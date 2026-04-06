@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VSS Body Controller · HMI</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;900&family=Share+Tech+Mono&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#04080F;--s1:#080E18;--s2:#0C1420;--s3:#111B28;--s4:#18243A;
+  --bdr:#1A2540;--bdr2:#243055;
+  --amber:#F59E0B;--amber2:rgba(245,158,11,.15);--amber3:rgba(245,158,11,.07);
+  --teal:#0DC8C8;--teal2:rgba(13,200,200,.13);
+  --green:#10D98A;--green2:rgba(16,217,138,.12);
+  --red:#F04040;--red2:rgba(240,64,64,.12);
+  --blue:#4A9EF5;--blue2:rgba(74,158,245,.12);
+  --violet:#9B6DFF;--violet2:rgba(155,109,255,.12);
+  --white:#DCE8F5;--dim:#6B7E99;--muted:#2E3E55;
+  --fd:'Orbitron',monospace;--fm:'Share Tech Mono',monospace;--fu:'Inter',sans-serif;
+  --r4:4px;--r6:6px;--r8:8px;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--white);font-family:var(--fu)}
+
+/* HEADER */
+.hdr{height:44px;background:var(--s1);border-bottom:1px solid var(--bdr);display:flex;align-items:center;padding:0 16px;gap:14px;flex-shrink:0;position:relative;z-index:10}
+.logo{font-family:var(--fd);font-size:11px;font-weight:900;letter-spacing:.22em;color:var(--amber);white-space:nowrap}
+.logo span{color:var(--muted);font-weight:400}
+.hdiv{width:1px;height:22px;background:var(--bdr2)}
+.hchip{display:flex;align-items:center;gap:5px;font-family:var(--fm);font-size:9px;padding:2px 8px;border-radius:3px;border:1px solid var(--bdr2);background:var(--s2);color:var(--dim);white-space:nowrap}
+.hchip .dot{width:5px;height:5px;border-radius:50%}
+.dot-mock{background:var(--amber);box-shadow:0 0 8px var(--amber)}
+.dot-ok{background:var(--green);box-shadow:0 0 6px var(--green)}
+.hright{margin-left:auto;display:flex;align-items:center;gap:12px}
+.clk{font-family:var(--fm);font-size:10px;color:var(--dim)}
+.sigcount{font-family:var(--fm);font-size:9px;color:var(--teal);padding:2px 7px;border:1px solid var(--teal2);border-radius:3px;background:var(--teal2)}
+
+/* LAYOUT */
+.layout{display:flex;height:calc(100vh - 44px)}
+
+/* SIDEBAR */
+.sb{width:52px;background:var(--s1);border-right:1px solid var(--bdr);display:flex;flex-direction:column;align-items:center;padding:8px 0;gap:2px;flex-shrink:0}
+.vbtn{width:40px;height:42px;border-radius:var(--r6);border:1px solid transparent;background:transparent;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--dim);font-family:var(--fm);font-size:6.5px;letter-spacing:.06em;transition:all .15s}
+.vbtn:hover{background:var(--s2);color:var(--white)}
+.vbtn.active{background:var(--amber2);border-color:rgba(245,158,11,.35);color:var(--amber)}
+.vbtn svg{width:16px;height:16px;stroke-width:1.5}
+.sbsep{width:32px;height:1px;background:var(--bdr);margin:5px 0}
+.sbi{width:40px;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 0}
+.sbd{width:7px;height:7px;border-radius:50%;transition:all .25s}
+.sbl{font-family:var(--fm);font-size:5.5px;color:var(--muted);transition:color .25s}
+
+/* CANVAS */
+.canvas{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg)}
+.ctbar{height:32px;background:var(--s1);border-bottom:1px solid var(--bdr);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0}
+.ctlabel{font-family:var(--fd);font-size:7.5px;letter-spacing:.14em;color:var(--dim)}
+.ctlabel b{color:var(--amber)}
+.ctright{margin-left:auto;font-family:var(--fm);font-size:8px;color:var(--muted)}
+.svgwrap{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:12px}
+
+/* CONTROL PANEL */
+.cp{width:280px;flex-shrink:0;background:var(--s1);border-left:1px solid var(--bdr);display:flex;flex-direction:column;overflow:hidden}
+.cphdr{height:32px;display:flex;align-items:center;padding:0 12px;gap:7px;border-bottom:1px solid var(--bdr);flex-shrink:0}
+.cptitle{font-family:var(--fd);font-size:7px;letter-spacing:.18em;color:var(--dim)}
+.cpscroll{flex:1;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--bdr2) transparent}
+.cpscroll::-webkit-scrollbar{width:3px}
+.cpscroll::-webkit-scrollbar-track{background:transparent}
+.cpscroll::-webkit-scrollbar-thumb{background:var(--bdr2);border-radius:2px}
+
+/* SIGNAL GROUPS */
+.sg{border-bottom:1px solid var(--bdr)}
+.sghdr{padding:6px 12px;display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;font-size:9px;font-weight:500;color:var(--dim);text-transform:uppercase;letter-spacing:.09em;transition:color .13s}
+.sghdr:hover{color:var(--white)}
+.sghdr.lit{color:var(--amber)}
+.vsstag{font-family:var(--fm);font-size:7px;color:var(--muted);background:var(--s2);padding:1px 5px;border-radius:2px;margin-left:auto;border:1px solid var(--bdr)}
+.chv{color:var(--muted);transition:transform .13s;font-size:10px;margin-left:4px}
+.chv.o{transform:rotate(90deg)}
+.sgbody{padding:4px 12px 8px;display:flex;flex-direction:column;gap:4px}
+
+/* CONTROLS */
+.cr{display:flex;align-items:center;gap:6px;min-height:24px}
+.cn{font-family:var(--fm);font-size:9px;color:var(--dim);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:color .13s}
+.cn.on{color:var(--white)}
+/* Toggle */
+.tog{width:32px;height:16px;border-radius:8px;border:1px solid var(--bdr2);background:var(--s3);cursor:pointer;position:relative;transition:all .16s;flex-shrink:0}
+.tog.on{border-color:var(--green)}.tog.on.a{border-color:var(--amber)}.tog.on.r{border-color:var(--red)}.tog.on.b{border-color:var(--blue)}.tog.on.t{border-color:var(--teal)}.tog.on.v{border-color:var(--violet)}
+.tog.on{background:var(--green2)}.tog.on.a{background:var(--amber2)}.tog.on.r{background:var(--red2)}.tog.on.b{background:var(--blue2)}.tog.on.t{background:var(--teal2)}.tog.on.v{background:var(--violet2)}
+.knob{position:absolute;width:10px;height:10px;border-radius:50%;background:var(--dim);top:2px;left:2px;transition:transform .16s,background .16s}
+.tog.on .knob{transform:translateX(16px);background:var(--green)}
+.tog.on.a .knob{background:var(--amber)}.tog.on.r .knob{background:var(--red)}.tog.on.b .knob{background:var(--blue)}.tog.on.t .knob{background:var(--teal)}.tog.on.v .knob{background:var(--violet)}
+/* Slider */
+.slrow{display:flex;flex-direction:column;gap:2px}
+.slhdr{display:flex;justify-content:space-between;align-items:center}
+.slr{flex:1;height:2px;-webkit-appearance:none;background:var(--s4);border-radius:2px;outline:none;cursor:pointer;margin-top:3px}
+.slr::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;border-radius:50%;background:var(--amber);cursor:pointer;box-shadow:0 0 4px rgba(245,158,11,.5)}
+.sv{font-family:var(--fm);font-size:9px;color:var(--amber);min-width:30px;text-align:right}
+/* Select */
+.sel{flex:1;background:var(--s3);border:1px solid var(--bdr2);border-radius:var(--r4);color:var(--white);font-family:var(--fm);font-size:8.5px;padding:2px 5px;outline:none;cursor:pointer}
+.sel:focus{border-color:var(--amber)}
+/* Door card grid */
+.dcgrid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.dcard{background:var(--s2);border-radius:var(--r6);padding:6px 8px;border:1px solid var(--bdr);display:flex;flex-direction:column;gap:3px}
+.dctitle{font-family:var(--fm);font-size:7.5px;color:var(--amber);margin-bottom:1px}
+.dcr{display:flex;align-items:center;justify-content:space-between;gap:4px}
+.dcl{font-family:var(--fm);font-size:8px;color:var(--dim)}
+/* Div */
+.hdiv2{height:1px;background:var(--bdr);margin:3px 0}
+/* Enum buttons */
+.ebrow{display:flex;gap:3px;flex-wrap:wrap}
+.eb{padding:2px 7px;border-radius:3px;font-family:var(--fm);font-size:7.5px;border:1px solid var(--bdr2);background:var(--s3);color:var(--dim);cursor:pointer;transition:all .13s}
+.eb:hover{color:var(--white)}
+.eb.on{background:var(--amber2);border-color:rgba(245,158,11,.4);color:var(--amber)}
+
+/* STATUS BAR */
+.stbar{height:22px;background:var(--s1);border-top:1px solid var(--bdr);display:flex;align-items:center;padding:0 12px;gap:16px;flex-shrink:0}
+.sti{display:flex;align-items:center;gap:4px;font-family:var(--fm);font-size:8px;color:var(--muted)}
+.stid{width:5px;height:5px;border-radius:50%}
+
+/* ANIMATIONS */
+@keyframes blink{0%,49%{opacity:1}50%,100%{opacity:.1}}
+@keyframes pulse{0%,100%{opacity:.2}50%{opacity:.7}}
+@keyframes spin{to{transform:rotate(360deg)}}
+.blink{animation:blink .7s infinite}
+.blinks{animation:blink 1.4s infinite}
+.pulse{animation:pulse .5s infinite}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useRef,useCallback}=React;
+
+/* ══════ VSS SIGNAL STORE ══════ */
+const INIT_STATE={
+  // Lights
+  'Body.Lights.Beam.Low.IsOn':false,
+  'Body.Lights.Beam.High.IsOn':false,
+  'Body.Lights.Running.IsOn':false,
+  'Body.Lights.Parking.IsOn':false,
+  'Body.Lights.Fog.Front.IsOn':false,
+  'Body.Lights.Fog.Rear.IsOn':false,
+  'Body.Lights.Brake.IsActive':false,
+  'Body.Lights.Backup.IsActive':false,
+  'Body.Lights.LicensePlate.IsOn':false,
+  'Body.Lights.DirectionIndicator.Left.IsSignaling':false,
+  'Body.Lights.DirectionIndicator.Right.IsSignaling':false,
+  'Body.Lights.Hazard.IsSignaling':false,
+  // Wipers
+  'Body.Windshield.Front.Wiping.Mode':'OFF',
+  'Body.Windshield.Front.Wiping.Intensity':0,
+  'Body.Windshield.Front.Washing.IsActive':false,
+  'Body.Windshield.Rear.Wiping.Mode':'OFF',
+  'Body.Windshield.Rear.Washing.IsActive':false,
+  // Mirrors
+  'Body.Mirrors.Left.IsFolded':false,'Body.Mirrors.Left.IsHeatingOn':false,
+  'Body.Mirrors.Left.Tilt':0,'Body.Mirrors.Left.Pan':0,
+  'Body.Mirrors.Right.IsFolded':false,'Body.Mirrors.Right.IsHeatingOn':false,
+  'Body.Mirrors.Right.Tilt':0,'Body.Mirrors.Right.Pan':0,
+  // Doors Row1
+  'Body.Doors.Row1.Left.IsOpen':false,'Body.Doors.Row1.Left.IsLocked':true,
+  'Body.Doors.Row1.Left.LatchStatus':'FULL_LATCHED','Body.Doors.Row1.Left.IsChildLockActive':false,
+  'Body.Doors.Row1.Left.Window.Position':0,'Body.Doors.Row1.Left.IsDoubleLocked':false,
+  'Body.Doors.Row1.Right.IsOpen':false,'Body.Doors.Row1.Right.IsLocked':true,
+  'Body.Doors.Row1.Right.LatchStatus':'FULL_LATCHED','Body.Doors.Row1.Right.IsChildLockActive':false,
+  'Body.Doors.Row1.Right.Window.Position':0,'Body.Doors.Row1.Right.IsDoubleLocked':false,
+  // Doors Row2
+  'Body.Doors.Row2.Left.IsOpen':false,'Body.Doors.Row2.Left.IsLocked':true,
+  'Body.Doors.Row2.Left.LatchStatus':'FULL_LATCHED','Body.Doors.Row2.Left.IsChildLockActive':false,
+  'Body.Doors.Row2.Left.Window.Position':0,'Body.Doors.Row2.Left.IsDoubleLocked':false,
+  'Body.Doors.Row2.Right.IsOpen':false,'Body.Doors.Row2.Right.IsLocked':true,
+  'Body.Doors.Row2.Right.LatchStatus':'FULL_LATCHED','Body.Doors.Row2.Right.IsChildLockActive':false,
+  'Body.Doors.Row2.Right.Window.Position':0,'Body.Doors.Row2.Right.IsDoubleLocked':false,
+  // Body
+  'Body.Hood.IsOpen':false,'Body.Trunk.IsOpen':false,
+  'Body.Horn.IsActive':false,
+  // Sunroof
+  'Body.Sunroof.Position':0,'Body.Sunroof.Shade.Position':0,
+  // Cabin lights
+  'Cabin.Lights.IsDomeOn':false,'Cabin.Lights.IsGloveBoxOn':false,
+  'Cabin.Lights.Ambient.Intensity':0,'Cabin.Lights.Ambient.Color':'#3B82F6',
+  // HVAC
+  'Cabin.HVAC.IsAirConditioningActive':false,
+  'Cabin.HVAC.Station.Row1.Left.Temperature':22,
+  'Cabin.HVAC.Station.Row1.Left.FanSpeed':0,
+  'Cabin.HVAC.Station.Row1.Left.AirDistribution':'DASHBOARD',
+  'Cabin.HVAC.Station.Row1.Right.Temperature':22,
+  'Cabin.HVAC.Station.Row1.Right.FanSpeed':0,
+  'Cabin.HVAC.Station.Row1.Right.AirDistribution':'DASHBOARD',
+  'Cabin.HVAC.IsRecirculationActive':false,'Cabin.HVAC.IsFrontDefrosterActive':false,
+  'Cabin.HVAC.IsRearDefrosterActive':false,
+  // Seats
+  'Cabin.Seat.Row1.Left.IsHeatingOn':false,'Cabin.Seat.Row1.Left.IsVentilationOn':false,
+  'Cabin.Seat.Row1.Right.IsHeatingOn':false,'Cabin.Seat.Row1.Right.IsVentilationOn':false,
+  // Powertrain-related body
+  'Body.Trunk.IsLocked':true,
+  'Body.FuelLid.IsOpen':false,
+  'Body.ChargeLid.IsOpen':false,
+};
+
+/* ══════ COMPONENTS ══════ */
+function Tog({val,on,c=''}){
+  return <div className={`tog ${val?'on '+c:''}`} onClick={on}><div className="knob"/></div>;
+}
+function BR({label,k,s,set,c=''}){
+  return <div className="cr">
+    <span className={`cn ${s[k]?'on':''}`}>{label}</span>
+    <Tog val={s[k]} on={()=>set(k,!s[k])} c={c}/>
+  </div>;
+}
+function SlR({label,k,s,set,min=0,max=100,step=1,unit='%',color='var(--amber)'}){
+  const v=s[k];
+  return <div className="slrow">
+    <div className="slhdr">
+      <span className={`cn ${v!==min?'on':''}`}>{label}</span>
+      <span className="sv">{typeof v==='number'&&v%1!==0?v.toFixed(1):v}{unit}</span>
+    </div>
+    <input type="range" className="slr" min={min} max={max} step={step} value={v}
+      onChange={e=>set(k,parseFloat(e.target.value))} style={{'--c':color}}/>
+  </div>;
+}
+function SelR({label,k,s,set,opts}){
+  return <div className="cr">
+    <span className="cn">{label}</span>
+    <select className="sel" value={s[k]} onChange={e=>set(k,e.target.value)}>
+      {opts.map(o=><option key={o} value={o}>{o}</option>)}
+    </select>
+  </div>;
+}
+function EnumR({label,k,s,set,opts}){
+  return <div style={{display:'flex',flexDirection:'column',gap:3}}>
+    <span className="cn">{label}</span>
+    <div className="ebrow">
+      {opts.map(o=><button key={o} className={`eb ${s[k]===o?'on':''}`} onClick={()=>set(k,o)}>{o}</button>)}
+    </div>
+  </div>;
+}
+function SG({title,vss,children,def=false,lit=false}){
+  const [open,setOpen]=useState(def);
+  return <div className="sg">
+    <div className={`sghdr ${lit?'lit':''}`} onClick={()=>setOpen(o=>!o)}>
+      <span>{title}</span>
+      <span className="vsstag">{vss}</span>
+      <span className={`chv ${open?'o':''}`}>›</span>
+    </div>
+    {open&&<div className="sgbody">{children}</div>}
+  </div>;
+}
+
+/* ═══════════════ DOOR CARDS ═══════════════ */
+function DoorCard({label,pfx,s,set}){
+  const p=pfx;
+  return <div className="dcard">
+    <div className="dctitle">{label}</div>
+    <div className="dcr"><span className="dcl">Open</span>
+      <Tog val={s[`${p}.IsOpen`]} on={()=>set(`${p}.IsOpen`,!s[`${p}.IsOpen`])} c="a"/></div>
+    <div className="dcr"><span className="dcl">Lock</span>
+      <Tog val={s[`${p}.IsLocked`]} on={()=>set(`${p}.IsLocked`,!s[`${p}.IsLocked`])} c="r"/></div>
+    <div className="dcr"><span className="dcl">DblLock</span>
+      <Tog val={s[`${p}.IsDoubleLocked`]} on={()=>set(`${p}.IsDoubleLocked`,!s[`${p}.IsDoubleLocked`])} c="r"/></div>
+    <div className="dcr"><span className="dcl">ChildLk</span>
+      <Tog val={s[`${p}.IsChildLockActive`]} on={()=>set(`${p}.IsChildLockActive`,!s[`${p}.IsChildLockActive`])} c="v"/></div>
+    <div style={{marginTop:2}}>
+      <div className="slhdr"><span className="dcl">Win</span><span className="sv">{s[`${p}.Window.Position`]}%</span></div>
+      <input type="range" className="slr" min={0} max={100} value={s[`${p}.Window.Position`]}
+        onChange={e=>set(`${p}.Window.Position`,parseInt(e.target.value))}/>
+    </div>
+    <div style={{marginTop:1}}>
+      <div className="ebrow">
+        {['UNLATCHED','HALF_LATCHED','FULL_LATCHED'].map(v=>(
+          <button key={v} className={`eb ${s[`${p}.LatchStatus`]===v?'on':''}`}
+            onClick={()=>set(`${p}.LatchStatus`,v)}>{v.replace('_LATCHED','').replace('UN','UN-')}</button>
+        ))}
+      </div>
+    </div>
+  </div>;
+}
+
+/* ═══════════════ TOP VIEW SVG ═══════════════ */
+function TopView({s}){
+  const lo=s['Body.Lights.Beam.Low.IsOn'],hi=s['Body.Lights.Beam.High.IsOn'];
+  const drl=s['Body.Lights.Running.IsOn'],park=s['Body.Lights.Parking.IsOn'];
+  const ffog=s['Body.Lights.Fog.Front.IsOn'],rfog=s['Body.Lights.Fog.Rear.IsOn'];
+  const brake=s['Body.Lights.Brake.IsActive'],back=s['Body.Lights.Backup.IsActive'];
+  const lp=s['Body.Lights.LicensePlate.IsOn'];
+  const li=s['Body.Lights.DirectionIndicator.Left.IsSignaling']||s['Body.Lights.Hazard.IsSignaling'];
+  const ri=s['Body.Lights.DirectionIndicator.Right.IsSignaling']||s['Body.Lights.Hazard.IsSignaling'];
+  const hlc=hi?'#FFFFFF':lo?'#FCD34D':drl?'#C0C8D0':park?'#FEF3C7':'#0A1420';
+  const hlo=hi?.95:lo?.85:drl?.45:park?.2:.04;
+  const tlc=brake?'#FF2222':lo||hi||park?'#EF4444':'#1A0808';
+  const tlo=brake?.95:lo||hi||park?.75:.08;
+  const rlc=back?'#FFFFFF':'#1A1A2A';
+  const d1lo=s['Body.Doors.Row1.Left.IsOpen'],d1ro=s['Body.Doors.Row1.Right.IsOpen'];
+  const d2lo=s['Body.Doors.Row2.Left.IsOpen'],d2ro=s['Body.Doors.Row2.Right.IsOpen'];
+  const hood=s['Body.Hood.IsOpen'],trunk=s['Body.Trunk.IsOpen'];
+  const mlf=s['Body.Mirrors.Left.IsFolded'],mrf=s['Body.Mirrors.Right.IsFolded'];
+  const horn=s['Body.Horn.IsActive'];
+  const sr=s['Body.Sunroof.Position'];
+  const fuel=s['Body.FuelLid.IsOpen'];
+  const amb=s['Cabin.Lights.Ambient.Intensity']>0;
+  const ambC=s['Cabin.Lights.Ambient.Color'];
+  const wf=s['Body.Windshield.Front.Wiping.Mode']!=='OFF';
+  const wr=s['Body.Windshield.Rear.Wiping.Mode']!=='OFF';
+
+  const spokes=(cx,cy,r1,r2)=>[0,51.4,102.8,154.3,205.7,257.1,308.6].map(a=>{
+    const rad=a*Math.PI/180;
+    return <line key={a} x1={cx+r1*Math.cos(rad)} y1={cy+r1*Math.sin(rad)}
+      x2={cx+r2*Math.cos(rad)} y2={cy+r2*Math.sin(rad)} stroke="#252E3C" strokeWidth="2" strokeLinecap="round"/>;
+  });
+
+  return <svg viewBox="0 0 320 680" style={{maxHeight:'58vh',height:'100%'}}>
+    {/* beam glow */}
+    {(lo||hi)&&<><ellipse cx="100" cy="40" rx="55" ry="25" fill="#FCD34D" opacity=".05"/>
+    <ellipse cx="220" cy="40" rx="55" ry="25" fill="#FCD34D" opacity=".05"/></>}
+    {/* front bumper */}
+    <rect x="88" y="42" width="144" height="20" rx="7" fill="#0D1628"/>
+    <rect x="93" y="45" width="134" height="14" rx="4" fill="#09111E" stroke="#182030" strokeWidth=".5"/>
+    {/* headlights */}
+    <rect x="70" y="42" width="56" height="26" rx="5" fill={hlc} opacity={hlo}/>
+    <rect x="73" y="45" width="50" height="20" rx="3" fill="#07101C" stroke="#182030" strokeWidth=".5"/>
+    <rect x="76" y="48" width="20" height="14" rx="2" fill={hlc} opacity={hlo*.9}/>
+    <rect x="99" y="48" width="18" height="14" rx="2" fill={hlc} opacity={hlo*.65}/>
+    <rect x="194" y="42" width="56" height="26" rx="5" fill={hlc} opacity={hlo}/>
+    <rect x="197" y="45" width="50" height="20" rx="3" fill="#07101C" stroke="#182030" strokeWidth=".5"/>
+    <rect x="200" y="48" width="20" height="14" rx="2" fill={hlc} opacity={hlo*.9}/>
+    <rect x="223" y="48" width="18" height="14" rx="2" fill={hlc} opacity={hlo*.65}/>
+    {/* front indicators */}
+    <rect x="70" y="70" width="30" height="12" rx="3" fill={li?'#F59E0B':'#1A1208'} opacity={li?1:.3} className={li?'blink':''}/>
+    <rect x="220" y="70" width="30" height="12" rx="3" fill={ri?'#F59E0B':'#1A1208'} opacity={ri?1:.3} className={ri?'blink':''}/>
+    {/* front fog */}
+    {ffog&&<><rect x="93" y="70" width="26" height="12" rx="3" fill="#BAD6FE" opacity=".85"/>
+    <rect x="201" y="70" width="26" height="12" rx="3" fill="#BAD6FE" opacity=".85"/></>}
+    {/* hood */}
+    {hood&&<rect x="70" y="84" width="180" height="6" rx="2" fill="#F59E0B" opacity=".5"/>}
+    <rect x="70" y="84" width="180" height="72" fill="#0E1825" stroke="#1A2838" strokeWidth=".8"/>
+    <rect x="88" y="90" width="144" height="52" rx="2" fill="#09111E"/>
+    {[102,114,126].map(y=><line key={y} x1="90" y1={y} x2="232" y2={y} stroke="#121C28" strokeWidth="1"/>)}
+    {[120,160,200].map(x=><line key={x} x1={x} y1="90" x2={x} y2="142" stroke="#121C28" strokeWidth="1"/>)}
+    {/* fuel lid */}
+    {fuel&&<rect x="68" y="128" width="10" height="16" rx="2" fill="#F59E0B" opacity=".6"/>}
+    {/* windshield */}
+    <path d="M76,156 L78,188 L82,193 L238,193 L242,188 L244,156 Z" fill="#152840" stroke="#1E3650" strokeWidth=".5" opacity=".9"/>
+    {/* sunroof */}
+    {sr>0&&<rect x="110" y="163" width="100" height="24" rx="2" fill="#0A1C30" stroke={`${ambC}55`} strokeWidth="1" opacity={sr/100}/>}
+    {/* wipers front */}
+    {wf&&<g className="blinks">
+      <path d="M100,193 L92,162" stroke="#4A9EF5" strokeWidth="1.5" strokeLinecap="round" opacity=".7"/>
+      <path d="M160,193 L185,158" stroke="#4A9EF5" strokeWidth="1.5" strokeLinecap="round" opacity=".7"/>
+    </g>}
+    {/* cab body */}
+    <rect x="70" y="155" width="180" height="210" fill="#0C1825" stroke="#182030" strokeWidth=".8"/>
+    {/* ambient glow cabin */}
+    {amb&&<rect x="72" y="157" width="176" height="208" fill={ambC} opacity={s['Cabin.Lights.Ambient.Intensity']/300}/>}
+    {/* door dividers */}
+    <line x1="70" y1="248" x2="250" y2="248" stroke="#060E18" strokeWidth="2.5"/>
+    <line x1="70" y1="308" x2="250" y2="308" stroke="#060E18" strokeWidth="2.5"/>
+    {/* rear windshield */}
+    <path d="M78,363 L80,365 L82,372 L238,372 L240,365 L242,363 Z" fill="#152840" stroke="#1E3650" strokeWidth=".5" opacity=".8"/>
+    {/* wipers rear */}
+    {wr&&<g className="blinks">
+      <path d="M175,363 L188,368" stroke="#4A9EF5" strokeWidth="1.5" strokeLinecap="round" opacity=".7"/>
+    </g>}
+    {/* bed */}
+    <rect x="70" y="365" width="180" height="228" fill="#080F18" stroke="#182030" strokeWidth=".8"/>
+    <rect x="70" y="365" width="14" height="228" fill="#0C1422"/>
+    <rect x="236" y="365" width="14" height="228" fill="#0C1422"/>
+    {[378,393,408,423,438,453,468,484,500,516,532,548,564,580].map(y=>(
+      <line key={y} x1="85" y1={y} x2="235" y2={y} stroke="#060C14" strokeWidth="1"/>
+    ))}
+    {/* tailgate */}
+    {trunk&&<rect x="70" y="588" width="180" height="6" rx="2" fill="#F59E0B" opacity=".45"/>}
+    <rect x="70" y="588" width="180" height="20" fill="#0E1828" stroke="#1A2535" strokeWidth=".5"/>
+    <rect x="106" y="595" width="108" height="5" rx="2" fill="#09111E" stroke="#162030" strokeWidth=".5"/>
+    {/* rear bumper */}
+    <rect x="88" y="608" width="144" height="16" rx="5" fill="#0D1628"/>
+    {/* taillights */}
+    <rect x="70" y="588" width="58" height="20" rx="3" fill={tlc} opacity={tlo}/>
+    <rect x="73" y="590" width="52" height="16" rx="2" fill="#060A10" stroke="#180808" strokeWidth=".5"/>
+    <rect x="76" y="592" width="20" height="12" rx="2" fill={tlc} opacity={tlo*.9}/>
+    <rect x="99" y="592" width="18" height="12" rx="2" fill={tlc} opacity={tlo*.7}/>
+    <rect x="192" y="588" width="58" height="20" rx="3" fill={tlc} opacity={tlo}/>
+    <rect x="195" y="590" width="52" height="16" rx="2" fill="#060A10" stroke="#180808" strokeWidth=".5"/>
+    <rect x="198" y="592" width="20" height="12" rx="2" fill={tlc} opacity={tlo*.9}/>
+    <rect x="221" y="592" width="18" height="12" rx="2" fill={tlc} opacity={tlo*.7}/>
+    {/* reverse lights */}
+    {back&&<><rect x="100" y="604" width="20" height="8" rx="2" fill={rlc} opacity=".9"/>
+    <rect x="200" y="604" width="20" height="8" rx="2" fill={rlc} opacity=".9"/></>}
+    {/* license plate light */}
+    {lp&&<rect x="130" y="604" width="60" height="6" rx="2" fill="#E0EEFF" opacity=".6"/>}
+    {/* rear fog */}
+    {rfog&&<><rect x="105" y="580" width="18" height="8" rx="2" fill="#EF2020" opacity=".8"/>
+    <rect x="197" y="580" width="18" height="8" rx="2" fill="#EF2020" opacity=".8"/></>}
+    {/* rear indicators */}
+    <rect x="70" y="580" width="28" height="8" rx="2" fill={li?'#F59E0B':'#1A1208'} className={li?'blink':''} opacity={li?1:.2}/>
+    <rect x="222" y="580" width="28" height="8" rx="2" fill={ri?'#F59E0B':'#1A1208'} className={ri?'blink':''} opacity={ri?1:.2}/>
+    {/* wheels */}
+    {[[30,138,50],[240,138,50],[30,455,50],[240,455,50]].map(([cx,cy,r],i)=>(
+      <g key={i}>
+        <rect x={cx-r*.8} y={cy-r} width={r*1.6} height={r*2} rx="6" fill="#07101A" stroke="#161E2C" strokeWidth=".8"/>
+        <rect x={cx-r*.6} y={cy-r*.82} width={r*1.2} height={r*1.64} rx="4" fill="#0D1520"/>
+        <circle cx={cx} cy={cy} r={r*.5} fill="#111820" stroke="#202C3C" strokeWidth=".5"/>
+        <circle cx={cx} cy={cy} r={r*.2} fill="#08101A"/>
+        {spokes(cx,cy,r*.22,r*.44)}
+      </g>
+    ))}
+    {/* mirrors */}
+    {!mlf?<g><rect x="24" y="215" width="44" height="16" rx="4" fill="#0F1A28" stroke="#1A2838" strokeWidth=".5"/>
+      <rect x="27" y="217" width="38" height="12" rx="2" fill="#18304A" opacity=".7"/></g>
+      :<rect x="65" y="217" width="7" height="12" rx="2" fill="#0F1A28"/>}
+    {!mrf?<g><rect x="252" y="215" width="44" height="16" rx="4" fill="#0F1A28" stroke="#1A2838" strokeWidth=".5"/>
+      <rect x="255" y="217" width="38" height="12" rx="2" fill="#18304A" opacity=".7"/></g>
+      :<rect x="248" y="217" width="7" height="12" rx="2" fill="#0F1A28"/>}
+    {/* mirror heat indicators */}
+    {s['Body.Mirrors.Left.IsHeatingOn']&&<circle cx="46" cy="223" r="3" fill="#FF4040" opacity=".7" className="pulse"/>}
+    {s['Body.Mirrors.Right.IsHeatingOn']&&<circle cx="274" cy="223" r="3" fill="#FF4040" opacity=".7" className="pulse"/>}
+    {/* door open arcs */}
+    {d1lo&&<path d="M70,193 L30,203 L28,245 L70,248" fill="#F59E0B" opacity=".07" stroke="#F59E0B" strokeWidth="1"/>}
+    {d1ro&&<path d="M250,193 L290,203 L292,245 L250,248" fill="#F59E0B" opacity=".07" stroke="#F59E0B" strokeWidth="1"/>}
+    {d2lo&&<path d="M70,248 L30,258 L28,304 L70,308" fill="#F59E0B" opacity=".07" stroke="#F59E0B" strokeWidth="1"/>}
+    {d2ro&&<path d="M250,248 L290,258 L292,304 L250,308" fill="#F59E0B" opacity=".07" stroke="#F59E0B" strokeWidth="1"/>}
+    {/* door open labels */}
+    {d1lo&&<text x="42" y="224" fill="#F59E0B" fontSize="6" fontFamily="Share Tech Mono">OPEN</text>}
+    {d1ro&&<text x="256" y="224" fill="#F59E0B" fontSize="6" fontFamily="Share Tech Mono">OPEN</text>}
+    {d2lo&&<text x="32" y="282" fill="#F59E0B" fontSize="6" fontFamily="Share Tech Mono">OPEN</text>}
+    {d2ro&&<text x="256" y="282" fill="#F59E0B" fontSize="6" fontFamily="Share Tech Mono">OPEN</text>}
+    {/* horn pulse */}
+    {horn&&<circle cx="160" cy="270" r="32" fill="#EF4444" opacity=".07" className="pulse"/>}
+    {horn&&<circle cx="160" cy="270" r="18" fill="#EF4444" opacity=".1" className="pulse"/>}
+    {/* hood/trunk labels */}
+    {hood&&<text x="160" y="124" textAnchor="middle" fill="#F59E0B" fontSize="7" fontFamily="Share Tech Mono">HOOD OPEN</text>}
+    {trunk&&<text x="160" y="648" textAnchor="middle" fill="#F59E0B" fontSize="7" fontFamily="Share Tech Mono">TAILGATE OPEN</text>}
+    {fuel&&<text x="50" y="142" fill="#F59E0B" fontSize="6" fontFamily="Share Tech Mono">FUEL</text>}
+    {/* direction */}
+    <text x="160" y="20" textAnchor="middle" fill="#1E2C3C" fontSize="7" fontFamily="Share Tech Mono">▲ FRONT</text>
+    <text x="160" y="672" textAnchor="middle" fill="#1E2C3C" fontSize="7" fontFamily="Share Tech Mono">REAR ▼</text>
+  </svg>;
+}
+
+/* ═══════════════ SIDE VIEW SVG ═══════════════ */
+function SideView({s}){
+  const lo=s['Body.Lights.Beam.Low.IsOn'],hi=s['Body.Lights.Beam.High.IsOn'];
+  const drl=s['Body.Lights.Running.IsOn'],park=s['Body.Lights.Parking.IsOn'];
+  const li=s['Body.Lights.DirectionIndicator.Left.IsSignaling']||s['Body.Lights.Hazard.IsSignaling'];
+  const ffog=s['Body.Lights.Fog.Front.IsOn'],rfog=s['Body.Lights.Fog.Rear.IsOn'];
+  const brake=s['Body.Lights.Brake.IsActive'],back=s['Body.Lights.Backup.IsActive'];
+  const d1=s['Body.Doors.Row1.Left.IsOpen'],d2=s['Body.Doors.Row2.Left.IsOpen'];
+  const hood=s['Body.Hood.IsOpen'],trunk=s['Body.Trunk.IsOpen'];
+  const wf=s['Body.Windshield.Front.Wiping.Mode']!=='OFF';
+  const wr=s['Body.Windshield.Rear.Wiping.Mode']!=='OFF';
+  const sr=s['Body.Sunroof.Position'];
+  const fuel=s['Body.FuelLid.IsOpen'];
+  const hlc=hi?'#FFF':lo?'#FCD34D':drl?'#C0C8D0':park?'#FEF3C7':'#0A1420';
+  const hlo=hi?.95:lo?.85:drl?.45:park?.2:.06;
+  const tlc=brake?'#FF2222':lo||hi||park?'#EF4444':'#1A0808';
+  const tlo=brake?.95:lo||hi||park?.75:.1;
+  const amb=s['Cabin.Lights.Ambient.Intensity']>0;
+
+  const spokes=(cx,cy)=>[0,51.4,102.8,154.3,205.7,257.1,308.6].map(a=>{
+    const r=a*Math.PI/180;
+    return <line key={a} x1={cx+16*Math.cos(r)} y1={cy+16*Math.sin(r)} x2={cx+31*Math.cos(r)} y2={cy+31*Math.sin(r)} stroke="#1E2A3C" strokeWidth="2.5" strokeLinecap="round"/>;
+  });
+
+  return <svg viewBox="0 0 780 400" style={{width:'100%',maxWidth:'780px'}}>
+    {/* ground shadow */}
+    <ellipse cx="390" cy="372" rx="330" ry="14" fill="#000" opacity=".25"/>
+    {/* lower body */}
+    <rect x="82" y="274" width="616" height="26" rx="5" fill="#0A1420"/>
+    {/* main body path */}
+    <path d="M80,178 L126,116 L214,98 L318,86 L428,88 L456,96 L472,108 L702,112 L716,136 L718,274 L80,274 Z" fill="#0D1828" stroke="#182030" strokeWidth="1.2"/>
+    {/* hood */}
+    {hood&&<path d="M128,116 L172,60 L238,74 L220,98" fill="none" stroke="#F59E0B" strokeWidth="2" opacity=".6"/>}
+    <path d="M80,178 L126,116 L220,98 L216,274 L80,274 Z" fill="#111E2E" stroke="#182030" strokeWidth=".8"/>
+    {/* fuel lid */}
+    {fuel&&<path d="M104,210 L80,215" stroke="#F59E0B" strokeWidth="2" strokeLinecap="round" opacity=".7"/>}
+    {/* cab windows */}
+    <path d="M222,98 L322,86 L322,196 L210,196 Z" fill="#122840" stroke="#1E3A56" strokeWidth=".7" opacity=".9"/>
+    <rect x="326" y="88" width="100" height="108" rx="2" fill="#122840" stroke="#1E3A56" strokeWidth=".7" opacity=".85"/>
+    <path d="M428,88 L454,98 L450,196 L426,196 Z" fill="#122840" stroke="#1E3A56" strokeWidth=".7" opacity=".8"/>
+    {/* sunroof open */}
+    {sr>0&&<rect x="240" y="86" width={80*(sr/100)} height="12" rx="2" fill="#0A1828" stroke="#0DC8C8" strokeWidth="1" opacity=".8"/>}
+    {/* cab ambient glow */}
+    {amb&&<path d="M212,100 L322,88 L452,100 L448,196 L210,196 Z" fill={s['Cabin.Lights.Ambient.Color']} opacity={s['Cabin.Lights.Ambient.Intensity']/400}/>}
+    {/* pillars */}
+    <line x1="222" y1="98" x2="210" y2="196" stroke="#0D1828" strokeWidth="6" strokeLinecap="round"/>
+    <line x1="322" y1="86" x2="322" y2="196" stroke="#0D1828" strokeWidth="8" strokeLinecap="round"/>
+    <line x1="426" y1="88" x2="452" y2="196" stroke="#0D1828" strokeWidth="6" strokeLinecap="round"/>
+    {/* roof */}
+    <rect x="208" y="86" width="248" height="12" rx="2" fill="#08121C"/>
+    {/* bed */}
+    <rect x="460" y="112" width="256" height="162" fill="#070E18" stroke="#182030" strokeWidth=".8"/>
+    <rect x="460" y="112" width="256" height="12" fill="#111E2C"/>
+    {[128,145,162,180,198,215,232,250].map(y=><line key={y} x1="462" y1={y} x2="714" y2={y} stroke="#060B14" strokeWidth="1"/>)}
+    {/* tailgate */}
+    {trunk?<path d="M718,274 L780,274 L780,200" fill="none" stroke="#F59E0B" strokeWidth="2" opacity=".6"/>
+      :<rect x="712" y="112" width="12" height="162" rx="2" fill="#111E2C" stroke="#182030" strokeWidth=".5"/>}
+    {/* door gaps */}
+    <line x1="322" y1="196" x2="322" y2="274" stroke="#040A12" strokeWidth="3"/>
+    <line x1="430" y1="196" x2="430" y2="274" stroke="#040A12" strokeWidth="3"/>
+    {/* door open */}
+    {d1&&<path d="M212,196 L212,274 L164,292 L152,266 L198,196" fill="#F59E0B" opacity=".07" stroke="#F59E0B" strokeWidth="1.2"/>}
+    {d2&&<path d="M322,196 L322,274 L274,292 L262,266 L308,196" fill="#F59E0B" opacity=".07" stroke="#F59E0B" strokeWidth="1.2"/>}
+    {/* front bumper */}
+    <rect x="60" y="220" width="22" height="66" rx="5" fill="#0D1828" stroke="#182030" strokeWidth=".8"/>
+    {/* headlight */}
+    <rect x="64" y="176" width="20" height="42" rx="4" fill={hlc} opacity={hlo}/>
+    <rect x="67" y="180" width="13" height="34" rx="2" fill={hi?'#FFF':'#050B14'} opacity={hlo*.8}/>
+    {/* front indicator */}
+    <rect x="64" y="218" width="20" height="12" rx="3" fill={li?'#F59E0B':'#1A1208'} opacity={li?1:.3} className={li?'blink':''}/>
+    {/* front fog */}
+    {ffog&&<rect x="68" y="233" width="14" height="10" rx="2" fill="#BAD6FE" opacity=".9"/>}
+    {/* mirror */}
+    <path d="M215,164 L192,152 L188,182 L215,182 Z" fill="#111E2C" stroke="#182030" strokeWidth=".5"/>
+    {/* taillight */}
+    <rect x="718" y="184" width="16" height="48" rx="3" fill={tlc} opacity={tlo}/>
+    {/* rear indicator */}
+    <rect x="718" y="234" width="16" height="12" rx="2" fill={li?'#F59E0B':'#1A1208'} className={li?'blink':''} opacity={li?1:.25}/>
+    {/* reverse */}
+    {back&&<rect x="718" y="170" width="16" height="12" rx="2" fill="#FFFFFF" opacity=".8"/>}
+    {/* rear fog */}
+    {rfog&&<rect x="718" y="160" width="16" height="12" rx="2" fill="#EF2020" opacity=".8"/>}
+    {/* wipers */}
+    {wf&&<g className="blinks">
+      <path d="M236,196 L228,114" stroke="#4A9EF5" strokeWidth="2" strokeLinecap="round" opacity=".7"/>
+      <path d="M278,196 L308,100" stroke="#4A9EF5" strokeWidth="2" strokeLinecap="round" opacity=".7"/>
+    </g>}
+    {wr&&<g className="blinks">
+      <path d="M438,196 L450,104" stroke="#4A9EF5" strokeWidth="2" strokeLinecap="round" opacity=".7"/>
+    </g>}
+    {/* wheels */}
+    {[[172,326,52],[576,326,52]].map(([cx,cy,r],i)=>(
+      <g key={i}>
+        <circle cx={cx} cy={cy} r={r} fill="#07101A" stroke="#161E2C" strokeWidth="1.5"/>
+        <circle cx={cx} cy={cy} r={r*.75} fill="#07101A"/>
+        <circle cx={cx} cy={cy} r={r*.53} fill="#0F1828"/>
+        <circle cx={cx} cy={cy} r={r*.18} fill="#070D16" stroke="#202C3C" strokeWidth=".8"/>
+        {spokes(cx,cy)}
+      </g>
+    ))}
+    <text x="22" y="328" fill="#16243A" fontSize="8" fontFamily="Share Tech Mono">FRONT ◄</text>
+    <text x="722" y="328" fill="#16243A" fontSize="8" fontFamily="Share Tech Mono">► REAR</text>
+  </svg>;
+}
+
+/* ═══════════════ COCKPIT VIEW ═══════════════ */
+function CockpitView({s}){
+  const lo=s['Body.Lights.Beam.Low.IsOn'],hi=s['Body.Lights.Beam.High.IsOn'];
+  const li=s['Body.Lights.DirectionIndicator.Left.IsSignaling']||s['Body.Lights.Hazard.IsSignaling'];
+  const ri=s['Body.Lights.DirectionIndicator.Right.IsSignaling']||s['Body.Lights.Hazard.IsSignaling'];
+  const doorAjar=['Body.Doors.Row1.Left.IsOpen','Body.Doors.Row1.Right.IsOpen','Body.Doors.Row2.Left.IsOpen','Body.Doors.Row2.Right.IsOpen'].some(k=>s[k]);
+  const ac=s['Cabin.HVAC.IsAirConditioningActive'];
+  const defF=s['Cabin.HVAC.IsFrontDefrosterActive'],defR=s['Cabin.HVAC.IsRearDefrosterActive'];
+  const recirc=s['Cabin.HVAC.IsRecirculationActive'];
+  const dT=s['Cabin.HVAC.Station.Row1.Left.Temperature'];
+  const pT=s['Cabin.HVAC.Station.Row1.Right.Temperature'];
+  const dF=s['Cabin.HVAC.Station.Row1.Left.FanSpeed'];
+  const pF=s['Cabin.HVAC.Station.Row1.Right.FanSpeed'];
+  const wf=s['Body.Windshield.Front.Wiping.Mode'];
+  const horn=s['Body.Horn.IsActive'];
+  const dome=s['Cabin.Lights.IsDomeOn'];
+  const haz=s['Body.Lights.Hazard.IsSignaling'];
+  const park=s['Body.Lights.Parking.IsOn'];
+  const fog=s['Body.Lights.Fog.Front.IsOn'];
+  const brake=s['Body.Lights.Brake.IsActive'];
+  const back=s['Body.Lights.Backup.IsActive'];
+  const fuel=s['Body.FuelLid.IsOpen'];
+  const trunk=s['Body.Trunk.IsOpen'];
+  const heat1L=s['Cabin.Seat.Row1.Left.IsHeatingOn'];
+  const heat1R=s['Cabin.Seat.Row1.Right.IsHeatingOn'];
+
+  const fanBars=(f,x)=>Array.from({length:7},(_,i)=>(
+    <rect key={i} x={x+i*12} y={232-(i*4)} width={9} height={16+i*4} rx="1"
+      fill={i<f?'#3B82F6':'#101E30'} opacity={i<f?1:.5}/>
+  ));
+
+  const warn=(active,color,x,y,label)=>active&&(
+    <g><circle cx={x} cy={y} r={9} fill={color} opacity=".15"/>
+    <circle cx={x} cy={y} r={9} fill="none" stroke={color} strokeWidth=".8" opacity=".6"/>
+    <text x={x} y={y+4} textAnchor="middle" fill={color} fontSize="7" fontFamily="Share Tech Mono">{label}</text></g>
+  );
+
+  return <svg viewBox="0 0 740 420" style={{width:'100%',maxWidth:'740px'}}>
+    {/* dash bg */}
+    <rect x="0" y="0" width="740" height="420" fill="#06101C"/>
+    <path d="M0,52 Q370,92 740,52 L740,420 L0,420 Z" fill="#091424"/>
+    <path d="M0,48 Q370,88 740,48" fill="none" stroke="#142238" strokeWidth="2"/>
+    {/* steering wheel */}
+    <circle cx="210" cy="388" r="80" fill="none" stroke="#0E1C2E" strokeWidth="12"/>
+    <circle cx="210" cy="388" r="80" fill="none" stroke="#182840" strokeWidth="1.5"/>
+    <circle cx="210" cy="388" r="22" fill="#0B1824" stroke="#182840" strokeWidth="2"/>
+    <line x1="210" y1="308" x2="210" y2="366" stroke="#0E1C2E" strokeWidth="10"/>
+    <line x1="136" y1="388" x2="188" y2="388" stroke="#0E1C2E" strokeWidth="10"/>
+    <line x1="232" y1="388" x2="284" y2="388" stroke="#0E1C2E" strokeWidth="10"/>
+    {horn&&<circle cx="210" cy="388" r="22" fill="#EF4040" opacity=".2" className="pulse"/>}
+    {/* cluster */}
+    <rect x="262" y="92" width="216" height="136" rx="8" fill="#070F1C" stroke="#182030" strokeWidth=".8"/>
+    <text x="370" y="120" textAnchor="middle" fill="#1C3050" fontSize="8" fontFamily="Share Tech Mono" letterSpacing="2">SPEED</text>
+    <text x="370" y="158" textAnchor="middle" fill="#F59E0B" fontSize="34" fontFamily="Orbitron" fontWeight="700">0</text>
+    <text x="370" y="177" textAnchor="middle" fill="#1C3050" fontSize="8" fontFamily="Share Tech Mono">KM/H</text>
+    <text x="370" y="208" textAnchor="middle" fill="#10D98A" fontSize="11" fontFamily="Share Tech Mono">● PARK</text>
+    {/* telltales row */}
+    {warn(lo,'#22C55E',276,240,'LO')}
+    {warn(hi,'#4A9EF5',300,240,'HI')}
+    <text x="325" y="246" textAnchor="middle" fill={li?'#F59E0B':'#1E2C3C'} fontSize="18" className={li?'blink':''}>◄</text>
+    <text x="414" y="246" textAnchor="middle" fill={ri?'#F59E0B':'#1E2C3C'} fontSize="18" className={ri?'blink':''}>►</text>
+    {warn(haz,'#F59E0B',348,240,'HAZ')}
+    {warn(doorAjar,'#EF4444',372,240,'DR')}
+    {warn(fog,'#BAD6FE',396,240,'FOG')}
+    {warn(park,'#FEF3C7',420,240,'PRK')}
+    {warn(dome,'#FCD34D',444,240,'DOM')}
+    {warn(brake,'#EF4444',465,240,'BRK')}
+    {warn(back,'#FFFFFF',485,240,'REV')}
+    {warn(fuel,'#F59E0B',276,264,'FUEL')}
+    {warn(trunk,'#F59E0B',300,264,'TGTD')}
+    {warn(heat1L,'#EF6020',348,264,'HS-D')}
+    {warn(heat1R,'#EF6020',396,264,'HS-P')}
+    {warn(defF,'#4A9EF5',444,264,'DEF-F')}
+    {warn(defR,'#4A9EF5',485,264,'DEF-R')}
+    {/* HVAC panel */}
+    <rect x="488" y="92" width="238" height="182" rx="8" fill="#060E1A" stroke="#182030" strokeWidth=".8"/>
+    <text x="607" y="113" textAnchor="middle" fill="#1C3050" fontSize="7" fontFamily="Share Tech Mono" letterSpacing="2">CLIMATE CONTROL</text>
+    {/* driver zone */}
+    <text x="524" y="134" textAnchor="middle" fill="#2A3A50" fontSize="7" fontFamily="Share Tech Mono">DRIVER</text>
+    <text x="524" y="162" textAnchor="middle" fill="#F59E0B" fontSize="26" fontFamily="Orbitron" fontWeight="600">{dT.toFixed(1)}</text>
+    <text x="524" y="178" textAnchor="middle" fill="#1C3050" fontSize="7" fontFamily="Share Tech Mono">°C</text>
+    {/* pass zone */}
+    <text x="692" y="134" textAnchor="middle" fill="#2A3A50" fontSize="7" fontFamily="Share Tech Mono">PASS.</text>
+    <text x="692" y="162" textAnchor="middle" fill="#F59E0B" fontSize="26" fontFamily="Orbitron" fontWeight="600">{pT.toFixed(1)}</text>
+    <text x="692" y="178" textAnchor="middle" fill="#1C3050" fontSize="7" fontFamily="Share Tech Mono">°C</text>
+    {/* AC button */}
+    <circle cx="607" cy="152" r="18" fill={ac?'#0A2448':'#070E18'} stroke={ac?'#4A9EF5':'#182030'} strokeWidth={ac?1.2:.8}/>
+    <text x="607" y="157" textAnchor="middle" fill={ac?'#4A9EF5':'#1C3050'} fontSize="10" fontFamily="Share Tech Mono">A/C</text>
+    {/* recirc */}
+    <circle cx="580" cy="152" r="12" fill={recirc?'#0A2A1C':'#070E18'} stroke={recirc?'#10D98A':'#182030'} strokeWidth=".8"/>
+    <text x="580" y="156" textAnchor="middle" fill={recirc?'#10D98A':'#1C3050'} fontSize="7" fontFamily="Share Tech Mono">↺</text>
+    {/* fan bars */}
+    {fanBars(dF,496)}
+    <text x="524" y="260" textAnchor="middle" fill="#1C3050" fontSize="6" fontFamily="Share Tech Mono">FAN {dF}/7</text>
+    {fanBars(pF,650)}
+    <text x="678" y="260" textAnchor="middle" fill="#1C3050" fontSize="6" fontFamily="Share Tech Mono">FAN {pF}/7</text>
+    {/* wiper status */}
+    <rect x="86" y="284" width="112" height="46" rx="5" fill="#070F1C" stroke="#182030" strokeWidth=".5"/>
+    <text x="142" y="301" textAnchor="middle" fill="#1C3050" fontSize="7" fontFamily="Share Tech Mono">FRONT WIPER</text>
+    <text x="142" y="320" textAnchor="middle" fill={wf!=='OFF'?'#4A9EF5':'#1C3050'} fontSize="13" fontFamily="Share Tech Mono">{wf}</text>
+    {/* horn ring */}
+    {horn&&<g><rect x="310" y="284" width="100" height="46" rx="5" fill="#EF4040" opacity=".1" stroke="#EF4040" strokeWidth=".8"/>
+    <text x="360" y="314" textAnchor="middle" fill="#EF4040" fontSize="12" fontFamily="Share Tech Mono" letterSpacing="4">HORN!</text></g>}
+    {/* VSS label */}
+    <text x="370" y="414" textAnchor="middle" fill="#0A1828" fontSize="7" fontFamily="Share Tech Mono">Vehicle.Body.*  ·  COVESA VSS v4.0  ·  overlay: LatchStatus  IsDoubleLocked  IsChildLockActive</text>
+  </svg>;
+}
+
+/* ═══════════════ CONTROL PANEL ═══════════════ */
+function ControlPanel({s,set}){
+  const anyLight=Object.keys(s).some(k=>k.startsWith('Body.Lights')&&s[k]===true);
+  const anyDoor=['Row1.Left','Row1.Right','Row2.Left','Row2.Right'].some(d=>s[`Body.Doors.${d}.IsOpen`]);
+
+  return <div className="cp">
+    <div className="cphdr">
+      <div style={{width:7,height:7,borderRadius:2,background:'var(--amber)',opacity:.5}}/>
+      <span className="cptitle">VSS SIGNAL CONTROL</span>
+    </div>
+    <div className="cpscroll">
+
+      <SG title="Exterior Lighting" vss="Body.Lights" def={true} lit={anyLight}>
+        <BR label="Low beam" k="Body.Lights.Beam.Low.IsOn" s={s} set={set}/>
+        <BR label="High beam" k="Body.Lights.Beam.High.IsOn" s={s} set={set} c="b"/>
+        <BR label="DRL (running lights)" k="Body.Lights.Running.IsOn" s={s} set={set}/>
+        <BR label="Parking lights" k="Body.Lights.Parking.IsOn" s={s} set={set} c="a"/>
+        <BR label="Front fog" k="Body.Lights.Fog.Front.IsOn" s={s} set={set} c="a"/>
+        <BR label="Rear fog" k="Body.Lights.Fog.Rear.IsOn" s={s} set={set} c="r"/>
+        <BR label="Brake lights" k="Body.Lights.Brake.IsActive" s={s} set={set} c="r"/>
+        <BR label="Reverse / backup" k="Body.Lights.Backup.IsActive" s={s} set={set}/>
+        <BR label="License plate" k="Body.Lights.LicensePlate.IsOn" s={s} set={set}/>
+        <div className="hdiv2"/>
+        <BR label="Left indicator" k="Body.Lights.DirectionIndicator.Left.IsSignaling" s={s} set={set} c="a"/>
+        <BR label="Right indicator" k="Body.Lights.DirectionIndicator.Right.IsSignaling" s={s} set={set} c="a"/>
+        <BR label="Hazard (all)" k="Body.Lights.Hazard.IsSignaling" s={s} set={set} c="a"/>
+      </SG>
+
+      <SG title="Wipers & Washers" vss="Body.Windshield">
+        <EnumR label="Front mode" k="Body.Windshield.Front.Wiping.Mode" s={s} set={set}
+          opts={['OFF','SLOW','MEDIUM','FAST','INTERVAL']}/>
+        <SlR label="Front intensity" k="Body.Windshield.Front.Wiping.Intensity" s={s} set={set} min={0} max={5} step={1} unit="/5"/>
+        <BR label="Front washer" k="Body.Windshield.Front.Washing.IsActive" s={s} set={set} c="b"/>
+        <div className="hdiv2"/>
+        <EnumR label="Rear mode" k="Body.Windshield.Rear.Wiping.Mode" s={s} set={set}
+          opts={['OFF','SLOW','MEDIUM','FAST']}/>
+        <BR label="Rear washer" k="Body.Windshield.Rear.Washing.IsActive" s={s} set={set} c="b"/>
+      </SG>
+
+      <SG title="Mirrors" vss="Body.Mirrors">
+        <div style={{display:'flex',gap:6}}>
+          {[['Left','Body.Mirrors.Left'],['Right','Body.Mirrors.Right']].map(([side,pfx])=>(
+            <div key={side} style={{flex:1,background:'var(--s2)',borderRadius:'var(--r6)',padding:'6px 8px',border:'1px solid var(--bdr)',display:'flex',flexDirection:'column',gap:3}}>
+              <div className="dctitle">{side.toUpperCase()}</div>
+              <div className="dcr"><span className="dcl">Fold</span><Tog val={s[`${pfx}.IsFolded`]} on={()=>set(`${pfx}.IsFolded`,!s[`${pfx}.IsFolded`])} c="a"/></div>
+              <div className="dcr"><span className="dcl">Heat</span><Tog val={s[`${pfx}.IsHeatingOn`]} on={()=>set(`${pfx}.IsHeatingOn`,!s[`${pfx}.IsHeatingOn`])} c="r"/></div>
+              <SlR label="Tilt" k={`${pfx}.Tilt`} s={s} set={set} min={-10} max={10} step={1} unit="°"/>
+              <SlR label="Pan" k={`${pfx}.Pan`} s={s} set={set} min={-10} max={10} step={1} unit="°"/>
+            </div>
+          ))}
+        </div>
+      </SG>
+
+      <SG title="Doors" vss="Body.Doors" def={true} lit={anyDoor}>
+        <div className="dcgrid">
+          <DoorCard label="ROW1 · LEFT" pfx="Body.Doors.Row1.Left" s={s} set={set}/>
+          <DoorCard label="ROW1 · RIGHT" pfx="Body.Doors.Row1.Right" s={s} set={set}/>
+          <DoorCard label="ROW2 · LEFT" pfx="Body.Doors.Row2.Left" s={s} set={set}/>
+          <DoorCard label="ROW2 · RIGHT" pfx="Body.Doors.Row2.Right" s={s} set={set}/>
+        </div>
+      </SG>
+
+      <SG title="Body Actuators" vss="Body">
+        <BR label="Hood open" k="Body.Hood.IsOpen" s={s} set={set} c="a"/>
+        <BR label="Trunk / tailgate open" k="Body.Trunk.IsOpen" s={s} set={set} c="a"/>
+        <BR label="Trunk locked" k="Body.Trunk.IsLocked" s={s} set={set} c="r"/>
+        <BR label="Fuel lid open" k="Body.FuelLid.IsOpen" s={s} set={set} c="a"/>
+        <BR label="Charge lid open" k="Body.ChargeLid.IsOpen" s={s} set={set} c="t"/>
+        <BR label="Horn active" k="Body.Horn.IsActive" s={s} set={set} c="r"/>
+      </SG>
+
+      <SG title="Sunroof" vss="Body.Sunroof">
+        <SlR label="Roof position" k="Body.Sunroof.Position" s={s} set={set} min={0} max={100} step={5} unit="%"/>
+        <SlR label="Shade position" k="Body.Sunroof.Shade.Position" s={s} set={set} min={0} max={100} step={5} unit="%"/>
+      </SG>
+
+      <SG title="Cabin Lighting" vss="Cabin.Lights">
+        <BR label="Dome light" k="Cabin.Lights.IsDomeOn" s={s} set={set} c="a"/>
+        <BR label="Glovebox light" k="Cabin.Lights.IsGloveBoxOn" s={s} set={set} c="a"/>
+        <SlR label="Ambient intensity" k="Cabin.Lights.Ambient.Intensity" s={s} set={set} min={0} max={100} step={5} unit="%"/>
+        <div className="cr">
+          <span className="cn">Ambient color</span>
+          <input type="color" value={s['Cabin.Lights.Ambient.Color']}
+            onChange={e=>set('Cabin.Lights.Ambient.Color',e.target.value)}
+            style={{width:32,height:20,border:'1px solid var(--bdr2)',borderRadius:3,background:'transparent',cursor:'pointer',padding:1}}/>
+          <span className="sv" style={{fontSize:8}}>{s['Cabin.Lights.Ambient.Color']}</span>
+        </div>
+      </SG>
+
+      <SG title="HVAC" vss="Cabin.HVAC">
+        <BR label="A/C active" k="Cabin.HVAC.IsAirConditioningActive" s={s} set={set} c="b"/>
+        <BR label="Recirculation" k="Cabin.HVAC.IsRecirculationActive" s={s} set={set} c="t"/>
+        <BR label="Front defroster" k="Cabin.HVAC.IsFrontDefrosterActive" s={s} set={set} c="b"/>
+        <BR label="Rear defroster" k="Cabin.HVAC.IsRearDefrosterActive" s={s} set={set} c="b"/>
+        <div className="hdiv2"/>
+        <SlR label="Driver temp" k="Cabin.HVAC.Station.Row1.Left.Temperature" s={s} set={set} min={16} max={30} step={0.5} unit="°C"/>
+        <SlR label="Driver fan" k="Cabin.HVAC.Station.Row1.Left.FanSpeed" s={s} set={set} min={0} max={7} step={1} unit="/7"/>
+        <EnumR label="Driver vent" k="Cabin.HVAC.Station.Row1.Left.AirDistribution" s={s} set={set}
+          opts={['DASHBOARD','FLOOR','DEFROST','COMBINED']}/>
+        <div className="hdiv2"/>
+        <SlR label="Passenger temp" k="Cabin.HVAC.Station.Row1.Right.Temperature" s={s} set={set} min={16} max={30} step={0.5} unit="°C"/>
+        <SlR label="Passenger fan" k="Cabin.HVAC.Station.Row1.Right.FanSpeed" s={s} set={set} min={0} max={7} step={1} unit="/7"/>
+        <EnumR label="Passenger vent" k="Cabin.HVAC.Station.Row1.Right.AirDistribution" s={s} set={set}
+          opts={['DASHBOARD','FLOOR','DEFROST','COMBINED']}/>
+      </SG>
+
+      <SG title="Seats" vss="Cabin.Seat">
+        {[['Driver','Cabin.Seat.Row1.Left'],['Passenger','Cabin.Seat.Row1.Right']].map(([label,pfx])=>(
+          <div key={pfx} style={{background:'var(--s2)',borderRadius:'var(--r6)',padding:'6px 8px',border:'1px solid var(--bdr)',display:'flex',flexDirection:'column',gap:3,marginBottom:4}}>
+            <div className="dctitle">{label.toUpperCase()}</div>
+            <div className="dcr"><span className="dcl">Heating</span><Tog val={s[`${pfx}.IsHeatingOn`]} on={()=>set(`${pfx}.IsHeatingOn`,!s[`${pfx}.IsHeatingOn`])} c="r"/></div>
+            <div className="dcr"><span className="dcl">Ventilation</span><Tog val={s[`${pfx}.IsVentilationOn`]} on={()=>set(`${pfx}.IsVentilationOn`,!s[`${pfx}.IsVentilationOn`])} c="b"/></div>
+          </div>
+        ))}
+      </SG>
+
+    </div>
+  </div>;
+}
+
+/* ═══════════════ MAIN APP ═══════════════ */
+function App(){
+  const [s,setS]=useState(INIT_STATE);
+  const [view,setView]=useState('top');
+  const [time,setTime]=useState(new Date());
+  const seq=useRef(0);
+
+  useEffect(()=>{const t=setInterval(()=>setTime(new Date()),1000);return()=>clearInterval(t)},[]);
+
+  const set=useCallback((k,v)=>{
+    setS(prev=>({...prev,[k]:v}));
+    seq.current++;
+  },[]);
+
+  const activeCount=Object.values(s).filter(v=>v===true||(typeof v==='string'&&v!=='OFF'&&!v.includes('#')&&!['FULL_LATCHED','DASHBOARD'].includes(v))).length;
+
+  const views=[
+    {id:'top',label:'TOP',icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="8" y="2" width="8" height="20" rx="3"/><rect x="4" y="6" width="4" height="12" rx="2" opacity=".5"/><rect x="16" y="6" width="4" height="12" rx="2" opacity=".5"/><rect x="6" y="15" width="3" height="5" rx="1" opacity=".4"/><rect x="15" y="15" width="3" height="5" rx="1" opacity=".4"/></svg>},
+    {id:'side',label:'SIDE',icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M2 14L6 8l6-2h5l3 2v6H2Z"/><path d="M2 14h18"/><circle cx="6" cy="17" r="3"/><circle cx="16" cy="17" r="3"/></svg>},
+    {id:'cockpit',label:'DASH',icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M2 12Q12 6 22 12"/><circle cx="12" cy="14" r="4"/><path d="M12 10V8M8 12l-2-2M16 12l2-2"/></svg>},
+  ];
+
+  const viewLabels={top:'TOP VIEW · XY PLANE',side:'SIDE VIEW · XZ PLANE',cockpit:'COCKPIT · INSTRUMENT CLUSTER'};
+
+  return <div style={{display:'flex',flexDirection:'column',height:'100vh',overflow:'hidden'}}>
+    <div className="hdr">
+      <span className="logo">BODY<span>CTRL</span></span>
+      <div className="hdiv"/>
+      <span className="hchip"><span className="dot dot-mock"/>MOCK · SIGNAL BUS</span>
+      <span className="hchip"><span className="dot dot-ok"/>COVESA VSS v4.0</span>
+      <span className="hchip">VIN: <b style={{color:'var(--teal)',marginLeft:4}}>1FTFW1ET0EKF08206</b></span>
+      <div className="hright">
+        <span className="sigcount">{activeCount} ACTIVE</span>
+        <span className="clk">{time.toTimeString().slice(0,8)}</span>
+      </div>
+    </div>
+    <div className="layout">
+      <div className="sb">
+        {views.map(v=>(
+          <button key={v.id} className={`vbtn ${view===v.id?'active':''}`} onClick={()=>setView(v.id)}>
+            {v.icon}{v.label}
+          </button>
+        ))}
+        <div className="sbsep"/>
+        {/* live indicators */}
+        {[
+          {k:'Body.Lights.Hazard.IsSignaling',c:'var(--amber)',l:'HAZ'},
+          {k:'Body.Horn.IsActive',c:'var(--red)',l:'HRN'},
+          {k:'Body.Lights.Beam.Low.IsOn',c:'var(--green)',l:'LO'},
+          {k:'Body.Lights.Beam.High.IsOn',c:'var(--blue)',l:'HI'},
+        ].map(({k,c,l})=>(
+          <div key={k} className="sbi">
+            <div className="sbd" style={{background:s[k]?c:'var(--muted)',boxShadow:s[k]?`0 0 8px ${c}`:''}}/>
+            <span className="sbl" style={{color:s[k]?c:''}}>{l}</span>
+          </div>
+        ))}
+      </div>
+      <div className="canvas">
+        <div className="ctbar">
+          <span className="ctlabel"><b>VSS</b> · {viewLabels[view]}</span>
+          <span className="ctright">NXP S32G2 · BODY DOMAIN · QM+ASIL-B</span>
+        </div>
+        <div className="svgwrap">
+          {view==='top'&&<TopView s={s}/>}
+          {view==='side'&&<SideView s={s}/>}
+          {view==='cockpit'&&<CockpitView s={s}/>}
+        </div>
+        <div className="stbar">
+          {[
+            {label:'LIGHTS',active:Object.keys(s).some(k=>k.startsWith('Body.Lights')&&s[k]===true),c:'var(--amber)'},
+            {label:'DOORS',active:['Row1.Left','Row1.Right','Row2.Left','Row2.Right'].some(d=>s[`Body.Doors.${d}.IsOpen`]),c:'var(--amber)'},
+            {label:'WIPERS',active:s['Body.Windshield.Front.Wiping.Mode']!=='OFF',c:'var(--blue)'},
+            {label:'HVAC',active:s['Cabin.HVAC.IsAirConditioningActive'],c:'var(--teal)'},
+            {label:'HORN',active:s['Body.Horn.IsActive'],c:'var(--red)'},
+            {label:'AMBIENT',active:s['Cabin.Lights.Ambient.Intensity']>0,c:'var(--violet)'},
+          ].map(({label,active,c})=>(
+            <div key={label} className="sti">
+              <div className="stid" style={{background:active?c:'var(--muted)',boxShadow:active?`0 0 6px ${c}`:''}}/>
+              <span style={{color:active?c:''}}>{label}</span>
+            </div>
+          ))}
+          <div style={{marginLeft:'auto',fontFamily:'var(--fm)',fontSize:'8px',color:'var(--muted)'}}>
+            seq#{seq.current} · {Object.keys(INIT_STATE).length} signals
+          </div>
+        </div>
+      </div>
+      <ControlPanel s={s} set={set}/>
+    </div>
+  </div>;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
