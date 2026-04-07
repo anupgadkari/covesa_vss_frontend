@@ -9,6 +9,7 @@ pub mod signal_bus;
 pub mod signal_ids;
 pub mod adapters;
 pub mod features;
+pub mod kuksa_sync;
 
 use std::sync::Arc;
 use tracing_subscriber::EnvFilter;
@@ -46,11 +47,13 @@ async fn main() -> anyhow::Result<()> {
     // let ws_server = WsServer::new("0.0.0.0:8080", Arc::clone(&bus));
     // tokio::spawn(ws_server.run());
 
-    // TODO: gRPC client for kuksa.val at L4
-    // let kuksa = KuksaClient::connect("http://localhost:55555").await?;
-    // tokio::spawn(kuksa.sync_loop(Arc::clone(&bus)));
+    // gRPC client for kuksa.val databroker at L4
+    let kuksa_endpoint = std::env::var("KUKSA_ENDPOINT")
+        .unwrap_or_else(|_| "http://localhost:55555".to_string());
+    let kuksa = kuksa_sync::KuksaSync::new(&kuksa_endpoint, Arc::clone(&bus));
+    tokio::spawn(async move { kuksa.run().await });
 
-    let _ = bus; // suppress unused warning until components are wired
+    let _ = bus; // suppress unused warning until FSMs are wired
 
     tracing::info!("vss-bridge ready — waiting for shutdown signal");
     tokio::signal::ctrl_c().await?;

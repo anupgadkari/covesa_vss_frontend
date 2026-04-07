@@ -208,15 +208,21 @@ A build-time tool that generates a `.dbc` CAN database from the VSS overlay. The
 ```
 vss-bridge/
 ├── Cargo.toml
-├── build.rs                  # bindgen: vss_ipc_message.h → Rust bindings
-├── include/
-│   └── vss_ipc_message.h     # canonical IPC schema (shared with AUTOSAR)
+├── build.rs                  # tonic-build: kuksa.val proto → gRPC client stubs
+├── proto/
+│   └── kuksa/val/v1/
+│       ├── val.proto         # kuksa.val gRPC service definition
+│       └── types.proto       # kuksa.val data types (DataEntry, Datapoint, etc.)
+├── overlay/
+│   └── Body/
+│       └── SwitchInputs.vspec  # overlay: physical switch/stalk sensor signals
 ├── src/
 │   ├── main.rs               # tokio runtime, dependency injection
 │   ├── signal_bus.rs         # trait SignalBus — the portability seam
 │   ├── arbiter.rs            # Signal Arbiter — per-actuator priority resolution
-│   ├── ipc_message.rs        # encode/parse RPmsg wire format
-│   ├── signal_ids.rs         # generated: VSS path → u32 ID constants
+│   ├── ipc_message.rs        # pure Rust IPC wire format (replaces C header + bindgen)
+│   ├── signal_ids.rs         # VSS path ↔ u32 ID constants (86 signals)
+│   ├── kuksa_sync.rs         # bidirectional gRPC sync with kuksa.val databroker
 │   ├── adapters/
 │   │   ├── rpmsg.rs          # RpmsgBus: NXP S32G2 (current)
 │   │   ├── glink.rs          # GlinkBus: Qualcomm (future)
@@ -240,16 +246,21 @@ vss-bridge/
 tokio           = { version = "1", features = ["full"] }
 tokio-tungstenite = "0.21"
 tonic           = "0.11"          # gRPC client for kuksa.val
-prost           = "0.12"          # protobuf codegen
+prost           = "0.12"          # protobuf runtime
+prost-types     = "0.12"          # well-known protobuf types (Timestamp)
 crc             = "3"             # CRC-16/CCITT-FALSE
 thiserror       = "1"
 serde           = { version = "1", features = ["derive"] }
 serde_json      = "1"
 async-trait     = "0.1"
 bytes           = "1"
+futures         = "0.3"
+tokio-stream    = { version = "0.1", features = ["sync"] }
+anyhow          = "1"
+tracing         = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [build-dependencies]
-bindgen         = "0.69"
 tonic-build     = "0.11"
 ```
 
@@ -380,8 +391,10 @@ pub struct HazardFsm<B: SignalBus> {
 
 impl<B: SignalBus> HazardFsm<B> {
     pub async fn run(self) {
+        // Subscribe to the physical hazard SWITCH input (overlay sensor signal),
+        // NOT the actuator output — prevents feedback loops.
         let mut stream = self.bus
-            .subscribe("Body.Lights.Hazard.IsSignaling")
+            .subscribe("Body.Switches.Hazard.IsEngaged")
             .await;
 
         while let Some(value) = stream.next().await {
@@ -410,14 +423,16 @@ impl<B: SignalBus> HazardFsm<B> {
 
 | FSM | Inputs (VSS subscriptions) | Outputs (Arbiter requests) |
 |-----|---------------------------|---------------------------|
-| `HazardFsm` | `Body.Lights.Hazard.IsSignaling` | Both `DirectionIndicator.*.IsSignaling` @ prio 3 |
-| `TurnFsm` | `Body.Lights.DirectionIndicator.{L,R}.IsSignaling` | Same signals @ prio 2 |
+| `HazardFsm` | `Body.Switches.Hazard.IsEngaged` (overlay) | Both `DirectionIndicator.*.IsSignaling` @ prio 3 |
+| `TurnFsm` | `Body.Switches.TurnIndicator.Direction` (overlay) | `DirectionIndicator.{Left,Right}.IsSignaling` @ prio 2 |
 | `LockFeedback` | `Body.Doors.*.IsLocked` (state change) | Both indicators @ prio 1 (brief sequence) |
-| `PepsFsm` | LF antenna event (RPmsg sensor), key auth result | `Body.Doors.*.IsLocked` @ prio 3 |
-| `LowBeamFsm` | `Body.Lights.Beam.Low.IsOn` | Same signal @ prio 2 |
-| `HighBeamFsm` | `Body.Lights.Beam.High.IsOn` | Same signal @ prio 2 |
-| `DrlFsm` | Ignition state, park brake | `Body.Lights.Running.IsOn` @ prio 2 |
-| `AutoLock` | Speed signal (`Vehicle.Speed`) | `Body.Doors.*.IsLocked` @ prio 2 |
+| `PepsFsm` | `Body.PEPS.KeyPresent` (synthetic sensor) | `Body.Doors.*.IsLocked` @ prio 3 |
+| `LowBeamFsm` | `Body.Lights.LightSwitch` | `Body.Lights.Beam.Low.IsOn` @ prio 2 |
+| `HighBeamFsm` | `Body.Switches.HighBeam.IsEngaged` (overlay) | `Body.Lights.Beam.High.IsOn` @ prio 2 |
+| `DrlFsm` | `Vehicle.LowVoltageSystemState`, `Chassis.ParkingBrake.IsEngaged` (overlay) | `Body.Lights.Running.IsOn` @ prio 2 |
+| `AutoLock` | `Vehicle.Speed` | `Body.Doors.*.IsLocked` @ prio 2 |
+
+**Input/output separation principle**: FSMs subscribe to *physical switch/stalk inputs* (sensor overlay signals), not to the actuator outputs they control. This prevents feedback loops and correctly models the hardware: a hazard switch is physically separate from the indicator lamps it controls. Overlay signals that are not in standard VSS v4.0 are defined in `overlay/Body/SwitchInputs.vspec`.
 
 ---
 
@@ -545,7 +560,7 @@ Runs as an AUTOSAR Classic partition on M7 cores. ASIL-B certified per ISO 26262
 
 ## 10. IPC Message Schema
 
-Defined in `include/vss_ipc_message.h`. Consumed by AUTOSAR C (direct include) and Rust (via `bindgen` at build time).
+Defined in `src/ipc_message.rs` (pure Rust implementation). The AUTOSAR C side uses a matching `vss_ipc_message.h` header with identical layout, offsets, and CRC algorithm. Both sides must produce byte-identical wire format.
 
 ### Wire format
 
@@ -644,6 +659,49 @@ Vehicle.Cabin.Door.Row1.DriverSide.IsChildLockActive:
 ```
 
 Instance the above across `Row[1,2]` × `["DriverSide", "PassengerSide"]` using the VSS overlay mechanism. Run `vspec2id` after including the overlay to generate stable signal IDs for the new signals.
+
+### Switch / Stalk Input Overlay
+
+Standard COVESA VSS v4.0 defines actuator outputs (e.g. `Body.Lights.Hazard.IsSignaling`) but not the physical switch inputs that drive them. Feature FSMs must subscribe to inputs, not outputs, to avoid feedback loops. The following overlay defines sensor signals for physical switches and stalks.
+
+**File**: `overlay/Body/SwitchInputs.vspec`
+
+```yaml
+Body.Switches.Hazard.IsEngaged:
+  datatype: boolean
+  type: sensor
+  description: >
+    Physical hazard switch state. True when the driver has pressed the
+    hazard button on the dashboard. HazardFsm subscribes to this signal.
+
+Body.Switches.TurnIndicator.Direction:
+  datatype: string
+  type: sensor
+  allowed: ['OFF', 'LEFT', 'RIGHT']
+  description: >
+    Turn signal stalk position. TurnFsm subscribes to this signal and
+    maps LEFT/RIGHT to the corresponding DirectionIndicator actuator output.
+
+Body.Switches.HighBeam.IsEngaged:
+  datatype: boolean
+  type: sensor
+  description: >
+    High beam stalk/switch state. HighBeamFsm subscribes to this signal.
+
+Chassis.ParkingBrake.IsEngaged:
+  datatype: boolean
+  type: sensor
+  description: >
+    Parking brake engagement state. Used by DrlFsm as an input condition.
+```
+
+### Synthetic Signals
+
+**`Body.PEPS.KeyPresent`** — Boolean sensor signal injected by the Rust bridge when the Safety Monitor reports a successful LF key authentication. PepsFsm subscribes to this as a stand-in for the raw LF antenna interrupt (which is M7-internal).
+
+### Power Mode Signals
+
+FSMs that depend on vehicle power state (DrlFsm, AutoLock) subscribe to **`Vehicle.LowVoltageSystemState`** (standard VSS v4.0) rather than `Vehicle.Powertrain.Engine.IsRunning`. This is powertrain-agnostic — works for ICE, HEV, and BEV platforms. Values: `undefined`, `lock`, `off`, `acc`, `on`, `start`. **`Vehicle.Powertrain.Type`** (string: `COMBUSTION`, `HYBRID`, `ELECTRIC`) is available for features that need powertrain-specific behaviour.
 
 ---
 
@@ -842,15 +900,18 @@ Context:
 - FSMs subscribe to input signals, compute state transitions, publish ActuatorRequests
 - No FSM imports another FSM
 - LED blink waveform is NOT the FSM's responsibility — it sets boolean intent only
+- IMPORTANT: FSMs subscribe to physical switch/stalk INPUTS (overlay sensors),
+  not to the actuator outputs they control. This prevents feedback loops.
 - Priority assignments (hardcoded, matches Safety Monitor's table):
-    HazardFsm          → DirectionIndicator.*.IsSignaling    @ HIGH (3)
-    TurnFsm            → DirectionIndicator.{Left,Right}     @ MEDIUM (2)
-    LockFeedback       → DirectionIndicator.*.IsSignaling    @ LOW (1)
-    PepsFsm            → Doors.*.IsLocked                    @ HIGH (3)
-    AutoLock           → Doors.*.IsLocked                    @ MEDIUM (2)
-    LowBeamFsm         → Lights.Beam.Low.IsOn                @ MEDIUM (2)
-    HighBeamFsm        → Lights.Beam.High.IsOn               @ MEDIUM (2)
-    DrlFsm             → Lights.Running.IsOn                 @ MEDIUM (2)
+    HazardFsm   input: Body.Switches.Hazard.IsEngaged        → DirectionIndicator.*.IsSignaling    @ HIGH (3)
+    TurnFsm     input: Body.Switches.TurnIndicator.Direction  → DirectionIndicator.{Left,Right}     @ MEDIUM (2)
+    LockFeedback input: Body.Doors.*.IsLocked (state change)  → DirectionIndicator.*.IsSignaling    @ LOW (1)
+    PepsFsm     input: Body.PEPS.KeyPresent (synthetic)       → Doors.*.IsLocked                    @ HIGH (3)
+    AutoLock    input: Vehicle.Speed                           → Doors.*.IsLocked                    @ MEDIUM (2)
+    LowBeamFsm input: Body.Lights.LightSwitch                 → Lights.Beam.Low.IsOn                @ MEDIUM (2)
+    HighBeamFsm input: Body.Switches.HighBeam.IsEngaged        → Lights.Beam.High.IsOn               @ MEDIUM (2)
+    DrlFsm      input: Vehicle.LowVoltageSystemState,
+                       Chassis.ParkingBrake.IsEngaged          → Lights.Running.IsOn                 @ MEDIUM (2)
 
 Implement all 8 FSMs, each in its own file under src/features/.
 For LockFeedback: on any IsLocked state change event, publish a HIGH request to both indicators
@@ -900,22 +961,26 @@ Include MISRA-C:2012 compatible code style. No dynamic allocation. No recursion.
 You are implementing the Kuksa.val synchronisation loop for the Rust vss-bridge service.
 
 Context:
-- kuksa.val runs in a sibling container at grpc://localhost:55555
-- Use the `kuksa-client` Rust crate (or raw `tonic` with kuksa proto definitions)
+- kuksa.val runs in a sibling container at grpc://localhost:55555 (configurable via KUKSA_ENDPOINT env var)
+- Use raw `tonic` with bundled kuksa.val proto definitions in `proto/kuksa/val/v1/`
+  (val.proto defines the VAL gRPC service; types.proto defines DataEntry, Datapoint, etc.)
+- build.rs uses `tonic_build::configure().build_server(false).compile()` to generate the client stubs
+- The proto module is re-exported as `kuksa_sync::proto` via `tonic::include_proto!("kuksa.val.v1")`
 - The sync loop has two responsibilities:
-    1. INBOUND: subscribe to all Body.* and Cabin.* VSS signals in kuksa.val;
-       on change, forward to SignalBus::publish() so features react
-    2. OUTBOUND: subscribe to SignalBus state updates from Safety Monitor;
-       on receipt, write the new value to kuksa.val via SetValues RPC
+    1. INBOUND: subscribe to all signals from ALL_SIGNALS in kuksa.val via the Subscribe RPC;
+       convert kuksa.val Datapoint values to internal SignalValue; forward to SignalBus::publish()
+    2. OUTBOUND: relay Safety Monitor state updates to kuksa.val via the Set RPC
+       using `push_to_kuksa()` which converts SignalValue → Datapoint
 - Handle kuksa.val disconnection gracefully: retry with exponential backoff (1s, 2s, 4s, max 30s)
 - On reconnect: request a full state snapshot from Safety Monitor and replay to kuksa.val
 - The struct is `KuksaSync<B: SignalBus>` with a `run()` async method
+- On connect, log server info via GetServerInfo RPC
 
 Implement:
-1. `KuksaSync<B>` struct and `run()` method
-2. Inbound subscription loop with reconnect logic
-3. Outbound state update forwarding
-4. A `signal_path_to_kuksa_id()` helper that maps VSS path strings to kuksa entry IDs
+1. `KuksaSync<B>` struct and `run()` method with reconnect loop
+2. Inbound subscription loop using `ValClient::subscribe()` streaming RPC
+3. `datapoint_to_signal_value()` and `signal_value_to_datapoint()` conversion functions
+4. `push_to_kuksa()` for outbound Set RPCs
 5. Unit test using MockBus and a mock gRPC server (use `tonic` test utilities)
 ```
 
@@ -956,14 +1021,14 @@ You are setting up the build and container infrastructure for the vss-bridge Rus
 Context:
 - Target: aarch64-unknown-linux-musl (statically linked, for RHEL UBI minimal container)
 - Cross-compilation from x86_64 dev machine using cross-rs
-- build.rs must run bindgen on include/vss_ipc_message.h targeting thumbv7em-none-eabihf
-  (for consistent C type sizes matching the M7)
+- build.rs runs tonic-build to generate gRPC client stubs from bundled kuksa.val proto files
+- IPC message types are implemented in pure Rust (no C header, no bindgen)
 - Container base: registry.redhat.io/ubi9/ubi-minimal
 - Podman, not Docker
 
 Produce:
 1. `Cargo.toml` with all dependencies from the architecture doc
-2. `build.rs` using bindgen with allowlist for Vss* types and VSS_* constants
+2. `build.rs` using tonic-build to compile kuksa.val proto files (build_server=false, client only)
 3. `Cross.toml` configuring cross-rs for aarch64-unknown-linux-musl
 4. `Containerfile` (Podman):
    - Stage 1: cargo build --release --target aarch64-unknown-linux-musl
@@ -978,6 +1043,6 @@ Produce:
 
 ---
 
-*Document version: 1.0 — Architecture as of April 2026*  
-*VSS base: COVESA VSS v4.0 + DoorExtended overlay*  
-*IPC schema: vss_ipc_message.h v1 (magic 0xBCC01A00)*
+*Document version: 1.1 — Architecture as of April 2026*
+*VSS base: COVESA VSS v4.0 + DoorExtended overlay + SwitchInputs overlay*
+*IPC schema: src/ipc_message.rs v1 (magic 0xBCC01A00) — pure Rust, matching AUTOSAR C header*
