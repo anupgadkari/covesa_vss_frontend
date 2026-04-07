@@ -1,0 +1,72 @@
+# VSS Overlay — Physical Switch / Stalk Input Signals
+#
+# Standard COVESA VSS v4.0 does not separate physical switch state from
+# actuator output state. For example, Body.Lights.Hazard.IsSignaling is
+# defined as an actuator (output), but the hazard push-button on the
+# dashboard is a sensor (input). Feature FSMs must subscribe to the
+# physical input, not their own output, to avoid circular dependencies.
+#
+# This overlay adds sensor signals for every driver-operated switch and
+# stalk that feeds into the L5 feature state machines.
+#
+# Naming convention: Body.Switches.<System>.<Signal>
+# All signals in this file are type: sensor (read-only from the A53 perspective).
+# The Safety Monitor (M7) reads the physical switch via CAN/LIN and pushes
+# STATE_UPDATE frames to the A53 Rust bridge.
+
+# ─── Hazard Warning ───────────────────────────────────────────────────
+# Dashboard push-button. Latching toggle: press once = on, press again = off.
+# The HazardFsm reads this and drives both DirectionIndicator.*.IsSignaling
+# at HIGH priority.
+
+Vehicle.Body.Switches.Hazard.IsEngaged:
+  datatype: boolean
+  type: sensor
+  description: >
+    Physical state of the hazard warning push-button on the dashboard.
+    True when the button is in the engaged (on) position.
+    Read by HazardFsm; drives both direction indicators at HIGH priority.
+
+# ─── Turn Signal Stalk ────────────────────────────────────────────────
+# Column stalk with three detent positions: center (OFF), up (LEFT),
+# down (RIGHT). Self-cancelling after steering wheel return.
+# The TurnFsm reads this and drives the corresponding DirectionIndicator
+# at MEDIUM priority.
+
+Vehicle.Body.Switches.TurnIndicator.Direction:
+  datatype: string
+  type: sensor
+  allowed: ['OFF', 'LEFT', 'RIGHT']
+  description: >
+    Turn signal stalk position.
+    OFF = center/neutral, LEFT = stalk pushed up, RIGHT = stalk pushed down.
+    Read by TurnFsm; drives the matching DirectionIndicator at MEDIUM priority.
+    Self-cancels via steering angle feedback (handled in body ECU firmware).
+
+# ─── High Beam Stalk ─────────────────────────────────────────────────
+# Column stalk pull-toward-driver = momentary flash-to-pass,
+# push-away = latching high beam on/off.
+# The HighBeamFsm reads this and drives Body.Lights.Beam.High.IsOn
+# at MEDIUM priority.
+
+Vehicle.Body.Switches.HighBeam.IsEngaged:
+  datatype: boolean
+  type: sensor
+  description: >
+    High beam request from the column stalk.
+    True when the driver has pulled (flash-to-pass) or pushed (latch on)
+    the stalk into the high beam position. The body ECU distinguishes
+    momentary vs. latched; this signal reflects the current requested state.
+    Read by HighBeamFsm; drives Beam.High.IsOn at MEDIUM priority.
+
+# ─── Parking Brake ────────────────────────────────────────────────────
+# Electronic parking brake state. Used by DrlFsm to suppress DRL when
+# the vehicle is parked with ignition on.
+
+Vehicle.Chassis.ParkingBrake.IsEngaged:
+  datatype: boolean
+  type: sensor
+  description: >
+    Electronic parking brake state. True when the parking brake is applied.
+    Standard VSS v4.0 defines this; included here for completeness.
+    Read by DrlFsm to suppress daytime running lights when parked.

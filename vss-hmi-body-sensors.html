@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VSS Body Sensor Inputs · Test HMI</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;900&family=Share+Tech+Mono&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#04080F;--s1:#080E18;--s2:#0C1420;--s3:#111B28;--s4:#18243A;
+  --bdr:#1A2540;--bdr2:#243055;
+  --amber:#F59E0B;--amber2:rgba(245,158,11,.15);--amber3:rgba(245,158,11,.07);
+  --teal:#0DC8C8;--teal2:rgba(13,200,200,.13);
+  --green:#10D98A;--green2:rgba(16,217,138,.12);
+  --red:#F04040;--red2:rgba(240,64,64,.12);
+  --blue:#4A9EF5;--blue2:rgba(74,158,245,.12);
+  --violet:#9B6DFF;--violet2:rgba(155,109,255,.12);
+  --white:#DCE8F5;--dim:#6B7E99;--muted:#2E3E55;
+  --fd:'Orbitron',monospace;--fm:'Share Tech Mono',monospace;--fu:'Inter',sans-serif;
+  --r4:4px;--r6:6px;--r8:8px;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--white);font-family:var(--fu)}
+
+/* HEADER */
+.hdr{height:44px;background:var(--s1);border-bottom:1px solid var(--bdr);display:flex;align-items:center;padding:0 16px;gap:14px;flex-shrink:0;position:relative;z-index:10}
+.logo{font-family:var(--fd);font-size:13px;font-weight:900;letter-spacing:.22em;color:var(--amber);white-space:nowrap}
+.logo span{color:var(--muted);font-weight:400}
+.hdiv{width:1px;height:22px;background:var(--bdr2)}
+.hchip{display:flex;align-items:center;gap:5px;font-family:var(--fm);font-size:10px;padding:4px 10px;border-radius:4px;border:1px solid var(--bdr2);background:var(--s2);color:var(--dim);white-space:nowrap}
+.hchip .dot{width:5px;height:5px;border-radius:50%}
+.dot-mock{background:var(--amber);box-shadow:0 0 8px var(--amber)}
+.dot-ok{background:var(--green);box-shadow:0 0 6px var(--green)}
+.hright{margin-left:auto;display:flex;align-items:center;gap:12px}
+.clk{font-family:var(--fm);font-size:12px;color:var(--dim)}
+.sigcount{font-family:var(--fm);font-size:10px;color:var(--teal);padding:3px 8px;border:1px solid var(--teal2);border-radius:3px;background:var(--teal2)}
+
+/* LAYOUT */
+.layout{display:flex;flex-direction:column;height:calc(100vh - 44px)}
+
+/* CONTENT */
+.container{flex:1;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--bdr2) transparent;padding:16px;max-width:600px;margin:0 auto;width:100%}
+.container::-webkit-scrollbar{width:4px}
+.container::-webkit-scrollbar-track{background:transparent}
+.container::-webkit-scrollbar-thumb{background:var(--bdr2);border-radius:2px}
+
+/* SECTION */
+.section{background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r6);padding:16px;margin-bottom:16px}
+.section-title{font-family:var(--fd);font-size:12px;letter-spacing:.12em;color:var(--amber);text-transform:uppercase;margin-bottom:12px;font-weight:600}
+.section-info{font-family:var(--fm);font-size:9px;color:var(--dim);margin-bottom:12px;line-height:1.4}
+
+/* CONTROLS */
+.control{display:flex;align-items:center;gap:12px;margin-bottom:12px;padding:8px;background:var(--s3);border-radius:var(--r4);border:1px solid var(--bdr)}
+.control-label{font-family:var(--fm);font-size:10px;color:var(--white);min-width:120px;font-weight:500}
+.control-value{font-family:var(--fm);font-size:10px;color:var(--amber);min-width:60px;text-align:right;font-weight:600}
+
+/* Slider */
+.slider-ctrl{flex:1}
+.slr{width:100%;height:6px;-webkit-appearance:none;background:var(--s4);border-radius:4px;outline:none;cursor:pointer}
+.slr::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--amber);cursor:pointer;box-shadow:0 0 6px rgba(245,158,11,.7)}
+.slr::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--amber);cursor:pointer;border:none;box-shadow:0 0 6px rgba(245,158,11,.7)}
+
+/* Toggle */
+.tog{width:42px;height:22px;border-radius:11px;border:1.5px solid var(--bdr2);background:var(--s3);cursor:pointer;position:relative;transition:all .16s;flex-shrink:0}
+.tog.on{border-color:var(--green);background:var(--green2)}
+.knob{position:absolute;width:14px;height:14px;border-radius:50%;background:var(--dim);top:3px;left:3px;transition:transform .16s,background .16s}
+.tog.on .knob{transform:translateX(20px);background:var(--green)}
+
+/* Button Group */
+.button-group{display:flex;flex-wrap:wrap;gap:6px;flex:1}
+.btn{padding:6px 10px;border-radius:var(--r4);font-family:var(--fm);font-size:9px;border:1px solid var(--bdr2);background:var(--s3);color:var(--dim);cursor:pointer;transition:all .13s;white-space:nowrap}
+.btn:hover{color:var(--white);border-color:var(--white)}
+.btn.active{background:var(--amber2);border-color:rgba(245,158,11,.4);color:var(--amber)}
+
+/* Select */
+.sel{flex:1;background:var(--s3);border:1px solid var(--bdr2);border-radius:var(--r4);color:var(--white);font-family:var(--fm);font-size:10px;padding:6px 8px;outline:none;cursor:pointer}
+.sel:focus{border-color:var(--amber)}
+
+/* STATUS BAR */
+.stbar{height:24px;background:var(--s1);border-top:1px solid var(--bdr);display:flex;align-items:center;padding:0 12px;gap:8px;flex-shrink:0;font-family:var(--fm);font-size:9px;color:var(--dim)}
+
+/* ANIMATIONS */
+@keyframes blink{0%,49%{opacity:1}50%,100%{opacity:.1}}
+.blink{animation:blink .7s infinite}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useRef,useCallback}=React;
+
+/* ══════ VSS SENSOR SIGNALS ══════ */
+const INIT_STATE={
+  // Vehicle power state (powertrain-agnostic — standard VSS v4.0)
+  'Vehicle.LowVoltageSystemState':'OFF',
+  'Vehicle.Powertrain.Type':'COMBUSTION',
+  // Braking
+  'Chassis.Brake.PedalPosition':0,
+  // Transmission
+  'Powertrain.Transmission.CurrentGear':0,
+  // Light Switch
+  'Body.Lights.LightSwitch':'OFF',
+  // Switch / Stalk inputs (overlay — physical driver controls)
+  'Body.Switches.Hazard.IsEngaged':false,
+  'Body.Switches.TurnIndicator.Direction':'OFF',
+  'Body.Switches.HighBeam.IsEngaged':false,
+  'Chassis.ParkingBrake.IsEngaged':true,
+  // Doors
+  'Body.Doors.Row1.Left.IsOpen':false,
+  'Body.Doors.Row1.Right.IsOpen':false,
+  'Body.Doors.Row2.Left.IsOpen':false,
+  'Body.Doors.Row2.Right.IsOpen':false,
+  'Body.Doors.Row1.Left.LatchStatus':'FULL_LATCHED',
+  'Body.Doors.Row1.Right.LatchStatus':'FULL_LATCHED',
+  'Body.Doors.Row2.Left.LatchStatus':'FULL_LATCHED',
+  'Body.Doors.Row2.Right.LatchStatus':'FULL_LATCHED',
+  // Hood & Trunk
+  'Body.Hood.IsOpen':false,
+  'Body.Trunk.IsOpen':false,
+  // Fuel & Charge
+  'Body.FuelLid.IsOpen':false,
+  'Body.ChargeLid.IsOpen':false,
+};
+
+/* ══════ MAIN APP ══════ */
+function App(){
+  const [state,setState]=useState(INIT_STATE);
+  const [connected,setConnected]=useState(false);
+  const wsRef=useRef(null);
+
+  useEffect(()=>{
+    const url=`ws://${window.location.hostname}:8080`;
+    const ws=new WebSocket(url);
+    ws.onopen=()=>{
+      console.log('✓ WebSocket connected');
+      setConnected(true);
+      ws.send(JSON.stringify({type:'sensor-hmi',action:'subscribe'}));
+    };
+    ws.onmessage=(e)=>{
+      try{
+        const msg=JSON.parse(e.data);
+        if(msg.state)setState(msg.state);
+      }catch(err){console.error('Parse error:',err)}
+    };
+    ws.onerror=()=>setConnected(false);
+    ws.onclose=()=>setConnected(false);
+    wsRef.current=ws;
+    return ()=>ws.close();
+  },[]);
+
+  const set=(k,v)=>{
+    setState(s=>({...s,[k]:v}));
+    if(wsRef.current?.readyState===WebSocket.OPEN){
+      wsRef.current.send(JSON.stringify({type:'sensor',path:k,value:v}));
+    }
+  };
+
+  return <div style={{display:'flex',flexDirection:'column',height:'100vh'}}>
+    <header className="hdr">
+      <div className="logo">SENSOR<span>·HMI</span></div>
+      <div className="hdiv"/>
+      <div className="hchip">
+        <div className={`dot ${connected?'dot-ok':'dot-mock'}`}/>
+        <span>{connected?'LIVE':'MOCK'}</span>
+      </div>
+      <div className="hright">
+        <span className="sigcount">{Object.keys(state).length} signals</span>
+      </div>
+    </header>
+
+    <div className="layout">
+      <div className="container">
+        {/* VEHICLE POWER STATE */}
+        <div className="section">
+          <div className="section-title">Vehicle Power</div>
+          <div className="section-info">Powertrain-agnostic ignition / power mode (standard VSS v4.0). Works for ICE, HEV, and BEV.</div>
+          <div className="control">
+            <div className="control-label">Power Mode</div>
+            <div className="button-group">
+              {['OFF','LOCK','ACC','ON','START'].map(m=>(
+                <button key={m} className={`btn ${state['Vehicle.LowVoltageSystemState']===m?'active':''}`}
+                  onClick={()=>set('Vehicle.LowVoltageSystemState',m)}>
+                  {m}
+                </button>
+              ))}
+            </div>
+            <div className="control-value">{state['Vehicle.LowVoltageSystemState']}</div>
+          </div>
+          <div className="control">
+            <div className="control-label">Powertrain</div>
+            <div className="button-group">
+              {['COMBUSTION','HYBRID','ELECTRIC'].map(t=>(
+                <button key={t} className={`btn ${state['Vehicle.Powertrain.Type']===t?'active':''}`}
+                  onClick={()=>set('Vehicle.Powertrain.Type',t)}>
+                  {t}
+                </button>
+              ))}
+            </div>
+            <div className="control-value">{state['Vehicle.Powertrain.Type']}</div>
+          </div>
+        </div>
+        <div className="section">
+          <div className="section-title">Braking System</div>
+          <div className="section-info">Brake pedal position: 0% = not pressed, 100% = fully depressed</div>
+          <div className="control">
+            <div className="control-label">Brake Pedal</div>
+            <div className="slider-ctrl">
+              <input type="range" className="slr" min="0" max="100" step="1"
+                value={state['Chassis.Brake.PedalPosition']||0}
+                onChange={(e)=>set('Chassis.Brake.PedalPosition',parseInt(e.target.value))}/>
+            </div>
+            <div className="control-value">{state['Chassis.Brake.PedalPosition']||0}%</div>
+          </div>
+        </div>
+
+        {/* TRANSMISSION */}
+        <div className="section">
+          <div className="section-title">Transmission</div>
+          <div className="section-info">Gear position: negative = reverse, 0 = neutral, positive = forward</div>
+          <div className="control">
+            <div className="control-label">Gear</div>
+            <div className="button-group">
+              {[-2,-1,0,1,2,3,4,5,6].map(g=>(
+                <button key={g} className={`btn ${state['Powertrain.Transmission.CurrentGear']===g?'active':''}`}
+                  onClick={()=>set('Powertrain.Transmission.CurrentGear',g)}>
+                  {g<0?`R${-g}`:g===0?'N':`D${g}`}
+                </button>
+              ))}
+            </div>
+            <div className="control-value">{state['Powertrain.Transmission.CurrentGear']}</div>
+          </div>
+        </div>
+
+        {/* LIGHT SWITCH */}
+        <div className="section">
+          <div className="section-title">Light Control</div>
+          <div className="section-info">Headlamp and exterior light switch mode</div>
+          <div className="control">
+            <div className="control-label">Mode</div>
+            <div className="button-group">
+              {['OFF','POSITION','DRL','AUTO','BEAM'].map(m=>(
+                <button key={m} className={`btn ${state['Body.Lights.LightSwitch']===m?'active':''}`}
+                  onClick={()=>set('Body.Lights.LightSwitch',m)}>
+                  {m}
+                </button>
+              ))}
+            </div>
+            <div className="control-value">{state['Body.Lights.LightSwitch']}</div>
+          </div>
+        </div>
+
+        {/* SWITCHES & STALKS (overlay inputs for FSMs) */}
+        <div className="section">
+          <div className="section-title">Switches &amp; Stalks</div>
+          <div className="section-info">Physical driver controls — overlay signals (not in standard VSS v4.0). These feed the L5 feature state machines.</div>
+          <div className="control">
+            <div className="control-label">Hazard Switch</div>
+            <div style={{flex:1}}/>
+            <div className="tog"
+              onClick={()=>set('Body.Switches.Hazard.IsEngaged',!state['Body.Switches.Hazard.IsEngaged'])}
+              style={state['Body.Switches.Hazard.IsEngaged']?{borderColor:'#F59E0B',background:'rgba(245,158,11,.15)'}:{}}>
+              <div className="knob" style={state['Body.Switches.Hazard.IsEngaged']?{transform:'translateX(20px)',background:'#F59E0B'}:{}}/>
+            </div>
+          </div>
+          <div className="control">
+            <div className="control-label">Turn Stalk</div>
+            <div className="button-group">
+              {['OFF','LEFT','RIGHT'].map(d=>(
+                <button key={d} className={`btn ${state['Body.Switches.TurnIndicator.Direction']===d?'active':''}`}
+                  onClick={()=>set('Body.Switches.TurnIndicator.Direction',d)}>
+                  {d}
+                </button>
+              ))}
+            </div>
+            <div className="control-value">{state['Body.Switches.TurnIndicator.Direction']}</div>
+          </div>
+          <div className="control">
+            <div className="control-label">High Beam Stalk</div>
+            <div style={{flex:1}}/>
+            <div className="tog"
+              onClick={()=>set('Body.Switches.HighBeam.IsEngaged',!state['Body.Switches.HighBeam.IsEngaged'])}
+              style={state['Body.Switches.HighBeam.IsEngaged']?{borderColor:'#4A9EF5',background:'rgba(74,158,245,.12)'}:{}}>
+              <div className="knob" style={state['Body.Switches.HighBeam.IsEngaged']?{transform:'translateX(20px)',background:'#4A9EF5'}:{}}/>
+            </div>
+          </div>
+          <div className="control">
+            <div className="control-label">Parking Brake</div>
+            <div style={{flex:1}}/>
+            <div className="tog"
+              onClick={()=>set('Chassis.ParkingBrake.IsEngaged',!state['Chassis.ParkingBrake.IsEngaged'])}
+              style={state['Chassis.ParkingBrake.IsEngaged']?{borderColor:'#F04040',background:'rgba(240,64,64,.12)'}:{}}>
+              <div className="knob" style={state['Chassis.ParkingBrake.IsEngaged']?{transform:'translateX(20px)',background:'#F04040'}:{}}/>
+            </div>
+          </div>
+        </div>
+
+        {/* DOORS */}
+        <div className="section">
+          <div className="section-title">Doors</div>
+          {[
+            {key:'Body.Doors.Row1.Left',name:'Front Left'},
+            {key:'Body.Doors.Row1.Right',name:'Front Right'},
+            {key:'Body.Doors.Row2.Left',name:'Rear Left'},
+            {key:'Body.Doors.Row2.Right',name:'Rear Right'},
+          ].map(d=>(
+            <div key={d.key}>
+              <div className="control">
+                <div className="control-label">{d.name} Open</div>
+                <div style={{flex:1}}/>
+                <div className="tog"
+                  onClick={()=>set(`${d.key}.IsOpen`,!state[`${d.key}.IsOpen`])}
+                  style={state[`${d.key}.IsOpen`]?{borderColor:'#10D98A',background:'rgba(16,217,138,.12)'}:{}}>
+                  <div className="knob" style={state[`${d.key}.IsOpen`]?{transform:'translateX(20px)',background:'#10D98A'}:{}}/>
+                </div>
+              </div>
+              <div className="control" style={{marginBottom:'12px'}}>
+                <div className="control-label">{d.name} Latch</div>
+                <select className="sel" value={state[`${d.key}.LatchStatus`]||'FULL_LATCHED'}
+                  onChange={(e)=>set(`${d.key}.LatchStatus`,e.target.value)}>
+                  <option>UNLATCHED</option>
+                  <option>HALF_LATCHED</option>
+                  <option>FULL_LATCHED</option>
+                </select>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* HOOD & TRUNK */}
+        <div className="section">
+          <div className="section-title">Openings</div>
+          {[
+            {key:'Body.Hood.IsOpen',name:'Hood'},
+            {key:'Body.Trunk.IsOpen',name:'Trunk'},
+            {key:'Body.FuelLid.IsOpen',name:'Fuel Lid'},
+            {key:'Body.ChargeLid.IsOpen',name:'Charge Lid'},
+          ].map(o=>(
+            <div key={o.key} className="control">
+              <div className="control-label">{o.name}</div>
+              <div style={{flex:1}}/>
+              <div className="tog"
+                onClick={()=>set(o.key,!state[o.key])}
+                style={state[o.key]?{borderColor:'#10D98A',background:'rgba(16,217,138,.12)'}:{}}>
+                <div className="knob" style={state[o.key]?{transform:'translateX(20px)',background:'#10D98A'}:{}}/>
+              </div>
+            </div>
+          ))}
+        </div>
+
+      </div>
+    </div>
+
+    <div className="stbar">
+      Connected to vss-bridge: {connected?'✓ LIVE':'✗ FALLBACK'}
+    </div>
+  </div>;
+}
+
+/* ══════ RENDER ══════ */
+ReactDOM.render(<App/>,document.getElementById('root'));
+</script>
+</body>
+</html>
