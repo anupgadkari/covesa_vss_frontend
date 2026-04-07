@@ -94,6 +94,8 @@ const {useState,useEffect,useRef,useCallback}=React;
 
 /* ══════ VSS SENSOR SIGNALS ══════ */
 const INIT_STATE={
+  // Engine
+  'Vehicle.Powertrain.Engine.IsRunning':false,
   // Braking
   'Chassis.Brake.PedalPosition':0,
   // Transmission
@@ -165,7 +167,17 @@ function App(){
 
     <div className="layout">
       <div className="container">
-        {/* BRAKE PEDAL */}
+        {/* ENGINE */}
+        <div className="section">
+          <div className="section-title">Engine Control</div>
+          <div className="control">
+            <div className="control-label">Engine State</div>
+            <button style={{marginLeft:'auto',padding:'6px 16px',borderRadius:'var(--r4)',border:'1.5px solid var(--bdr2)',background:state['Vehicle.Powertrain.Engine.IsRunning']?'#EF4444':'#0E1625',color:state['Vehicle.Powertrain.Engine.IsRunning']?'#FFFFFF':'#6B7E99',cursor:'pointer',fontFamily:'var(--fm)',fontSize:'10px',fontWeight:'600',transition:'all 0.16s'}}
+              onClick={()=>set('Vehicle.Powertrain.Engine.IsRunning',!state['Vehicle.Powertrain.Engine.IsRunning'])}>
+              {state['Vehicle.Powertrain.Engine.IsRunning']?'STOP':'START'}
+            </button>
+          </div>
+        </div>
         <div className="section">
           <div className="section-title">Braking System</div>
           <div className="section-info">Brake pedal position: 0% = not pressed, 100% = fully depressed</div>

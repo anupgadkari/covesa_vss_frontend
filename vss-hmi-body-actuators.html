@@ -134,6 +134,8 @@ const {useState,useEffect,useRef,useCallback}=React;
 
 /* ══════ VSS SIGNAL STORE ══════ */
 const INIT_STATE={
+  // Engine
+  'Vehicle.Powertrain.Engine.IsRunning':false,
   // Lights
   'Body.Lights.Beam.Low.IsOn':false,
   'Body.Lights.Beam.High.IsOn':false,
@@ -267,6 +269,16 @@ function DoorCard({label,pfx,s,set}){
       <div className="slhdr"><span className="dcl">Win</span><span className="sv">{s[`${p}.Window.Position`]}%</span></div>
       <input type="range" className="slr" min={0} max={100} value={s[`${p}.Window.Position`]}
         onChange={e=>set(`${p}.Window.Position`,parseInt(e.target.value))}/>
+      <div style={{display:'flex',gap:'4px',marginTop:'4px'}}>
+        <button className="eb" style={{flex:1}} onClick={()=>{
+          const pos=Math.max(0,s[`${p}.Window.Position`]-10);
+          set(`${p}.Window.Position`,pos);
+        }}>▼ Down</button>
+        <button className="eb" style={{flex:1}} onClick={()=>{
+          const pos=Math.min(100,s[`${p}.Window.Position`]+10);
+          set(`${p}.Window.Position`,pos);
+        }}>▲ Up</button>
+      </div>
     </div>
     <div style={{marginTop:1}}>
       <div className="ebrow">
@@ -855,6 +867,35 @@ function ControlPanel({s,set}){
           <DoorCard label="ROW1 · RIGHT" pfx="Body.Doors.Row1.Right" s={s} set={set}/>
           <DoorCard label="ROW2 · LEFT" pfx="Body.Doors.Row2.Left" s={s} set={set}/>
           <DoorCard label="ROW2 · RIGHT" pfx="Body.Doors.Row2.Right" s={s} set={set}/>
+        </div>
+
+        {/* Driver Door Remote Window Controls */}
+        <div className="hdiv2"/>
+        <div style={{padding:'8px 0'}}>
+          <div style={{fontSize:'10px',color:'var(--dim)',fontFamily:'var(--fm)',marginBottom:'8px',fontWeight:'600'}}>DRIVER REMOTE WINDOW</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'6px'}}>
+            <div>
+              <div style={{fontSize:'8px',color:'var(--muted)',marginBottom:'3px'}}>Passenger</div>
+              <div style={{display:'flex',gap:'2px'}}>
+                <button className="eb" style={{flex:1,fontSize:'8px'}} onClick={()=>set('Body.Doors.Row1.Right.Window.Position',Math.max(0,s['Body.Doors.Row1.Right.Window.Position']-10))}>▼</button>
+                <button className="eb" style={{flex:1,fontSize:'8px'}} onClick={()=>set('Body.Doors.Row1.Right.Window.Position',Math.min(100,s['Body.Doors.Row1.Right.Window.Position']+10))}>▲</button>
+              </div>
+            </div>
+            <div>
+              <div style={{fontSize:'8px',color:'var(--muted)',marginBottom:'3px'}}>Rear L</div>
+              <div style={{display:'flex',gap:'2px'}}>
+                <button className="eb" style={{flex:1,fontSize:'8px'}} onClick={()=>set('Body.Doors.Row2.Left.Window.Position',Math.max(0,s['Body.Doors.Row2.Left.Window.Position']-10))}>▼</button>
+                <button className="eb" style={{flex:1,fontSize:'8px'}} onClick={()=>set('Body.Doors.Row2.Left.Window.Position',Math.min(100,s['Body.Doors.Row2.Left.Window.Position']+10))}>▲</button>
+              </div>
+            </div>
+            <div>
+              <div style={{fontSize:'8px',color:'var(--muted)',marginBottom:'3px'}}>Rear R</div>
+              <div style={{display:'flex',gap:'2px'}}>
+                <button className="eb" style={{flex:1,fontSize:'8px'}} onClick={()=>set('Body.Doors.Row2.Right.Window.Position',Math.max(0,s['Body.Doors.Row2.Right.Window.Position']-10))}>▼</button>
+                <button className="eb" style={{flex:1,fontSize:'8px'}} onClick={()=>set('Body.Doors.Row2.Right.Window.Position',Math.min(100,s['Body.Doors.Row2.Right.Window.Position']+10))}>▲</button>
+              </div>
+            </div>
+          </div>
         </div>
       </SG>
 
