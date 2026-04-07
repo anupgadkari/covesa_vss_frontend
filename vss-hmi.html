@@ -686,16 +686,16 @@ function CockpitView({s,set}){
     <text x="50" y="105" fill="#1C3050" fontSize="9" fontFamily="Share Tech Mono" fontWeight="600">WARNINGS:</text>
 
     {/* Beam Low */}
-    {lo&&<g>
-      <circle cx="50" cy="130" r="12" fill="#22C55E" opacity="0.3" stroke="#22C55E" strokeWidth="1.2"/>
-      <text x="50" y="135" textAnchor="middle" fill="#22C55E" fontSize="9" fontFamily="Share Tech Mono" fontWeight="600">LO</text>
-    </g>}
+    <g>
+      <circle cx="50" cy="130" r="12" fill={lo?'#22C55E':'#1A2838'} opacity={lo?0.6:0.25} stroke={lo?'#22C55E':'#3A4D5C'} strokeWidth="1.2"/>
+      <text x="50" y="135" textAnchor="middle" fill={lo?'#22C55E':'#3A5060'} fontSize="9" fontFamily="Share Tech Mono" fontWeight="600">LO</text>
+    </g>
 
     {/* Beam High */}
-    {hi&&<g>
-      <circle cx="110" cy="130" r="12" fill="#4A9EF5" opacity="0.3" stroke="#4A9EF5" strokeWidth="1.2"/>
-      <text x="110" y="135" textAnchor="middle" fill="#4A9EF5" fontSize="9" fontFamily="Share Tech Mono" fontWeight="600">HI</text>
-    </g>}
+    <g>
+      <circle cx="110" cy="130" r="12" fill={hi?'#4A9EF5':'#1A2838'} opacity={hi?0.6:0.25} stroke={hi?'#4A9EF5':'#3A4D5C'} strokeWidth="1.2"/>
+      <text x="110" y="135" textAnchor="middle" fill={hi?'#4A9EF5':'#3A5060'} fontSize="9" fontFamily="Share Tech Mono" fontWeight="600">HI</text>
+    </g>
 
     {/* Turn Left */}
     {li&&<g>
