@@ -927,17 +927,86 @@ function ControlPanel({s,set}){
 
 /* ═══════════════ MAIN APP ═══════════════ */
 function App(){
-  const [s,setS]=useState(INIT_STATE);
+  const [s,setS]=useState({});
   const [view,setView]=useState('top');
   const [time,setTime]=useState(new Date());
-  const seq=useRef(0);
+  const [wsConnected,setWsConnected]=useState(false);
+  const [useMockFallback,setUseMockFallback]=useState(false);
+  const wsRef=useRef(null);
+  const reconnectTimeoutRef=useRef(null);
+  const reconnectAttemptsRef=useRef(0);
 
+  // Time ticker
   useEffect(()=>{const t=setInterval(()=>setTime(new Date()),1000);return()=>clearInterval(t)},[]);
 
-  const set=useCallback((k,v)=>{
-    setS(prev=>({...prev,[k]:v}));
-    seq.current++;
+  // WebSocket connection and state sync
+  useEffect(()=>{
+    const connectWebSocket=()=>{
+      try {
+        const ws=new WebSocket('ws://localhost:8080');
+
+        ws.onopen=()=>{
+          console.log('[HMI] Connected to vss-bridge');
+          setWsConnected(true);
+          setUseMockFallback(false);
+          reconnectAttemptsRef.current=0;
+        };
+
+        ws.onmessage=(event)=>{
+          try {
+            const {path,value}=JSON.parse(event.data);
+            setS(prev=>({...prev,[path]:value}));
+          } catch(e) {
+            console.error('[HMI] Failed to parse message:',e);
+          }
+        };
+
+        ws.onerror=(err)=>{
+          console.error('[HMI] WebSocket error:',err);
+          setWsConnected(false);
+        };
+
+        ws.onclose=()=>{
+          console.log('[HMI] WebSocket closed, attempting reconnect...');
+          setWsConnected(false);
+          // Fallback to mock if WS is unavailable
+          if(Object.keys(s).length===0) {
+            setUseMockFallback(true);
+            setS(INIT_STATE);
+          }
+          // Exponential backoff reconnect: 1s, 2s, 4s, 8s, max 30s
+          const delay=Math.min(1000*Math.pow(2,reconnectAttemptsRef.current),30000);
+          reconnectAttemptsRef.current++;
+          reconnectTimeoutRef.current=setTimeout(connectWebSocket,delay);
+        };
+
+        wsRef.current=ws;
+      } catch(err) {
+        console.error('[HMI] WebSocket creation failed:',err);
+        setUseMockFallback(true);
+        setS(INIT_STATE);
+      }
+    };
+
+    connectWebSocket();
+
+    return ()=>{
+      if(reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+      if(wsRef.current) wsRef.current.close();
+    };
   },[]);
+
+  // Send state updates via WebSocket or use mock
+  const set=useCallback((k,v)=>{
+    if(wsRef.current?.readyState===WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({path:k,value:v}));
+    } else if(useMockFallback) {
+      // In mock mode, update local state
+      setS(prev=>({...prev,[k]:v}));
+    } else {
+      console.warn('[HMI] WebSocket not connected, queuing update would be here');
+    }
+  },[useMockFallback]);
 
   const activeCount=Object.values(s).filter(v=>v===true||(typeof v==='string'&&v!=='OFF'&&!v.includes('#')&&!['FULL_LATCHED','DASHBOARD'].includes(v))).length;
 
@@ -953,7 +1022,7 @@ function App(){
     <div className="hdr">
       <span className="logo">BODY<span>CTRL</span></span>
       <div className="hdiv"/>
-      <span className="hchip"><span className="dot dot-mock"/>MOCK · SIGNAL BUS</span>
+      <span className="hchip"><span className={`dot ${wsConnected?'dot-ok':'dot-mock'}`}/>{wsConnected?'LIVE':'MOCK'} · {useMockFallback?'FALLBACK':'SIGNAL BUS'}</span>
       <span className="hchip"><span className="dot dot-ok"/>COVESA VSS v4.0</span>
       <span className="hchip">VIN: <b style={{color:'var(--teal)',marginLeft:4}}>1FTFW1ET0EKF08206</b></span>
       <div className="hright">
