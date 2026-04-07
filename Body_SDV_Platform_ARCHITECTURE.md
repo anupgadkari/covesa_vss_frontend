@@ -19,7 +19,7 @@
 7. [Application Layer — L5 (Rust)](#7-application-layer--l5-rust)
    - 7.1 [SignalBus Trait](#71-signalbus-trait)
    - 7.2 [Signal Arbiter](#72-signal-arbiter)
-   - 7.3 [Feature State Machines](#73-feature-state-machines)
+   - 7.3 [Feature Business Logic](#73-feature-business-logic)
    - 7.4 [Transport Adapters](#74-transport-adapters)
 8. [Web HMI — L6](#8-web-hmi--l6)
 9. [Safety Monitor — ASIL-B](#9-safety-monitor--asil-b)
@@ -44,7 +44,7 @@
 ├──────────────────────────────────────────────────────────┤
 │  L5  Application layer — Rust · RHEL container           │
 │        tokio-tungstenite WS bridge                        │
-│        Signal Arbiter · Feature FSMs                      │
+│        Signal Arbiter · Feature Business Logic             │
 │        Kuksa client crate · Android Auto apps             │
 ├──────────────────────────────────────────────────────────┤
 │        gRPC localhost · port 55555                        │
@@ -84,15 +84,16 @@ All application feature logic, the Signal Arbiter, and the SignalBus trait live 
 
 | Layer | Name | Language | Safety | Owner |
 |-------|------|----------|--------|-------|
-| L6 | Web HMI | HTML/CSS/React | QM | App team |
-| L5 | Application / bridge | Rust | QM | Platform team |
+| L6 | Web HMI (optional diagnostics) | HTML/CSS/React | QM | OEM app team |
+| L5 | Application / bridge | Rust | QM | OEM platform team |
 | L4 | VSS middleware | C++ / Python | QM | COVESA / OEM |
 | L3 | Android VHAL | Java / C++ | QM | Google / OEM |
-| L2 | OS / BSP | C | QM | NXP / OEM |
-| L1 | Hardware | — | ASIL-B (safety paths) | NXP |
-| SM | Safety Monitor | C / AUTOSAR CP | ASIL-B | Safety team |
+| L2 | OS / BSP | C | QM | Platform Provider / OEM |
+| L1 | Hardware (schematics, PCB) | — | ASIL-B (safety paths) | Platform Provider |
+| SM | Safety Monitor | C / AUTOSAR CP | ASIL-B | Platform Provider (or OEM) |
+| ASIL App | AUTOSAR Application SWCs | C / AUTOSAR CP | ASIL-B | OEM (optional) |
 
-The **Safety Monitor** (SM) is not a numbered layer — it runs on the M7 cores alongside the AUTOSAR stack and crosses the A53/M7 boundary via RPmsg. It is the sole authority for ASIL-B state.
+The **Safety Monitor** (SM) is not a numbered layer — it runs on the M7 cores alongside the AUTOSAR stack and crosses the A53/M7 boundary via RPmsg. It is the sole authority for ASIL-B state. The **Platform Provider** delivers the Classic AUTOSAR BSW, Linux distribution, hardware schematics/PCB layout, and a reference Safety Monitor. The OEM may optionally develop ASIL-B Application Layer SWCs on the M7 as in-house competency grows.
 
 ---
 
@@ -268,7 +269,7 @@ tonic-build     = "0.11"
 
 ### 7.1 SignalBus Trait
 
-The portability seam. Every feature FSM and the Signal Arbiter depend only on this trait. No feature imports any transport type.
+The portability seam. Every feature module and the Signal Arbiter depend only on this trait. No feature imports any transport type.
 
 ```rust
 // src/signal_bus.rs
@@ -375,9 +376,9 @@ async fn arbiter_loop<B: SignalBus>(
 
 ---
 
-### 7.3 Feature State Machines
+### 7.3 Feature Business Logic
 
-Each feature is a self-contained `async` struct that holds a reference to the `SignalArbiter`. Features subscribe to relevant input signals via the `SignalBus` and publish requests when their internal state changes. **No feature imports another feature.**
+Each feature is a self-contained `async` module that holds a reference to the `SignalArbiter`. Features subscribe to relevant input signals via the `SignalBus` and publish requests when their internal state changes. **No feature imports another feature.** Feature implementations may range from simple state machines (e.g., HazardFsm) to complex algorithms — the architecture does not constrain the implementation approach.
 
 **Example: HazardFsm**
 
@@ -417,7 +418,7 @@ impl<B: SignalBus> HazardFsm<B> {
 }
 ```
 
-**LED blink waveform note**: `IsSignaling` is a boolean *intent* flag. UN R48-compliant 1–2 Hz blink cadence is implemented in the LED driver IC or body ECU firmware. Feature FSMs never set timers for blink patterns.
+**LED blink waveform note**: `IsSignaling` is a boolean *intent* flag. UN R48-compliant 1–2 Hz blink cadence is implemented in the LED driver IC or body ECU firmware. Feature business logic never sets timers for blink patterns.
 
 **Feature inventory**
 
@@ -459,7 +460,7 @@ Each adapter implements `SignalBus`. Injected at startup in `main.rs`.
 
 **MockBus** (CI / unit tests)
 - In-memory broadcast channel; no hardware
-- Enables unit testing of every feature FSM and the Arbiter with no hardware dependency
+- Enables unit testing of every feature module and the Arbiter with no hardware dependency
 - Records all published signals and exposed as `MockBus::history()` for assertions
 
 **Dependency injection in main.rs**
@@ -472,7 +473,7 @@ async fn main() -> anyhow::Result<()> {
 
     let arbiter = Arc::new(SignalArbiter::new(Arc::clone(&bus)));
 
-    // Spawn all feature FSMs
+    // Spawn all feature business logic
     tokio::spawn(HazardFsm::new(Arc::clone(&arbiter), Arc::clone(&bus)).run());
     tokio::spawn(TurnFsm::new(Arc::clone(&arbiter), Arc::clone(&bus)).run());
     tokio::spawn(LockFeedback::new(Arc::clone(&arbiter), Arc::clone(&bus)).run());
@@ -662,7 +663,7 @@ Instance the above across `Row[1,2]` × `["DriverSide", "PassengerSide"]` using 
 
 ### Switch / Stalk Input Overlay
 
-Standard COVESA VSS v4.0 defines actuator outputs (e.g. `Body.Lights.Hazard.IsSignaling`) but not the physical switch inputs that drive them. Feature FSMs must subscribe to inputs, not outputs, to avoid feedback loops. The following overlay defines sensor signals for physical switches and stalks.
+Standard COVESA VSS v4.0 defines actuator outputs (e.g. `Body.Lights.Hazard.IsSignaling`) but not the physical switch inputs that drive them. Feature business logic must subscribe to inputs, not outputs, to avoid feedback loops. The following overlay defines sensor signals for physical switches and stalks.
 
 **File**: `overlay/Body/SwitchInputs.vspec`
 
@@ -788,7 +789,7 @@ The architecture is designed so that moving from NXP S32G2 to another SoC (Qualc
 2. **One adapter file in L5** — `src/adapters/rpmsg.rs` replaced by `src/adapters/glink.rs` (Qualcomm) or similar; `main.rs` changes one `Arc::new(...)` line
 
 **Everything above the trait boundary is unchanged:**
-- All feature FSMs
+- All feature business logic
 - Signal Arbiter and priority table
 - IPC message schema (reused verbatim)
 - VSS signal IDs and overlay
@@ -798,7 +799,7 @@ The architecture is designed so that moving from NXP S32G2 to another SoC (Qualc
 
 **The `SignalBus` trait is the portability contract.** Every ecosystem has an equivalent construct (Java interface, C++ pure virtual, Go interface, AIDL IVehicle). The concept is transport-agnostic by design.
 
-**SOME/IP as the maximally portable option**: if the next SoC does not have heterogeneous cores (i.e. no M7 equivalent), the Safety Monitor can run on a separate MCU connected via Ethernet. `SomeIpBus` implements `SignalBus` over SOME/IP; feature code is unchanged. Latency increases from ~100 µs (RPmsg) to ~500 µs (GbE), which is acceptable for body domain functions outside the PEPS critical path.
+**SOME/IP as the maximally portable option**: if the next SoC does not have heterogeneous cores (i.e. no M7 equivalent), the Safety Monitor can run on a separate MCU connected via Ethernet. `SomeIpBus` implements `SignalBus` over SOME/IP; feature business logic is unchanged. Latency increases from ~100 µs (RPmsg) to ~500 µs (GbE), which is acceptable for body domain functions outside the PEPS critical path.
 
 ---
 
@@ -841,7 +842,7 @@ Implement:
 You are implementing the Signal Arbiter for a Rust automotive body controller.
 
 Context (from architecture doc):
-- The arbiter sits between feature FSMs and the SignalBus
+- The arbiter sits between feature business logic and the SignalBus
 - Features publish `ActuatorRequest` structs with { signal, value, priority, feature_id }
 - The arbiter holds a per-signal "current winner" map
 - A new request replaces the winner if its priority >= current winner's priority
@@ -890,15 +891,16 @@ Implement:
 
 ---
 
-### Prompt 4 — Feature FSMs (full set)
+### Prompt 4 — Feature Business Logic (full set)
 
 ```
-You are implementing all body feature state machines for a Rust automotive body controller.
+You are implementing all body feature business logic for a Rust automotive body controller.
 
 Context:
-- Each FSM is an async struct holding Arc<SignalArbiter<B>> and Arc<B: SignalBus>
-- FSMs subscribe to input signals, compute state transitions, publish ActuatorRequests
-- No FSM imports another FSM
+- Each feature is an async struct holding Arc<SignalArbiter<B>> and Arc<B: SignalBus>
+- Features subscribe to input signals, compute state transitions or run algorithms, and publish ActuatorRequests
+- No feature imports another feature
+- Implementations may be simple state machines or complex algorithms — use whatever fits the feature
 - LED blink waveform is NOT the FSM's responsibility — it sets boolean intent only
 - IMPORTANT: FSMs subscribe to physical switch/stalk INPUTS (overlay sensors),
   not to the actuator outputs they control. This prevents feedback loops.
