@@ -192,7 +192,9 @@ const INIT_STATE={
   'Cabin.HVAC.IsRearDefrosterActive':false,
   // Seats
   'Cabin.Seat.Row1.Left.IsHeatingOn':false,'Cabin.Seat.Row1.Left.IsVentilationOn':false,
+  'Cabin.Seat.Row1.Left.HeatingLevel':0,
   'Cabin.Seat.Row1.Right.IsHeatingOn':false,'Cabin.Seat.Row1.Right.IsVentilationOn':false,
+  'Cabin.Seat.Row1.Right.HeatingLevel':0,
   // Powertrain-related body
   'Body.Trunk.IsLocked':true,
   'Body.FuelLid.IsOpen':false,
@@ -309,136 +311,139 @@ function TopView({s}){
       x2={cx+r2*Math.cos(rad)} y2={cy+r2*Math.sin(rad)} stroke="#252E3C" strokeWidth="2" strokeLinecap="round"/>;
   });
 
-  return <svg viewBox="0 0 320 680" style={{maxHeight:'58vh',height:'100%'}}>
+  return <svg viewBox="0 0 360 700" style={{maxHeight:'58vh',height:'100%'}}>
+    {/* background grid */}
+    <defs>
+      <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+        <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#0a1420" strokeWidth="0.5"/>
+      </pattern>
+    </defs>
+    <rect width="360" height="700" fill="url(#grid)" opacity="0.1"/>
+
     {/* beam glow */}
-    {(lo||hi)&&<><ellipse cx="100" cy="40" rx="55" ry="25" fill="#FCD34D" opacity=".05"/>
-    <ellipse cx="220" cy="40" rx="55" ry="25" fill="#FCD34D" opacity=".05"/></>}
-    {/* front bumper */}
-    <rect x="88" y="42" width="144" height="20" rx="7" fill="#0D1628"/>
-    <rect x="93" y="45" width="134" height="14" rx="4" fill="#09111E" stroke="#182030" strokeWidth=".5"/>
-    {/* headlights */}
-    <rect x="70" y="42" width="56" height="26" rx="5" fill={hlc} opacity={hlo}/>
-    <rect x="73" y="45" width="50" height="20" rx="3" fill="#07101C" stroke="#182030" strokeWidth=".5"/>
-    <rect x="76" y="48" width="20" height="14" rx="2" fill={hlc} opacity={hlo*.9}/>
-    <rect x="99" y="48" width="18" height="14" rx="2" fill={hlc} opacity={hlo*.65}/>
-    <rect x="194" y="42" width="56" height="26" rx="5" fill={hlc} opacity={hlo}/>
-    <rect x="197" y="45" width="50" height="20" rx="3" fill="#07101C" stroke="#182030" strokeWidth=".5"/>
-    <rect x="200" y="48" width="20" height="14" rx="2" fill={hlc} opacity={hlo*.9}/>
-    <rect x="223" y="48" width="18" height="14" rx="2" fill={hlc} opacity={hlo*.65}/>
-    {/* front indicators */}
-    <rect x="70" y="70" width="30" height="12" rx="3" fill={li?'#F59E0B':'#1A1208'} opacity={li?1:.3} className={li?'blink':''}/>
-    <rect x="220" y="70" width="30" height="12" rx="3" fill={ri?'#F59E0B':'#1A1208'} opacity={ri?1:.3} className={ri?'blink':''}/>
-    {/* front position/parking lamps */}
-    <rect x="65" y="56" width="10" height="10" rx="2" fill={park?'#F59E0B':'#1A1208'} opacity={park?1:.25}/>
-    <rect x="245" y="56" width="10" height="10" rx="2" fill={park?'#F59E0B':'#1A1208'} opacity={park?1:.25}/>
-    {ffog&&<><rect x="93" y="70" width="26" height="12" rx="3" fill="#BAD6FE" opacity=".85"/>
-    <rect x="201" y="70" width="26" height="12" rx="3" fill="#BAD6FE" opacity=".85"/></>}
-    {/* hood */}
-    {hood&&<rect x="70" y="84" width="180" height="6" rx="2" fill="#F59E0B" opacity=".5"/>}
-    <rect x="70" y="84" width="180" height="72" fill="#0E1825" stroke="#1A2838" strokeWidth=".8"/>
-    <rect x="88" y="90" width="144" height="52" rx="2" fill="#09111E"/>
-    {[102,114,126].map(y=><line key={y} x1="90" y1={y} x2="232" y2={y} stroke="#121C28" strokeWidth="1"/>)}
-    {[120,160,200].map(x=><line key={x} x1={x} y1="90" x2={x} y2="142" stroke="#121C28" strokeWidth="1"/>)}
-    {/* fuel lid */}
-    {fuel&&<rect x="68" y="128" width="10" height="16" rx="2" fill="#F59E0B" opacity=".6"/>}
-    {/* windshield */}
-    <path d="M76,156 L78,188 L82,193 L238,193 L242,188 L244,156 Z" fill="#152840" stroke="#1E3650" strokeWidth=".5" opacity=".9"/>
-    {/* sunroof */}
-    {sr>0&&<rect x="110" y="163" width="100" height="24" rx="2" fill="#0A1C30" stroke={`${ambC}55`} strokeWidth="1" opacity={sr/100}/>}
-    {/* wipers front */}
-    {wf&&<g className="blinks">
-      <path d="M100,193 L92,162" stroke="#4A9EF5" strokeWidth="1.5" strokeLinecap="round" opacity=".7"/>
-      <path d="M160,193 L185,158" stroke="#4A9EF5" strokeWidth="1.5" strokeLinecap="round" opacity=".7"/>
-    </g>}
-    {/* cab body */}
-    <rect x="70" y="155" width="180" height="210" fill="#0C1825" stroke="#182030" strokeWidth=".8"/>
-    {/* ambient glow cabin */}
-    {amb&&<rect x="72" y="157" width="176" height="208" fill={ambC} opacity={s['Cabin.Lights.Ambient.Intensity']/300}/>}
-    {/* door dividers */}
-    <line x1="70" y1="248" x2="250" y2="248" stroke="#060E18" strokeWidth="2.5"/>
-    <line x1="70" y1="308" x2="250" y2="308" stroke="#060E18" strokeWidth="2.5"/>
-    {/* rear windshield */}
-    <path d="M78,363 L80,365 L82,372 L238,372 L240,365 L242,363 Z" fill="#152840" stroke="#1E3650" strokeWidth=".5" opacity=".8"/>
-    {/* wipers rear */}
-    {wr&&<g className="blinks">
-      <path d="M175,363 L188,368" stroke="#4A9EF5" strokeWidth="1.5" strokeLinecap="round" opacity=".7"/>
-    </g>}
-    {/* bed */}
-    <rect x="70" y="365" width="180" height="228" fill="#080F18" stroke="#182030" strokeWidth=".8"/>
-    <rect x="70" y="365" width="14" height="228" fill="#0C1422"/>
-    <rect x="236" y="365" width="14" height="228" fill="#0C1422"/>
-    {[378,393,408,423,438,453,468,484,500,516,532,548,564,580].map(y=>(
-      <line key={y} x1="85" y1={y} x2="235" y2={y} stroke="#060C14" strokeWidth="1"/>
-    ))}
-    {/* tailgate */}
-    {trunk&&<rect x="70" y="588" width="180" height="6" rx="2" fill="#F59E0B" opacity=".45"/>}
-    <rect x="70" y="588" width="180" height="20" fill="#0E1828" stroke="#1A2535" strokeWidth=".5"/>
-    <rect x="106" y="595" width="108" height="5" rx="2" fill="#09111E" stroke="#162030" strokeWidth=".5"/>
-    {/* rear bumper */}
-    <rect x="88" y="608" width="144" height="16" rx="5" fill="#0D1628"/>
-    {/* taillights */}
-    <rect x="70" y="588" width="58" height="20" rx="3" fill={tlc} opacity={tlo}/>
-    <rect x="73" y="590" width="52" height="16" rx="2" fill="#060A10" stroke="#180808" strokeWidth=".5"/>
-    <rect x="76" y="592" width="20" height="12" rx="2" fill={tlc} opacity={tlo*.9}/>
-    <rect x="99" y="592" width="18" height="12" rx="2" fill={tlc} opacity={tlo*.7}/>
-    <rect x="192" y="588" width="58" height="20" rx="3" fill={tlc} opacity={tlo}/>
-    <rect x="195" y="590" width="52" height="16" rx="2" fill="#060A10" stroke="#180808" strokeWidth=".5"/>
-    <rect x="198" y="592" width="20" height="12" rx="2" fill={tlc} opacity={tlo*.9}/>
-    <rect x="221" y="592" width="18" height="12" rx="2" fill={tlc} opacity={tlo*.7}/>
-    {/* reverse lights */}
-    {back&&<><rect x="100" y="604" width="20" height="8" rx="2" fill={rlc} opacity=".9"/>
-    <rect x="200" y="604" width="20" height="8" rx="2" fill={rlc} opacity=".9"/></>}
-    {/* license plate light */}
-    {lp&&<rect x="130" y="604" width="60" height="6" rx="2" fill="#E0EEFF" opacity=".6"/>}
-    {/* rear fog */}
-    {rfog&&<><rect x="105" y="580" width="18" height="8" rx="2" fill="#EF2020" opacity=".8"/>
-    <rect x="197" y="580" width="18" height="8" rx="2" fill="#EF2020" opacity=".8"/></>}
-    {/* rear indicators */}
-    <rect x="70" y="580" width="28" height="8" rx="2" fill={li?'#F59E0B':'#1A1208'} className={li?'blink':''} opacity={li?1:.2}/>
-    <rect x="222" y="580" width="28" height="8" rx="2" fill={ri?'#F59E0B':'#1A1208'} className={ri?'blink':''} opacity={ri?1:.2}/>
-    {/* rear position/parking lamps */}
-    <rect x="65" y="588" width="10" height="10" rx="2" fill={park?'#F59E0B':'#1A1208'} opacity={park?1:.25}/>
-    <rect x="245" y="588" width="10" height="10" rx="2" fill={park?'#F59E0B':'#1A1208'} opacity={park?1:.25}/>
-    {/* wheels */}
-    {[[30,138,50],[240,138,50],[30,455,50],[240,455,50]].map(([cx,cy,r],i)=>(
-      <g key={i}>
-        <rect x={cx-r*.8} y={cy-r} width={r*1.6} height={r*2} rx="6" fill="#07101A" stroke="#161E2C" strokeWidth=".8"/>
-        <rect x={cx-r*.6} y={cy-r*.82} width={r*1.2} height={r*1.64} rx="4" fill="#0D1520"/>
-        <circle cx={cx} cy={cy} r={r*.5} fill="#111820" stroke="#202C3C" strokeWidth=".5"/>
-        <circle cx={cx} cy={cy} r={r*.2} fill="#08101A"/>
-        {spokes(cx,cy,r*.22,r*.44)}
-      </g>
-    ))}
-    {/* mirrors */}
-    {!mlf?<g><rect x="40" y="217" width="28" height="14" rx="3" fill="#0F1A28" stroke="#1A2838" strokeWidth=".5"/>
-      <rect x="42" y="219" width="24" height="10" rx="2" fill="#18304A" opacity=".7"/></g>
-      :<rect x="68" y="219" width="5" height="10" rx="2" fill="#0F1A28"/>}
-    {!mrf?<g><rect x="252" y="217" width="28" height="14" rx="3" fill="#0F1A28" stroke="#1A2838" strokeWidth=".5"/>
-      <rect x="254" y="219" width="24" height="10" rx="2" fill="#18304A" opacity=".7"/></g>
-      :<rect x="247" y="219" width="5" height="10" rx="2" fill="#0F1A28"/>}
-    {/* mirror heat indicators */}
-    {s['Body.Mirrors.Left.IsHeatingOn']&&<circle cx="46" cy="223" r="3" fill="#FF4040" opacity=".7" className="pulse"/>}
-    {s['Body.Mirrors.Right.IsHeatingOn']&&<circle cx="274" cy="223" r="3" fill="#FF4040" opacity=".7" className="pulse"/>}
-    {/* door open arcs */}
-    {d1lo&&<path d="M70,193 L30,203 L28,245 L70,248" fill="#F59E0B" opacity=".07" stroke="#F59E0B" strokeWidth="1"/>}
-    {d1ro&&<path d="M250,193 L290,203 L292,245 L250,248" fill="#F59E0B" opacity=".07" stroke="#F59E0B" strokeWidth="1"/>}
-    {d2lo&&<path d="M70,248 L30,258 L28,304 L70,308" fill="#F59E0B" opacity=".07" stroke="#F59E0B" strokeWidth="1"/>}
-    {d2ro&&<path d="M250,248 L290,258 L292,304 L250,308" fill="#F59E0B" opacity=".07" stroke="#F59E0B" strokeWidth="1"/>}
-    {/* door open labels */}
-    {d1lo&&<text x="42" y="224" fill="#F59E0B" fontSize="6" fontFamily="Share Tech Mono">OPEN</text>}
-    {d1ro&&<text x="256" y="224" fill="#F59E0B" fontSize="6" fontFamily="Share Tech Mono">OPEN</text>}
-    {d2lo&&<text x="32" y="282" fill="#F59E0B" fontSize="6" fontFamily="Share Tech Mono">OPEN</text>}
-    {d2ro&&<text x="256" y="282" fill="#F59E0B" fontSize="6" fontFamily="Share Tech Mono">OPEN</text>}
-    {/* horn pulse */}
-    {horn&&<circle cx="160" cy="270" r="32" fill="#EF4444" opacity=".07" className="pulse"/>}
-    {horn&&<circle cx="160" cy="270" r="18" fill="#EF4444" opacity=".1" className="pulse"/>}
-    {/* hood/trunk labels */}
-    {hood&&<text x="160" y="124" textAnchor="middle" fill="#F59E0B" fontSize="7" fontFamily="Share Tech Mono">HOOD OPEN</text>}
-    {trunk&&<text x="160" y="648" textAnchor="middle" fill="#F59E0B" fontSize="7" fontFamily="Share Tech Mono">TAILGATE OPEN</text>}
-    {fuel&&<text x="50" y="142" fill="#F59E0B" fontSize="6" fontFamily="Share Tech Mono">FUEL</text>}
-    {/* direction */}
-    <text x="160" y="20" textAnchor="middle" fill="#1E2C3C" fontSize="7" fontFamily="Share Tech Mono">▲ FRONT</text>
-    <text x="160" y="672" textAnchor="middle" fill="#1E2C3C" fontSize="7" fontFamily="Share Tech Mono">REAR ▼</text>
+    {(lo||hi)&&<><ellipse cx="100" cy="35" rx="60" ry="25" fill="#FCD34D" opacity=".1"/>
+    <ellipse cx="260" cy="35" rx="60" ry="25" fill="#FCD34D" opacity=".1"/></>}
+
+    {/* SUV Body - wider, more boxy */}
+    <rect x="60" y="80" width="240" height="480" rx="8" fill="#0C1825" stroke="#1A2838" strokeWidth="1"/>
+
+    {/* Body side lines for detail */}
+    <line x1="60" y1="150" x2="300" y2="150" stroke="#182030" strokeWidth="1" opacity=".6"/>
+    <line x1="60" y1="290" x2="300" y2="290" stroke="#182030" strokeWidth="1" opacity=".6"/>
+    <line x1="60" y1="430" x2="300" y2="430" stroke="#182030" strokeWidth="1" opacity=".6"/>
+
+    {/* Front section */}
+    <rect x="60" y="30" width="240" height="50" fill="#0D1628" stroke="#1A2838" strokeWidth="1" rx="4"/>
+
+    {/* Hood outline */}
+    {hood&&<rect x="70" y="35" width="220" height="8" fill="#F59E0B" opacity=".4"/>}
+    <rect x="70" y="40" width="220" height="40" fill="#09111E" stroke="#182030" strokeWidth="0.5"/>
+
+    {/* Headlights - left */}
+    <rect x="70" y="45" width="30" height="28" rx="3" fill={hlc} opacity={hlo/1.5}/>
+    <text x="85" y="65" textAnchor="middle" fill={hlc} fontSize="10" fontWeight="bold" opacity={hlo}>{lo?'●':'○'}</text>
+
+    {/* Headlights - right */}
+    <rect x="260" y="45" width="30" height="28" rx="3" fill={hlc} opacity={hlo/1.5}/>
+    <text x="275" y="65" textAnchor="middle" fill={hlc} fontSize="10" fontWeight="bold" opacity={hlo}>{lo?'●':'○'}</text>
+
+    {/* Turn indicators - left */}
+    <rect x="65" y="75" width="32" height="10" rx="2" fill={li?'#F59E0B':'#1A1208'} opacity={li?1:.25} className={li?'blink':''}/>
+
+    {/* Turn indicators - right */}
+    <rect x="263" y="75" width="32" height="10" rx="2" fill={ri?'#F59E0B':'#1A1208'} opacity={ri?1:.25} className={ri?'blink':''}/>
+
+    {/* Position lamps - front corners */}
+    <circle cx="65" cy="35" r="4" fill={park?'#F59E0B':'#1A1208'} opacity={park?0.9:.3}/>
+    <circle cx="295" cy="35" r="4" fill={park?'#F59E0B':'#1A1208'} opacity={park?0.9:.3}/>
+
+    {/* Windshield */}
+    <rect x="70" y="78" width="220" height="45" rx="3" fill="#152840" stroke="#1E3650" strokeWidth="0.5" opacity=".85"/>
+    <text x="180" y="103" textAnchor="middle" fill="#2A4a6a" fontSize="8" opacity=".6">〰〰</text>
+
+    {/* Cabin/Passenger compartment */}
+    <g>
+      {/* Front left door */}
+      <rect x="60" y="125" width="50" height="165" fill="#0E1825" stroke={d1lo?'#F59E0B':'#1A2838'} strokeWidth={d1lo?2:1} rx="2"/>
+      <rect x="62" y="127" width="46" height="161" fill="#08111f"/>
+      <circle cx="105" cy="210" r="2.5" fill="#2A4a6a" opacity=".7"/>
+      <text x="85" y="215" textAnchor="middle" fill="#2A4a6a" fontSize="7">FL</text>
+      {d1lo&&<path d="M 105,210 L 40,210" stroke="#F59E0B" strokeWidth="2" opacity=".6" strokeDasharray="3,2"/>}
+
+      {/* Front right door */}
+      <rect x="250" y="125" width="50" height="165" fill="#0E1825" stroke={d1ro?'#F59E0B':'#1A2838'} strokeWidth={d1ro?2:1} rx="2"/>
+      <rect x="252" y="127" width="46" height="161" fill="#08111f"/>
+      <circle cx="275" cy="210" r="2.5" fill="#2A4a6a" opacity=".7"/>
+      <text x="255" y="215" textAnchor="middle" fill="#2A4a6a" fontSize="7">FR</text>
+      {d1ro&&<path d="M 255,210 L 320,210" stroke="#F59E0B" strokeWidth="2" opacity=".6" strokeDasharray="3,2"/>}
+    </g>
+
+    {/* Rear left door */}
+    <rect x="60" y="295" width="50" height="135" fill="#0E1825" stroke={d2lo?'#F59E0B':'#1A2838'} strokeWidth={d2lo?2:1} rx="2"/>
+    <rect x="62" y="297" width="46" height="131" fill="#08111f"/>
+    <circle cx="85" cy="360" r="2" fill="#2A4a6a" opacity=".7"/>
+    <text x="85" y="375" textAnchor="middle" fill="#2A4a6a" fontSize="7">RL</text>
+    {d2lo&&<path d="M 85,360 L 20,360" stroke="#F59E0B" strokeWidth="2" opacity=".6" strokeDasharray="3,2"/>}
+
+    {/* Rear right door */}
+    <rect x="250" y="295" width="50" height="135" fill="#0E1825" stroke={d2ro?'#F59E0B':'#1A2838'} strokeWidth={d2ro?2:1} rx="2"/>
+    <rect x="252" y="297" width="46" height="131" fill="#08111f"/>
+    <circle cx="275" cy="360" r="2" fill="#2A4a6a" opacity=".7"/>
+    <text x="275" y="375" textAnchor="middle" fill="#2A4a6a" fontSize="7">RR</text>
+    {d2ro&&<path d="M 275,360 L 340,360" stroke="#F59E0B" strokeWidth="2" opacity=".6" strokeDasharray="3,2"/>}
+
+    {/* Cargo bed - wider for SUV */}
+    <rect x="60" y="440" width="240" height="120" fill="#070E18" stroke="#182030" strokeWidth="1" rx="2"/>
+    <rect x="65" y="445" width="230" height="110" fill="#09111e" opacity=".5"/>
+    {[455,470,485,500,515,530,545,552].map(y=><line key={y} x1="65" y1={y} x2="295" y2={y} stroke="#0a0f18" strokeWidth="0.8" opacity=".4"/>)}
+
+    {/* Tailgate */}
+    {trunk&&<rect x="70" y="560" width="220" height="8" fill="#F59E0B" opacity=".5"/>}
+    <rect x="60" y="560" width="240" height="20" fill="#0E1828" stroke="#1A2535" strokeWidth=".5" rx="2"/>
+
+    {/* Taillights - left */}
+    <rect x="70" y="568" width="35" height="10" rx="2" fill={tlc} opacity={tlo}/>
+    <text x="87" y="576" textAnchor="middle" fill={brake?'#fff':tlc} fontSize="8" fontWeight="bold" opacity={tlo}>{brake?'●':'○'}</text>
+
+    {/* Taillights - right */}
+    <rect x="255" y="568" width="35" height="10" rx="2" fill={tlc} opacity={tlo}/>
+    <text x="272" y="576" textAnchor="middle" fill={brake?'#fff':tlc} fontSize="8" fontWeight="bold" opacity={tlo}>{brake?'●':'○'}</text>
+
+    {/* Rear turn indicators */}
+    <rect x="65" y="580" width="32" height="8" rx="2" fill={li?'#F59E0B':'#1A1208'} opacity={li?1:.25} className={li?'blink':''}/>
+    <rect x="263" y="580" width="32" height="8" rx="2" fill={ri?'#F59E0B':'#1A1208'} opacity={ri?1:.25} className={ri?'blink':''}/>
+
+    {/* Position lamps - rear corners */}
+    <circle cx="65" cy="595" r="4" fill={park?'#F59E0B':'#1A1208'} opacity={park?0.9:.3}/>
+    <circle cx="295" cy="595" r="4" fill={park?'#F59E0B':'#1A1208'} opacity={park?0.9:.3}/>
+
+    {/* Wheels - realistic SUV sizing */}
+    {/* Front left wheel */}
+    <circle cx="95" cy="630" r="35" fill="#07101A" stroke="#1a2838" strokeWidth="1.5"/>
+    <circle cx="95" cy="630" r="28" fill="#0D1520"/>
+    <circle cx="95" cy="630" r="18" fill="#111820" stroke="#202C3C" strokeWidth="0.5"/>
+    <circle cx="95" cy="630" r="6" fill="#08101A"/>
+    {spokes(95,630,7,14)}
+
+    {/* Front right wheel */}
+    <circle cx="265" cy="630" r="35" fill="#07101A" stroke="#1a2838" strokeWidth="1.5"/>
+    <circle cx="265" cy="630" r="28" fill="#0D1520"/>
+    <circle cx="265" cy="630" r="18" fill="#111820" stroke="#202C3C" strokeWidth="0.5"/>
+    <circle cx="265" cy="630" r="6" fill="#08101A"/>
+    {spokes(265,630,7,14)}
+
+    {/* Mirrors */}
+    {!mlf?<circle cx="50" cy="200" r="6" fill="#0F1A28" stroke="#1A2838" strokeWidth="0.5" opacity=".8"/>
+      :<circle cx="50" cy="200" r="3" fill="#0F1A28"/>}
+    {!mrf?<circle cx="310" cy="200" r="6" fill="#0F1A28" stroke="#1A2838" strokeWidth="0.5" opacity=".8"/>
+      :<circle cx="310" cy="200" r="3" fill="#0F1A28"/>}
+
+    {s['Body.Mirrors.Left.IsHeatingOn']&&<circle cx="50" cy="200" r="7" fill="none" stroke="#FF4040" strokeWidth="1" opacity=".6" className="pulse"/>}
+    {s['Body.Mirrors.Right.IsHeatingOn']&&<circle cx="310" cy="200" r="7" fill="none" stroke="#FF4040" strokeWidth="1" opacity=".6" className="pulse"/>}
+
+    {/* Direction labels */}
+    <text x="180" y="20" textAnchor="middle" fill="#1E2C3C" fontSize="8" fontFamily="Share Tech Mono" fontWeight="bold">▲ FRONT</text>
+    <text x="180" y="690" textAnchor="middle" fill="#1E2C3C" fontSize="8" fontFamily="Share Tech Mono" fontWeight="bold">REAR ▼</text>
   </svg>;
 }
 
@@ -455,6 +460,7 @@ function SideView({s}){
   const wr=s['Body.Windshield.Rear.Wiping.Mode']!=='OFF';
   const sr=s['Body.Sunroof.Position'];
   const fuel=s['Body.FuelLid.IsOpen'];
+  const mlf=s['Body.Mirrors.Left.IsFolded'],mrf=s['Body.Mirrors.Right.IsFolded'];
   const hlc=hi?'#FFF':lo?'#FCD34D':drl?'#C0C8D0':park?'#FEF3C7':'#0A1420';
   const hlo=hi?.95:lo?.85:drl?.45:park?.2:.06;
   const tlc=brake?'#FF2222':lo||hi||park?'#EF4444':'#1A0808';
@@ -466,89 +472,139 @@ function SideView({s}){
     return <line key={a} x1={cx+16*Math.cos(r)} y1={cy+16*Math.sin(r)} x2={cx+31*Math.cos(r)} y2={cy+31*Math.sin(r)} stroke="#1E2A3C" strokeWidth="2.5" strokeLinecap="round"/>;
   });
 
-  return <svg viewBox="0 0 780 400" style={{width:'100%',maxWidth:'780px'}}>
-    {/* ground shadow */}
-    <ellipse cx="390" cy="372" rx="330" ry="14" fill="#000" opacity=".25"/>
-    {/* lower body */}
-    <rect x="82" y="274" width="616" height="26" rx="5" fill="#0A1420"/>
-    {/* main body path */}
-    <path d="M80,178 L126,116 L214,98 L318,86 L428,88 L456,96 L472,108 L702,112 L716,136 L718,274 L80,274 Z" fill="#0D1828" stroke="#182030" strokeWidth="1.2"/>
-    {/* hood */}
-    {hood&&<path d="M128,116 L172,60 L238,74 L220,98" fill="none" stroke="#F59E0B" strokeWidth="2" opacity=".6"/>}
-    <path d="M80,178 L126,116 L220,98 L216,274 L80,274 Z" fill="#111E2E" stroke="#182030" strokeWidth=".8"/>
-    {/* fuel lid */}
-    {fuel&&<path d="M104,210 L80,215" stroke="#F59E0B" strokeWidth="2" strokeLinecap="round" opacity=".7"/>}
-    {/* cab windows */}
-    <path d="M222,98 L322,86 L322,196 L210,196 Z" fill="#122840" stroke="#1E3A56" strokeWidth=".7" opacity=".9"/>
-    <rect x="326" y="88" width="100" height="108" rx="2" fill="#122840" stroke="#1E3A56" strokeWidth=".7" opacity=".85"/>
-    <path d="M428,88 L454,98 L450,196 L426,196 Z" fill="#122840" stroke="#1E3A56" strokeWidth=".7" opacity=".8"/>
-    {/* sunroof open */}
-    {sr>0&&<rect x="240" y="86" width={80*(sr/100)} height="12" rx="2" fill="#0A1828" stroke="#0DC8C8" strokeWidth="1" opacity=".8"/>}
-    {/* cab ambient glow */}
-    {amb&&<path d="M212,100 L322,88 L452,100 L448,196 L210,196 Z" fill={s['Cabin.Lights.Ambient.Color']} opacity={s['Cabin.Lights.Ambient.Intensity']/400}/>}
-    {/* pillars */}
-    <line x1="222" y1="98" x2="210" y2="196" stroke="#0D1828" strokeWidth="6" strokeLinecap="round"/>
-    <line x1="322" y1="86" x2="322" y2="196" stroke="#0D1828" strokeWidth="8" strokeLinecap="round"/>
-    <line x1="426" y1="88" x2="452" y2="196" stroke="#0D1828" strokeWidth="6" strokeLinecap="round"/>
-    {/* roof */}
-    <rect x="208" y="86" width="248" height="12" rx="2" fill="#08121C"/>
-    {/* bed */}
-    <rect x="460" y="112" width="256" height="162" fill="#070E18" stroke="#182030" strokeWidth=".8"/>
-    <rect x="460" y="112" width="256" height="12" fill="#111E2C"/>
-    {[128,145,162,180,198,215,232,250].map(y=><line key={y} x1="462" y1={y} x2="714" y2={y} stroke="#060B14" strokeWidth="1"/>)}
-    {/* tailgate */}
-    {trunk?<path d="M718,274 L780,274 L780,200" fill="none" stroke="#F59E0B" strokeWidth="2" opacity=".6"/>
-      :<rect x="712" y="112" width="12" height="162" rx="2" fill="#111E2C" stroke="#182030" strokeWidth=".5"/>}
-    {/* door gaps */}
-    <line x1="322" y1="196" x2="322" y2="274" stroke="#040A12" strokeWidth="3"/>
-    <line x1="430" y1="196" x2="430" y2="274" stroke="#040A12" strokeWidth="3"/>
-    {/* door open */}
-    {d1&&<path d="M212,196 L212,274 L164,292 L152,266 L198,196" fill="#F59E0B" opacity=".07" stroke="#F59E0B" strokeWidth="1.2"/>}
-    {d2&&<path d="M322,196 L322,274 L274,292 L262,266 L308,196" fill="#F59E0B" opacity=".07" stroke="#F59E0B" strokeWidth="1.2"/>}
-    {/* front bumper */}
-    <rect x="60" y="220" width="22" height="66" rx="5" fill="#0D1828" stroke="#182030" strokeWidth=".8"/>
-    {/* headlight */}
-    <rect x="64" y="176" width="20" height="42" rx="4" fill={hlc} opacity={hlo}/>
-    <rect x="67" y="180" width="13" height="34" rx="2" fill={hi?'#FFF':'#050B14'} opacity={hlo*.8}/>
-    {/* front indicator */}
-    <rect x="64" y="218" width="20" height="12" rx="3" fill={li?'#F59E0B':'#1A1208'} opacity={li?1:.3} className={li?'blink':''}/>
-    {/* front fog */}
-    {ffog&&<rect x="68" y="233" width="14" height="10" rx="2" fill="#BAD6FE" opacity=".9"/>}
-    {/* mirror */}
-    <path d="M215,164 L192,152 L188,182 L215,182 Z" fill="#111E2C" stroke="#182030" strokeWidth=".5"/>
-    {/* taillight */}
-    <rect x="718" y="184" width="16" height="48" rx="3" fill={tlc} opacity={tlo}/>
-    {/* rear indicator */}
-    <rect x="718" y="234" width="16" height="12" rx="2" fill={li?'#F59E0B':'#1A1208'} className={li?'blink':''} opacity={li?1:.25}/>
-    {/* reverse */}
-    {back&&<rect x="718" y="170" width="16" height="12" rx="2" fill="#FFFFFF" opacity=".8"/>}
-    {/* rear fog */}
-    {rfog&&<rect x="718" y="160" width="16" height="12" rx="2" fill="#EF2020" opacity=".8"/>}
-    {/* wipers */}
+  return <svg viewBox="0 0 1000 450" style={{width:'100%',maxWidth:'1000px'}}>
+    {/* Ground */}
+    <line x1="20" y1="400" x2="980" y2="400" stroke="#182030" strokeWidth="2" opacity=".5"/>
+    <ellipse cx="500" cy="415" rx="450" ry="12" fill="#000" opacity=".15"/>
+
+    {/* SUV BODY - Clean unified shape */}
+    {/* Main body outline */}
+    <path d="M 100,320 L 120,240 L 180,120 L 280,80 L 800,80 L 880,140 L 900,250 L 920,320 L 920,400 L 100,400 Z"
+      fill="#0C1825" stroke="#1A2838" strokeWidth="2"/>
+
+    {/* Roof/Top line - smooth curve */}
+    <path d="M 120,240 Q 200,100 280,80 L 800,80 Q 880,100 900,250"
+      fill="none" stroke="#1A2838" strokeWidth="1" opacity=".6"/>
+
+    {/* Hood - front */}
+    {hood&&<path d="M 100,320 L 120,240 L 180,150" stroke="#F59E0B" strokeWidth="3" fill="none" opacity=".6"/>}
+
+    {/* Windshield panel */}
+    <path d="M 180,120 L 280,80 L 290,240 L 200,250 Z"
+      fill="#0F2840" stroke="#1E3A56" strokeWidth="1" opacity=".85"/>
+
+    {/* Front door - larger */}
+    <rect x="290" y="240" width="180" height="160" fill="#0C1825" stroke={d1?'#F59E0B':'#1A2838'} strokeWidth={d1?2.5:1.2} rx="3"/>
+    <path d="M 320,250 L 450,250 M 320,290 L 450,290 M 320,330 L 450,330"
+      stroke="#07101f" strokeWidth="0.8" opacity=".4"/>
+    {d1&&<g>
+      <path d="M 290,300 L 180,300" stroke="#F59E0B" strokeWidth="2.5" opacity=".8" strokeDasharray="4,2"/>
+      <text x="220" y="290" fill="#F59E0B" fontSize="8" fontWeight="bold">DOOR OPEN</text>
+    </g>}
+
+    {/* Main cabin window */}
+    <path d="M 290,240 L 450,240 L 850,240 L 880,260 Q 880,270 870,280 L 290,280 Z"
+      fill="#0F2438" stroke="#1E3A56" strokeWidth="1" opacity=".82"/>
+
+    {/* Rear door */}
+    <rect x="470" y="240" width="160" height="160" fill="#0C1825" stroke={d2?'#F59E0B':'#1A2838'} strokeWidth={d2?2.5:1.2} rx="3"/>
+    <path d="M 495,250 L 620,250 M 495,290 L 620,290 M 495,330 L 620,330"
+      stroke="#07101f" strokeWidth="0.8" opacity=".4"/>
+    {d2&&<g>
+      <path d="M 470,300 L 380,300" stroke="#F59E0B" strokeWidth="2.5" opacity=".8" strokeDasharray="4,2"/>
+      <text x="410" y="290" fill="#F59E0B" fontSize="8" fontWeight="bold">OPEN</text>
+    </g>}
+
+    {/* Cargo bed area */}
+    <rect x="630" y="240" width="200" height="160" fill="#070E18" stroke="#182030" strokeWidth="1.2" rx="3"/>
+    <rect x="640" y="250" width="180" height="140" fill="#0a0f1a" opacity=".3"/>
+    {[270, 295, 320, 345].map(y=><line key={y} x1="640" y1={y} x2="820" y2={y} stroke="#060c14" strokeWidth="0.8" opacity=".4"/>)}
+
+    {/* Tailgate */}
+    {trunk&&<path d="M 830,250 L 860,220 L 875,250 L 850,270 Z" fill="#F59E0B" opacity=".5"/>}
+
+    {/* Rear bumper */}
+    <path d="M 880,320 L 900,250 L 920,320 Z" fill="#0D1628" stroke="#182030" strokeWidth="1"/>
+
+    {/* HEADLIGHT - Left */}
+    <ellipse cx="130" cy="200" rx="18" ry="28" fill={hlc} opacity={hlo*0.75}/>
+    <circle cx="130" cy="210" r="8" fill={hlc} opacity={hlo*1.4}/>
+    <text x="130" y="214" textAnchor="middle" fill="#fff" fontSize="8" fontWeight="bold" opacity={hlo}>{lo?'●':'○'}</text>
+
+    {/* Front indicators/turn signal */}
+    <rect x="110" y="240" width="28" height="14" rx="2" fill={li?'#F59E0B':'#1A1208'} opacity={li?0.95:.25} className={li?'blink':''}/>
+
+    {/* Front fog */}
+    {ffog&&<rect x="110" y="260" width="28" height="12" rx="2" fill="#BAD6FE" opacity=".88"/>}
+
+    {/* TAILLIGHT - Right */}
+    <ellipse cx="870" cy="200" rx="18" ry="28" fill={tlc} opacity={tlo}/>
+    <circle cx="870" cy="210" r="8" fill={tlc} opacity={tlo*1.4}/>
+    <text x="870" y="214" textAnchor="middle" fill="#fff" fontSize="8" fontWeight="bold" opacity={tlo}>{brake?'●':'○'}</text>
+
+    {/* Rear turn indicator */}
+    <rect x="862" y="240" width="28" height="14" rx="2" fill={li?'#F59E0B':'#1A1208'} className={li?'blink':''} opacity={li?0.95:.25}/>
+
+    {/* Rear fog */}
+    {rfog&&<rect x="862" y="260" width="28" height="12" rx="2" fill="#EF2020" opacity=".88"/>}
+
+    {/* Reverse */}
+    {back&&<rect x="862" y="280" width="28" height="10" rx="2" fill="#FFFFFF" opacity=".82"/>}
+
+    {/* MIRRORS */}
+    {!mlf?<g>
+      <ellipse cx="75" cy="210" rx="12" ry="18" fill="#0F1A28" stroke="#1A2838" strokeWidth="1"/>
+      <ellipse cx="77" cy="213" rx="8" ry="13" fill="#18304A" opacity=".7"/>
+    </g>
+    :<circle cx="78" cy="210" r="5" fill="#0F1A28"/>}
+    {s['Body.Mirrors.Left.IsHeatingOn']&&<circle cx="75" cy="210" r="16" fill="none" stroke="#FF4040" strokeWidth="1.2" opacity=".7" className="pulse"/>}
+
+    {!mrf?<g>
+      <ellipse cx="925" cy="210" rx="12" ry="18" fill="#0F1A28" stroke="#1A2838" strokeWidth="1"/>
+      <ellipse cx="923" cy="213" rx="8" ry="13" fill="#18304A" opacity=".7"/>
+    </g>
+    :<circle cx="922" cy="210" r="5" fill="#0F1A28"/>}
+    {s['Body.Mirrors.Right.IsHeatingOn']&&<circle cx="925" cy="210" r="16" fill="none" stroke="#FF4040" strokeWidth="1.2" opacity=".7" className="pulse"/>}
+
+    {/* WHEELS - Large SUV wheels */}
+    {/* Front wheel */}
+    <circle cx="180" cy="400" r="55" fill="#07101A" stroke="#161E2C" strokeWidth="2.2"/>
+    <circle cx="180" cy="400" r="42" fill="#0D1520"/>
+    <circle cx="180" cy="400" r="28" fill="#111820" stroke="#202C3C" strokeWidth="1"/>
+    <circle cx="180" cy="400" r="10" fill="#08101A"/>
+    {spokes(180,400)}
+
+    {/* Rear wheel */}
+    <circle cx="800" cy="400" r="55" fill="#07101A" stroke="#161E2C" strokeWidth="2.2"/>
+    <circle cx="800" cy="400" r="42" fill="#0D1520"/>
+    <circle cx="800" cy="400" r="28" fill="#111820" stroke="#202C3C" strokeWidth="1"/>
+    <circle cx="800" cy="400" r="10" fill="#08101A"/>
+    {spokes(800,400)}
+
+    {/* Position/Parking lamps - corners */}
+    <circle cx="130" cy="315" r="5" fill={park?'#F59E0B':'#1A1208'} opacity={park?0.85:.3}/>
+    <circle cx="870" cy="315" r="5" fill={park?'#F59E0B':'#1A1208'} opacity={park?0.85:.3}/>
+
+    {/* Wipers */}
     {wf&&<g className="blinks">
-      <path d="M236,196 L228,114" stroke="#4A9EF5" strokeWidth="2" strokeLinecap="round" opacity=".7"/>
-      <path d="M278,196 L308,100" stroke="#4A9EF5" strokeWidth="2" strokeLinecap="round" opacity=".7"/>
+      <path d="M 250,250 L 220,130" stroke="#4A9EF5" strokeWidth="2" strokeLinecap="round" opacity=".75"/>
+      <path d="M 380,250 L 420,110" stroke="#4A9EF5" strokeWidth="2" strokeLinecap="round" opacity=".75"/>
     </g>}
     {wr&&<g className="blinks">
-      <path d="M438,196 L450,104" stroke="#4A9EF5" strokeWidth="2" strokeLinecap="round" opacity=".7"/>
+      <path d="M 800,250 L 835,130" stroke="#4A9EF5" strokeWidth="2" strokeLinecap="round" opacity=".7"/>
     </g>}
-    {/* wheels */}
-    {[[172,326,52],[576,326,52]].map(([cx,cy,r],i)=>(
-      <g key={i}>
-        <circle cx={cx} cy={cy} r={r} fill="#07101A" stroke="#161E2C" strokeWidth="1.5"/>
-        <circle cx={cx} cy={cy} r={r*.75} fill="#07101A"/>
-        <circle cx={cx} cy={cy} r={r*.53} fill="#0F1828"/>
-        <circle cx={cx} cy={cy} r={r*.18} fill="#070D16" stroke="#202C3C" strokeWidth=".8"/>
-        {spokes(cx,cy)}
-      </g>
-    ))}
-    <text x="22" y="328" fill="#16243A" fontSize="8" fontFamily="Share Tech Mono">FRONT ◄</text>
-    <text x="722" y="328" fill="#16243A" fontSize="8" fontFamily="Share Tech Mono">► REAR</text>
+
+    {/* Direction labels */}
+    <text x="40" y="220" fill="#16243A" fontSize="11" fontFamily="Share Tech Mono" fontWeight="700">FRONT</text>
+    <text x="920" y="220" fill="#16243A" fontSize="11" fontFamily="Share Tech Mono" fontWeight="700">REAR</text>
+
+    {/* Sunroof indicator */}
+    {sr>0&&<rect x={320+sr*2.4} y="95" width={120*(sr/100)} height="14" fill="#0A1828" stroke="#0DC8C8" strokeWidth="1.2" opacity={sr/100*0.8} rx="2"/>}
   </svg>;
 }
 
 /* ═══════════════ COCKPIT VIEW ═══════════════ */
-function CockpitView({s}){
+function CockpitView({s,set}){
   const lo=s['Body.Lights.Beam.Low.IsOn'],hi=s['Body.Lights.Beam.High.IsOn'];
   const li=s['Body.Lights.DirectionIndicator.Left.IsSignaling']||s['Body.Lights.Hazard.IsSignaling'];
   const ri=s['Body.Lights.DirectionIndicator.Right.IsSignaling']||s['Body.Lights.Hazard.IsSignaling'];
@@ -570,8 +626,10 @@ function CockpitView({s}){
   const back=s['Body.Lights.Backup.IsActive'];
   const fuel=s['Body.FuelLid.IsOpen'];
   const trunk=s['Body.Trunk.IsOpen'];
-  const heat1L=s['Cabin.Seat.Row1.Left.IsHeatingOn'];
-  const heat1R=s['Cabin.Seat.Row1.Right.IsHeatingOn'];
+  const heatL=s['Cabin.Seat.Row1.Left.HeatingLevel']||0;
+  const heatR=s['Cabin.Seat.Row1.Right.HeatingLevel']||0;
+  const vent1L=s['Cabin.Seat.Row1.Left.IsVentilationOn'];
+  const vent1R=s['Cabin.Seat.Row1.Right.IsVentilationOn'];
 
   const fanBars=(f,x)=>Array.from({length:7},(_,i)=>(
     <rect key={i} x={x+i*12} y={232-(i*4)} width={9} height={16+i*4} rx="1"
@@ -584,74 +642,116 @@ function CockpitView({s}){
     <text x={x} y={y+4} textAnchor="middle" fill={color} fontSize="7" fontFamily="Share Tech Mono">{label}</text></g>
   );
 
-  return <svg viewBox="0 0 740 420" style={{width:'100%',maxWidth:'740px'}}>
-    {/* dash bg */}
-    <rect x="0" y="0" width="740" height="420" fill="#06101C"/>
-    <path d="M0,52 Q370,92 740,52 L740,420 L0,420 Z" fill="#091424"/>
-    <path d="M0,48 Q370,88 740,48" fill="none" stroke="#142238" strokeWidth="2"/>
-    {/* steering wheel */}
-    <circle cx="210" cy="388" r="80" fill="none" stroke="#0E1C2E" strokeWidth="12"/>
-    <circle cx="210" cy="388" r="80" fill="none" stroke="#182840" strokeWidth="1.5"/>
-    <circle cx="210" cy="388" r="22" fill="#0B1824" stroke="#182840" strokeWidth="2"/>
-    <line x1="210" y1="308" x2="210" y2="366" stroke="#0E1C2E" strokeWidth="10"/>
-    <line x1="136" y1="388" x2="188" y2="388" stroke="#0E1C2E" strokeWidth="10"/>
-    <line x1="232" y1="388" x2="284" y2="388" stroke="#0E1C2E" strokeWidth="10"/>
-    {horn&&<circle cx="210" cy="388" r="22" fill="#EF4040" opacity=".2" className="pulse"/>}
-    {/* cluster */}
-    <rect x="262" y="92" width="216" height="136" rx="8" fill="#070F1C" stroke="#182030" strokeWidth=".8"/>
-    <text x="370" y="120" textAnchor="middle" fill="#1C3050" fontSize="8" fontFamily="Share Tech Mono" letterSpacing="2">SPEED</text>
-    <text x="370" y="158" textAnchor="middle" fill="#F59E0B" fontSize="34" fontFamily="Orbitron" fontWeight="700">0</text>
-    <text x="370" y="177" textAnchor="middle" fill="#1C3050" fontSize="8" fontFamily="Share Tech Mono">KM/H</text>
-    <text x="370" y="208" textAnchor="middle" fill="#10D98A" fontSize="11" fontFamily="Share Tech Mono">● PARK</text>
-    {/* telltales row */}
-    {warn(lo,'#22C55E',276,240,'LO')}
-    {warn(hi,'#4A9EF5',300,240,'HI')}
-    <text x="325" y="246" textAnchor="middle" fill={li?'#F59E0B':'#1E2C3C'} fontSize="18" className={li?'blink':''}>◄</text>
-    <text x="414" y="246" textAnchor="middle" fill={ri?'#F59E0B':'#1E2C3C'} fontSize="18" className={ri?'blink':''}>►</text>
-    {warn(haz,'#F59E0B',348,240,'HAZ')}
-    {warn(doorAjar,'#EF4444',372,240,'DR')}
-    {warn(fog,'#BAD6FE',396,240,'FOG')}
-    {warn(park,'#FEF3C7',420,240,'PRK')}
-    {warn(dome,'#FCD34D',444,240,'DOM')}
-    {warn(brake,'#EF4444',465,240,'BRK')}
-    {warn(back,'#FFFFFF',485,240,'REV')}
-    {warn(fuel,'#F59E0B',276,264,'FUEL')}
-    {warn(trunk,'#F59E0B',300,264,'TGTD')}
-    {warn(heat1L,'#EF6020',348,264,'HS-D')}
-    {warn(heat1R,'#EF6020',396,264,'HS-P')}
-    {warn(defF,'#4A9EF5',444,264,'DEF-F')}
-    {warn(defR,'#4A9EF5',485,264,'DEF-R')}
-    {/* HVAC panel */}
-    <rect x="488" y="92" width="238" height="182" rx="8" fill="#060E1A" stroke="#182030" strokeWidth=".8"/>
-    <text x="607" y="113" textAnchor="middle" fill="#1C3050" fontSize="7" fontFamily="Share Tech Mono" letterSpacing="2">CLIMATE CONTROL</text>
-    {/* driver zone */}
-    <text x="524" y="134" textAnchor="middle" fill="#2A3A50" fontSize="7" fontFamily="Share Tech Mono">DRIVER</text>
-    <text x="524" y="162" textAnchor="middle" fill="#F59E0B" fontSize="26" fontFamily="Orbitron" fontWeight="600">{dT.toFixed(1)}</text>
-    <text x="524" y="178" textAnchor="middle" fill="#1C3050" fontSize="7" fontFamily="Share Tech Mono">°C</text>
-    {/* pass zone */}
-    <text x="692" y="134" textAnchor="middle" fill="#2A3A50" fontSize="7" fontFamily="Share Tech Mono">PASS.</text>
-    <text x="692" y="162" textAnchor="middle" fill="#F59E0B" fontSize="26" fontFamily="Orbitron" fontWeight="600">{pT.toFixed(1)}</text>
-    <text x="692" y="178" textAnchor="middle" fill="#1C3050" fontSize="7" fontFamily="Share Tech Mono">°C</text>
-    {/* AC button */}
-    <circle cx="607" cy="152" r="18" fill={ac?'#0A2448':'#070E18'} stroke={ac?'#4A9EF5':'#182030'} strokeWidth={ac?1.2:.8}/>
-    <text x="607" y="157" textAnchor="middle" fill={ac?'#4A9EF5':'#1C3050'} fontSize="10" fontFamily="Share Tech Mono">A/C</text>
-    {/* recirc */}
-    <circle cx="580" cy="152" r="12" fill={recirc?'#0A2A1C':'#070E18'} stroke={recirc?'#10D98A':'#182030'} strokeWidth=".8"/>
-    <text x="580" y="156" textAnchor="middle" fill={recirc?'#10D98A':'#1C3050'} fontSize="7" fontFamily="Share Tech Mono">↺</text>
-    {/* fan bars */}
-    {fanBars(dF,496)}
-    <text x="524" y="260" textAnchor="middle" fill="#1C3050" fontSize="6" fontFamily="Share Tech Mono">FAN {dF}/7</text>
-    {fanBars(pF,650)}
-    <text x="678" y="260" textAnchor="middle" fill="#1C3050" fontSize="6" fontFamily="Share Tech Mono">FAN {pF}/7</text>
-    {/* wiper status */}
-    <rect x="86" y="284" width="112" height="46" rx="5" fill="#070F1C" stroke="#182030" strokeWidth=".5"/>
-    <text x="142" y="301" textAnchor="middle" fill="#1C3050" fontSize="7" fontFamily="Share Tech Mono">FRONT WIPER</text>
-    <text x="142" y="320" textAnchor="middle" fill={wf!=='OFF'?'#4A9EF5':'#1C3050'} fontSize="13" fontFamily="Share Tech Mono">{wf}</text>
-    {/* horn ring */}
-    {horn&&<g><rect x="310" y="284" width="100" height="46" rx="5" fill="#EF4040" opacity=".1" stroke="#EF4040" strokeWidth=".8"/>
-    <text x="360" y="314" textAnchor="middle" fill="#EF4040" fontSize="12" fontFamily="Share Tech Mono" letterSpacing="4">HORN!</text></g>}
-    {/* VSS label */}
-    <text x="370" y="414" textAnchor="middle" fill="#0A1828" fontSize="7" fontFamily="Share Tech Mono">Vehicle.Body.*  ·  COVESA VSS v4.0  ·  overlay: LatchStatus  IsDoubleLocked  IsChildLockActive</text>
+  return <svg viewBox="0 0 800 500" style={{width:'100%',maxWidth:'800px'}}>
+    {/* dash background */}
+    <rect x="0" y="0" width="800" height="500" fill="#06101C"/>
+    <path d="M0,60 Q400,100 800,60 L800,500 L0,500 Z" fill="#091424"/>
+
+    {/* SPEED CLUSTER - Center */}
+    <rect x="280" y="80" width="240" height="160" rx="8" fill="#070F1C" stroke="#1A2838" strokeWidth="1.2"/>
+    <text x="400" y="105" textAnchor="middle" fill="#1C3050" fontSize="11" fontFamily="Share Tech Mono" fontWeight="600" letterSpacing="2">SPEED</text>
+    <text x="400" y="155" textAnchor="middle" fill="#F59E0B" fontSize="52" fontFamily="Orbitron" fontWeight="700">0</text>
+    <text x="400" y="180" textAnchor="middle" fill="#1C3050" fontSize="12" fontFamily="Share Tech Mono">km/h</text>
+    <text x="400" y="215" textAnchor="middle" fill="#10D98A" fontSize="13" fontFamily="Share Tech Mono" fontWeight="600">● PARK</text>
+
+    {/* WARNING INDICATORS - Top Row */}
+    <text x="50" y="105" fill="#1C3050" fontSize="9" fontFamily="Share Tech Mono" fontWeight="600">WARNINGS:</text>
+
+    {/* Beam Low */}
+    {lo&&<g>
+      <circle cx="50" cy="130" r="12" fill="#22C55E" opacity="0.3" stroke="#22C55E" strokeWidth="1.2"/>
+      <text x="50" y="135" textAnchor="middle" fill="#22C55E" fontSize="9" fontFamily="Share Tech Mono" fontWeight="600">LO</text>
+    </g>}
+
+    {/* Beam High */}
+    {hi&&<g>
+      <circle cx="110" cy="130" r="12" fill="#4A9EF5" opacity="0.3" stroke="#4A9EF5" strokeWidth="1.2"/>
+      <text x="110" y="135" textAnchor="middle" fill="#4A9EF5" fontSize="9" fontFamily="Share Tech Mono" fontWeight="600">HI</text>
+    </g>}
+
+    {/* Turn Left */}
+    {li&&<g>
+      <circle cx="170" cy="130" r="12" fill="#F59E0B" opacity="0.3" stroke="#F59E0B" strokeWidth="1.2" className="blink"/>
+      <text x="170" y="135" textAnchor="middle" fill="#F59E0B" fontSize="10" fontFamily="Share Tech Mono" fontWeight="600">◄</text>
+    </g>}
+
+    {/* Turn Right */}
+    {ri&&<g>
+      <circle cx="230" cy="130" r="12" fill="#F59E0B" opacity="0.3" stroke="#F59E0B" strokeWidth="1.2" className="blink"/>
+      <text x="230" y="135" textAnchor="middle" fill="#F59E0B" fontSize="10" fontFamily="Share Tech Mono" fontWeight="600">►</text>
+    </g>}
+
+    {/* Door Ajar */}
+    {doorAjar&&<g>
+      <circle cx="290" cy="130" r="12" fill="#EF4444" opacity="0.3" stroke="#EF4444" strokeWidth="1.2"/>
+      <text x="290" y="135" textAnchor="middle" fill="#EF4444" fontSize="8" fontFamily="Share Tech Mono" fontWeight="600">DOOR</text>
+    </g>}
+
+    {/* Brake */}
+    {brake&&<g>
+      <circle cx="350" cy="130" r="12" fill="#EF4444" opacity="0.3" stroke="#EF4444" strokeWidth="1.2"/>
+      <text x="350" y="135" textAnchor="middle" fill="#EF4444" fontSize="8" fontFamily="Share Tech Mono" fontWeight="600">BRK</text>
+    </g>}
+
+    {/* HVAC STATUS - Left */}
+    <rect x="20" y="260" width="240" height="140" rx="6" fill="#060E1A" stroke="#1A2838" strokeWidth="1"/>
+    <text x="140" y="280" textAnchor="middle" fill="#1C3050" fontSize="10" fontFamily="Share Tech Mono" fontWeight="600">CLIMATE</text>
+
+    <text x="50" y="310" fill="#2A3A50" fontSize="8" fontFamily="Share Tech Mono">DRIVER:</text>
+    <text x="50" y="330" fill="#F59E0B" fontSize="20" fontFamily="Orbitron" fontWeight="600">{dT.toFixed(0)}°</text>
+
+    <text x="175" y="310" fill="#2A3A50" fontSize="8" fontFamily="Share Tech Mono">PASS:</text>
+    <text x="175" y="330" fill="#F59E0B" fontSize="20" fontFamily="Orbitron" fontWeight="600">{pT.toFixed(0)}°</text>
+
+    <text x="50" y="360" fill={ac?'#4A9EF5':'#1C3050'} fontSize="7" fontFamily="Share Tech Mono">{ac?'[A/C]':'a/c'}</text>
+    <text x="110" y="360" fill={recirc?'#10D98A':'#1C3050'} fontSize="7" fontFamily="Share Tech Mono">{recirc?'[RECIRC]':'recirc'}</text>
+    <text x="175" y="360" fill={defF?'#4A9EF5':'#1C3050'} fontSize="7" fontFamily="Share Tech Mono">{defF?'[DEF-F]':'def-f'}</text>
+
+    {/* SEATS - Right */}
+    <rect x="540" y="260" width="240" height="140" rx="6" fill="#060E1A" stroke="#1A2838" strokeWidth="1"/>
+    <text x="660" y="280" textAnchor="middle" fill="#1C3050" fontSize="10" fontFamily="Share Tech Mono" fontWeight="600">SEATS</text>
+
+    {/* Row 1: Heating buttons */}
+    {/* Driver Heating - CLICKABLE */}
+    <g onClick={()=>set('Cabin.Seat.Row1.Left.HeatingLevel',[3,0,1,2][heatL])} style={{cursor:'pointer'}}>
+      <rect x="555" y="295" width="45" height="32" rx="2" fill={heatL>0?'#6B1E1E':'#0E1625'} stroke={heatL>0?'#EF6020':'#1A2838'} strokeWidth="1.2"/>
+      <text x="577" y="314" textAnchor="middle" fill={heatL>0?'#FF6B35':'#1C3050'} fontSize="14" fontFamily="Orbitron" fontWeight="600">{heatL}</text>
+      <text x="577" y="326" textAnchor="middle" fill={heatL>0?'#FF6B35':'#1C3050'} fontSize="6" fontFamily="Share Tech Mono">Heat</text>
+    </g>
+
+    {/* Passenger Heating - CLICKABLE */}
+    <g onClick={()=>set('Cabin.Seat.Row1.Right.HeatingLevel',[3,0,1,2][heatR])} style={{cursor:'pointer'}}>
+      <rect x="670" y="295" width="45" height="32" rx="2" fill={heatR>0?'#6B1E1E':'#0E1625'} stroke={heatR>0?'#EF6020':'#1A2838'} strokeWidth="1.2"/>
+      <text x="692" y="314" textAnchor="middle" fill={heatR>0?'#FF6B35':'#1C3050'} fontSize="14" fontFamily="Orbitron" fontWeight="600">{heatR}</text>
+      <text x="692" y="326" textAnchor="middle" fill={heatR>0?'#FF6B35':'#1C3050'} fontSize="6" fontFamily="Share Tech Mono">Heat</text>
+    </g>
+
+    {/* Row 2: Ventilation buttons */}
+    {/* Driver Vent - CLICKABLE */}
+    <g onClick={()=>set('Cabin.Seat.Row1.Left.IsVentilationOn',!vent1L)} style={{cursor:'pointer'}}>
+      <rect x="555" y="345" width="45" height="32" rx="2" fill={vent1L?'#1E3A52':'#0E1625'} stroke={vent1L?'#4A9EF5':'#1A2838'} strokeWidth="1.2"/>
+      <text x="577" y="365" textAnchor="middle" fill={vent1L?'#4A9EF5':'#1C3050'} fontSize="11" fontFamily="Share Tech Mono" fontWeight="600">{vent1L?'●':'○'}</text>
+      <text x="577" y="376" textAnchor="middle" fill={vent1L?'#4A9EF5':'#1C3050'} fontSize="6" fontFamily="Share Tech Mono">Vent</text>
+    </g>
+
+    {/* Passenger Vent - CLICKABLE */}
+    <g onClick={()=>set('Cabin.Seat.Row1.Right.IsVentilationOn',!vent1R)} style={{cursor:'pointer'}}>
+      <rect x="670" y="345" width="45" height="32" rx="2" fill={vent1R?'#1E3A52':'#0E1625'} stroke={vent1R?'#4A9EF5':'#1A2838'} strokeWidth="1.2"/>
+      <text x="692" y="365" textAnchor="middle" fill={vent1R?'#4A9EF5':'#1C3050'} fontSize="11" fontFamily="Share Tech Mono" fontWeight="600">{vent1R?'●':'○'}</text>
+      <text x="692" y="376" textAnchor="middle" fill={vent1R?'#4A9EF5':'#1C3050'} fontSize="6" fontFamily="Share Tech Mono">Vent</text>
+    </g>
+
+    {/* Status Bar - Bottom */}
+    <rect x="20" y="410" width="760" height="70" rx="6" fill="#060E1A" stroke="#1A2838" strokeWidth="1"/>
+    <text x="400" y="430" textAnchor="middle" fill="#1C3050" fontSize="8" fontFamily="Share Tech Mono" fontWeight="600">STATUS</text>
+
+    <text x="50" y="460" fill={wf!=='OFF'?'#4A9EF5':'#1C3050'} fontSize="9" fontFamily="Share Tech Mono">WIPERS: <tspan fontWeight="600">{wf}</tspan></text>
+    <text x="220" y="460" fill={horn?'#EF4444':'#1C3050'} fontSize="9" fontFamily="Share Tech Mono">HORN: <tspan fontWeight="600">{horn?'ACTIVE':'-'}</tspan></text>
+    <text x="420" y="460" fill={dome?'#FCD34D':'#1C3050'} fontSize="9" fontFamily="Share Tech Mono">DOME: <tspan fontWeight="600">{dome?'ON':'OFF'}</tspan></text>
+    <text x="600" y="460" fill={fuel?'#F59E0B':'#1C3050'} fontSize="9" fontFamily="Share Tech Mono">FUEL LID: <tspan fontWeight="600">{fuel?'OPEN':'CLOSED'}</tspan></text>
+
+    <text x="50" y="485" fill={trunk?'#F59E0B':'#1C3050'} fontSize="9" fontFamily="Share Tech Mono">TAILGATE: <tspan fontWeight="600">{trunk?'OPEN':'CLOSED'}</tspan></text>
+    <text x="300" y="485" fill="#7A8FA6" fontSize="8" fontFamily="Share Tech Mono">COVESA VSS v4.0</text>
   </svg>;
 }
 
@@ -763,9 +863,18 @@ function ControlPanel({s,set}){
 
       <SG title="Seats" vss="Cabin.Seat">
         {[['Driver','Cabin.Seat.Row1.Left'],['Passenger','Cabin.Seat.Row1.Right']].map(([label,pfx])=>(
-          <div key={pfx} style={{background:'var(--s2)',borderRadius:'var(--r6)',padding:'6px 8px',border:'1px solid var(--bdr)',display:'flex',flexDirection:'column',gap:3,marginBottom:4}}>
+          <div key={pfx} style={{background:'var(--s2)',borderRadius:'var(--r6)',padding:'8px 10px',border:'1px solid var(--bdr)',display:'flex',flexDirection:'column',gap:4,marginBottom:4}}>
             <div className="dctitle">{label.toUpperCase()}</div>
-            <div className="dcr"><span className="dcl">Heating</span><Tog val={s[`${pfx}.IsHeatingOn`]} on={()=>set(`${pfx}.IsHeatingOn`,!s[`${pfx}.IsHeatingOn`])} c="r"/></div>
+
+            {/* Heating Level Control */}
+            <div style={{display:'flex',alignItems:'center',gap:6}}>
+              <span className="dcl" style={{flex:1}}>Heating</span>
+              <button style={{background:s[`${pfx}.HeatingLevel`]>0?'#8B2E2E':'#1A2838',border:'1px solid #3A4D5C',borderRadius:4,color:s[`${pfx}.HeatingLevel`]>0?'#FF6B35':'#666',cursor:'pointer',padding:'4px 12px',fontSize:'11px',fontWeight:'600',fontFamily:'Orbitron'}} onClick={()=>set(`${pfx}.HeatingLevel`,[3,0,1,2][s[`${pfx}.HeatingLevel`]||0])}>
+                {s[`${pfx}.HeatingLevel`]||0}
+              </button>
+            </div>
+
+            {/* Ventilation Toggle */}
             <div className="dcr"><span className="dcl">Ventilation</span><Tog val={s[`${pfx}.IsVentilationOn`]} on={()=>set(`${pfx}.IsVentilationOn`,!s[`${pfx}.IsVentilationOn`])} c="b"/></div>
           </div>
         ))}
@@ -840,7 +949,7 @@ function App(){
         <div className="svgwrap">
           {view==='top'&&<TopView s={s}/>}
           {view==='side'&&<SideView s={s}/>}
-          {view==='cockpit'&&<CockpitView s={s}/>}
+          {view==='cockpit'&&<CockpitView s={s} set={set}/>}
         </div>
         <div className="stbar">
           {[
