@@ -786,13 +786,13 @@ function CockpitView({s,set}){
     <rect x="20" y="410" width="760" height="70" rx="6" fill="#060E1A" stroke="#1A2838" strokeWidth="1"/>
     <text x="400" y="430" textAnchor="middle" fill="#1C3050" fontSize="8" fontFamily="Share Tech Mono" fontWeight="600">STATUS</text>
 
-    <text x="50" y="460" fill={wf!=='OFF'?'#4A9EF5':'#1C3050'} fontSize="9" fontFamily="Share Tech Mono">WIPERS: <tspan fontWeight="600">{wf}</tspan></text>
-    <text x="220" y="460" fill={horn?'#EF4444':'#1C3050'} fontSize="9" fontFamily="Share Tech Mono">HORN: <tspan fontWeight="600">{horn?'ACTIVE':'-'}</tspan></text>
-    <text x="420" y="460" fill={dome?'#FCD34D':'#1C3050'} fontSize="9" fontFamily="Share Tech Mono">DOME: <tspan fontWeight="600">{dome?'ON':'OFF'}</tspan></text>
-    <text x="600" y="460" fill={fuel?'#F59E0B':'#1C3050'} fontSize="9" fontFamily="Share Tech Mono">FUEL LID: <tspan fontWeight="600">{fuel?'OPEN':'CLOSED'}</tspan></text>
+    <text x="50" y="455" fill={wf!=='OFF'?'#4A9EF5':'#1C3050'} fontSize="8" fontFamily="Share Tech Mono">WIPERS: <tspan fontWeight="600">{wf}</tspan></text>
+    <text x="200" y="455" fill={horn?'#EF4444':'#1C3050'} fontSize="8" fontFamily="Share Tech Mono">HORN: <tspan fontWeight="600">{horn?'●':'-'}</tspan></text>
+    <text x="340" y="455" fill={dome?'#FCD34D':'#1C3050'} fontSize="8" fontFamily="Share Tech Mono">DOME: <tspan fontWeight="600">{dome?'ON':'OFF'}</tspan></text>
+    <text x="480" y="455" fill={fuel?'#F59E0B':'#1C3050'} fontSize="8" fontFamily="Share Tech Mono">FUEL: <tspan fontWeight="600">{fuel?'OPEN':'-'}</tspan></text>
 
-    <text x="50" y="485" fill={trunk?'#F59E0B':'#1C3050'} fontSize="9" fontFamily="Share Tech Mono">TAILGATE: <tspan fontWeight="600">{trunk?'OPEN':'CLOSED'}</tspan></text>
-    <text x="300" y="485" fill="#7A8FA6" fontSize="8" fontFamily="Share Tech Mono">COVESA VSS v4.0</text>
+    <text x="50" y="475" fill={trunk?'#F59E0B':'#1C3050'} fontSize="8" fontFamily="Share Tech Mono">GATE: <tspan fontWeight="600">{trunk?'OPEN':'-'}</tspan></text>
+    <text x="650" y="475" fill="#7A8FA6" fontSize="7" fontFamily="Share Tech Mono">VSS v4.0</text>
   </svg>;
 }
 
