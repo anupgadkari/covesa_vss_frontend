@@ -140,7 +140,7 @@ function App(){
       }catch(err){console.error('Parse error:',err)}
     };
     ws.onerror=()=>setConnected(false);
-    ws.onclose=()=>{setConnected(false);setTimeout(()=>{window.location.reload()},3000)};
+    ws.onclose=()=>setConnected(false);
     wsRef.current=ws;
     return ()=>ws.close();
   },[]);
