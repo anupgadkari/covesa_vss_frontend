@@ -649,7 +649,7 @@ function CockpitView({s,set}){
   const dome=s['Cabin.Lights.IsDomeOn'];
   const haz=s['Body.Lights.Hazard.IsSignaling'];
   const park=s['Body.Lights.Parking.IsOn'];
-  const fog=s['Body.Lights.Fog.Front.IsOn'];
+  const ffog=s['Body.Lights.Fog.Front.IsOn'],rfog=s['Body.Lights.Fog.Rear.IsOn'];
   const brake=s['Body.Lights.Brake.IsActive'];
   const back=s['Body.Lights.Backup.IsActive'];
   const fuel=s['Body.FuelLid.IsOpen'];
@@ -697,28 +697,40 @@ function CockpitView({s,set}){
       <text x="110" y="135" textAnchor="middle" fill={hi?'#4A9EF5':'#3A5060'} fontSize="9" fontFamily="Share Tech Mono" fontWeight="600">HI</text>
     </g>
 
+    {/* Front Fog */}
+    <g>
+      <circle cx="170" cy="130" r="12" fill={ffog?'#BAD6FE':'#1A2838'} opacity={ffog?0.6:0.25} stroke={ffog?'#BAD6FE':'#3A4D5C'} strokeWidth="1.2"/>
+      <text x="170" y="135" textAnchor="middle" fill={ffog?'#BAD6FE':'#3A5060'} fontSize="8" fontFamily="Share Tech Mono" fontWeight="600">FOG</text>
+    </g>
+
+    {/* Rear Fog */}
+    <g>
+      <circle cx="230" cy="130" r="12" fill={rfog?'#EF4444':'#1A2838'} opacity={rfog?0.6:0.25} stroke={rfog?'#EF4444':'#3A4D5C'} strokeWidth="1.2"/>
+      <text x="230" y="135" textAnchor="middle" fill={rfog?'#EF4444':'#3A5060'} fontSize="7" fontFamily="Share Tech Mono" fontWeight="600">RFOG</text>
+    </g>
+
     {/* Turn Left */}
     {li&&<g>
-      <circle cx="170" cy="130" r="12" fill="#F59E0B" opacity="0.3" stroke="#F59E0B" strokeWidth="1.2" className="blink"/>
-      <text x="170" y="135" textAnchor="middle" fill="#F59E0B" fontSize="10" fontFamily="Share Tech Mono" fontWeight="600">◄</text>
+      <circle cx="290" cy="130" r="12" fill="#F59E0B" opacity="0.3" stroke="#F59E0B" strokeWidth="1.2" className="blink"/>
+      <text x="290" y="135" textAnchor="middle" fill="#F59E0B" fontSize="10" fontFamily="Share Tech Mono" fontWeight="600">◄</text>
     </g>}
 
     {/* Turn Right */}
     {ri&&<g>
-      <circle cx="230" cy="130" r="12" fill="#F59E0B" opacity="0.3" stroke="#F59E0B" strokeWidth="1.2" className="blink"/>
-      <text x="230" y="135" textAnchor="middle" fill="#F59E0B" fontSize="10" fontFamily="Share Tech Mono" fontWeight="600">►</text>
+      <circle cx="350" cy="130" r="12" fill="#F59E0B" opacity="0.3" stroke="#F59E0B" strokeWidth="1.2" className="blink"/>
+      <text x="350" y="135" textAnchor="middle" fill="#F59E0B" fontSize="10" fontFamily="Share Tech Mono" fontWeight="600">►</text>
     </g>}
 
     {/* Door Ajar */}
     {doorAjar&&<g>
-      <circle cx="290" cy="130" r="12" fill="#EF4444" opacity="0.3" stroke="#EF4444" strokeWidth="1.2"/>
-      <text x="290" y="135" textAnchor="middle" fill="#EF4444" fontSize="8" fontFamily="Share Tech Mono" fontWeight="600">DOOR</text>
+      <circle cx="410" cy="130" r="12" fill="#EF4444" opacity="0.3" stroke="#EF4444" strokeWidth="1.2"/>
+      <text x="410" y="135" textAnchor="middle" fill="#EF4444" fontSize="8" fontFamily="Share Tech Mono" fontWeight="600">DOOR</text>
     </g>}
 
     {/* Brake */}
     {brake&&<g>
-      <circle cx="350" cy="130" r="12" fill="#EF4444" opacity="0.3" stroke="#EF4444" strokeWidth="1.2"/>
-      <text x="350" y="135" textAnchor="middle" fill="#EF4444" fontSize="8" fontFamily="Share Tech Mono" fontWeight="600">BRK</text>
+      <circle cx="470" cy="130" r="12" fill="#EF4444" opacity="0.3" stroke="#EF4444" strokeWidth="1.2"/>
+      <text x="470" y="135" textAnchor="middle" fill="#EF4444" fontSize="8" fontFamily="Share Tech Mono" fontWeight="600">BRK</text>
     </g>}
 
     {/* HVAC STATUS - Left */}
