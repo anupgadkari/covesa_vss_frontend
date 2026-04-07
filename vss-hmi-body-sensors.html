@@ -94,14 +94,20 @@ const {useState,useEffect,useRef,useCallback}=React;
 
 /* ══════ VSS SENSOR SIGNALS ══════ */
 const INIT_STATE={
-  // Engine
-  'Vehicle.Powertrain.Engine.IsRunning':false,
+  // Vehicle power state (powertrain-agnostic — standard VSS v4.0)
+  'Vehicle.LowVoltageSystemState':'OFF',
+  'Vehicle.Powertrain.Type':'COMBUSTION',
   // Braking
   'Chassis.Brake.PedalPosition':0,
   // Transmission
   'Powertrain.Transmission.CurrentGear':0,
   // Light Switch
   'Body.Lights.LightSwitch':'OFF',
+  // Switch / Stalk inputs (overlay — physical driver controls)
+  'Body.Switches.Hazard.IsEngaged':false,
+  'Body.Switches.TurnIndicator.Direction':'OFF',
+  'Body.Switches.HighBeam.IsEngaged':false,
+  'Chassis.ParkingBrake.IsEngaged':true,
   // Doors
   'Body.Doors.Row1.Left.IsOpen':false,
   'Body.Doors.Row1.Right.IsOpen':false,
@@ -167,15 +173,33 @@ function App(){
 
     <div className="layout">
       <div className="container">
-        {/* ENGINE */}
+        {/* VEHICLE POWER STATE */}
         <div className="section">
-          <div className="section-title">Engine Control</div>
+          <div className="section-title">Vehicle Power</div>
+          <div className="section-info">Powertrain-agnostic ignition / power mode (standard VSS v4.0). Works for ICE, HEV, and BEV.</div>
           <div className="control">
-            <div className="control-label">Engine State</div>
-            <button style={{marginLeft:'auto',padding:'6px 16px',borderRadius:'4px',border:'1.5px solid #243055',background:state['Vehicle.Powertrain.Engine.IsRunning']?'#EF4444':'#0E1625',color:state['Vehicle.Powertrain.Engine.IsRunning']?'#FFFFFF':'#6B7E99',cursor:'pointer',fontFamily:'"Share Tech Mono",monospace',fontSize:'10px',fontWeight:'600',transition:'all 0.16s'}}
-              onClick={()=>set('Vehicle.Powertrain.Engine.IsRunning',!state['Vehicle.Powertrain.Engine.IsRunning'])}>
-              {state['Vehicle.Powertrain.Engine.IsRunning']?'STOP':'START'}
-            </button>
+            <div className="control-label">Power Mode</div>
+            <div className="button-group">
+              {['OFF','LOCK','ACC','ON','START'].map(m=>(
+                <button key={m} className={`btn ${state['Vehicle.LowVoltageSystemState']===m?'active':''}`}
+                  onClick={()=>set('Vehicle.LowVoltageSystemState',m)}>
+                  {m}
+                </button>
+              ))}
+            </div>
+            <div className="control-value">{state['Vehicle.LowVoltageSystemState']}</div>
+          </div>
+          <div className="control">
+            <div className="control-label">Powertrain</div>
+            <div className="button-group">
+              {['COMBUSTION','HYBRID','ELECTRIC'].map(t=>(
+                <button key={t} className={`btn ${state['Vehicle.Powertrain.Type']===t?'active':''}`}
+                  onClick={()=>set('Vehicle.Powertrain.Type',t)}>
+                  {t}
+                </button>
+              ))}
+            </div>
+            <div className="control-value">{state['Vehicle.Powertrain.Type']}</div>
           </div>
         </div>
         <div className="section">
@@ -225,6 +249,51 @@ function App(){
               ))}
             </div>
             <div className="control-value">{state['Body.Lights.LightSwitch']}</div>
+          </div>
+        </div>
+
+        {/* SWITCHES & STALKS (overlay inputs for FSMs) */}
+        <div className="section">
+          <div className="section-title">Switches &amp; Stalks</div>
+          <div className="section-info">Physical driver controls — overlay signals (not in standard VSS v4.0). These feed the L5 feature state machines.</div>
+          <div className="control">
+            <div className="control-label">Hazard Switch</div>
+            <div style={{flex:1}}/>
+            <div className="tog"
+              onClick={()=>set('Body.Switches.Hazard.IsEngaged',!state['Body.Switches.Hazard.IsEngaged'])}
+              style={state['Body.Switches.Hazard.IsEngaged']?{borderColor:'#F59E0B',background:'rgba(245,158,11,.15)'}:{}}>
+              <div className="knob" style={state['Body.Switches.Hazard.IsEngaged']?{transform:'translateX(20px)',background:'#F59E0B'}:{}}/>
+            </div>
+          </div>
+          <div className="control">
+            <div className="control-label">Turn Stalk</div>
+            <div className="button-group">
+              {['OFF','LEFT','RIGHT'].map(d=>(
+                <button key={d} className={`btn ${state['Body.Switches.TurnIndicator.Direction']===d?'active':''}`}
+                  onClick={()=>set('Body.Switches.TurnIndicator.Direction',d)}>
+                  {d}
+                </button>
+              ))}
+            </div>
+            <div className="control-value">{state['Body.Switches.TurnIndicator.Direction']}</div>
+          </div>
+          <div className="control">
+            <div className="control-label">High Beam Stalk</div>
+            <div style={{flex:1}}/>
+            <div className="tog"
+              onClick={()=>set('Body.Switches.HighBeam.IsEngaged',!state['Body.Switches.HighBeam.IsEngaged'])}
+              style={state['Body.Switches.HighBeam.IsEngaged']?{borderColor:'#4A9EF5',background:'rgba(74,158,245,.12)'}:{}}>
+              <div className="knob" style={state['Body.Switches.HighBeam.IsEngaged']?{transform:'translateX(20px)',background:'#4A9EF5'}:{}}/>
+            </div>
+          </div>
+          <div className="control">
+            <div className="control-label">Parking Brake</div>
+            <div style={{flex:1}}/>
+            <div className="tog"
+              onClick={()=>set('Chassis.ParkingBrake.IsEngaged',!state['Chassis.ParkingBrake.IsEngaged'])}
+              style={state['Chassis.ParkingBrake.IsEngaged']?{borderColor:'#F04040',background:'rgba(240,64,64,.12)'}:{}}>
+              <div className="knob" style={state['Chassis.ParkingBrake.IsEngaged']?{transform:'translateX(20px)',background:'#F04040'}:{}}/>
+            </div>
           </div>
         </div>
 

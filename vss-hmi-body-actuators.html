@@ -134,8 +134,9 @@ const {useState,useEffect,useRef,useCallback}=React;
 
 /* ══════ VSS SIGNAL STORE ══════ */
 const INIT_STATE={
-  // Engine
-  'Vehicle.Powertrain.Engine.IsRunning':false,
+  // Vehicle power state (powertrain-agnostic — standard VSS v4.0)
+  'Vehicle.LowVoltageSystemState':'OFF',
+  'Vehicle.Powertrain.Type':'COMBUSTION',
   // Lights
   'Body.Lights.Beam.Low.IsOn':false,
   'Body.Lights.Beam.High.IsOn':false,
