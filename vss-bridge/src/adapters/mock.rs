@@ -71,7 +71,7 @@ impl Default for MockBus {
 #[async_trait]
 impl SignalBus for MockBus {
     async fn publish(&self, signal: VssPath, value: SignalValue) -> anyhow::Result<()> {
-        self.history.lock().unwrap().push((signal, value));
+        self.history.lock().unwrap().push((signal, value.clone()));
         // Also broadcast so subscribers see outbound values (useful in tests).
         let tx = self.get_or_create_channel(signal);
         let _ = tx.send(value);

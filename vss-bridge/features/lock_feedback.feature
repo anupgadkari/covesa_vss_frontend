@@ -138,7 +138,7 @@ Feature: Lock Feedback Flash
   # --- REQ-LKF-001, REQ-LKF-002 ---
   Scenario: Multiple doors change state simultaneously
     Given all four doors are unlocked
-    When all four doors transition to locked simultaneously (PEPS lock-all)
+    When all four doors transition to locked simultaneously (KeyfobPeps lock-all)
     Then only one LOCK pattern plays (not four stacked patterns)
     And the first lock event triggers the pattern; subsequent events within
     the pattern window are absorbed

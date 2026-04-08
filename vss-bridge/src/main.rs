@@ -36,7 +36,8 @@ async fn main() -> anyhow::Result<()> {
 
     // Domain Arbiters — one per actuator domain
     let (lighting_arb, lighting_fut) = arbiter::lighting_arbiter(Arc::clone(&bus));
-    let (door_lock_arb, door_lock_fut) = arbiter::door_lock_arbiter(Arc::clone(&bus));
+    let (door_lock_arb, _door_lock_ack_tx, door_lock_fut) =
+        arbiter::door_lock_arbiter(Arc::clone(&bus));
     let (horn_arb, horn_fut) = arbiter::horn_arbiter(Arc::clone(&bus));
     let (comfort_arb, comfort_fut) = arbiter::comfort_arbiter(Arc::clone(&bus));
 

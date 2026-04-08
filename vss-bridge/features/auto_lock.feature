@@ -15,16 +15,18 @@ Feature: Speed-Based Auto Lock
   #
   # REQ-ALK-002: The auto lock feature SHALL NOT automatically unlock the
   #              doors when speed drops below the threshold. Unlocking is
-  #              exclusively the driver's action (via PEPS or manual).
+  #              exclusively the driver's action (via KeyfobPeps, KeyfobRke,
+  #              PhoneBle, or interior switch).
   #
   # REQ-ALK-003: The auto lock feature SHALL NOT re-lock doors that have
   #              been manually unlocked by the driver while the vehicle is
   #              above the speed threshold. The feature SHALL only trigger
   #              on the rising-edge speed crossing.
   #
-  # REQ-ALK-004: Auto lock requests SHALL use priority MEDIUM (2). The PEPS
-  #              feature (HIGH/3) can override auto lock in the DoorLock
-  #              arbiter.
+  # REQ-ALK-004: Auto lock requests go through the DoorLock arbiter's
+  #              serialized queue. Higher-priority requestors (KeyfobPeps,
+  #              KeyfobRke, CrashUnlock) will replace AutoLock's pending
+  #              request in the queue.
   #
   # REQ-ALK-005: The auto lock feature SHALL subscribe to Vehicle.Speed
   #              (standard VSS v4.0 sensor signal).
@@ -66,7 +68,7 @@ Feature: Speed-Based Auto Lock
   # --- REQ-ALK-003 ---
   Scenario: Doors manually unlocked above threshold — no re-lock
     Given all four doors were auto-locked at 16 km/h
-    And the driver manually unlocks the driver door (via PEPS or interior switch)
+    And the driver manually unlocks the driver door (via KeyfobPeps, KeyfobRke, or interior switch)
     When Vehicle.Speed remains at 20 km/h
     Then the Auto Lock feature does NOT re-lock the driver door
     And no additional lock requests are published
@@ -79,11 +81,11 @@ Feature: Speed-Based Auto Lock
     But does NOT publish duplicate lock requests while continuously above threshold
 
   # --- REQ-ALK-004 ---
-  Scenario: PEPS unlock overrides auto lock
-    Given all four doors are locked by auto lock at priority MEDIUM
+  Scenario: KeyfobPeps unlock replaces auto lock in queue
+    Given all four doors are locked by auto lock
     When Body.PEPS.KeyPresent becomes TRUE
-    Then the PEPS feature's HIGH unlock request wins in the DoorLock arbiter
-    And all four doors are requested unlocked despite auto lock
+    Then the KeyfobPeps UNLOCK replaces AutoLock's pending LOCK in the DoorLock arbiter
+    And all four doors are requested unlocked
 
   # --- REQ-ALK-001 ---
   Scenario: Vehicle stopped — auto lock does not trigger

@@ -1,12 +1,14 @@
-//! Domain-based Signal Arbiters — per-actuator priority resolution grouped by domain.
+//! Domain-based Signal Arbiters — grouped by actuator domain.
 //!
-//! Each domain (Lighting, Doors, Horn, Comfort) gets its own `DomainArbiter` instance.
-//! Within a domain, each actuator signal tracks the current highest-priority request.
-//! A new request replaces the winner if its priority >= the current winner's priority.
+//! Two arbiter patterns coexist:
 //!
-//! Feature business logic calls `arbiter.request(...)` — the arbiter validates the
-//! (feature_id, signal, priority) tuple against the domain's static allow-list before
-//! forwarding the arbitrated value to the SignalBus.
+//! 1. **DomainArbiter** (Lighting, Horn, Comfort) — instant per-signal priority
+//!    resolution. A new request replaces the winner if priority >= current winner.
+//!
+//! 2. **DoorLockArbiter** — serialized command queue with ACK handshake. The lock
+//!    motor takes ~300 ms, so requests are serialized through a one-deep queue
+//!    (active + pending). Special crash-unlock rules prevent the queue from being
+//!    overwritten and impose a 10-second lockout after crash events.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -137,7 +139,7 @@ async fn arbiter_loop<B: SignalBus>(
                 "arbiter: new winner"
             );
 
-            if let Err(e) = bus.publish(req.signal, req.value).await {
+            if let Err(e) = bus.publish(req.signal, req.value.clone()).await {
                 tracing::error!(
                     domain = name,
                     signal = req.signal,
@@ -236,35 +238,283 @@ pub fn lighting_arbiter<B: SignalBus>(
     DomainArbiter::new("Lighting", allow_list, bus)
 }
 
-/// Create the Door/Lock domain arbiter.
-///
-/// Covers: all 4 door lock signals.
-/// Contention: Peps(3) > AutoLock(2).
-pub fn door_lock_arbiter<B: SignalBus>(
-    bus: Arc<B>,
-) -> (DomainArbiter, impl std::future::Future<Output = ()>) {
-    let door_signals: &[VssPath] = &[
-        "Body.Doors.Row1.Left.IsLocked",
-        "Body.Doors.Row1.Right.IsLocked",
-        "Body.Doors.Row2.Left.IsLocked",
-        "Body.Doors.Row2.Right.IsLocked",
-    ];
+// ---------------------------------------------------------------------------
+// DoorLockArbiter — serialized command queue with ACK handshake
+// ---------------------------------------------------------------------------
 
-    let mut allow_list = Vec::new();
-    for &signal in door_signals {
-        allow_list.push(AllowEntry {
-            feature_id: FeatureId::Peps,
-            signal,
-            priority: Priority::High,
-        });
-        allow_list.push(AllowEntry {
-            feature_id: FeatureId::AutoLock,
-            signal,
-            priority: Priority::Medium,
-        });
+/// Lock command type — what the feature is requesting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LockCommand {
+    Unlock,
+    Lock,
+    DoubleLock,
+}
+
+/// A door-lock request submitted by a feature module.
+#[derive(Debug, Clone)]
+pub struct DoorLockRequest {
+    pub command: LockCommand,
+    pub feature_id: FeatureId,
+}
+
+/// Acknowledgement from the Classic AUTOSAR Locking SWC.
+///
+/// Published via IPC after each motor operation completes (~300 ms).
+/// The event number, requestor, and per-door status are carried here
+/// for the arbiter's queue management. NVM persistence and DTC
+/// reporting are the Classic AUTOSAR SWC's responsibility.
+#[derive(Debug, Clone)]
+pub struct LockAck {
+    pub event_number: u32,
+    /// Per-door success/failure. `true` = operation succeeded for that door.
+    pub door_results: [bool; 4], // Row1L, Row1R, Row2L, Row2R
+}
+
+/// Allow-list entry for the DoorLock arbiter.
+/// Only feature_id is checked — the DoorLock arbiter does not use
+/// per-signal priority resolution (it uses queue serialization instead).
+#[derive(Debug, Clone)]
+pub struct DoorLockAllowEntry {
+    pub feature_id: FeatureId,
+}
+
+/// Serialized command-queue arbiter for door locks.
+///
+/// Unlike the Lighting arbiter (instant priority resolution), the DoorLock
+/// arbiter manages a one-deep queue because the lock motor takes ~300 ms
+/// to complete and cannot accept concurrent commands.
+///
+/// Queue rules:
+/// - If idle: dispatch immediately (request becomes active).
+/// - If active: new request goes to pending slot (replaces previous pending).
+/// - When ACK received: promote pending to active and dispatch.
+/// - CrashUnlock exception: cannot be replaced in queue; triggers 10s lockout.
+pub struct DoorLockArbiter {
+    cmd_tx: mpsc::Sender<DoorLockMsg>,
+}
+
+/// Internal messages to the arbiter loop.
+enum DoorLockMsg {
+    Request(DoorLockRequest),
+    Ack(LockAck),
+}
+
+impl DoorLockArbiter {
+    /// Create a new DoorLock arbiter.
+    ///
+    /// Returns the arbiter handle and a future to spawn, plus an ACK sender
+    /// that the IPC layer feeds when the Classic AUTOSAR Locking SWC reports
+    /// completion.
+    pub fn new<B: SignalBus>(
+        allow_list: Vec<DoorLockAllowEntry>,
+        bus: Arc<B>,
+    ) -> (Self, mpsc::Sender<LockAck>, impl std::future::Future<Output = ()>) {
+        let (cmd_tx, cmd_rx) = mpsc::channel::<DoorLockMsg>(64);
+        let ack_tx = {
+            let cmd_tx_clone = cmd_tx.clone();
+            let (ack_tx, mut ack_rx) = mpsc::channel::<LockAck>(16);
+
+            // Forward ACKs into the unified command channel
+            tokio::spawn(async move {
+                while let Some(ack) = ack_rx.recv().await {
+                    if cmd_tx_clone.send(DoorLockMsg::Ack(ack)).await.is_err() {
+                        break;
+                    }
+                }
+            });
+
+            ack_tx
+        };
+
+        let arbiter = Self { cmd_tx: cmd_tx.clone() };
+        let loop_fut = door_lock_loop(allow_list, bus, cmd_rx);
+
+        (arbiter, ack_tx, loop_fut)
     }
 
-    DomainArbiter::new("DoorLock", allow_list, bus)
+    /// Submit a lock/unlock/double-lock request.
+    pub async fn request(&self, req: DoorLockRequest) -> anyhow::Result<()> {
+        self.cmd_tx
+            .send(DoorLockMsg::Request(req))
+            .await
+            .map_err(|_| anyhow::anyhow!("DoorLock: arbiter channel closed"))
+    }
+}
+
+/// Background loop for the DoorLock arbiter.
+async fn door_lock_loop<B: SignalBus>(
+    allow_list: Vec<DoorLockAllowEntry>,
+    bus: Arc<B>,
+    mut rx: mpsc::Receiver<DoorLockMsg>,
+) {
+    // Queue state
+    let mut active: Option<DoorLockRequest> = None;
+    let mut pending: Option<DoorLockRequest> = None;
+    let mut crash_lockout_until: Option<tokio::time::Instant> = None;
+
+    tracing::info!("DoorLock arbiter started");
+
+    while let Some(msg) = rx.recv().await {
+        match msg {
+            DoorLockMsg::Request(req) => {
+                // 1. Validate against allow-list
+                let allowed = allow_list
+                    .iter()
+                    .any(|entry| entry.feature_id == req.feature_id);
+
+                if !allowed {
+                    tracing::warn!(
+                        feature = ?req.feature_id,
+                        "DoorLock: request rejected — not in allow-list"
+                    );
+                    continue;
+                }
+
+                // 2. Check crash lockout
+                if let Some(lockout_end) = crash_lockout_until {
+                    if tokio::time::Instant::now() < lockout_end {
+                        tracing::warn!(
+                            feature = ?req.feature_id,
+                            command = ?req.command,
+                            "DoorLock: request rejected — crash lockout active"
+                        );
+                        continue;
+                    } else {
+                        // Lockout expired
+                        crash_lockout_until = None;
+                    }
+                }
+
+                if active.is_none() {
+                    // 3a. Idle — dispatch immediately
+                    tracing::info!(
+                        feature = ?req.feature_id,
+                        command = ?req.command,
+                        "DoorLock: dispatching immediately (idle)"
+                    );
+                    dispatch_lock_command(&req, &bus).await;
+
+                    // Start crash lockout if this is a CrashUnlock
+                    if req.feature_id == FeatureId::CrashUnlock {
+                        crash_lockout_until = Some(
+                            tokio::time::Instant::now()
+                                + std::time::Duration::from_secs(10),
+                        );
+                    }
+
+                    active = Some(req);
+                } else {
+                    // 3b. Active operation in progress — queue it
+                    // Check if pending is a crash unlock (cannot be replaced)
+                    if let Some(ref p) = pending {
+                        if p.feature_id == FeatureId::CrashUnlock {
+                            tracing::warn!(
+                                feature = ?req.feature_id,
+                                "DoorLock: request rejected — crash unlock pending, cannot replace"
+                            );
+                            continue;
+                        }
+                    }
+
+                    tracing::info!(
+                        feature = ?req.feature_id,
+                        command = ?req.command,
+                        replaced = pending.as_ref().map(|p| format!("{:?}", p.feature_id)),
+                        "DoorLock: queued as pending"
+                    );
+                    pending = Some(req);
+                }
+            }
+
+            DoorLockMsg::Ack(ack) => {
+                let completed = active.take();
+                tracing::info!(
+                    event = ack.event_number,
+                    feature = ?completed.as_ref().map(|r| r.feature_id),
+                    doors_ok = ?ack.door_results,
+                    "DoorLock: operation complete"
+                );
+
+                // Promote pending to active
+                if let Some(next) = pending.take() {
+                    tracing::info!(
+                        feature = ?next.feature_id,
+                        command = ?next.command,
+                        "DoorLock: promoting pending to active"
+                    );
+                    dispatch_lock_command(&next, &bus).await;
+
+                    if next.feature_id == FeatureId::CrashUnlock {
+                        crash_lockout_until = Some(
+                            tokio::time::Instant::now()
+                                + std::time::Duration::from_secs(10),
+                        );
+                    }
+
+                    active = Some(next);
+                }
+            }
+        }
+    }
+
+    tracing::info!("DoorLock arbiter loop ended");
+}
+
+/// Dispatch a lock command to the SignalBus (which forwards to Classic AUTOSAR via IPC).
+async fn dispatch_lock_command<B: SignalBus>(req: &DoorLockRequest, bus: &Arc<B>) {
+    let lock_value = match req.command {
+        LockCommand::Unlock => SignalValue::Bool(false),
+        LockCommand::Lock => SignalValue::Bool(true),
+        // DoubleLock uses a distinct signal value — the Classic AUTOSAR SWC
+        // interprets Bool(true) on the .IsDoubleLocked path.
+        LockCommand::DoubleLock => SignalValue::Bool(true),
+    };
+
+    let signals: &[VssPath] = if req.command == LockCommand::DoubleLock {
+        &[
+            "Body.Doors.Row1.Left.IsDoubleLocked",
+            "Body.Doors.Row1.Right.IsDoubleLocked",
+            "Body.Doors.Row2.Left.IsDoubleLocked",
+            "Body.Doors.Row2.Right.IsDoubleLocked",
+        ]
+    } else {
+        &[
+            "Body.Doors.Row1.Left.IsLocked",
+            "Body.Doors.Row1.Right.IsLocked",
+            "Body.Doors.Row2.Left.IsLocked",
+            "Body.Doors.Row2.Right.IsLocked",
+        ]
+    };
+
+    for &signal in signals {
+        if let Err(e) = bus.publish(signal, lock_value.clone()).await {
+            tracing::error!(
+                signal,
+                error = %e,
+                "DoorLock: failed to dispatch command"
+            );
+        }
+    }
+}
+
+/// Create the DoorLock arbiter with all authorized lock requestors.
+pub fn door_lock_arbiter<B: SignalBus>(
+    bus: Arc<B>,
+) -> (DoorLockArbiter, mpsc::Sender<LockAck>, impl std::future::Future<Output = ()>) {
+    let allow_list = vec![
+        DoorLockAllowEntry { feature_id: FeatureId::KeyfobPeps },
+        DoorLockAllowEntry { feature_id: FeatureId::AutoLock },
+        DoorLockAllowEntry { feature_id: FeatureId::DoorTrimButton },
+        DoorLockAllowEntry { feature_id: FeatureId::KeyfobRke },
+        DoorLockAllowEntry { feature_id: FeatureId::PhoneApp },
+        DoorLockAllowEntry { feature_id: FeatureId::PhoneBle },
+        DoorLockAllowEntry { feature_id: FeatureId::NfcCard },
+        DoorLockAllowEntry { feature_id: FeatureId::NfcPhone },
+        DoorLockAllowEntry { feature_id: FeatureId::AutoRelock },
+        DoorLockAllowEntry { feature_id: FeatureId::CrashUnlock },
+    ];
+
+    DoorLockArbiter::new(allow_list, bus)
 }
 
 /// Create the Horn domain arbiter.
@@ -549,45 +799,215 @@ mod tests {
         assert_eq!(history.len(), 0, "wrong priority should be rejected");
     }
 
-    #[tokio::test]
-    async fn door_lock_arbiter_peps_wins_over_autolock() {
+    // -----------------------------------------------------------------------
+    // DoorLockArbiter tests
+    // -----------------------------------------------------------------------
+
+    async fn setup_door_lock() -> (DoorLockArbiter, mpsc::Sender<LockAck>, Arc<MockBus>) {
         let bus = Arc::new(MockBus::new());
-        let (arbiter, loop_fut) = door_lock_arbiter(Arc::clone(&bus));
+        let (arbiter, ack_tx, loop_fut) = door_lock_arbiter(Arc::clone(&bus));
         tokio::spawn(loop_fut);
         tokio::task::yield_now().await;
+        (arbiter, ack_tx, bus)
+    }
 
-        // AutoLock (medium) locks driver door
-        arbiter
-            .request(ActuatorRequest {
-                signal: "Body.Doors.Row1.Left.IsLocked",
-                value: SignalValue::Bool(true),
-                priority: Priority::Medium,
-                feature_id: FeatureId::AutoLock,
-            })
-            .await
-            .unwrap();
-        tokio::task::yield_now().await;
+    #[tokio::test]
+    async fn door_lock_idle_dispatches_immediately() {
+        let (arbiter, _ack_tx, bus) = setup_door_lock().await;
 
-        // PEPS (high) unlocks driver door — should win
         arbiter
-            .request(ActuatorRequest {
-                signal: "Body.Doors.Row1.Left.IsLocked",
-                value: SignalValue::Bool(false),
-                priority: Priority::High,
-                feature_id: FeatureId::Peps,
+            .request(DoorLockRequest {
+                command: LockCommand::Unlock,
+                feature_id: FeatureId::KeyfobPeps,
             })
             .await
             .unwrap();
         tokio::task::yield_now().await;
 
         let history = bus.history();
-        assert_eq!(history.len(), 2);
-        assert_eq!(
-            history[1],
-            (
-                "Body.Doors.Row1.Left.IsLocked",
-                SignalValue::Bool(false)
-            )
-        );
+        // 4 door signals dispatched
+        assert_eq!(history.len(), 4);
+        assert_eq!(history[0].0, "Body.Doors.Row1.Left.IsLocked");
+        assert_eq!(history[0].1, SignalValue::Bool(false)); // unlock
+    }
+
+    #[tokio::test]
+    async fn door_lock_queues_during_active() {
+        let (arbiter, ack_tx, bus) = setup_door_lock().await;
+
+        // PEPS unlock → active
+        arbiter
+            .request(DoorLockRequest {
+                command: LockCommand::Unlock,
+                feature_id: FeatureId::KeyfobPeps,
+            })
+            .await
+            .unwrap();
+        tokio::task::yield_now().await;
+
+        // AutoLock lock → pending (should NOT dispatch yet)
+        arbiter
+            .request(DoorLockRequest {
+                command: LockCommand::Lock,
+                feature_id: FeatureId::AutoLock,
+            })
+            .await
+            .unwrap();
+        tokio::task::yield_now().await;
+
+        // Only the first 4 signals (PEPS unlock) should be dispatched
+        assert_eq!(bus.history().len(), 4);
+
+        // ACK the first operation → pending promotes to active
+        ack_tx
+            .send(LockAck {
+                event_number: 1,
+                door_results: [true, true, true, true],
+            })
+            .await
+            .unwrap();
+        tokio::task::yield_now().await;
+
+        // Now 8 signals: 4 unlock + 4 lock
+        let history = bus.history();
+        assert_eq!(history.len(), 8);
+        assert_eq!(history[4].1, SignalValue::Bool(true)); // lock
+    }
+
+    #[tokio::test]
+    async fn door_lock_newer_replaces_pending() {
+        let (arbiter, ack_tx, bus) = setup_door_lock().await;
+
+        // PEPS unlock → active
+        arbiter
+            .request(DoorLockRequest {
+                command: LockCommand::Unlock,
+                feature_id: FeatureId::KeyfobPeps,
+            })
+            .await
+            .unwrap();
+        tokio::task::yield_now().await;
+
+        // AutoLock lock → pending
+        arbiter
+            .request(DoorLockRequest {
+                command: LockCommand::Lock,
+                feature_id: FeatureId::AutoLock,
+            })
+            .await
+            .unwrap();
+        tokio::task::yield_now().await;
+
+        // KeyfobRke double-lock → replaces AutoLock in pending
+        arbiter
+            .request(DoorLockRequest {
+                command: LockCommand::DoubleLock,
+                feature_id: FeatureId::KeyfobRke,
+            })
+            .await
+            .unwrap();
+        tokio::task::yield_now().await;
+
+        // ACK → KeyfobRke should dispatch, not AutoLock
+        ack_tx
+            .send(LockAck {
+                event_number: 1,
+                door_results: [true, true, true, true],
+            })
+            .await
+            .unwrap();
+        tokio::task::yield_now().await;
+
+        let history = bus.history();
+        // 4 unlock + 4 double-lock
+        assert_eq!(history.len(), 8);
+        // Double-lock uses IsDoubleLocked path
+        assert_eq!(history[4].0, "Body.Doors.Row1.Left.IsDoubleLocked");
+    }
+
+    #[tokio::test]
+    async fn door_lock_crash_unlock_not_replaceable() {
+        let (arbiter, _ack_tx, bus) = setup_door_lock().await;
+
+        // PEPS lock → active
+        arbiter
+            .request(DoorLockRequest {
+                command: LockCommand::Lock,
+                feature_id: FeatureId::KeyfobPeps,
+            })
+            .await
+            .unwrap();
+        tokio::task::yield_now().await;
+
+        // CrashUnlock → pending
+        arbiter
+            .request(DoorLockRequest {
+                command: LockCommand::Unlock,
+                feature_id: FeatureId::CrashUnlock,
+            })
+            .await
+            .unwrap();
+        tokio::task::yield_now().await;
+
+        // AutoLock tries to replace → should be rejected
+        arbiter
+            .request(DoorLockRequest {
+                command: LockCommand::Lock,
+                feature_id: FeatureId::AutoLock,
+            })
+            .await
+            .unwrap();
+        tokio::task::yield_now().await;
+
+        // Only 4 signals (PEPS lock). CrashUnlock is pending, AutoLock was rejected.
+        assert_eq!(bus.history().len(), 4);
+    }
+
+    #[tokio::test]
+    async fn door_lock_crash_lockout_10_seconds() {
+        let (arbiter, _ack_tx, bus) = setup_door_lock().await;
+
+        // CrashUnlock dispatches immediately (idle)
+        arbiter
+            .request(DoorLockRequest {
+                command: LockCommand::Unlock,
+                feature_id: FeatureId::CrashUnlock,
+            })
+            .await
+            .unwrap();
+        tokio::task::yield_now().await;
+
+        // 4 signals dispatched (crash unlock)
+        assert_eq!(bus.history().len(), 4);
+
+        // KeyfobRke tries to lock → rejected (crash lockout)
+        arbiter
+            .request(DoorLockRequest {
+                command: LockCommand::Lock,
+                feature_id: FeatureId::KeyfobRke,
+            })
+            .await
+            .unwrap();
+        tokio::task::yield_now().await;
+
+        // Still 4 — KeyfobRke was rejected
+        assert_eq!(bus.history().len(), 4);
+    }
+
+    #[tokio::test]
+    async fn door_lock_unauthorized_rejected() {
+        let (arbiter, _ack_tx, bus) = setup_door_lock().await;
+
+        // DRL tries to lock doors — not in allow-list
+        arbiter
+            .request(DoorLockRequest {
+                command: LockCommand::Lock,
+                feature_id: FeatureId::Drl,
+            })
+            .await
+            .unwrap();
+        tokio::task::yield_now().await;
+
+        assert_eq!(bus.history().len(), 0, "unauthorized request should not dispatch");
     }
 }
