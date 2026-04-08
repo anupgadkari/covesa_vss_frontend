@@ -11,6 +11,7 @@ pub mod arbiter;
 pub mod adapters;
 pub mod features;
 pub mod kuksa_sync;
+pub mod sleep_inhibit;
 
 use std::sync::Arc;
 use tracing_subscriber::EnvFilter;

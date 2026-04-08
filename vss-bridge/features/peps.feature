@@ -2,9 +2,30 @@ Feature: Keyfob Passive Entry / Passive Start (KeyfobPeps)
   As the body controller platform
   I must unlock or lock all four doors
   when the Safety Monitor reports a successful keyfob proximity
-  authentication (LF antenna)
+  authentication
   so that the driver can enter or secure the vehicle without
   pressing a physical key button.
+
+  # -------------------------------------------------------------------------
+  # Wake-up chain (hardware, not A53 software)
+  # -------------------------------------------------------------------------
+  # The PEPS unlock sequence begins in hardware, not in this Rust feature:
+  #
+  #   1. Door handle capacitive touch sensor detects hand presence
+  #      (always powered, µA draw — the only always-on component)
+  #   2. Capacitive sensor interrupt wakes the M7 from sleep
+  #   3. M7 drives LF antennas in door handles (transmit challenge,
+  #      a few seconds window)
+  #   4. Keyfob receives LF, replies on UHF RF (315/433 MHz)
+  #   5. M7 validates RF response (crypto challenge-response)
+  #   6. M7 drives lock motors directly via LLCE/LIN
+  #   7. M7 wakes A53, pushes STATE_UPDATE for Body.Doors.*.IsLocked
+  #   8. A53 receives Body.PEPS.KeyPresent = TRUE (post-facto)
+  #
+  # The A53 and this Rust feature are NOT in the critical path.
+  # Steps 1–6 complete in < 80 ms. The A53 may still be booting
+  # when the doors are already unlocked.
+  # -------------------------------------------------------------------------
 
   # -------------------------------------------------------------------------
   # Requirements
@@ -16,11 +37,13 @@ Feature: Keyfob Passive Entry / Passive Start (KeyfobPeps)
   #               SHALL request LOCK via the DoorLock arbiter.
   #
   # REQ-PEPS-003: The KeyfobPeps feature on the A53 is NOT in the critical
-  #               unlock path. The Safety Monitor (M7) executes the actual
-  #               unlock via LLCE/LIN directly. The A53 KeyfobPeps feature
-  #               receives the KeyPresent signal AFTER the M7 has already
-  #               acted, and its arbiter request serves to keep the
-  #               application-layer state consistent.
+  #               unlock path. The wake-up chain (capacitive touch → M7 LF
+  #               challenge → keyfob RF response → M7 lock motor drive)
+  #               executes entirely on M7 hardware while the A53 may still
+  #               be asleep or booting. The A53 KeyfobPeps feature receives
+  #               the KeyPresent signal AFTER the M7 has already acted, and
+  #               its arbiter request serves only to keep the application-
+  #               layer state consistent.
   #
   # REQ-PEPS-004: KeyfobPeps is a separate requestor from KeyfobRke (manual
   #               button press). Both use the same physical keyfob but are
@@ -31,7 +54,7 @@ Feature: Keyfob Passive Entry / Passive Start (KeyfobPeps)
   # REQ-PEPS-005: The KeyfobPeps feature SHALL subscribe to the synthetic
   #               sensor signal Body.PEPS.KeyPresent, which is injected by
   #               the vss-bridge when the Safety Monitor reports a
-  #               successful LF key authentication.
+  #               successful keyfob authentication.
   #
   # REQ-PEPS-006: The KeyfobPeps feature SHALL have no dependency on any
   #               other feature module.
@@ -66,11 +89,16 @@ Feature: Keyfob Passive Entry / Passive Start (KeyfobPeps)
   # --- REQ-PEPS-003 ---
   Scenario: A53 KeyfobPeps is not in the critical path
     # This scenario documents the architectural constraint, not a testable behavior.
-    # The actual unlock is performed by the M7 Safety Monitor via LLCE/LIN.
-    Given the driver approaches the vehicle with a valid keyfob
-    When the M7 Safety Monitor authenticates the key via LF
-    Then the M7 drives the lock actuators directly (< 80 ms)
-    And the M7 pushes STATE_UPDATE for Body.Doors.*.IsLocked to the A53
+    # The actual unlock is performed entirely by M7 hardware:
+    #   capacitive touch → LF challenge → RF response → lock motor
+    Given the vehicle is in LowVoltageSystemState "OFF" (parked, A53 asleep)
+    When the driver touches the door handle (capacitive sensor)
+    Then the capacitive sensor interrupt wakes the M7
+    And the M7 transmits LF challenge via door handle antennas
+    And the keyfob replies on UHF RF (315/433 MHz)
+    And the M7 validates the crypto challenge-response
+    And the M7 drives the lock actuators directly via LLCE/LIN (< 80 ms total)
+    And the M7 wakes the A53 and pushes STATE_UPDATE for Body.Doors.*.IsLocked
     And only then does Body.PEPS.KeyPresent become TRUE on the A53
 
   # --- REQ-PEPS-001 ---
