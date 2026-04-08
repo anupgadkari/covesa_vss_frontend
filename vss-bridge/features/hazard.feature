@@ -27,8 +27,9 @@ Feature: Hazard Lighting
   #              driver IC or body ECU firmware.
   #
   # REQ-HAZ-005: Hazard requests SHALL use priority HIGH (3), which wins
-  #              over Turn Indicator (MEDIUM/2) and Lock Feedback (LOW/1)
-  #              in the Lighting arbiter.
+  #              over Turn Indicator (MEDIUM/2) in the Lighting arbiter.
+  #              Lock Feedback also uses HIGH (overlay) but self-releases
+  #              after its brief pattern, so hazard resumes automatically.
   #
   # REQ-HAZ-006: The hazard feature SHALL have no dependency on any other
   #              feature module.
@@ -65,11 +66,13 @@ Feature: Hazard Lighting
     And the turn signal's MEDIUM request is suppressed by the arbiter
 
   # --- REQ-HAZ-005 ---
-  Scenario: Hazard overrides lock feedback flash
-    Given a lock feedback flash is active at priority LOW
-    When the driver engages the hazard switch
-    Then both direction indicators signal at priority HIGH
-    And the lock feedback's LOW request is suppressed by the arbiter
+  Scenario: Lock feedback overlays on active hazard then hazard resumes
+    Given the hazard switch is engaged
+    And both direction indicators are signaling at priority HIGH
+    When a door lock event triggers the Lock Feedback pattern at priority HIGH
+    Then the Lock Feedback pattern temporarily takes both indicators
+    And after the pattern completes and Lock Feedback releases
+    Then Hazard's pending HIGH request resumes both indicators
 
   # --- REQ-HAZ-002, REQ-HAZ-005 ---
   Scenario: Turn signal resumes after hazard is disengaged

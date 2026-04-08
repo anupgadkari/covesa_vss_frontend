@@ -30,8 +30,10 @@ Feature: Turn Indicator
   #               the actuator outputs.
   #
   # REQ-TURN-005: Turn indicator requests SHALL use priority MEDIUM (2).
-  #               The Hazard feature (HIGH/3) can override; Lock Feedback
-  #               (LOW/1) cannot.
+  #               The Hazard feature (HIGH/3) and Lock Feedback (HIGH/3,
+  #               overlay) can temporarily override. Lock Feedback
+  #               self-releases after its brief pattern, allowing the
+  #               turn signal to resume.
   #
   # REQ-TURN-006: The turn indicator feature SHALL NOT set blink timing.
   #

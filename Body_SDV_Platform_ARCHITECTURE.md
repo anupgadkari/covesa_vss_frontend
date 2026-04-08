@@ -323,7 +323,7 @@ Each domain carries a **static allow-list** of `(FeatureId, VssPath, Priority)` 
 |----------|---------|----------|
 | `Body.Lights.DirectionIndicator.*.IsSignaling` | Hazard | 3 (HIGH) |
 | `Body.Lights.DirectionIndicator.*.IsSignaling` | TurnIndicator | 2 (MEDIUM) |
-| `Body.Lights.DirectionIndicator.*.IsSignaling` | LockFeedback | 1 (LOW) |
+| `Body.Lights.DirectionIndicator.*.IsSignaling` | LockFeedback | 3 (HIGH, overlay) |
 | `Body.Lights.Hazard.IsSignaling` | Hazard | 3 (HIGH) |
 | `Body.Lights.Beam.Low.IsOn` | LowBeam | 2 (MEDIUM) |
 | `Body.Lights.Beam.High.IsOn` | HighBeam | 2 (MEDIUM) |
@@ -455,7 +455,7 @@ impl<B: SignalBus> HazardFsm<B> {
 |-----|---------------------------|---------------------------|
 | `HazardFsm` | `Body.Switches.Hazard.IsEngaged` (overlay) | Both `DirectionIndicator.*.IsSignaling` @ prio 3 |
 | `TurnFsm` | `Body.Switches.TurnIndicator.Direction` (overlay) | `DirectionIndicator.{Left,Right}.IsSignaling` @ prio 2 |
-| `LockFeedback` | `Body.Doors.*.IsLocked` (state change) | Both indicators @ prio 1 (brief sequence) |
+| `LockFeedback` | `Body.Doors.*.IsLocked` (state change) | Both indicators @ prio 3 (HIGH, overlay — self-releases after pattern) |
 | `PepsFsm` | `Body.PEPS.KeyPresent` (synthetic sensor) | `Body.Doors.*.IsLocked` @ prio 3 |
 | `LowBeamFsm` | `Body.Lights.LightSwitch` | `Body.Lights.Beam.Low.IsOn` @ prio 2 |
 | `HighBeamFsm` | `Body.Switches.HighBeam.IsEngaged` (overlay) | `Body.Lights.Beam.High.IsOn` @ prio 2 |
@@ -886,7 +886,7 @@ FeatureId enum: Peps=0x01, Hazard=0x02, TurnIndicator=0x03, LowBeam=0x04,
   HighBeam=0x05, Drl=0x06, AutoLock=0x07, LockFeedback=0x08, Welcome=0x09
 
 Lighting allow-list: Hazard→DirectionIndicator.*@HIGH, Turn→DirectionIndicator.*@MEDIUM,
-  LockFeedback→DirectionIndicator.*@LOW, Hazard→Hazard.IsSignaling@HIGH,
+  LockFeedback→DirectionIndicator.*@HIGH(overlay), Hazard→Hazard.IsSignaling@HIGH,
   LowBeam→Beam.Low@MEDIUM, HighBeam→Beam.High@MEDIUM, Drl→Running@MEDIUM
 DoorLock allow-list: Peps→Doors.*.IsLocked@HIGH, AutoLock→Doors.*.IsLocked@MEDIUM
 Horn/Comfort: empty allow-lists (pass-through with validation, ready for future features)
@@ -949,7 +949,7 @@ Context:
 - Priority assignments (hardcoded, matches Safety Monitor's table):
     HazardFsm   input: Body.Switches.Hazard.IsEngaged        → DirectionIndicator.*.IsSignaling    @ HIGH (3)
     TurnFsm     input: Body.Switches.TurnIndicator.Direction  → DirectionIndicator.{Left,Right}     @ MEDIUM (2)
-    LockFeedback input: Body.Doors.*.IsLocked (state change)  → DirectionIndicator.*.IsSignaling    @ LOW (1)
+    LockFeedback input: Body.Doors.*.IsLocked (state change)  → DirectionIndicator.*.IsSignaling    @ HIGH (3, overlay — self-releases)
     PepsFsm     input: Body.PEPS.KeyPresent (synthetic)       → Doors.*.IsLocked                    @ HIGH (3)
     AutoLock    input: Vehicle.Speed                           → Doors.*.IsLocked                    @ MEDIUM (2)
     LowBeamFsm input: Body.Lights.LightSwitch                 → Lights.Beam.Low.IsOn                @ MEDIUM (2)

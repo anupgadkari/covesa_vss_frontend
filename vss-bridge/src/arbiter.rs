@@ -168,7 +168,8 @@ async fn arbiter_loop<B: SignalBus>(
 /// Create the Lighting domain arbiter.
 ///
 /// Covers: direction indicators, low/high beam, DRL, hazard signaling.
-/// Contention: Hazard(3) > Turn(2) > LockFeedback(1) on direction indicators.
+/// Contention on direction indicators: Hazard(3), LockFeedback(3, overlay), Turn(2).
+/// LockFeedback uses HIGH to overlay its brief pattern on hazard/turn, then releases.
 pub fn lighting_arbiter<B: SignalBus>(
     bus: Arc<B>,
 ) -> (DomainArbiter, impl std::future::Future<Output = ()>) {
@@ -194,15 +195,17 @@ pub fn lighting_arbiter<B: SignalBus>(
             signal: "Body.Lights.DirectionIndicator.Right.IsSignaling",
             priority: Priority::Medium,
         },
+        // LockFeedback uses HIGH to overlay its brief lock/unlock pattern
+        // on top of active hazard or turn signaling, then self-releases.
         AllowEntry {
             feature_id: FeatureId::LockFeedback,
             signal: "Body.Lights.DirectionIndicator.Left.IsSignaling",
-            priority: Priority::Low,
+            priority: Priority::High,
         },
         AllowEntry {
             feature_id: FeatureId::LockFeedback,
             signal: "Body.Lights.DirectionIndicator.Right.IsSignaling",
-            priority: Priority::Low,
+            priority: Priority::High,
         },
         // Hazard master signal
         AllowEntry {
@@ -359,7 +362,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn low_priority_suppressed_by_existing_high() {
+    async fn medium_priority_suppressed_by_existing_high() {
         let (arbiter, bus) = setup_lighting().await;
 
         // Hazard (high) claims left indicator
@@ -374,13 +377,13 @@ mod tests {
             .unwrap();
         tokio::task::yield_now().await;
 
-        // LockFeedback (low) tries the same signal — should be suppressed
+        // Turn (medium) tries the same signal — should be suppressed
         arbiter
             .request(ActuatorRequest {
                 signal: "Body.Lights.DirectionIndicator.Left.IsSignaling",
                 value: SignalValue::Bool(false),
-                priority: Priority::Low,
-                feature_id: FeatureId::LockFeedback,
+                priority: Priority::Medium,
+                feature_id: FeatureId::TurnIndicator,
             })
             .await
             .unwrap();
@@ -396,6 +399,41 @@ mod tests {
                 SignalValue::Bool(true)
             )
         );
+    }
+
+    #[tokio::test]
+    async fn lock_feedback_overlays_on_active_hazard() {
+        let (arbiter, bus) = setup_lighting().await;
+
+        // Hazard (high) claims left indicator ON
+        arbiter
+            .request(ActuatorRequest {
+                signal: "Body.Lights.DirectionIndicator.Left.IsSignaling",
+                value: SignalValue::Bool(true),
+                priority: Priority::High,
+                feature_id: FeatureId::Hazard,
+            })
+            .await
+            .unwrap();
+        tokio::task::yield_now().await;
+
+        // LockFeedback (high, overlay) takes over — should publish (equal priority wins)
+        arbiter
+            .request(ActuatorRequest {
+                signal: "Body.Lights.DirectionIndicator.Left.IsSignaling",
+                value: SignalValue::Bool(false),
+                priority: Priority::High,
+                feature_id: FeatureId::LockFeedback,
+            })
+            .await
+            .unwrap();
+        tokio::task::yield_now().await;
+
+        let history = bus.history();
+        // Both published: Hazard ON, then LockFeedback OFF (overlay)
+        assert_eq!(history.len(), 2);
+        assert_eq!(history[0].1, SignalValue::Bool(true));  // Hazard
+        assert_eq!(history[1].1, SignalValue::Bool(false)); // LockFeedback overlay
     }
 
     #[tokio::test]
