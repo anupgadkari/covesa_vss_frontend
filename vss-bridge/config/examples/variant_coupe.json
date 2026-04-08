@@ -1,0 +1,12 @@
+{
+  "_comment": "Variant calibration — 2-door coupe (e.g., GR86)",
+  "_tier": "3 — specific to this trim, part of BOM",
+  "auto_lock_speed_kmh": 20,
+  "double_lock_enabled": false,
+  "nfc_enabled": false,
+  "ble_key_enabled": false,
+  "remote_lock_enabled": false,
+  "welcome_light_pattern": "Simple",
+  "door_rows": 1,
+  "has_rear_doors": false
+}

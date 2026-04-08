@@ -1,0 +1,12 @@
+{
+  "_comment": "Variant calibration — Premium trim (XSE / Limited / TRD Pro)",
+  "_tier": "3 — specific to this trim, part of BOM",
+  "auto_lock_speed_kmh": 15,
+  "double_lock_enabled": true,
+  "nfc_enabled": true,
+  "ble_key_enabled": true,
+  "remote_lock_enabled": true,
+  "welcome_light_pattern": "Sequential",
+  "door_rows": 2,
+  "has_rear_doors": true
+}

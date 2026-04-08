@@ -25,10 +25,12 @@ use tokio::select;
 use tokio::time::sleep;
 
 use crate::arbiter::{DoorLockArbiter, DoorLockRequest, LockCommand};
+use crate::config::PlatformConfig;
 use crate::ipc_message::{FeatureId, SignalValue};
 use crate::signal_bus::{SignalBus, VssPath};
 
 /// Default timeout before automatic relock.
+/// Used only as a fallback if PlatformConfig is not provided.
 const DEFAULT_RELOCK_TIMEOUT: Duration = Duration::from_secs(45);
 
 /// Crash detection signal from the Safety Monitor.
@@ -76,6 +78,21 @@ pub struct AutoRelock<B: SignalBus> {
 }
 
 impl<B: SignalBus> AutoRelock<B> {
+    /// Create with platform configuration (production path).
+    /// Reads the auto-relock timeout from Tier 2 (vehicle-line calibration).
+    pub fn from_config(
+        arbiter: Arc<DoorLockArbiter>,
+        bus: Arc<B>,
+        config: &PlatformConfig,
+    ) -> Self {
+        Self {
+            arbiter,
+            bus,
+            timeout: config.auto_relock_timeout(),
+        }
+    }
+
+    /// Create with default timeout (convenience for tests).
     pub fn new(arbiter: Arc<DoorLockArbiter>, bus: Arc<B>) -> Self {
         Self {
             arbiter,
@@ -84,6 +101,7 @@ impl<B: SignalBus> AutoRelock<B> {
         }
     }
 
+    /// Override timeout (for unit tests with short durations).
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
         self.timeout = timeout;
         self

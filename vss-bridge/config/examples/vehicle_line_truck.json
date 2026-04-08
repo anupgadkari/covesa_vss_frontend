@@ -1,0 +1,11 @@
+{
+  "_comment": "Vehicle-line calibration — Truck program (e.g., Tundra-class)",
+  "_tier": "2 — same for all trims of this vehicle line",
+  "auto_relock_timeout_secs": 60,
+  "peps_lf_window_ms": 4000,
+  "welcome_light_duration_secs": 45,
+  "drl_brightness_pct": 100,
+  "lock_feedback_blink_count": 2,
+  "lock_feedback_blink_period_ms": 500,
+  "shutdown_grace_secs": 45
+}
