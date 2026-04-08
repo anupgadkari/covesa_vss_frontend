@@ -311,23 +311,36 @@ pub enum AckResult {
 
 ---
 
-### 7.2 Signal Arbiter
+### 7.2 Domain Arbiters
 
-Resolves per-actuator ownership conflicts between features. Each feature publishes `ActuatorRequest` structs tagged with a priority. The Arbiter holds the current highest-priority request per actuator signal and emits arbitrated commands downstream.
+Resolves per-actuator ownership conflicts between features. Arbiters are **grouped by domain** — one `DomainArbiter` per actuator domain (Lighting, DoorLock, Horn, Comfort). Within each domain, the arbiter tracks the current highest-priority request per actuator signal and emits arbitrated commands downstream.
 
-**Priority table (hardcoded)**
+Each domain carries a **static allow-list** of `(FeatureId, VssPath, Priority)` tuples. A request is rejected locally if the feature/signal/priority combination is not in the allow-list — before it reaches the Safety Monitor. The Safety Monitor independently validates the claim and returns `ACK_ERR_PRIORITY` if the claim does not match its own copy of the table.
+
+**Domain: Lighting**
 
 | Actuator | Feature | Priority |
 |----------|---------|----------|
-| `Body.Lights.DirectionIndicator.*.IsSignaling` | HazardFsm | 3 (HIGH) |
-| `Body.Lights.DirectionIndicator.*.IsSignaling` | TurnFsm | 2 (MEDIUM) |
+| `Body.Lights.DirectionIndicator.*.IsSignaling` | Hazard | 3 (HIGH) |
+| `Body.Lights.DirectionIndicator.*.IsSignaling` | TurnIndicator | 2 (MEDIUM) |
 | `Body.Lights.DirectionIndicator.*.IsSignaling` | LockFeedback | 1 (LOW) |
-| `Body.Doors.*.IsLocked` | PepsFsm | 3 (HIGH) |
-| `Body.Doors.*.IsLocked` | AutoLock | 2 (MEDIUM) |
-| `Body.Lights.Beam.Low.IsOn` | LowBeamFsm | 2 (MEDIUM) |
-| `Body.Lights.Beam.High.IsOn` | HighBeamFsm | 2 (MEDIUM) |
+| `Body.Lights.Hazard.IsSignaling` | Hazard | 3 (HIGH) |
+| `Body.Lights.Beam.Low.IsOn` | LowBeam | 2 (MEDIUM) |
+| `Body.Lights.Beam.High.IsOn` | HighBeam | 2 (MEDIUM) |
+| `Body.Lights.Running.IsOn` | Drl | 2 (MEDIUM) |
 
-**Key invariant**: a feature is only permitted to claim the priority the table assigns to it for that signal. The Safety Monitor independently validates the claim and returns `ACK_ERR_PRIORITY` if the claim does not match its own copy of the table.
+**Domain: DoorLock**
+
+| Actuator | Feature | Priority |
+|----------|---------|----------|
+| `Body.Doors.Row[1,2].{Left,Right}.IsLocked` | Peps | 3 (HIGH) |
+| `Body.Doors.Row[1,2].{Left,Right}.IsLocked` | AutoLock | 2 (MEDIUM) |
+
+**Domain: Horn** — single feature today, pass-through with allow-list validation.
+
+**Domain: Comfort** — seat heating/ventilation, HVAC, cabin lights, sunroof. No contention today. Adding a second feature to any comfort actuator requires only an allow-list entry.
+
+**Key invariant**: a feature is only permitted to claim the priority the allow-list assigns to it for that signal. A request with a mismatched (feature, signal, priority) tuple is rejected silently. This is validated both in the application arbiter and independently in the Safety Monitor.
 
 ```rust
 // src/arbiter.rs  (abbreviated)
@@ -339,39 +352,55 @@ pub struct ActuatorRequest {
     pub feature_id: FeatureId,
 }
 
-pub struct SignalArbiter<B: SignalBus> {
-    bus:      Arc<B>,
+pub struct AllowEntry {
+    pub feature_id: FeatureId,
+    pub signal:     VssPath,
+    pub priority:   Priority,
+}
+
+pub struct DomainArbiter {
+    pub name: &'static str,
     tx:       mpsc::Sender<ActuatorRequest>,
 }
 
-impl<B: SignalBus> SignalArbiter<B> {
-    pub fn new(bus: Arc<B>) -> (Self, mpsc::Receiver<ActuatorRequest>) { ... }
+impl DomainArbiter {
+    /// Create a new domain arbiter. Returns the handle and a future to spawn.
+    pub fn new<B: SignalBus>(
+        name: &'static str,
+        allow_list: Vec<AllowEntry>,
+        bus: Arc<B>,
+    ) -> (Self, impl Future<Output = ()>) { ... }
 
-    /// Feature state machines call this — fire and forget.
-    pub async fn request(&self, req: ActuatorRequest) {
-        self.tx.send(req).await.ok();
+    /// Feature business logic calls this — fire and forget.
+    pub async fn request(&self, req: ActuatorRequest) -> anyhow::Result<()> {
+        self.tx.send(req).await?;
+        Ok(())
     }
 }
 
-/// Arbiter resolution loop — runs as a tokio task.
-async fn arbiter_loop<B: SignalBus>(
-    bus:  Arc<B>,
-    mut rx: mpsc::Receiver<ActuatorRequest>,
-) {
-    // Per-signal map: signal path → current winning request
-    let mut winners: HashMap<VssPath, ActuatorRequest> = HashMap::new();
+// Factory functions for each domain:
+pub fn lighting_arbiter<B: SignalBus>(bus: Arc<B>)   -> (DomainArbiter, impl Future<Output = ()>);
+pub fn door_lock_arbiter<B: SignalBus>(bus: Arc<B>)  -> (DomainArbiter, impl Future<Output = ()>);
+pub fn horn_arbiter<B: SignalBus>(bus: Arc<B>)       -> (DomainArbiter, impl Future<Output = ()>);
+pub fn comfort_arbiter<B: SignalBus>(bus: Arc<B>)    -> (DomainArbiter, impl Future<Output = ()>);
+```
 
-    while let Some(req) = rx.recv().await {
-        let should_emit = match winners.get(req.signal) {
-            None => true,
-            Some(current) => req.priority >= current.priority,
-        };
-        if should_emit {
-            winners.insert(req.signal, req.clone());
-            bus.publish(req.signal, req.value).await.ok();
-        }
-    }
-}
+**Wiring in main.rs:**
+
+```rust
+let (lighting_arb, lighting_fut) = arbiter::lighting_arbiter(Arc::clone(&bus));
+let (door_lock_arb, door_lock_fut) = arbiter::door_lock_arbiter(Arc::clone(&bus));
+let (horn_arb, horn_fut) = arbiter::horn_arbiter(Arc::clone(&bus));
+let (comfort_arb, comfort_fut) = arbiter::comfort_arbiter(Arc::clone(&bus));
+
+tokio::spawn(lighting_fut);
+tokio::spawn(door_lock_fut);
+tokio::spawn(horn_fut);
+tokio::spawn(comfort_fut);
+
+// Feature modules receive Arc<DomainArbiter> for their domain:
+tokio::spawn(HazardFsm::new(Arc::clone(&lighting_arb), Arc::clone(&bus)).run());
+tokio::spawn(PepsFsm::new(Arc::clone(&door_lock_arb), Arc::clone(&bus)).run());
 ```
 
 ---
@@ -836,32 +865,45 @@ Implement:
 
 ---
 
-### Prompt 2 — Signal Arbiter
+### Prompt 2 — Domain Arbiters
 
 ```
-You are implementing the Signal Arbiter for a Rust automotive body controller.
+You are implementing domain-based Signal Arbiters for a Rust automotive body controller.
 
 Context (from architecture doc):
-- The arbiter sits between feature business logic and the SignalBus
+- Arbiters are grouped by actuator domain: Lighting, DoorLock, Horn, Comfort
+- Each `DomainArbiter` has a static allow-list of (FeatureId, VssPath, Priority) tuples
 - Features publish `ActuatorRequest` structs with { signal, value, priority, feature_id }
-- The arbiter holds a per-signal "current winner" map
+- The arbiter validates against the allow-list, then holds a per-signal "current winner" map
 - A new request replaces the winner if its priority >= current winner's priority
-- The arbiter is generic over `B: SignalBus`
+- Requests not in the allow-list are rejected silently (logged at WARN)
+- `DomainArbiter` is not generic — it receives `Arc<B: SignalBus>` at construction
 - All inter-task communication uses `tokio::sync::mpsc`
+- Factory functions create each domain with its hardcoded allow-list
 
 Priority enum: Low=1, Medium=2, High=3
 FeatureId enum: Peps=0x01, Hazard=0x02, TurnIndicator=0x03, LowBeam=0x04,
   HighBeam=0x05, Drl=0x06, AutoLock=0x07, LockFeedback=0x08, Welcome=0x09
 
+Lighting allow-list: Hazard→DirectionIndicator.*@HIGH, Turn→DirectionIndicator.*@MEDIUM,
+  LockFeedback→DirectionIndicator.*@LOW, Hazard→Hazard.IsSignaling@HIGH,
+  LowBeam→Beam.Low@MEDIUM, HighBeam→Beam.High@MEDIUM, Drl→Running@MEDIUM
+DoorLock allow-list: Peps→Doors.*.IsLocked@HIGH, AutoLock→Doors.*.IsLocked@MEDIUM
+Horn/Comfort: empty allow-lists (pass-through with validation, ready for future features)
+
 Implement:
-1. `ActuatorRequest` struct
-2. `SignalArbiter<B: SignalBus>` struct with a `request()` method
-3. `arbiter_loop()` async function that runs as a tokio task
-4. Unit tests using MockBus covering:
+1. `ActuatorRequest` and `AllowEntry` structs
+2. `DomainArbiter` struct with `new()` returning (handle, future) and `request()` method
+3. `arbiter_loop()` async function with allow-list validation and priority resolution
+4. Factory functions: lighting_arbiter, door_lock_arbiter, horn_arbiter, comfort_arbiter
+5. Unit tests using MockBus covering:
    - High priority wins over low priority for the same signal
+   - Low priority suppressed by existing high priority winner
    - Two different signals do not interfere
    - Priority tie: latest request wins
-   - Releasing a high-priority hold (setting to false) allows lower priority to retake
+   - Request rejected if feature/signal/priority not in allow-list
+   - Request rejected if feature claims wrong priority
+   - Cross-domain: door lock arbiter PEPS wins over AutoLock
 ```
 
 ---

@@ -7,6 +7,7 @@
 pub mod ipc_message;
 pub mod signal_bus;
 pub mod signal_ids;
+pub mod arbiter;
 pub mod adapters;
 pub mod features;
 pub mod kuksa_sync;
@@ -33,14 +34,26 @@ async fn main() -> anyhow::Result<()> {
         "signal catalog loaded"
     );
 
-    // TODO: Signal Arbiter
-    // let (arbiter, arb_rx) = SignalArbiter::new(Arc::clone(&bus));
-    // let arbiter = Arc::new(arbiter);
-    // tokio::spawn(arbiter_loop(Arc::clone(&bus), arb_rx));
+    // Domain Arbiters — one per actuator domain
+    let (lighting_arb, lighting_fut) = arbiter::lighting_arbiter(Arc::clone(&bus));
+    let (door_lock_arb, door_lock_fut) = arbiter::door_lock_arbiter(Arc::clone(&bus));
+    let (horn_arb, horn_fut) = arbiter::horn_arbiter(Arc::clone(&bus));
+    let (comfort_arb, comfort_fut) = arbiter::comfort_arbiter(Arc::clone(&bus));
 
-    // TODO: Feature FSMs
-    // tokio::spawn(HazardFsm::new(...).run());
-    // tokio::spawn(TurnFsm::new(...).run());
+    tokio::spawn(lighting_fut);
+    tokio::spawn(door_lock_fut);
+    tokio::spawn(horn_fut);
+    tokio::spawn(comfort_fut);
+
+    let _lighting_arb = Arc::new(lighting_arb);
+    let _door_lock_arb = Arc::new(door_lock_arb);
+    let _horn_arb = Arc::new(horn_arb);
+    let _comfort_arb = Arc::new(comfort_arb);
+
+    // TODO: Feature Business Logic
+    // tokio::spawn(HazardFsm::new(Arc::clone(&_lighting_arb), Arc::clone(&bus)).run());
+    // tokio::spawn(TurnFsm::new(Arc::clone(&_lighting_arb), Arc::clone(&bus)).run());
+    // tokio::spawn(PepsFsm::new(Arc::clone(&_door_lock_arb), Arc::clone(&bus)).run());
     // ...
 
     // TODO: WebSocket server for L6 HMI
