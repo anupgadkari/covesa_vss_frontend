@@ -130,6 +130,20 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Vehicle.Speed" => Some(0x000C_0003),
         "Body.Lights.LightSwitch" => Some(0x000C_0004),
 
+        // Door lock inputs (overlay — DoorLockInputs.vspec)
+        "Body.Switches.DoorTrim.Row1.Left.LockButton" => Some(0x000E_0001),
+        "Body.Switches.DoorTrim.Row1.Right.LockButton" => Some(0x000E_0002),
+        "Body.Switches.DoorTrim.Row2.Left.LockButton" => Some(0x000E_0003),
+        "Body.Switches.DoorTrim.Row2.Right.LockButton" => Some(0x000E_0004),
+        "Body.Switches.Keyfob.LockButton" => Some(0x000E_0010),
+        "Body.Connectivity.RemoteLock" => Some(0x000E_0020),
+        "Body.Connectivity.BleLock" => Some(0x000E_0021),
+        "Body.Connectivity.NfcCardPresent" => Some(0x000E_0030),
+        "Body.Connectivity.NfcPhonePresent" => Some(0x000E_0031),
+
+        // Safety signals
+        "Vehicle.Safety.CrashDetected" => Some(0x000F_0001),
+
         _ => None,
     }
 }
@@ -232,6 +246,18 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Powertrain.Transmission.CurrentGear", 0x000C_0002),
     ("Vehicle.Speed", 0x000C_0003),
     ("Body.Lights.LightSwitch", 0x000C_0004),
+    // Door lock inputs (overlay — DoorLockInputs.vspec)
+    ("Body.Switches.DoorTrim.Row1.Left.LockButton", 0x000E_0001),
+    ("Body.Switches.DoorTrim.Row1.Right.LockButton", 0x000E_0002),
+    ("Body.Switches.DoorTrim.Row2.Left.LockButton", 0x000E_0003),
+    ("Body.Switches.DoorTrim.Row2.Right.LockButton", 0x000E_0004),
+    ("Body.Switches.Keyfob.LockButton", 0x000E_0010),
+    ("Body.Connectivity.RemoteLock", 0x000E_0020),
+    ("Body.Connectivity.BleLock", 0x000E_0021),
+    ("Body.Connectivity.NfcCardPresent", 0x000E_0030),
+    ("Body.Connectivity.NfcPhonePresent", 0x000E_0031),
+    // Safety signals
+    ("Vehicle.Safety.CrashDetected", 0x000F_0001),
 ];
 
 #[cfg(test)]
