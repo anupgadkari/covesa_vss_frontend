@@ -205,11 +205,118 @@ pub struct VariantCal {
     /// Welcome light pattern.
     pub welcome_light_pattern: WelcomeLightPattern,
 
-    /// Number of door rows (2 for sedan/SUV, could be 1 for 2-door coupe).
-    pub door_rows: u8,
+    /// Door configuration for this variant.
+    pub doors: DoorConfig,
+}
 
-    /// Whether rear doors exist (false for 2-door coupe/truck).
-    pub has_rear_doors: bool,
+/// Door configuration — which doors are present and whether they are
+/// removable. Features use this to determine which VSS door signals
+/// to monitor. A 2-door coupe only has Row1; a Bronco/Wrangler has
+/// all four doors but they are removable.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct DoorConfig {
+    /// Front left door present (always true for any production vehicle).
+    pub row1_left: bool,
+    /// Front right door present (always true for any production vehicle).
+    pub row1_right: bool,
+    /// Rear left door present (false for 2-door coupe).
+    pub row2_left: bool,
+    /// Rear right door present (false for 2-door coupe).
+    pub row2_right: bool,
+
+    /// Whether doors are removable (Bronco, Wrangler, etc.).
+    /// When true, features must also subscribe to a door-removed sensor
+    /// signal and exclude removed doors from open/lock monitoring.
+    /// A removed door is neither "open" nor "closed" — it is absent.
+    pub removable: bool,
+}
+
+impl Default for DoorConfig {
+    fn default() -> Self {
+        Self {
+            row1_left: true,
+            row1_right: true,
+            row2_left: true,
+            row2_right: true,
+            removable: false,
+        }
+    }
+}
+
+impl DoorConfig {
+    /// Two-door configuration (coupe).
+    pub fn two_door() -> Self {
+        Self {
+            row1_left: true,
+            row1_right: true,
+            row2_left: false,
+            row2_right: false,
+            removable: false,
+        }
+    }
+
+    /// Four-door with removable doors (Bronco, Wrangler).
+    pub fn four_door_removable() -> Self {
+        Self {
+            row1_left: true,
+            row1_right: true,
+            row2_left: true,
+            row2_right: true,
+            removable: true,
+        }
+    }
+
+    /// Returns the list of VSS door signal suffixes for doors that are
+    /// present in this variant. Used by features to build their signal
+    /// subscription list.
+    ///
+    /// Returns e.g. `["Row1.Left", "Row1.Right"]` for a 2-door coupe,
+    /// or `["Row1.Left", "Row1.Right", "Row2.Left", "Row2.Right"]` for
+    /// a 4-door sedan.
+    pub fn present_doors(&self) -> Vec<&'static str> {
+        let mut doors = Vec::with_capacity(4);
+        if self.row1_left { doors.push("Row1.Left"); }
+        if self.row1_right { doors.push("Row1.Right"); }
+        if self.row2_left { doors.push("Row2.Left"); }
+        if self.row2_right { doors.push("Row2.Right"); }
+        doors
+    }
+
+    /// Returns full VSS paths for IsLocked signals of present doors.
+    pub fn lock_signals(&self) -> Vec<&'static str> {
+        self.present_doors().iter().map(|d| match *d {
+            "Row1.Left" => "Body.Doors.Row1.Left.IsLocked",
+            "Row1.Right" => "Body.Doors.Row1.Right.IsLocked",
+            "Row2.Left" => "Body.Doors.Row2.Left.IsLocked",
+            "Row2.Right" => "Body.Doors.Row2.Right.IsLocked",
+            _ => unreachable!(),
+        }).collect()
+    }
+
+    /// Returns full VSS paths for IsOpen signals of present doors.
+    pub fn open_signals(&self) -> Vec<&'static str> {
+        self.present_doors().iter().map(|d| match *d {
+            "Row1.Left" => "Body.Doors.Row1.Left.IsOpen",
+            "Row1.Right" => "Body.Doors.Row1.Right.IsOpen",
+            "Row2.Left" => "Body.Doors.Row2.Left.IsOpen",
+            "Row2.Right" => "Body.Doors.Row2.Right.IsOpen",
+            _ => unreachable!(),
+        }).collect()
+    }
+
+    /// Returns full VSS paths for IsRemoved signals (only meaningful
+    /// when `removable` is true).
+    pub fn removed_signals(&self) -> Vec<&'static str> {
+        if !self.removable { return Vec::new(); }
+        self.present_doors().iter().map(|d| match *d {
+            "Row1.Left" => "Body.Doors.Row1.Left.IsRemoved",
+            "Row1.Right" => "Body.Doors.Row1.Right.IsRemoved",
+            "Row2.Left" => "Body.Doors.Row2.Left.IsRemoved",
+            "Row2.Right" => "Body.Doors.Row2.Right.IsRemoved",
+            _ => unreachable!(),
+        }).collect()
+    }
 }
 
 /// Welcome light pattern options.
@@ -238,8 +345,7 @@ impl Default for VariantCal {
             ble_key_enabled: false,
             remote_lock_enabled: false,
             welcome_light_pattern: WelcomeLightPattern::Simple,
-            door_rows: 2,
-            has_rear_doors: true,
+            doors: DoorConfig::default(),
         }
     }
 }
@@ -420,6 +526,11 @@ impl PlatformConfig {
         }
     }
 
+    /// Door configuration for this variant.
+    pub fn doors(&self) -> &DoorConfig {
+        &self.variant.doors
+    }
+
     // ── Tier 4 — dealer config (runtime-updatable) ──────────────────
 
     /// Get a snapshot of the current dealer configuration.
@@ -537,7 +648,8 @@ mod tests {
         assert_eq!(vc.auto_lock_speed_kmh, 20);
         assert!(!vc.double_lock_enabled);
         assert!(!vc.nfc_enabled);
-        assert!(vc.has_rear_doors);
+        assert!(vc.doors.row2_left);  // 4-door by default
+        assert!(!vc.doors.removable); // not removable by default
 
         let dc = DealerConfig::default();
         assert!(dc.auto_relock_enabled);
@@ -594,6 +706,57 @@ mod tests {
         assert!(!vc.double_lock_enabled);
         assert!(!vc.nfc_enabled);
         assert_eq!(vc.welcome_light_pattern, WelcomeLightPattern::Simple);
+    }
+
+    #[test]
+    fn variant_json_coupe_two_door() {
+        let json = r#"{
+            "auto_lock_speed_kmh": 20,
+            "doors": {
+                "row1_left": true,
+                "row1_right": true,
+                "row2_left": false,
+                "row2_right": false,
+                "removable": false
+            }
+        }"#;
+        let vc: VariantCal = serde_json::from_str(json).unwrap();
+        assert_eq!(vc.doors.present_doors().len(), 2);
+        assert_eq!(
+            vc.doors.lock_signals(),
+            vec![
+                "Body.Doors.Row1.Left.IsLocked",
+                "Body.Doors.Row1.Right.IsLocked",
+            ]
+        );
+    }
+
+    #[test]
+    fn variant_json_removable_doors() {
+        let json = r#"{
+            "doors": {
+                "row1_left": true,
+                "row1_right": true,
+                "row2_left": true,
+                "row2_right": true,
+                "removable": true
+            }
+        }"#;
+        let vc: VariantCal = serde_json::from_str(json).unwrap();
+        assert!(vc.doors.removable);
+        assert_eq!(vc.doors.present_doors().len(), 4);
+        assert_eq!(vc.doors.removed_signals().len(), 4);
+        assert_eq!(
+            vc.doors.removed_signals()[0],
+            "Body.Doors.Row1.Left.IsRemoved"
+        );
+    }
+
+    #[test]
+    fn door_config_non_removable_has_no_removed_signals() {
+        let dc = DoorConfig::default();
+        assert!(!dc.removable);
+        assert!(dc.removed_signals().is_empty());
     }
 
     #[test]

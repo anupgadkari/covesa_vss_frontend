@@ -25,7 +25,7 @@ use tokio::select;
 use tokio::time::sleep;
 
 use crate::arbiter::{DoorLockArbiter, DoorLockRequest, LockCommand};
-use crate::config::PlatformConfig;
+use crate::config::{DoorConfig, PlatformConfig};
 use crate::ipc_message::{FeatureId, SignalValue};
 use crate::signal_bus::{SignalBus, VssPath};
 
@@ -39,16 +39,17 @@ const CRASH_SIGNAL: VssPath = "Vehicle.Safety.CrashDetected";
 /// Power state signal — standard VSS v4.0.
 const POWER_STATE_SIGNAL: VssPath = "Vehicle.LowVoltageSystemState";
 
-/// Door lock signals to monitor.
-const DOOR_LOCK_SIGNALS: &[VssPath] = &[
+/// Default door lock signals (4-door sedan). Used when no DoorConfig
+/// is provided (backward compatibility / simple tests).
+const DEFAULT_LOCK_SIGNALS: &[VssPath] = &[
     "Body.Doors.Row1.Left.IsLocked",
     "Body.Doors.Row1.Right.IsLocked",
     "Body.Doors.Row2.Left.IsLocked",
     "Body.Doors.Row2.Right.IsLocked",
 ];
 
-/// Door open signals to monitor.
-const DOOR_OPEN_SIGNALS: &[VssPath] = &[
+/// Default door open signals (4-door sedan).
+const DEFAULT_OPEN_SIGNALS: &[VssPath] = &[
     "Body.Doors.Row1.Left.IsOpen",
     "Body.Doors.Row1.Right.IsOpen",
     "Body.Doors.Row2.Left.IsOpen",

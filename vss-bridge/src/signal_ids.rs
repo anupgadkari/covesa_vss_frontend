@@ -141,6 +141,12 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Body.Connectivity.NfcCardPresent" => Some(0x000E_0030),
         "Body.Connectivity.NfcPhonePresent" => Some(0x000E_0031),
 
+        // Door removed sensors (removable doors — Bronco, Wrangler)
+        "Body.Doors.Row1.Left.IsRemoved" => Some(0x000E_0040),
+        "Body.Doors.Row1.Right.IsRemoved" => Some(0x000E_0041),
+        "Body.Doors.Row2.Left.IsRemoved" => Some(0x000E_0042),
+        "Body.Doors.Row2.Right.IsRemoved" => Some(0x000E_0043),
+
         // Safety signals
         "Vehicle.Safety.CrashDetected" => Some(0x000F_0001),
 
@@ -256,6 +262,11 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Body.Connectivity.BleLock", 0x000E_0021),
     ("Body.Connectivity.NfcCardPresent", 0x000E_0030),
     ("Body.Connectivity.NfcPhonePresent", 0x000E_0031),
+    // Door removed sensors (removable doors)
+    ("Body.Doors.Row1.Left.IsRemoved", 0x000E_0040),
+    ("Body.Doors.Row1.Right.IsRemoved", 0x000E_0041),
+    ("Body.Doors.Row2.Left.IsRemoved", 0x000E_0042),
+    ("Body.Doors.Row2.Right.IsRemoved", 0x000E_0043),
     // Safety signals
     ("Vehicle.Safety.CrashDetected", 0x000F_0001),
 ];

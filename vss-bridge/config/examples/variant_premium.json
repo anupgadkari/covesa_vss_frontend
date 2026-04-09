@@ -7,6 +7,11 @@
   "ble_key_enabled": true,
   "remote_lock_enabled": true,
   "welcome_light_pattern": "Sequential",
-  "door_rows": 2,
-  "has_rear_doors": true
+  "doors": {
+    "row1_left": true,
+    "row1_right": true,
+    "row2_left": true,
+    "row2_right": true,
+    "removable": false
+  }
 }

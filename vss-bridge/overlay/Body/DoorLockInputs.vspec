@@ -152,6 +152,40 @@ Vehicle.Body.Connectivity.NfcPhonePresent:
     requestor in the DoorLock arbiter and NVM diagnostic log.
     Read by NfcPhone feature; same lock/unlock semantics as NfcCard.
 
+# ─── Door Removed Sensors (Removable Doors) ─────────────────────────
+# For vehicles with removable doors (Bronco, Wrangler), a sensor
+# detects whether each door is physically present. When a door is
+# removed, it is neither "open" nor "closed" — it is absent. Features
+# must exclude removed doors from open/lock monitoring.
+# Only meaningful when VariantCal.doors.removable = true.
+
+Vehicle.Body.Doors.Row1.Left.IsRemoved:
+  datatype: boolean
+  type: sensor
+  description: >
+    Front left door physically removed from the vehicle. TRUE = door
+    has been unbolted and removed. FALSE = door is installed.
+    Only applicable to vehicles with removable doors (Bronco, Wrangler).
+    When TRUE, features must ignore IsOpen and IsLocked for this door.
+
+Vehicle.Body.Doors.Row1.Right.IsRemoved:
+  datatype: boolean
+  type: sensor
+  description: >
+    Front right door physically removed. Same semantics as Row1.Left.
+
+Vehicle.Body.Doors.Row2.Left.IsRemoved:
+  datatype: boolean
+  type: sensor
+  description: >
+    Rear left door physically removed. Same semantics as Row1.Left.
+
+Vehicle.Body.Doors.Row2.Right.IsRemoved:
+  datatype: boolean
+  type: sensor
+  description: >
+    Rear right door physically removed. Same semantics as Row1.Left.
+
 # ─── Crash Detection ─────────────────────────────────────────────────
 # Safety-critical signal from the airbag / restraint control module
 # via the Safety Monitor. Used by CrashUnlock (immediate unlock) and
