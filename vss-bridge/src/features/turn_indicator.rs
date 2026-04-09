@@ -4,6 +4,8 @@
 //! Subscribes to:
 //!   - Body.Switches.TurnIndicator.Direction (overlay sensor — stalk)
 //!     Values: "OFF", "LEFT", "RIGHT"
+//!   - Vehicle.LowVoltageSystemState (ignition / power mode)
+//!     Turn signals only operate when ignition is ON or START.
 //!
 //! Outputs (via Lighting arbiter):
 //!   - Body.Lights.DirectionIndicator.Left.IsSignaling  @ MEDIUM (2)
@@ -13,10 +15,16 @@
 //! The stalk's self-cancelling behavior (via steering angle feedback)
 //! is handled by the body ECU firmware — this feature just tracks the
 //! stalk position signal.
+//!
+//! Unlike HazardLighting, turn signals require ignition ON. When
+//! ignition leaves ON/START, any active indicator is deactivated.
+//! When ignition returns to ON/START, the current stalk position is
+//! re-evaluated and indicators re-activated if the stalk is not OFF.
 
 use std::sync::Arc;
 
 use futures::StreamExt;
+use tokio::select;
 
 use crate::arbiter::{ActuatorRequest, DomainArbiter};
 use crate::ipc_message::{FeatureId, Priority, SignalValue};
@@ -25,9 +33,17 @@ use crate::signal_bus::{SignalBus, VssPath};
 /// Physical turn signal stalk input (overlay signal).
 const TURN_STALK: VssPath = "Body.Switches.TurnIndicator.Direction";
 
+/// Power state signal — standard VSS v4.0.
+const POWER_STATE: VssPath = "Vehicle.LowVoltageSystemState";
+
 /// Actuator outputs — direction indicators.
 const LEFT_INDICATOR: VssPath = "Body.Lights.DirectionIndicator.Left.IsSignaling";
 const RIGHT_INDICATOR: VssPath = "Body.Lights.DirectionIndicator.Right.IsSignaling";
+
+/// Returns true when ignition is ON or START (turn signals allowed).
+fn is_ignition_on(val: &SignalValue) -> bool {
+    matches!(val, SignalValue::String(s) if s == "ON" || s == "START")
+}
 
 pub struct TurnIndicator<B: SignalBus> {
     arbiter: Arc<DomainArbiter>,
@@ -40,44 +56,87 @@ impl<B: SignalBus> TurnIndicator<B> {
     }
 
     /// Main run loop. Call via `tokio::spawn(turn.run())`.
+    ///
+    /// Two-phase state machine:
+    /// - **Ignition OFF**: ignores stalk inputs, waits for ON/START.
+    /// - **Ignition ON**: processes stalk inputs normally. If ignition
+    ///   leaves ON/START, deactivates both indicators and returns to
+    ///   the OFF phase. When ignition returns, re-evaluates the stalk.
     pub async fn run(self) {
         tracing::info!("TurnIndicator feature started");
 
         let mut stalk_stream = self.bus.subscribe(TURN_STALK).await;
+        let mut power_stream = self.bus.subscribe(POWER_STATE).await;
 
-        while let Some(val) = stalk_stream.next().await {
-            let (left, right) = match &val {
-                SignalValue::String(s) => match s.as_str() {
-                    "LEFT" => (true, false),
-                    "RIGHT" => (false, true),
-                    _ => (false, false), // "OFF" or any unknown value
-                },
-                _ => {
-                    tracing::warn!(value = ?val, "TurnIndicator: unexpected non-string value");
-                    continue;
+        // Track the last stalk position so we can re-apply it when
+        // ignition returns to ON.
+        let mut last_stalk: String = "OFF".to_string();
+        let mut ignition_on = false;
+
+        loop {
+            select! {
+                Some(val) = stalk_stream.next() => {
+                    // Always track the stalk position, even when ignition is off.
+                    if let SignalValue::String(s) = &val {
+                        last_stalk = s.clone();
+                    }
+
+                    if !ignition_on {
+                        tracing::debug!(stalk = %last_stalk, "TurnIndicator: stalk change ignored (ignition off)");
+                        continue;
+                    }
+
+                    self.apply_stalk(&last_stalk).await;
                 }
-            };
+                Some(val) = power_stream.next() => {
+                    let was_on = ignition_on;
+                    ignition_on = is_ignition_on(&val);
 
-            tracing::debug!(left, right, "turn stalk changed");
-
-            // Request both indicators — one on, one off (or both off for OFF).
-            for (signal, active) in [(LEFT_INDICATOR, left), (RIGHT_INDICATOR, right)] {
-                if let Err(e) = self
-                    .arbiter
-                    .request(ActuatorRequest {
-                        signal,
-                        value: SignalValue::Bool(active),
-                        priority: Priority::Medium,
-                        feature_id: FeatureId::TurnIndicator,
-                    })
-                    .await
-                {
-                    tracing::error!(error = %e, "TurnIndicator: arbiter request failed");
+                    if was_on && !ignition_on {
+                        // Ignition left ON/START — deactivate both indicators.
+                        tracing::info!(state = ?val, "TurnIndicator: ignition off, deactivating");
+                        self.set_both(false, false).await;
+                    } else if !was_on && ignition_on {
+                        // Ignition entered ON/START — re-apply current stalk position.
+                        tracing::info!(state = ?val, stalk = %last_stalk, "TurnIndicator: ignition on, re-evaluating stalk");
+                        self.apply_stalk(&last_stalk).await;
+                    }
                 }
+                else => break,
             }
         }
 
-        tracing::warn!("TurnIndicator: stalk stream closed, exiting");
+        tracing::warn!("TurnIndicator: streams closed, exiting");
+    }
+
+    /// Translate stalk position to indicator requests.
+    async fn apply_stalk(&self, stalk: &str) {
+        let (left, right) = match stalk {
+            "LEFT" => (true, false),
+            "RIGHT" => (false, true),
+            _ => (false, false),
+        };
+
+        tracing::debug!(left, right, stalk, "turn stalk applied");
+        self.set_both(left, right).await;
+    }
+
+    /// Request both indicator states through the arbiter.
+    async fn set_both(&self, left: bool, right: bool) {
+        for (signal, active) in [(LEFT_INDICATOR, left), (RIGHT_INDICATOR, right)] {
+            if let Err(e) = self
+                .arbiter
+                .request(ActuatorRequest {
+                    signal,
+                    value: SignalValue::Bool(active),
+                    priority: Priority::Medium,
+                    feature_id: FeatureId::TurnIndicator,
+                })
+                .await
+            {
+                tracing::error!(error = %e, "TurnIndicator: arbiter request failed");
+            }
+        }
     }
 }
 
@@ -93,7 +152,28 @@ mod tests {
     use std::time::Duration;
     use tokio::time::sleep;
 
+    /// Helper: set up TurnIndicator with ignition ON (normal operation).
     async fn setup() -> (Arc<MockBus>, Arc<DomainArbiter>, tokio::task::JoinHandle<()>) {
+        let bus = Arc::new(MockBus::new());
+        let (arbiter, arbiter_fut) = lighting_arbiter(Arc::clone(&bus));
+        tokio::spawn(arbiter_fut);
+        let arbiter = Arc::new(arbiter);
+
+        let feature = TurnIndicator::new(Arc::clone(&arbiter), Arc::clone(&bus));
+        let handle = tokio::spawn(feature.run());
+        tokio::task::yield_now().await;
+
+        // Turn on ignition so the feature is active
+        bus.inject(POWER_STATE, s("ON"));
+        tokio::task::yield_now().await;
+        sleep(Duration::from_millis(20)).await;
+        bus.clear_history();
+
+        (bus, arbiter, handle)
+    }
+
+    /// Helper: set up TurnIndicator WITHOUT turning on ignition.
+    async fn setup_ignition_off() -> (Arc<MockBus>, Arc<DomainArbiter>, tokio::task::JoinHandle<()>) {
         let bus = Arc::new(MockBus::new());
         let (arbiter, arbiter_fut) = lighting_arbiter(Arc::clone(&bus));
         tokio::spawn(arbiter_fut);
@@ -109,6 +189,10 @@ mod tests {
     fn s(val: &str) -> SignalValue {
         SignalValue::String(val.to_string())
     }
+
+    // -----------------------------------------------------------------------
+    // Normal operation (ignition ON)
+    // -----------------------------------------------------------------------
 
     #[tokio::test]
     async fn stalk_left_activates_left_indicator() {
@@ -248,6 +332,171 @@ mod tests {
                 *sig == RIGHT_INDICATOR && *val == SignalValue::Bool(true)
             }),
             "hazard should override: right should be TRUE, history: {:?}",
+            history
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Ignition gating (REQ-TURN-008)
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn stalk_ignored_when_ignition_off() {
+        let (bus, _arb, _handle) = setup_ignition_off().await;
+
+        // Stalk to LEFT while ignition is off
+        bus.inject(TURN_STALK, s("LEFT"));
+        tokio::task::yield_now().await;
+        sleep(Duration::from_millis(50)).await;
+
+        let history = bus.history();
+        assert!(
+            !history.iter().any(|(sig, val)| {
+                *sig == LEFT_INDICATOR && *val == SignalValue::Bool(true)
+            }),
+            "left indicator should NOT activate when ignition off, history: {:?}",
+            history
+        );
+    }
+
+    #[tokio::test]
+    async fn stalk_ignored_when_ignition_acc() {
+        let (bus, _arb, _handle) = setup_ignition_off().await;
+
+        // Set ignition to ACC (not ON)
+        bus.inject(POWER_STATE, s("ACC"));
+        tokio::task::yield_now().await;
+        sleep(Duration::from_millis(20)).await;
+        bus.clear_history();
+
+        // Stalk to LEFT — should be ignored
+        bus.inject(TURN_STALK, s("LEFT"));
+        tokio::task::yield_now().await;
+        sleep(Duration::from_millis(50)).await;
+
+        let history = bus.history();
+        assert!(
+            !history.iter().any(|(sig, val)| {
+                *sig == LEFT_INDICATOR && *val == SignalValue::Bool(true)
+            }),
+            "left indicator should NOT activate in ACC, history: {:?}",
+            history
+        );
+    }
+
+    #[tokio::test]
+    async fn ignition_off_deactivates_active_turn() {
+        let (bus, _arb, _handle) = setup().await;
+
+        // Activate LEFT turn
+        bus.inject(TURN_STALK, s("LEFT"));
+        tokio::task::yield_now().await;
+        sleep(Duration::from_millis(50)).await;
+
+        bus.clear_history();
+
+        // Ignition goes to OFF
+        bus.inject(POWER_STATE, s("OFF"));
+        tokio::task::yield_now().await;
+        sleep(Duration::from_millis(50)).await;
+
+        let history = bus.history();
+        assert!(
+            history.iter().any(|(sig, val)| {
+                *sig == LEFT_INDICATOR && *val == SignalValue::Bool(false)
+            }),
+            "left should deactivate when ignition goes OFF, history: {:?}",
+            history
+        );
+        assert!(
+            history.iter().any(|(sig, val)| {
+                *sig == RIGHT_INDICATOR && *val == SignalValue::Bool(false)
+            }),
+            "right should deactivate when ignition goes OFF, history: {:?}",
+            history
+        );
+    }
+
+    #[tokio::test]
+    async fn ignition_acc_deactivates_active_turn() {
+        let (bus, _arb, _handle) = setup().await;
+
+        // Activate RIGHT turn
+        bus.inject(TURN_STALK, s("RIGHT"));
+        tokio::task::yield_now().await;
+        sleep(Duration::from_millis(50)).await;
+
+        bus.clear_history();
+
+        // Ignition goes to ACC
+        bus.inject(POWER_STATE, s("ACC"));
+        tokio::task::yield_now().await;
+        sleep(Duration::from_millis(50)).await;
+
+        let history = bus.history();
+        assert!(
+            history.iter().any(|(sig, val)| {
+                *sig == LEFT_INDICATOR && *val == SignalValue::Bool(false)
+            }),
+            "left should be FALSE when ignition goes to ACC, history: {:?}",
+            history
+        );
+        assert!(
+            history.iter().any(|(sig, val)| {
+                *sig == RIGHT_INDICATOR && *val == SignalValue::Bool(false)
+            }),
+            "right should be FALSE when ignition goes to ACC, history: {:?}",
+            history
+        );
+    }
+
+    #[tokio::test]
+    async fn ignition_on_reactivates_stalk_position() {
+        let (bus, _arb, _handle) = setup_ignition_off().await;
+
+        // Move stalk to LEFT while ignition off (should be tracked but not applied)
+        bus.inject(TURN_STALK, s("LEFT"));
+        tokio::task::yield_now().await;
+        sleep(Duration::from_millis(50)).await;
+
+        bus.clear_history();
+
+        // Turn ignition ON — should re-apply the stalk position
+        bus.inject(POWER_STATE, s("ON"));
+        tokio::task::yield_now().await;
+        sleep(Duration::from_millis(50)).await;
+
+        let history = bus.history();
+        assert!(
+            history.iter().any(|(sig, val)| {
+                *sig == LEFT_INDICATOR && *val == SignalValue::Bool(true)
+            }),
+            "left should activate when ignition returns to ON, history: {:?}",
+            history
+        );
+    }
+
+    #[tokio::test]
+    async fn start_state_also_enables_turn() {
+        let (bus, _arb, _handle) = setup_ignition_off().await;
+
+        bus.inject(TURN_STALK, s("RIGHT"));
+        tokio::task::yield_now().await;
+        sleep(Duration::from_millis(50)).await;
+
+        bus.clear_history();
+
+        // START should also enable turn signals
+        bus.inject(POWER_STATE, s("START"));
+        tokio::task::yield_now().await;
+        sleep(Duration::from_millis(50)).await;
+
+        let history = bus.history();
+        assert!(
+            history.iter().any(|(sig, val)| {
+                *sig == RIGHT_INDICATOR && *val == SignalValue::Bool(true)
+            }),
+            "right should activate in START state, history: {:?}",
             history
         );
     }
