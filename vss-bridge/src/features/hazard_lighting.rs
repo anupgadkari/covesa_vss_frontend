@@ -12,6 +12,10 @@
 //! compliant cadence is the responsibility of the LED driver IC or
 //! body ECU firmware. This feature only publishes the IsSignaling
 //! boolean intent flag.
+//!
+//! Unlike TurnIndicator, hazard lights operate regardless of ignition
+//! state (OFF, ACC, ON, START). This is a safety requirement — hazards
+//! must always be available.
 
 use std::sync::Arc;
 
@@ -189,5 +193,75 @@ mod tests {
         sleep(Duration::from_millis(50)).await;
 
         assert!(!handle.is_finished(), "feature should still be running after toggle");
+    }
+
+    // -----------------------------------------------------------------------
+    // Ignition-independent operation (REQ-HAZ-007)
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn hazard_works_with_ignition_off() {
+        let (bus, _arb, _handle) = setup().await;
+
+        // Set ignition to OFF — hazard should still work
+        bus.inject(
+            "Vehicle.LowVoltageSystemState",
+            SignalValue::String("OFF".to_string()),
+        );
+        tokio::task::yield_now().await;
+        sleep(Duration::from_millis(20)).await;
+
+        bus.clear_history();
+        bus.inject(HAZARD_SWITCH, SignalValue::Bool(true));
+        tokio::task::yield_now().await;
+        sleep(Duration::from_millis(50)).await;
+
+        let history = bus.history();
+        assert!(
+            history.iter().any(|(sig, val)| {
+                *sig == LEFT_INDICATOR && *val == SignalValue::Bool(true)
+            }),
+            "hazard should work with ignition OFF, history: {:?}",
+            history
+        );
+        assert!(
+            history.iter().any(|(sig, val)| {
+                *sig == RIGHT_INDICATOR && *val == SignalValue::Bool(true)
+            }),
+            "hazard should work with ignition OFF, history: {:?}",
+            history
+        );
+    }
+
+    #[tokio::test]
+    async fn hazard_survives_ignition_state_change() {
+        let (bus, _arb, _handle) = setup().await;
+
+        // Engage hazard
+        bus.inject(HAZARD_SWITCH, SignalValue::Bool(true));
+        tokio::task::yield_now().await;
+        sleep(Duration::from_millis(50)).await;
+
+        // Change ignition from ON to OFF
+        bus.inject(
+            "Vehicle.LowVoltageSystemState",
+            SignalValue::String("OFF".to_string()),
+        );
+        tokio::task::yield_now().await;
+        sleep(Duration::from_millis(50)).await;
+
+        // Hazard should still be engaged — no deactivation published.
+        // The last arbiter state for both indicators is still TRUE.
+        let history = bus.history();
+        let left_events: Vec<_> = history
+            .iter()
+            .filter(|(sig, _)| *sig == LEFT_INDICATOR)
+            .collect();
+        // Only the initial TRUE, no FALSE from ignition change
+        assert!(
+            left_events.last().map(|(_, v)| v) == Some(&SignalValue::Bool(true)),
+            "hazard should remain active through ignition change, history: {:?}",
+            left_events
+        );
     }
 }

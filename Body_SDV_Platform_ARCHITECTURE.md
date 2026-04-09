@@ -473,8 +473,8 @@ impl<B: SignalBus> HazardFsm<B> {
 
 | Feature | Min ECU State | Inputs (VSS subscriptions) | Outputs (Arbiter requests) |
 |---------|---------------|---------------------------|---------------------------|
-| `HazardFsm` | Locally Awake | `Body.Switches.Hazard.IsEngaged` (overlay) | Both `DirectionIndicator.*.IsSignaling` @ prio 3 |
-| `TurnFsm` | Locally Awake | `Body.Switches.TurnIndicator.Direction` (overlay) | `DirectionIndicator.{Left,Right}.IsSignaling` @ prio 2 |
+| `HazardFsm` | Locally Awake | `Body.Switches.Hazard.IsEngaged` (overlay). **No ignition gate** — operates in any power state (OFF/ACC/ON/START). | Both `DirectionIndicator.*.IsSignaling` @ prio 3 |
+| `TurnFsm` | Locally Awake | `Body.Switches.TurnIndicator.Direction` (overlay), `Vehicle.LowVoltageSystemState`. **Ignition-gated** — only processes stalk when ON or START; deactivates indicators on OFF/ACC. | `DirectionIndicator.{Left,Right}.IsSignaling` @ prio 2 |
 | `LockFeedback` | Locally Awake | `Body.Doors.*.IsLocked` (state change) | Both indicators @ prio 3 (HIGH, overlay — self-releases after pattern) |
 | `KeyfobPeps` | Locally Awake | `Body.PEPS.KeyPresent` (synthetic sensor) | DoorLock arbiter: UNLOCK / LOCK |
 | `AutoLock` | Fully Awake | `Vehicle.Speed` | DoorLock arbiter: LOCK |

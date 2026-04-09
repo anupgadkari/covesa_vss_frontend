@@ -33,11 +33,16 @@ Feature: Hazard Lighting
   #
   # REQ-HAZ-006: The hazard feature SHALL have no dependency on any other
   #              feature module.
+  #
+  # REQ-HAZ-007: The hazard feature SHALL operate regardless of
+  #              Vehicle.LowVoltageSystemState. Hazard lights must function
+  #              when ignition is OFF, ACC, ON, or START.
+  #              Rationale: hazard lights are a safety feature required by
+  #              regulation to operate independently of ignition state.
   # -------------------------------------------------------------------------
 
   Background:
-    Given the vehicle low-voltage system is in state "ON"
-    And the Lighting domain arbiter is running
+    Given the Lighting domain arbiter is running
     And the Hazard feature is running
 
   # --- REQ-HAZ-001 ---
@@ -87,3 +92,28 @@ Feature: Hazard Lighting
     When the driver engages the hazard switch
     Then the Hazard feature publishes IsSignaling = TRUE once
     And the Hazard feature does NOT publish periodic on/off toggles
+
+  # ===========================================================================
+  # Ignition-independent operation (REQ-HAZ-007)
+  # ===========================================================================
+
+  # --- REQ-HAZ-007 ---
+  Scenario: Hazard operates when ignition is OFF
+    Given the vehicle low-voltage system is in state "OFF"
+    When the driver engages the hazard switch
+    Then the Hazard feature requests DirectionIndicator.Left.IsSignaling = TRUE at priority HIGH
+    And the Hazard feature requests DirectionIndicator.Right.IsSignaling = TRUE at priority HIGH
+
+  # --- REQ-HAZ-007 ---
+  Scenario: Hazard operates when ignition is ACC
+    Given the vehicle low-voltage system is in state "ACC"
+    When the driver engages the hazard switch
+    Then the Hazard feature requests DirectionIndicator.Left.IsSignaling = TRUE at priority HIGH
+    And the Hazard feature requests DirectionIndicator.Right.IsSignaling = TRUE at priority HIGH
+
+  # --- REQ-HAZ-007 ---
+  Scenario: Hazard remains active through ignition state changes
+    Given the vehicle low-voltage system is in state "ON"
+    And the hazard switch is engaged
+    When Vehicle.LowVoltageSystemState transitions to "OFF"
+    Then both direction indicators continue signaling at priority HIGH

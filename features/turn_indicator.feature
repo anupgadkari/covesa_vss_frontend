@@ -39,6 +39,15 @@ Feature: Turn Indicator
   #
   # REQ-TURN-007: The turn indicator feature SHALL have no dependency on
   #               any other feature module.
+  #
+  # REQ-TURN-008: The turn indicator feature SHALL only process stalk
+  #               inputs when Vehicle.LowVoltageSystemState is "ON" or
+  #               "START". When ignition transitions to any other state
+  #               (OFF, LOCK, ACC), the feature SHALL immediately request
+  #               both indicators FALSE at priority MEDIUM (2).
+  #               Rationale: turn signals require ignition ON per vehicle
+  #               electrical architecture — the turn signal relay is
+  #               powered from the ignition-switched bus.
   # -------------------------------------------------------------------------
 
   Background:
@@ -85,3 +94,43 @@ Feature: Turn Indicator
     When the driver moves the turn stalk to LEFT
     Then the Turn feature's MEDIUM request is suppressed by the Lighting arbiter
     And both indicators continue signaling due to Hazard's HIGH priority
+
+  # ===========================================================================
+  # Ignition gating (REQ-TURN-008)
+  # ===========================================================================
+
+  # --- REQ-TURN-008 ---
+  Scenario: Turn stalk ignored when ignition is OFF
+    Given the vehicle low-voltage system is in state "OFF"
+    When the driver moves the turn stalk to LEFT
+    Then the Turn feature does NOT request any indicator change
+
+  # --- REQ-TURN-008 ---
+  Scenario: Turn stalk ignored when ignition is ACC
+    Given the vehicle low-voltage system is in state "ACC"
+    When the driver moves the turn stalk to LEFT
+    Then the Turn feature does NOT request any indicator change
+
+  # --- REQ-TURN-008 ---
+  Scenario: Active turn signal deactivated when ignition turns OFF
+    Given the turn stalk is in position LEFT
+    And the left direction indicator is signaling at priority MEDIUM
+    When Vehicle.LowVoltageSystemState transitions to "OFF"
+    Then the Turn feature requests DirectionIndicator.Left.IsSignaling = FALSE at priority MEDIUM
+    And the Turn feature requests DirectionIndicator.Right.IsSignaling = FALSE at priority MEDIUM
+
+  # --- REQ-TURN-008 ---
+  Scenario: Active turn signal deactivated when ignition goes to ACC
+    Given the turn stalk is in position RIGHT
+    And the right direction indicator is signaling at priority MEDIUM
+    When Vehicle.LowVoltageSystemState transitions to "ACC"
+    Then the Turn feature requests DirectionIndicator.Left.IsSignaling = FALSE at priority MEDIUM
+    And the Turn feature requests DirectionIndicator.Right.IsSignaling = FALSE at priority MEDIUM
+
+  # --- REQ-TURN-008 ---
+  Scenario: Turn signal resumes when ignition returns to ON
+    Given the turn stalk is in position LEFT
+    And Vehicle.LowVoltageSystemState was "ACC" (turn inactive)
+    When Vehicle.LowVoltageSystemState transitions to "ON"
+    Then the Turn feature requests DirectionIndicator.Left.IsSignaling = TRUE at priority MEDIUM
+    And the Turn feature requests DirectionIndicator.Right.IsSignaling = FALSE at priority MEDIUM
