@@ -122,7 +122,7 @@ impl<B: SignalBus> AutoRelock<B> {
 
         // Subscribe to all lock signals — merge into a single stream
         let lock_streams = futures::future::join_all(
-            DOOR_LOCK_SIGNALS
+            DEFAULT_LOCK_SIGNALS
                 .iter()
                 .map(|&sig| self.bus.subscribe(sig)),
         )
@@ -131,7 +131,7 @@ impl<B: SignalBus> AutoRelock<B> {
 
         // Subscribe to all open signals — merge into a single stream
         let open_streams = futures::future::join_all(
-            DOOR_OPEN_SIGNALS
+            DEFAULT_OPEN_SIGNALS
                 .iter()
                 .map(|&sig| self.bus.subscribe(sig)),
         )
