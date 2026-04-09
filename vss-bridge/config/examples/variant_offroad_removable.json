@@ -1,0 +1,17 @@
+{
+  "_comment": "Variant calibration — Off-road with removable doors (Bronco / Wrangler)",
+  "_tier": "3 — specific to this trim, part of BOM",
+  "auto_lock_speed_kmh": 20,
+  "double_lock_enabled": false,
+  "nfc_enabled": false,
+  "ble_key_enabled": true,
+  "remote_lock_enabled": true,
+  "welcome_light_pattern": "Simple",
+  "doors": {
+    "row1_left": true,
+    "row1_right": true,
+    "row2_left": true,
+    "row2_right": true,
+    "removable": true
+  }
+}

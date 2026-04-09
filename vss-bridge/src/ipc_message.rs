@@ -20,13 +20,15 @@ pub const IPC_VERSION: u8 = 1;
 // ---------------------------------------------------------------------------
 
 /// Tagged union for VSS signal values.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum SignalValue {
     Bool(bool),
     Uint8(u8),
     Int16(i16),
     Uint16(u16),
     Float(f32),
+    /// String-valued VSS signals (e.g., LowVoltageSystemState: "OFF"/"ON"/"ACC").
+    String(String),
 }
 
 /// Type tag byte for the value union on the wire.
@@ -62,10 +64,14 @@ impl SignalValue {
             Self::Int16(_)  => SigType::Int16,
             Self::Uint16(_) => SigType::Uint16,
             Self::Float(_)  => SigType::Float,
+            Self::String(_) => panic!("String values are not IPC-wire-encodable"),
         }
     }
 
     /// Encode the value into a 4-byte little-endian representation.
+    ///
+    /// Panics if called on a `String` variant — string signals are
+    /// application-layer only and not sent over the 28-byte IPC wire format.
     pub fn encode_bytes(&self) -> [u8; 4] {
         match self {
             Self::Bool(v)   => [*v as u8, 0, 0, 0],
@@ -79,6 +85,7 @@ impl SignalValue {
                 [b[0], b[1], 0, 0]
             }
             Self::Float(v)  => v.to_le_bytes(),
+            Self::String(_) => panic!("String values are not IPC-wire-encodable"),
         }
     }
 
@@ -102,7 +109,7 @@ impl SignalValue {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum FeatureId {
-    Peps           = 0x01,
+    KeyfobPeps     = 0x01,
     Hazard         = 0x02,
     TurnIndicator  = 0x03,
     LowBeam        = 0x04,
@@ -111,12 +118,20 @@ pub enum FeatureId {
     AutoLock       = 0x07,
     LockFeedback   = 0x08,
     Welcome        = 0x09,
+    DoorTrimButton = 0x0A,
+    KeyfobRke      = 0x0B,
+    PhoneApp       = 0x0C,
+    CrashUnlock    = 0x0D,
+    PhoneBle       = 0x0E,
+    NfcCard        = 0x0F,
+    NfcPhone       = 0x10,
+    AutoRelock     = 0x11,
 }
 
 impl FeatureId {
     pub fn from_u8(v: u8) -> Option<Self> {
         match v {
-            0x01 => Some(Self::Peps),
+            0x01 => Some(Self::KeyfobPeps),
             0x02 => Some(Self::Hazard),
             0x03 => Some(Self::TurnIndicator),
             0x04 => Some(Self::LowBeam),
@@ -125,6 +140,14 @@ impl FeatureId {
             0x07 => Some(Self::AutoLock),
             0x08 => Some(Self::LockFeedback),
             0x09 => Some(Self::Welcome),
+            0x0A => Some(Self::DoorTrimButton),
+            0x0B => Some(Self::KeyfobRke),
+            0x0C => Some(Self::PhoneApp),
+            0x0D => Some(Self::CrashUnlock),
+            0x0E => Some(Self::PhoneBle),
+            0x0F => Some(Self::NfcCard),
+            0x10 => Some(Self::NfcPhone),
+            0x11 => Some(Self::AutoRelock),
             _    => None,
         }
     }
@@ -549,7 +572,7 @@ mod tests {
         for val in cases {
             let encoded = val.encode_bytes();
             let decoded = SignalValue::decode_bytes(val.sig_type(), encoded);
-            match (val, decoded) {
+            match (&val, &decoded) {
                 (SignalValue::Float(a), SignalValue::Float(b)) => {
                     assert!((a - b).abs() < f32::EPSILON);
                 }
@@ -581,13 +604,13 @@ mod tests {
         let msg = VssStateUpdate {
             header: make_header(MsgType::StateUpdate, 5, 0x2000),
             value: SignalValue::Uint8(100),
-            last_feature: FeatureId::Peps,
+            last_feature: FeatureId::KeyfobPeps,
         };
         let encoded = msg.encode();
         assert_eq!(encoded.len(), VssStateUpdate::SIZE);
         let decoded = VssStateUpdate::decode(&encoded).unwrap();
         assert_eq!(decoded.value, SignalValue::Uint8(100));
-        assert_eq!(decoded.last_feature, FeatureId::Peps);
+        assert_eq!(decoded.last_feature, FeatureId::KeyfobPeps);
     }
 
     #[test]

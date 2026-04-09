@@ -1,0 +1,204 @@
+# VSS Overlay — Door Lock Input Signals
+#
+# These overlay signals represent the various ways a driver or system can
+# request a door lock or unlock. None of these exist in standard COVESA
+# VSS v4.0 — they are platform-specific inputs that feed into the DoorLock
+# arbiter via their respective feature business logic modules.
+#
+# Each signal is type: sensor (read-only from the A53 perspective).
+# The Safety Monitor (M7) or connectivity stack generates these signals
+# and pushes them as STATE_UPDATE to the A53 Rust bridge.
+#
+# Naming conventions:
+#   Body.Switches.<System>.<Signal>    — physical switch/button inputs
+#   Body.Connectivity.<Feature>        — remote / wireless key inputs
+#   Body.PEPS.<Signal>                 — passive entry synthetic signals
+#   Vehicle.Safety.<Signal>            — safety-critical signals
+
+# ─── Door Trim Panel Buttons ─────────────────────────────────────────
+# Each door has a lock/unlock rocker switch on the interior trim panel.
+# Pressing the switch generates a momentary LOCK or UNLOCK command;
+# the signal returns to IDLE after the press is released.
+# The DoorTrimButton feature reads these and submits requests to the
+# DoorLock arbiter.
+
+Vehicle.Body.Switches.DoorTrim.Row1.Left.LockButton:
+  datatype: string
+  type: sensor
+  allowed: ['IDLE', 'LOCK', 'UNLOCK']
+  description: >
+    Front left (driver) door trim panel lock/unlock rocker switch.
+    IDLE = not pressed, LOCK = lock pressed, UNLOCK = unlock pressed.
+    Momentary — returns to IDLE after release.
+    Read by DoorTrimButton feature; submits LOCK/UNLOCK to DoorLock arbiter.
+
+Vehicle.Body.Switches.DoorTrim.Row1.Right.LockButton:
+  datatype: string
+  type: sensor
+  allowed: ['IDLE', 'LOCK', 'UNLOCK']
+  description: >
+    Front right (passenger) door trim panel lock/unlock rocker switch.
+    Same semantics as Row1.Left.LockButton.
+
+Vehicle.Body.Switches.DoorTrim.Row2.Left.LockButton:
+  datatype: string
+  type: sensor
+  allowed: ['IDLE', 'LOCK', 'UNLOCK']
+  description: >
+    Rear left door trim panel lock/unlock rocker switch.
+    Same semantics as Row1.Left.LockButton.
+
+Vehicle.Body.Switches.DoorTrim.Row2.Right.LockButton:
+  datatype: string
+  type: sensor
+  allowed: ['IDLE', 'LOCK', 'UNLOCK']
+  description: >
+    Rear right door trim panel lock/unlock rocker switch.
+    Same semantics as Row1.Left.LockButton.
+
+# ─── Keyfob Remote Keyless Entry (RKE) ──────────────────────────────
+# Physical button press on the keyfob (manual, not proximity-based).
+# Distinct from PEPS (Body.PEPS.KeyPresent) which is capacitive-touch
+# triggered. Both use the same physical keyfob but are tracked as
+# separate requestors in the DoorLock arbiter and NVM diagnostic log.
+
+Vehicle.Body.Switches.Keyfob.LockButton:
+  datatype: string
+  type: sensor
+  allowed: ['IDLE', 'LOCK', 'UNLOCK', 'DOUBLE_LOCK']
+  description: >
+    Keyfob RKE button press. IDLE = no press, LOCK = lock button pressed,
+    UNLOCK = unlock button pressed, DOUBLE_LOCK = long-press or double-
+    press lock (deadlock / superlocking — disables interior door handles).
+    The M7 receives the UHF RF signal from the keyfob and generates this
+    signal as a STATE_UPDATE. Read by KeyfobRke feature; submits to
+    DoorLock arbiter. Tracked separately from KeyfobPeps (proximity).
+
+# ─── PEPS (Passive Entry / Passive Start) ────────────────────────────
+# Synthetic signal injected when the capacitive-touch → LF challenge →
+# RF response → crypto validation chain completes successfully.
+# Already defined in signal_ids.rs as Body.PEPS.KeyPresent (0x000B_0001).
+# Included here for documentation completeness.
+
+# Vehicle.Body.PEPS.KeyPresent:
+#   datatype: boolean
+#   type: sensor
+#   description: >
+#     Keyfob proximity authentication result. TRUE = keyfob authenticated
+#     near door handle. FALSE = keyfob departed.
+#     Hardware chain: capacitive touch → M7 wake → LF challenge →
+#     keyfob RF response → M7 crypto validation.
+#     By the time this signal reaches A53, the M7 has already driven the
+#     lock motors. Read by KeyfobPeps feature for state consistency.
+#     (Already in signal catalog — not redefined here.)
+
+# ─── Phone App (Cloud Remote Lock) ──────────────────────────────────
+# Lock/unlock command from a smartphone app via cloud connectivity
+# (e.g., OEM companion app → cloud → TCU → CAN → M7 → A53).
+
+Vehicle.Body.Connectivity.RemoteLock:
+  datatype: string
+  type: sensor
+  allowed: ['IDLE', 'LOCK', 'UNLOCK']
+  description: >
+    Remote lock/unlock command from a smartphone app via cloud/internet.
+    IDLE = no pending command, LOCK = lock requested, UNLOCK = unlock
+    requested. The connectivity stack (TCU or telematics module) receives
+    the cloud command and generates this signal.
+    Read by PhoneApp feature; submits to DoorLock arbiter.
+
+# ─── BLE Digital Key ─────────────────────────────────────────────────
+# Lock/unlock from a Bluetooth Low Energy paired phone acting as a
+# digital key (CCC / ICCE standard). Proximity-based, similar to PEPS
+# but using BLE instead of LF/RF.
+
+Vehicle.Body.Connectivity.BleLock:
+  datatype: string
+  type: sensor
+  allowed: ['IDLE', 'LOCK', 'UNLOCK']
+  description: >
+    BLE digital key lock/unlock. IDLE = no event, LOCK = phone key
+    requests lock, UNLOCK = phone key requests unlock.
+    Proximity-based via BLE (CCC / ICCE digital key standard).
+    Read by PhoneBle feature; submits to DoorLock arbiter.
+    Tracked separately from PhoneApp (cloud) in NVM diagnostics.
+
+# ─── NFC Card ────────────────────────────────────────────────────────
+# Physical NFC key card (like Tesla Model 3 card key). Tapped against
+# the B-pillar NFC reader or door handle NFC reader.
+
+Vehicle.Body.Connectivity.NfcCardPresent:
+  datatype: boolean
+  type: sensor
+  description: >
+    NFC key card detected at the vehicle's NFC reader (B-pillar or
+    door handle). TRUE = authenticated card present, FALSE = card
+    removed or not detected.
+    Read by NfcCard feature; submits UNLOCK (on TRUE) or LOCK (on
+    FALSE, after timeout) to DoorLock arbiter.
+
+# ─── NFC Phone Key ───────────────────────────────────────────────────
+# NFC key provisioned on a smartphone (Apple Wallet / Google Wallet
+# car key). Tapped against the same NFC reader as the physical card.
+# Tracked separately from NfcCard for diagnostics.
+
+Vehicle.Body.Connectivity.NfcPhonePresent:
+  datatype: boolean
+  type: sensor
+  description: >
+    NFC key on phone detected at the vehicle's NFC reader. TRUE =
+    authenticated phone NFC key present, FALSE = phone removed.
+    Same physical reader as NfcCard but tracked as a separate
+    requestor in the DoorLock arbiter and NVM diagnostic log.
+    Read by NfcPhone feature; same lock/unlock semantics as NfcCard.
+
+# ─── Door Removed Sensors (Removable Doors) ─────────────────────────
+# For vehicles with removable doors (Bronco, Wrangler), a sensor
+# detects whether each door is physically present. When a door is
+# removed, it is neither "open" nor "closed" — it is absent. Features
+# must exclude removed doors from open/lock monitoring.
+# Only meaningful when VariantCal.doors.removable = true.
+
+Vehicle.Body.Doors.Row1.Left.IsRemoved:
+  datatype: boolean
+  type: sensor
+  description: >
+    Front left door physically removed from the vehicle. TRUE = door
+    has been unbolted and removed. FALSE = door is installed.
+    Only applicable to vehicles with removable doors (Bronco, Wrangler).
+    When TRUE, features must ignore IsOpen and IsLocked for this door.
+
+Vehicle.Body.Doors.Row1.Right.IsRemoved:
+  datatype: boolean
+  type: sensor
+  description: >
+    Front right door physically removed. Same semantics as Row1.Left.
+
+Vehicle.Body.Doors.Row2.Left.IsRemoved:
+  datatype: boolean
+  type: sensor
+  description: >
+    Rear left door physically removed. Same semantics as Row1.Left.
+
+Vehicle.Body.Doors.Row2.Right.IsRemoved:
+  datatype: boolean
+  type: sensor
+  description: >
+    Rear right door physically removed. Same semantics as Row1.Left.
+
+# ─── Crash Detection ─────────────────────────────────────────────────
+# Safety-critical signal from the airbag / restraint control module
+# via the Safety Monitor. Used by CrashUnlock (immediate unlock) and
+# AutoRelock (permanent disable until power cycle).
+
+Vehicle.Vehicle.Safety.CrashDetected:
+  datatype: boolean
+  type: sensor
+  description: >
+    Crash event detected by the airbag / restraint control module.
+    TRUE = crash detected, FALSE = no crash (or cleared after power
+    cycle). Latches TRUE until vehicle power cycle.
+    Read by CrashUnlock feature (immediate protected unlock) and
+    AutoRelock feature (permanent disable until OFF → ON).
+    The DoorLock arbiter also enforces a 10-second post-crash lockout
+    to prevent flying debris from triggering re-lock.

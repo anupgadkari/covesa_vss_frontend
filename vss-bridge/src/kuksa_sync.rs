@@ -189,6 +189,7 @@ fn signal_value_to_datapoint(value: SignalValue) -> Datapoint {
         SignalValue::Int16(v) => datapoint::Value::Int32(v as i32),
         SignalValue::Uint16(v) => datapoint::Value::Uint32(v as u32),
         SignalValue::Float(v) => datapoint::Value::Float(v),
+        SignalValue::String(v) => datapoint::Value::String(v),
     };
 
     Datapoint {

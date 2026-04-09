@@ -311,23 +311,56 @@ pub enum AckResult {
 
 ---
 
-### 7.2 Signal Arbiter
+### 7.2 Domain Arbiters
 
-Resolves per-actuator ownership conflicts between features. Each feature publishes `ActuatorRequest` structs tagged with a priority. The Arbiter holds the current highest-priority request per actuator signal and emits arbitrated commands downstream.
+Resolves per-actuator ownership conflicts between features. Two arbiter patterns coexist:
 
-**Priority table (hardcoded)**
+1. **DomainArbiter** (Lighting, Horn, Comfort) — instant per-signal priority resolution. A new request replaces the winner if its priority ≥ the current winner's priority.
+2. **DoorLockArbiter** — serialized command queue with ACK handshake (see below).
+
+Each domain carries a **static allow-list**. A request is rejected locally if the feature is not in the allow-list — before it reaches the Safety Monitor. The Safety Monitor independently validates the claim.
+
+**Domain: Lighting** (DomainArbiter — instant priority resolution)
 
 | Actuator | Feature | Priority |
 |----------|---------|----------|
-| `Body.Lights.DirectionIndicator.*.IsSignaling` | HazardFsm | 3 (HIGH) |
-| `Body.Lights.DirectionIndicator.*.IsSignaling` | TurnFsm | 2 (MEDIUM) |
-| `Body.Lights.DirectionIndicator.*.IsSignaling` | LockFeedback | 1 (LOW) |
-| `Body.Doors.*.IsLocked` | PepsFsm | 3 (HIGH) |
-| `Body.Doors.*.IsLocked` | AutoLock | 2 (MEDIUM) |
-| `Body.Lights.Beam.Low.IsOn` | LowBeamFsm | 2 (MEDIUM) |
-| `Body.Lights.Beam.High.IsOn` | HighBeamFsm | 2 (MEDIUM) |
+| `Body.Lights.DirectionIndicator.*.IsSignaling` | Hazard | 3 (HIGH) |
+| `Body.Lights.DirectionIndicator.*.IsSignaling` | TurnIndicator | 2 (MEDIUM) |
+| `Body.Lights.DirectionIndicator.*.IsSignaling` | LockFeedback | 3 (HIGH, overlay) |
+| `Body.Lights.Hazard.IsSignaling` | Hazard | 3 (HIGH) |
+| `Body.Lights.Beam.Low.IsOn` | LowBeam | 2 (MEDIUM) |
+| `Body.Lights.Beam.High.IsOn` | HighBeam | 2 (MEDIUM) |
+| `Body.Lights.Running.IsOn` | Drl | 2 (MEDIUM) |
 
-**Key invariant**: a feature is only permitted to claim the priority the table assigns to it for that signal. The Safety Monitor independently validates the claim and returns `ACK_ERR_PRIORITY` if the claim does not match its own copy of the table.
+**Domain: DoorLock** (DoorLockArbiter — serialized queue)
+
+The lock motor takes ~300 ms per operation and cannot accept concurrent commands. Instead of instant priority resolution, the DoorLock arbiter uses a **one-deep command queue** (active + pending) with ACK handshake:
+
+- **Idle → dispatch immediately.** Request becomes the active operation.
+- **Active in progress → queue.** New request replaces the pending slot (latest wins).
+- **ACK received → promote.** Pending moves to active and dispatches.
+- **Crash unlock protection:** A CrashUnlock pending request cannot be replaced. After a CrashUnlock dispatches, a 10-second lockout rejects all new requests (prevents debris/spurious signals from re-locking during a collision).
+
+The Classic AUTOSAR Locking SWC acknowledges completion by publishing an incrementing event number, the last requestor (FeatureId), and per-door lock status. It also persists the last 5 requestor/status entries in NVM for diagnostic readout. The Rust arbiter has no NVM responsibility.
+
+| Feature | Commands |
+|---------|----------|
+| KeyfobPeps | UNLOCK, LOCK |
+| AutoLock | LOCK |
+| DoorTrimButton | LOCK, UNLOCK |
+| KeyfobRke | LOCK, UNLOCK, DOUBLE_LOCK |
+| PhoneApp | LOCK, UNLOCK |
+| PhoneBle | LOCK, UNLOCK |
+| NfcCard | LOCK, UNLOCK |
+| NfcPhone | LOCK, UNLOCK |
+| AutoRelock | LOCK (45s timeout after unlock if no door opened) |
+| CrashUnlock | UNLOCK (protected, triggers 10s lockout) |
+
+**Domain: Horn** — single feature today, pass-through with allow-list validation.
+
+**Domain: Comfort** — seat heating/ventilation, HVAC, cabin lights, sunroof. No contention today. Adding a second feature to any comfort actuator requires only an allow-list entry.
+
+**Key invariant**: a feature is only permitted to claim the priority the allow-list assigns to it for that signal (Lighting/Horn/Comfort) or be registered in the DoorLock allow-list. Unauthorized requests are rejected silently. This is validated both in the application arbiter and independently in the Safety Monitor.
 
 ```rust
 // src/arbiter.rs  (abbreviated)
@@ -339,39 +372,55 @@ pub struct ActuatorRequest {
     pub feature_id: FeatureId,
 }
 
-pub struct SignalArbiter<B: SignalBus> {
-    bus:      Arc<B>,
+pub struct AllowEntry {
+    pub feature_id: FeatureId,
+    pub signal:     VssPath,
+    pub priority:   Priority,
+}
+
+pub struct DomainArbiter {
+    pub name: &'static str,
     tx:       mpsc::Sender<ActuatorRequest>,
 }
 
-impl<B: SignalBus> SignalArbiter<B> {
-    pub fn new(bus: Arc<B>) -> (Self, mpsc::Receiver<ActuatorRequest>) { ... }
+impl DomainArbiter {
+    /// Create a new domain arbiter. Returns the handle and a future to spawn.
+    pub fn new<B: SignalBus>(
+        name: &'static str,
+        allow_list: Vec<AllowEntry>,
+        bus: Arc<B>,
+    ) -> (Self, impl Future<Output = ()>) { ... }
 
-    /// Feature state machines call this — fire and forget.
-    pub async fn request(&self, req: ActuatorRequest) {
-        self.tx.send(req).await.ok();
+    /// Feature business logic calls this — fire and forget.
+    pub async fn request(&self, req: ActuatorRequest) -> anyhow::Result<()> {
+        self.tx.send(req).await?;
+        Ok(())
     }
 }
 
-/// Arbiter resolution loop — runs as a tokio task.
-async fn arbiter_loop<B: SignalBus>(
-    bus:  Arc<B>,
-    mut rx: mpsc::Receiver<ActuatorRequest>,
-) {
-    // Per-signal map: signal path → current winning request
-    let mut winners: HashMap<VssPath, ActuatorRequest> = HashMap::new();
+// Factory functions for each domain:
+pub fn lighting_arbiter<B: SignalBus>(bus: Arc<B>)   -> (DomainArbiter, impl Future<Output = ()>);
+pub fn door_lock_arbiter<B: SignalBus>(bus: Arc<B>)  -> (DomainArbiter, impl Future<Output = ()>);
+pub fn horn_arbiter<B: SignalBus>(bus: Arc<B>)       -> (DomainArbiter, impl Future<Output = ()>);
+pub fn comfort_arbiter<B: SignalBus>(bus: Arc<B>)    -> (DomainArbiter, impl Future<Output = ()>);
+```
 
-    while let Some(req) = rx.recv().await {
-        let should_emit = match winners.get(req.signal) {
-            None => true,
-            Some(current) => req.priority >= current.priority,
-        };
-        if should_emit {
-            winners.insert(req.signal, req.clone());
-            bus.publish(req.signal, req.value).await.ok();
-        }
-    }
-}
+**Wiring in main.rs:**
+
+```rust
+let (lighting_arb, lighting_fut) = arbiter::lighting_arbiter(Arc::clone(&bus));
+let (door_lock_arb, door_lock_fut) = arbiter::door_lock_arbiter(Arc::clone(&bus));
+let (horn_arb, horn_fut) = arbiter::horn_arbiter(Arc::clone(&bus));
+let (comfort_arb, comfort_fut) = arbiter::comfort_arbiter(Arc::clone(&bus));
+
+tokio::spawn(lighting_fut);
+tokio::spawn(door_lock_fut);
+tokio::spawn(horn_fut);
+tokio::spawn(comfort_fut);
+
+// Feature modules receive Arc<DomainArbiter> for their domain:
+tokio::spawn(HazardFsm::new(Arc::clone(&lighting_arb), Arc::clone(&bus)).run());
+tokio::spawn(KeyfobPepsFsm::new(Arc::clone(&door_lock_arb), Arc::clone(&bus)).run());
 ```
 
 ---
@@ -422,16 +471,24 @@ impl<B: SignalBus> HazardFsm<B> {
 
 **Feature inventory**
 
-| FSM | Inputs (VSS subscriptions) | Outputs (Arbiter requests) |
-|-----|---------------------------|---------------------------|
-| `HazardFsm` | `Body.Switches.Hazard.IsEngaged` (overlay) | Both `DirectionIndicator.*.IsSignaling` @ prio 3 |
-| `TurnFsm` | `Body.Switches.TurnIndicator.Direction` (overlay) | `DirectionIndicator.{Left,Right}.IsSignaling` @ prio 2 |
-| `LockFeedback` | `Body.Doors.*.IsLocked` (state change) | Both indicators @ prio 1 (brief sequence) |
-| `PepsFsm` | `Body.PEPS.KeyPresent` (synthetic sensor) | `Body.Doors.*.IsLocked` @ prio 3 |
-| `LowBeamFsm` | `Body.Lights.LightSwitch` | `Body.Lights.Beam.Low.IsOn` @ prio 2 |
-| `HighBeamFsm` | `Body.Switches.HighBeam.IsEngaged` (overlay) | `Body.Lights.Beam.High.IsOn` @ prio 2 |
-| `DrlFsm` | `Vehicle.LowVoltageSystemState`, `Chassis.ParkingBrake.IsEngaged` (overlay) | `Body.Lights.Running.IsOn` @ prio 2 |
-| `AutoLock` | `Vehicle.Speed` | `Body.Doors.*.IsLocked` @ prio 2 |
+| Feature | Min ECU State | Inputs (VSS subscriptions) | Outputs (Arbiter requests) |
+|---------|---------------|---------------------------|---------------------------|
+| `HazardFsm` | Locally Awake | `Body.Switches.Hazard.IsEngaged` (overlay) | Both `DirectionIndicator.*.IsSignaling` @ prio 3 |
+| `TurnFsm` | Locally Awake | `Body.Switches.TurnIndicator.Direction` (overlay) | `DirectionIndicator.{Left,Right}.IsSignaling` @ prio 2 |
+| `LockFeedback` | Locally Awake | `Body.Doors.*.IsLocked` (state change) | Both indicators @ prio 3 (HIGH, overlay — self-releases after pattern) |
+| `KeyfobPeps` | Locally Awake | `Body.PEPS.KeyPresent` (synthetic sensor) | DoorLock arbiter: UNLOCK / LOCK |
+| `AutoLock` | Fully Awake | `Vehicle.Speed` | DoorLock arbiter: LOCK |
+| `DoorTrimButton` | Locally Awake | `Body.Switches.DoorTrim.*.LockButton` (overlay) | DoorLock arbiter: LOCK / UNLOCK |
+| `KeyfobRke` | Locally Awake | `Body.Switches.Keyfob.LockButton` (overlay) | DoorLock arbiter: LOCK / UNLOCK / DOUBLE_LOCK |
+| `PhoneApp` | Locally Awake | `Body.Connectivity.RemoteLock` (overlay, cloud) | DoorLock arbiter: LOCK / UNLOCK |
+| `PhoneBle` | Locally Awake | `Body.Connectivity.BleLock` (overlay, BLE digital key) | DoorLock arbiter: LOCK / UNLOCK |
+| `NfcCard` | Locally Awake | `Body.Connectivity.NfcCardPresent` (overlay, physical NFC card) | DoorLock arbiter: LOCK / UNLOCK |
+| `NfcPhone` | Locally Awake | `Body.Connectivity.NfcPhonePresent` (overlay, NFC key on phone) | DoorLock arbiter: LOCK / UNLOCK |
+| `AutoRelock` | Locally Awake | `Body.Doors.*.IsLocked`, `Body.Doors.*.IsOpen`, `Vehicle.Safety.CrashDetected`, `Vehicle.LowVoltageSystemState` | DoorLock arbiter: LOCK (45s timeout, crash-disables until power cycle) |
+| `CrashUnlock` | Locally Awake | `Vehicle.Safety.CrashDetected` (M7 state update) | DoorLock arbiter: UNLOCK (protected) |
+| `LowBeamFsm` | Locally Awake | `Body.Lights.LightSwitch` | `Body.Lights.Beam.Low.IsOn` @ prio 2 |
+| `HighBeamFsm` | Locally Awake | `Body.Switches.HighBeam.IsEngaged` (overlay) | `Body.Lights.Beam.High.IsOn` @ prio 2 |
+| `DrlFsm` | Fully Awake | `Vehicle.LowVoltageSystemState`, `Chassis.ParkingBrake.IsEngaged` (overlay) | `Body.Lights.Running.IsOn` @ prio 2 |
 
 **Input/output separation principle**: FSMs subscribe to *physical switch/stalk inputs* (sensor overlay signals), not to the actuator outputs they control. This prevents feedback loops and correctly models the hardware: a hazard switch is physically separate from the indicator lamps it controls. Overlay signals that are not in standard VSS v4.0 are defined in `overlay/Body/SwitchInputs.vspec`.
 
@@ -477,7 +534,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(HazardFsm::new(Arc::clone(&arbiter), Arc::clone(&bus)).run());
     tokio::spawn(TurnFsm::new(Arc::clone(&arbiter), Arc::clone(&bus)).run());
     tokio::spawn(LockFeedback::new(Arc::clone(&arbiter), Arc::clone(&bus)).run());
-    tokio::spawn(PepsFsm::new(Arc::clone(&arbiter), Arc::clone(&bus)).run());
+    tokio::spawn(KeyfobPepsFsm::new(Arc::clone(&arbiter), Arc::clone(&bus)).run());
     // ... rest of features
 
     // WebSocket bridge toward L6 HMI
@@ -549,13 +606,20 @@ Runs as an AUTOSAR Classic partition on M7 cores. ASIL-B certified per ISO 26262
 - Boot sequence reads NVM, validates CRC; if CRC fails, applies safe-state defaults and logs DEM event
 - After M7 restores from NVM on boot, it pushes all signals as `STATE_UPDATE` to A53 to re-populate kuksa.val
 
-**PEPS (Passive Entry/Passive Start) path**
-- LF antenna interrupt → M7 GPIO ISR (< 1 ms)
-- M7 initiates key challenge/response over LF (NXP NCJ29D5 protocol)
-- Key authentication complete → M7 drives lock actuator via LLCE/LIN directly
-- M7 pushes `STATE_UPDATE` for `Body.Doors.*.IsLocked` and `Body.Doors.*.LatchStatus`
-- A53 is notified *after* unlock; not in the critical path
-- Total M7-side latency: < 80 ms (well within 200 ms budget)
+**PEPS (Passive Entry/Passive Start) wake-up chain**
+
+The PEPS unlock path executes entirely on M7 hardware while the A53 may still be asleep:
+
+1. **Capacitive touch sensor** on door handle detects hand presence (always powered, µA draw — the only always-on component)
+2. Capacitive sensor interrupt **wakes the M7** from sleep
+3. M7 drives **LF antennas** in door handles (transmits challenge, a few seconds window)
+4. Keyfob receives LF, **replies on UHF RF** (315/433 MHz)
+5. M7 validates RF response (**crypto challenge-response**, NXP NCJ29D5 protocol)
+6. M7 drives **lock actuators** directly via LLCE/LIN
+7. M7 pushes `STATE_UPDATE` for `Body.Doors.*.IsLocked` and `Body.Doors.*.LatchStatus`
+8. M7 wakes A53, A53 receives `Body.PEPS.KeyPresent = TRUE` (post-facto notification)
+
+The A53 is notified *after* the unlock; it is **not in the critical path**. Steps 1–6 complete in < 80 ms. The A53 may still be booting when the doors are already unlocked. The KeyfobPeps feature on A53 submits an arbiter request only to keep application-layer state consistent.
 
 ---
 
@@ -698,11 +762,83 @@ Chassis.ParkingBrake.IsEngaged:
 
 ### Synthetic Signals
 
-**`Body.PEPS.KeyPresent`** — Boolean sensor signal injected by the Rust bridge when the Safety Monitor reports a successful LF key authentication. PepsFsm subscribes to this as a stand-in for the raw LF antenna interrupt (which is M7-internal).
+**`Body.PEPS.KeyPresent`** — Boolean sensor signal injected by the vss-bridge when the Safety Monitor reports a successful keyfob proximity authentication. The underlying hardware chain is: capacitive touch sensor on door handle → M7 wakes → M7 transmits LF challenge → keyfob replies on UHF RF → M7 validates crypto response. By the time this signal reaches the A53, the M7 has already driven the lock motors. KeyfobPeps subscribes to this signal to keep application-layer state consistent.
 
 ### Power Mode Signals
 
-FSMs that depend on vehicle power state (DrlFsm, AutoLock) subscribe to **`Vehicle.LowVoltageSystemState`** (standard VSS v4.0) rather than `Vehicle.Powertrain.Engine.IsRunning`. This is powertrain-agnostic — works for ICE, HEV, and BEV platforms. Values: `undefined`, `lock`, `off`, `acc`, `on`, `start`. **`Vehicle.Powertrain.Type`** (string: `COMBUSTION`, `HYBRID`, `ELECTRIC`) is available for features that need powertrain-specific behaviour.
+Features that depend on vehicle power state subscribe to **`Vehicle.LowVoltageSystemState`** (standard VSS v4.0) rather than `Vehicle.Powertrain.Engine.IsRunning`. This is powertrain-agnostic — works for ICE, HEV, and BEV platforms. Values: `undefined`, `lock`, `off`, `acc`, `on`, `start` (lowest → highest; `lock` is steering column lock, an anti-theft state below `off`). **`Vehicle.Powertrain.Type`** (string: `COMBUSTION`, `HYBRID`, `ELECTRIC`) is available for features that need powertrain-specific behaviour.
+
+### ECU Sleep/Wake States
+
+The body controller ECU has its own power management states, independent of the vehicle ignition position. Feature lifecycle is tied to these ECU states, not directly to the ignition key.
+
+| ECU State | M7 | A53 | CAN/LIN | Wake Source | Typical Ignition |
+|-----------|-----|------|---------|-------------|-----------------|
+| **Deep Sleep** | Not polling; waiting for interrupt | Off | Off | Hardware interrupts only: capacitive touch on door handles, crash sensor, RKE RF receiver (always-on, µA draw) | Long-term parking (days/weeks) |
+| **Sleep** | Periodic polling (low duty cycle) | Off | Off | Timer tick, battery voltage threshold, tilt/motion sensor (theft detection) | Parked overnight |
+| **Low Power (M7 only)** | Fully active | Off | Active | M7 already awake; processes switch inputs, PEPS, crash signals directly over CAN/LIN. **M7 can wake A53** if it determines application-layer features are needed (see below). | Parked (OFF), driver operating lights/locks without ignition |
+| **Locally Awake, Network Off** | Fully active | Active | Local body bus active; vehicle-wide backbone (powertrain, chassis CAN FD) in bus-sleep | A53 boot complete (ignition or M7-initiated wake); no cross-domain signals yet | ACC, M7-initiated A53 wake, or early ON before network management wakes all domains |
+| **Fully Awake** | Fully active | Active | All buses active (body + powertrain + chassis) | Network management wake-up complete | ON / START |
+
+**State transitions:**
+
+```
+Deep Sleep → (capacitive touch / RKE RF / crash interrupt) → Low Power (M7 only)
+Sleep → (polling timer / tilt sensor) → Low Power (M7 only)
+
+Low Power → (ignition ACC or ON) → Locally Awake → (network mgmt) → Fully Awake
+Low Power → (M7-initiated A53 wake)  → Locally Awake
+                                        ↑ M7 wakes A53 when it determines
+                                          application-layer features are needed
+                                          (PEPS auth, RKE event, switch input)
+
+Locally Awake → (network management completes) → Fully Awake
+Locally Awake → (no ignition, A53 work done, shutdown timer) → Low Power
+
+Fully Awake → (ignition OFF, shutdown timer expires) → Low Power → Sleep → Deep Sleep
+```
+
+**M7-initiated A53 wake**: The M7 does not need to wait for an ignition change to wake the A53. After handling a critical-path operation in Low Power state (PEPS unlock, RKE lock/unlock, light switch change), the M7 can decide that application-layer features are needed and boot the A53. Examples:
+- **PEPS unlock** → M7 wakes A53 so AutoRelock timer starts, LockFeedback blink fires, state syncs to kuksa.val
+- **RKE lock/unlock** → M7 wakes A53 for LockFeedback blink and state sync
+- **Light switch** → M7 wakes A53 for state sync and HMI update (if HMI is available)
+
+In these cases the ECU enters **Locally Awake** (A53 up, local body bus active, but vehicle-wide backbone may still be in bus-sleep). If no ignition event follows and the A53 completes its work, a shutdown timer returns the ECU to Low Power. If the driver subsequently turns the ignition to ON, network management brings the ECU to Fully Awake.
+
+**Feature lifecycle by ECU state:**
+
+| ECU State | Features Active on A53 | M7 / Body ECU Handles Directly |
+|-----------|----------------------|-------------------------------|
+| **Deep Sleep** | None | Capacitive touch wake only; no active processing |
+| **Sleep** | None | Battery monitoring, tilt/motion polling |
+| **Low Power (M7 only)** | None | PEPS (full wake-up chain), CrashUnlock, light switch → lamp drive, hazard switch → indicator drive, RKE lock/unlock, all via CAN/LIN. Body ECU is the primary controller in this state. M7 wakes A53 when application-layer follow-up is needed. |
+| **Locally Awake** | All features **except** AutoLock and DRL | Door lock features (KeyfobPeps, KeyfobRke, DoorTrimButton, AutoRelock, PhoneApp, PhoneBle, NfcCard, NfcPhone, CrashUnlock), lighting (LowBeam, HighBeam, Hazard, Turn, LockFeedback). No cross-domain signals available (Vehicle.Speed not yet on bus). Reached via ignition **or** M7-initiated wake. |
+| **Fully Awake** | All features | All features + cross-domain signal coordination |
+
+**Key design principles:**
+
+1. **M7 handles all critical-path operations** while the A53 sleeps. In Low Power state, the body ECU drives lamps and locks from hardwired switch inputs over CAN/LIN — same architectural pattern as PEPS. The A53 feature layer is never in the critical path.
+
+2. **M7-initiated A53 wake**: The M7 can wake the A53 from Low Power independently of ignition state changes. After completing a critical-path operation (PEPS unlock, RKE event, light switch), the M7 determines whether application-layer follow-up is needed (AutoRelock timer, LockFeedback blink, state sync) and boots the A53 if so. This means A53 features run even when the ignition is OFF, as long as there is a reason for them to be active.
+
+3. **A53 state sync on boot**: When the A53 transitions from off to Locally Awake (whether by ignition or M7-initiated wake), the Safety Monitor pushes all current signal values as `STATE_UPDATE` via RPmsg to re-populate the signal bus and kuksa.val datastore. Features start with accurate state, even if the M7 has been handling requests while A53 was asleep.
+
+4. **Features self-gate on power state**: Features that require cross-domain signals (AutoLock needs `Vehicle.Speed`, DRL needs engine-running confirmation) subscribe to `Vehicle.LowVoltageSystemState` and remain idle until the ECU reaches Fully Awake. They do not fail — they simply wait.
+
+5. **Sleep inhibitors**: Features and subsystems that need the A53 to stay awake hold a **sleep inhibit claim**. The ECU cannot transition from Locally Awake to Low Power while any claim is active. Each claim has an associated maximum hold time to prevent a stuck feature from draining the 12V battery indefinitely.
+
+   | Sleep Inhibitor | Held By | Typical Duration | Max Hold |
+   |----------------|---------|-----------------|----------|
+   | `AutoRelockTimer` | AutoRelock feature | Up to 45 s (relock timeout) | 60 s |
+   | `LockFeedbackBlink` | LockFeedback feature | ~2 s (blink pattern) | 5 s |
+   | `DoorLockInFlight` | DoorLock arbiter | ~300 ms (motor + ACK) | 2 s |
+   | `OtaInProgress` | OTA subsystem | Minutes (download + apply) | 30 min |
+   | `StateFlush` | vss-bridge | < 1 s (kuksa.val sync) | 5 s |
+   | `ShutdownGrace` | Power manager | Fixed post-ignition-off grace period | 30 s |
+
+   **Shutdown sequence**: When ignition turns OFF (or M7-initiated wake work triggers shutdown), the power manager starts `ShutdownGrace`. Features that still have work in progress hold their own inhibitors. The A53 powers down only when **all** inhibitors are released. If any inhibitor exceeds its max hold time, the power manager force-releases it, logs a DEM event, and proceeds with shutdown.
+
+   **M7 enforcement**: The M7 controls A53 power and is the ultimate authority. If the A53 fails to shut down within a platform-configured hard timeout (e.g., 5 minutes), the M7 force-kills A53 power to protect the 12V battery. This is a safety backstop, not a normal code path.
 
 ---
 
@@ -734,20 +870,22 @@ A53 cluster (Cortex-A53 ×4)
 
 ## 13. PEPS Timing Budget
 
-Passive Entry target: **< 200 ms** from key LF wakeup to lock actuator energised.
+Passive Entry target: **< 200 ms** from driver hand on door handle to lock actuator energised.
 
 | Step | Owner | Time |
 |------|-------|------|
-| LF antenna wakeup → M7 GPIO ISR | M7 hardware | < 1 ms |
-| Key challenge/response (LF protocol) | M7 AUTOSAR / NXP NCJ29D5 | ~40 ms |
+| Capacitive touch detection → M7 wake | Door handle sensor + M7 | < 2 ms |
+| M7 transmits LF challenge via door handle antennas | M7 AUTOSAR / NXP NCJ29D5 | ~15 ms |
+| Keyfob receives LF, replies on UHF RF (315/433 MHz) | Keyfob | ~20 ms |
+| M7 validates crypto challenge-response | M7 AUTOSAR / NXP NCJ29D5 | ~5 ms |
 | Lock actuator command via LLCE/LIN | M7 → LLCE → LIN | ~10 ms |
 | LIN actuator response / confirmation | Body ECU → LLCE → M7 | ~10 ms |
-| **Total M7-side latency** | | **~61 ms** |
+| **Total M7-side latency** | | **~62 ms** |
 | NVM write (ASIL-B state commit) | M7 Safety Monitor | ~5 ms |
 | STATE_UPDATE push to A53 (notification) | RPmsg | ~0.2 ms |
 | Kuksa.val signal update (HMI indication) | A53 gRPC | ~2 ms |
 
-The A53/AAOS/Kuksa stack is entirely **out of the critical path**. The 200 ms budget is met with ~139 ms of margin. The A53 is notified after the unlock event for state sync and HMI indication only.
+The A53/AAOS/Kuksa stack is entirely **out of the critical path**. The 200 ms budget is met with ~138 ms of margin. The A53 is notified after the unlock event for state sync and HMI indication only. The capacitive touch sensor is the only always-on component (µA draw); the M7, LF antennas, and RF receiver are all dormant until the touch event.
 
 ---
 
@@ -836,32 +974,61 @@ Implement:
 
 ---
 
-### Prompt 2 — Signal Arbiter
+### Prompt 2 — Domain Arbiters
 
 ```
-You are implementing the Signal Arbiter for a Rust automotive body controller.
+You are implementing domain-based Signal Arbiters for a Rust automotive body controller.
 
 Context (from architecture doc):
-- The arbiter sits between feature business logic and the SignalBus
+- Two arbiter patterns:
+  1. DomainArbiter (Lighting, Horn, Comfort) — instant per-signal priority resolution
+  2. DoorLockArbiter — serialized one-deep command queue with ACK handshake
+
+DomainArbiter details:
+- Each `DomainArbiter` has a static allow-list of (FeatureId, VssPath, Priority) tuples
 - Features publish `ActuatorRequest` structs with { signal, value, priority, feature_id }
-- The arbiter holds a per-signal "current winner" map
+- The arbiter validates against the allow-list, then holds a per-signal "current winner" map
 - A new request replaces the winner if its priority >= current winner's priority
-- The arbiter is generic over `B: SignalBus`
+- Requests not in the allow-list are rejected silently (logged at WARN)
 - All inter-task communication uses `tokio::sync::mpsc`
+- Factory functions create each domain with its hardcoded allow-list
+
+DoorLockArbiter details:
+- Serialized queue: active operation (~300ms motor) + one pending slot
+- Features submit `DoorLockRequest { command: LockCommand, feature_id }` — NOT ActuatorRequest
+- LockCommand enum: Unlock, Lock, DoubleLock
+- ACK from Classic AUTOSAR Locking SWC (via `LockAck` channel) promotes pending to active
+- Pending slot: latest request replaces previous (except CrashUnlock)
+- CrashUnlock: cannot be replaced in queue; triggers 10s lockout rejecting all new requests
+- NVM persistence (last 5 requestors) is AUTOSAR SWC responsibility, not Rust
 
 Priority enum: Low=1, Medium=2, High=3
-FeatureId enum: Peps=0x01, Hazard=0x02, TurnIndicator=0x03, LowBeam=0x04,
-  HighBeam=0x05, Drl=0x06, AutoLock=0x07, LockFeedback=0x08, Welcome=0x09
+FeatureId enum: KeyfobPeps=0x01, Hazard=0x02, TurnIndicator=0x03, LowBeam=0x04,
+  HighBeam=0x05, Drl=0x06, AutoLock=0x07, LockFeedback=0x08, Welcome=0x09,
+  DoorTrimButton=0x0A, KeyfobRke=0x0B, PhoneApp=0x0C, CrashUnlock=0x0D,
+  PhoneBle=0x0E, NfcCard=0x0F, NfcPhone=0x10, AutoRelock=0x11
+
+Lighting allow-list: Hazard→DirectionIndicator.*@HIGH, Turn→DirectionIndicator.*@MEDIUM,
+  LockFeedback→DirectionIndicator.*@HIGH(overlay), Hazard→Hazard.IsSignaling@HIGH,
+  LowBeam→Beam.Low@MEDIUM, HighBeam→Beam.High@MEDIUM, Drl→Running@MEDIUM
+DoorLock allow-list: KeyfobPeps, KeyfobRke, AutoLock, AutoRelock, DoorTrimButton, PhoneApp, PhoneBle, NfcCard, NfcPhone, CrashUnlock
+Horn/Comfort: empty allow-lists (pass-through with validation, ready for future features)
 
 Implement:
-1. `ActuatorRequest` struct
-2. `SignalArbiter<B: SignalBus>` struct with a `request()` method
-3. `arbiter_loop()` async function that runs as a tokio task
-4. Unit tests using MockBus covering:
+1. `ActuatorRequest` and `AllowEntry` structs (for DomainArbiter)
+2. `DomainArbiter` struct with `new()` returning (handle, future) and `request()` method
+3. `arbiter_loop()` async function with allow-list validation and priority resolution
+4. `DoorLockArbiter` struct with one-deep queue, `DoorLockRequest`, `LockAck` channel
+5. `door_lock_loop()` async function with queue management and crash-unlock protection
+4. Factory functions: lighting_arbiter, door_lock_arbiter, horn_arbiter, comfort_arbiter
+5. Unit tests using MockBus covering:
    - High priority wins over low priority for the same signal
+   - Low priority suppressed by existing high priority winner
    - Two different signals do not interfere
    - Priority tie: latest request wins
-   - Releasing a high-priority hold (setting to false) allows lower priority to retake
+   - Request rejected if feature/signal/priority not in allow-list
+   - Request rejected if feature claims wrong priority
+   - Cross-domain: door lock arbiter PEPS wins over AutoLock
 ```
 
 ---
@@ -904,23 +1071,42 @@ Context:
 - LED blink waveform is NOT the FSM's responsibility — it sets boolean intent only
 - IMPORTANT: FSMs subscribe to physical switch/stalk INPUTS (overlay sensors),
   not to the actuator outputs they control. This prevents feedback loops.
-- Priority assignments (hardcoded, matches Safety Monitor's table):
+- Lighting domain priority assignments (hardcoded, matches Safety Monitor's table):
     HazardFsm   input: Body.Switches.Hazard.IsEngaged        → DirectionIndicator.*.IsSignaling    @ HIGH (3)
     TurnFsm     input: Body.Switches.TurnIndicator.Direction  → DirectionIndicator.{Left,Right}     @ MEDIUM (2)
-    LockFeedback input: Body.Doors.*.IsLocked (state change)  → DirectionIndicator.*.IsSignaling    @ LOW (1)
-    PepsFsm     input: Body.PEPS.KeyPresent (synthetic)       → Doors.*.IsLocked                    @ HIGH (3)
-    AutoLock    input: Vehicle.Speed                           → Doors.*.IsLocked                    @ MEDIUM (2)
+    LockFeedback input: Body.Doors.*.IsLocked (state change)  → DirectionIndicator.*.IsSignaling    @ HIGH (3, overlay — self-releases)
     LowBeamFsm input: Body.Lights.LightSwitch                 → Lights.Beam.Low.IsOn                @ MEDIUM (2)
     HighBeamFsm input: Body.Switches.HighBeam.IsEngaged        → Lights.Beam.High.IsOn               @ MEDIUM (2)
     DrlFsm      input: Vehicle.LowVoltageSystemState,
                        Chassis.ParkingBrake.IsEngaged          → Lights.Running.IsOn                 @ MEDIUM (2)
 
-Implement all 8 FSMs, each in its own file under src/features/.
-For LockFeedback: on any IsLocked state change event, publish a HIGH request to both indicators
-for 500 ms, then release (publish LOW priority false). Use tokio::time::sleep for the duration.
-For PepsFsm: subscribe to a synthetic signal `Body.PEPS.KeyPresent` (bool) as a stand-in for
-the LF antenna interrupt; unlock all four doors when true.
-Include unit tests using MockBus for each FSM covering the primary state transitions.
+- DoorLock domain (serialized queue, NOT priority-based):
+    KeyfobPepsFsm  input: Body.PEPS.KeyPresent (synthetic)              → DoorLockArbiter: UNLOCK / LOCK
+    KeyfobRke      input: Body.Switches.Keyfob.LockButton (overlay)    → DoorLockArbiter: LOCK / UNLOCK / DOUBLE_LOCK
+    AutoLock       input: Vehicle.Speed                                 → DoorLockArbiter: LOCK
+    DoorTrimButton input: Body.Switches.DoorTrim.*.LockButton (overlay) → DoorLockArbiter: LOCK / UNLOCK
+    PhoneApp       input: Body.Connectivity.RemoteLock (overlay, cloud) → DoorLockArbiter: LOCK / UNLOCK
+    PhoneBle       input: Body.Connectivity.BleLock (overlay, BLE key)  → DoorLockArbiter: LOCK / UNLOCK
+    NfcCard        input: Body.Connectivity.NfcCardPresent (overlay)    → DoorLockArbiter: LOCK / UNLOCK
+    NfcPhone       input: Body.Connectivity.NfcPhonePresent (overlay)   → DoorLockArbiter: LOCK / UNLOCK
+    AutoRelock     input: Body.Doors.*.IsLocked + *.IsOpen,              → DoorLockArbiter: LOCK (45s timer)
+                          Vehicle.Safety.CrashDetected,                   crash → DISABLED until power cycle
+                          Vehicle.LowVoltageSystemState                   OFF → ON re-enables after crash
+    CrashUnlock    input: Vehicle.Safety.CrashDetected (M7 state update) → DoorLockArbiter: UNLOCK (protected)
+
+  DoorLock arbiter rules:
+  - One-deep queue: active operation (~300 ms motor) + one pending
+  - Pending replaced by newer request (latest wins), EXCEPT CrashUnlock
+  - CrashUnlock in queue cannot be replaced; triggers 10s lockout after dispatch
+  - ACK from Classic AUTOSAR Locking SWC promotes pending to active
+  - NVM diagnostic persistence (last 5) is AUTOSAR SWC's responsibility
+
+Implement all features, each in its own file under src/features/.
+For LockFeedback: on any IsLocked state change event, play a timed pattern on both indicators
+at priority HIGH (overlay): lock = one 600ms flash, unlock = two 150ms flashes (100ms gap).
+Then release (publish HIGH false). Use tokio::time::sleep for durations.
+For door lock features: submit DoorLockRequest to the DoorLockArbiter (not ActuatorRequest).
+Include unit tests using MockBus for each feature covering the primary state transitions.
 ```
 
 ---

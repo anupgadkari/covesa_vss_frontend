@@ -108,11 +108,31 @@ const INIT_STATE={
   'Body.Switches.TurnIndicator.Direction':'OFF',
   'Body.Switches.HighBeam.IsEngaged':false,
   'Chassis.ParkingBrake.IsEngaged':true,
-  // Doors
+  // PEPS (Passive Entry / Passive Start)
+  'Body.PEPS.KeyPresent':false,
+  // Keyfob RKE (Remote Keyless Entry — manual button press)
+  'Body.Switches.Keyfob.LockButton':'IDLE',
+  // Door Trim Panel Buttons (per-door)
+  'Body.Switches.DoorTrim.Row1.Left.LockButton':'IDLE',
+  'Body.Switches.DoorTrim.Row1.Right.LockButton':'IDLE',
+  'Body.Switches.DoorTrim.Row2.Left.LockButton':'IDLE',
+  'Body.Switches.DoorTrim.Row2.Right.LockButton':'IDLE',
+  // Connectivity — Remote Lock Sources
+  'Body.Connectivity.RemoteLock':'IDLE',
+  'Body.Connectivity.BleLock':'IDLE',
+  'Body.Connectivity.NfcCardPresent':false,
+  'Body.Connectivity.NfcPhonePresent':false,
+  // Safety
+  'Vehicle.Safety.CrashDetected':false,
+  // Doors — open, locked, latch state (all 4 doors)
   'Body.Doors.Row1.Left.IsOpen':false,
   'Body.Doors.Row1.Right.IsOpen':false,
   'Body.Doors.Row2.Left.IsOpen':false,
   'Body.Doors.Row2.Right.IsOpen':false,
+  'Body.Doors.Row1.Left.IsLocked':true,
+  'Body.Doors.Row1.Right.IsLocked':true,
+  'Body.Doors.Row2.Left.IsLocked':true,
+  'Body.Doors.Row2.Right.IsLocked':true,
   'Body.Doors.Row1.Left.LatchStatus':'FULL_LATCHED',
   'Body.Doors.Row1.Right.LatchStatus':'FULL_LATCHED',
   'Body.Doors.Row2.Left.LatchStatus':'FULL_LATCHED',
@@ -297,6 +317,119 @@ function App(){
           </div>
         </div>
 
+        {/* DOOR LOCK INPUTS */}
+        <div className="section">
+          <div className="section-title">Door Lock Sources</div>
+          <div className="section-info">Overlay signals for all lock/unlock request sources. These feed the DoorLock arbiter via their respective feature modules. Each source is tracked independently in NVM diagnostics.</div>
+
+          {/* PEPS */}
+          <div className="control">
+            <div className="control-label">PEPS Key Present</div>
+            <div className="section-info" style={{flex:1,margin:0,fontSize:'8px'}}>Capacitive touch chain</div>
+            <div className="tog"
+              onClick={()=>set('Body.PEPS.KeyPresent',!state['Body.PEPS.KeyPresent'])}
+              style={state['Body.PEPS.KeyPresent']?{borderColor:'#10D98A',background:'rgba(16,217,138,.12)'}:{}}>
+              <div className="knob" style={state['Body.PEPS.KeyPresent']?{transform:'translateX(20px)',background:'#10D98A'}:{}}/>
+            </div>
+          </div>
+
+          {/* Keyfob RKE */}
+          <div className="control">
+            <div className="control-label">Keyfob RKE</div>
+            <div className="button-group">
+              {['IDLE','LOCK','UNLOCK','DOUBLE_LOCK'].map(m=>(
+                <button key={m} className={`btn ${state['Body.Switches.Keyfob.LockButton']===m?'active':''}`}
+                  onClick={()=>set('Body.Switches.Keyfob.LockButton',m)}>
+                  {m}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Door Trim Buttons */}
+          {[
+            {key:'Body.Switches.DoorTrim.Row1.Left.LockButton',name:'Trim FL'},
+            {key:'Body.Switches.DoorTrim.Row1.Right.LockButton',name:'Trim FR'},
+            {key:'Body.Switches.DoorTrim.Row2.Left.LockButton',name:'Trim RL'},
+            {key:'Body.Switches.DoorTrim.Row2.Right.LockButton',name:'Trim RR'},
+          ].map(d=>(
+            <div key={d.key} className="control">
+              <div className="control-label">{d.name}</div>
+              <div className="button-group">
+                {['IDLE','LOCK','UNLOCK'].map(m=>(
+                  <button key={m} className={`btn ${state[d.key]===m?'active':''}`}
+                    onClick={()=>set(d.key,m)}>
+                    {m}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {/* Phone App Remote Lock */}
+          <div className="control">
+            <div className="control-label">Phone App</div>
+            <div className="button-group">
+              {['IDLE','LOCK','UNLOCK'].map(m=>(
+                <button key={m} className={`btn ${state['Body.Connectivity.RemoteLock']===m?'active':''}`}
+                  onClick={()=>set('Body.Connectivity.RemoteLock',m)}>
+                  {m}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* BLE Digital Key */}
+          <div className="control">
+            <div className="control-label">BLE Key</div>
+            <div className="button-group">
+              {['IDLE','LOCK','UNLOCK'].map(m=>(
+                <button key={m} className={`btn ${state['Body.Connectivity.BleLock']===m?'active':''}`}
+                  onClick={()=>set('Body.Connectivity.BleLock',m)}>
+                  {m}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* NFC Card */}
+          <div className="control">
+            <div className="control-label">NFC Card</div>
+            <div style={{flex:1}}/>
+            <div className="tog"
+              onClick={()=>set('Body.Connectivity.NfcCardPresent',!state['Body.Connectivity.NfcCardPresent'])}
+              style={state['Body.Connectivity.NfcCardPresent']?{borderColor:'#9B6DFF',background:'rgba(155,109,255,.12)'}:{}}>
+              <div className="knob" style={state['Body.Connectivity.NfcCardPresent']?{transform:'translateX(20px)',background:'#9B6DFF'}:{}}/>
+            </div>
+          </div>
+
+          {/* NFC Phone */}
+          <div className="control">
+            <div className="control-label">NFC Phone</div>
+            <div style={{flex:1}}/>
+            <div className="tog"
+              onClick={()=>set('Body.Connectivity.NfcPhonePresent',!state['Body.Connectivity.NfcPhonePresent'])}
+              style={state['Body.Connectivity.NfcPhonePresent']?{borderColor:'#9B6DFF',background:'rgba(155,109,255,.12)'}:{}}>
+              <div className="knob" style={state['Body.Connectivity.NfcPhonePresent']?{transform:'translateX(20px)',background:'#9B6DFF'}:{}}/>
+            </div>
+          </div>
+        </div>
+
+        {/* SAFETY */}
+        <div className="section">
+          <div className="section-title">Safety</div>
+          <div className="section-info">Crash detection signal — triggers CrashUnlock (immediate protected unlock) and disables AutoRelock until power cycle.</div>
+          <div className="control">
+            <div className="control-label">Crash Detected</div>
+            <div style={{flex:1}}/>
+            <div className="tog"
+              onClick={()=>set('Vehicle.Safety.CrashDetected',!state['Vehicle.Safety.CrashDetected'])}
+              style={state['Vehicle.Safety.CrashDetected']?{borderColor:'#F04040',background:'rgba(240,64,64,.12)'}:{}}>
+              <div className="knob" style={state['Vehicle.Safety.CrashDetected']?{transform:'translateX(20px)',background:'#F04040'}:{}}/>
+            </div>
+          </div>
+        </div>
+
         {/* DOORS */}
         <div className="section">
           <div className="section-title">Doors</div>
@@ -314,6 +447,15 @@ function App(){
                   onClick={()=>set(`${d.key}.IsOpen`,!state[`${d.key}.IsOpen`])}
                   style={state[`${d.key}.IsOpen`]?{borderColor:'#10D98A',background:'rgba(16,217,138,.12)'}:{}}>
                   <div className="knob" style={state[`${d.key}.IsOpen`]?{transform:'translateX(20px)',background:'#10D98A'}:{}}/>
+                </div>
+              </div>
+              <div className="control">
+                <div className="control-label">{d.name} Locked</div>
+                <div style={{flex:1}}/>
+                <div className="tog"
+                  onClick={()=>set(`${d.key}.IsLocked`,!state[`${d.key}.IsLocked`])}
+                  style={state[`${d.key}.IsLocked`]?{borderColor:'#F59E0B',background:'rgba(245,158,11,.15)'}:{}}>
+                  <div className="knob" style={state[`${d.key}.IsLocked`]?{transform:'translateX(20px)',background:'#F59E0B'}:{}}/>
                 </div>
               </div>
               <div className="control" style={{marginBottom:'12px'}}>
