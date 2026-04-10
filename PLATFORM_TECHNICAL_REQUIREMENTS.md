@@ -230,6 +230,109 @@ After a 0x2E write, M7 pushes the updated value to A53 via a `CONFIG_UPDATE` IPC
 - Routes safety-relevant `setValues()` calls through the Rust bridge → arbiter → RPmsg → Safety Monitor
 - CarService and VHAL are permanently QM — they cannot issue ASIL-B commands directly
 
+#### 3.2.3 SOVD Gateway (Phase 2)
+
+**Standard**: ASAM SOVD V1.0.0 (2023) — Service-Oriented Vehicle Diagnostics. Developed by ASAM with AUTOSAR Adaptive input.
+
+**What it is**: An HTTP/REST gateway running on the A53 that exposes vehicle diagnostics as a standard OpenAPI interface. Diagnostic tools, cloud backends, and mobile apps access vehicle data through REST calls with JSON payloads instead of proprietary UDS tooling.
+
+**Why it matters for this platform**:
+- OEMs evaluating HPC-based body controllers in 2026+ will expect SOVD support. BMW and VW Group are early adopters; it is becoming a procurement checkbox.
+- Our architecture is exactly what SOVD was designed for: Linux HPC (A53) + Classic AUTOSAR MCU (M7). The SOVD Gateway bridges the two worlds.
+- Cloud diagnostics: same REST API works in-workshop (Ethernet) and remote (cellular). OEM cloud can read DTCs, health data, and trigger guided troubleshooting without a proprietary protocol.
+
+**Architecture**:
+
+```
+                    ┌─────────────────────────────────────────┐
+                    │         External Clients                 │
+                    │  Workshop tool · OEM cloud · Tablet app  │
+                    └──────────────┬──────────────────────────┘
+                                   │ HTTP/REST (JSON)
+                    ┌──────────────▼──────────────────────────┐
+                    │      SOVD Gateway (A53 container)        │
+                    │  OpenAPI server · ASAM SOVD V1.0.0       │
+                    │                                          │
+                    │  ┌────────────────┐  ┌────────────────┐  │
+                    │  │ Native SOVD    │  │ Classic Diag   │  │
+                    │  │ endpoints      │  │ Proxy          │  │
+                    │  │ (HPC services) │  │ (SOVD→UDS)     │  │
+                    │  └───────┬────────┘  └───────┬────────┘  │
+                    └──────────┼────────────────────┼──────────┘
+                               │                    │
+              ┌────────────────▼──┐    ┌────────────▼──────────┐
+              │  vss-bridge       │    │  M7 UDS Server         │
+              │  kuksa.val        │    │  (ISO 14229)           │
+              │  Container health │    │  0x22, 0x2E, 0x19, etc│
+              │  OTA status       │    │  NVM-backed DIDs       │
+              └───────────────────┘    └────────────────────────┘
+```
+
+The SOVD Gateway has two internal paths:
+
+1. **Native SOVD endpoints** — for HPC-resident services that don't exist on the M7:
+   - Container health and restart status
+   - OTA update status and history
+   - kuksa.val signal snapshot (current values of all VSS signals)
+   - Feature enable/disable status from the 4-tier config system
+   - Application-layer logs and diagnostics
+
+2. **Classic Diagnostic Proxy** (SOVD-to-UDS translation) — for M7-hosted diagnostics:
+   - DTC read/clear → translated to UDS 0x19 / 0x14 over DoIP or RPmsg
+   - Dealer config read/write → translated to UDS 0x22 / 0x2E with security access (0x27)
+   - Calibration reads → translated to UDS 0x22 for Tier 2/3/4 parameters
+   - ECU identification → translated to UDS 0x22 (F1xx DIDs)
+
+**SOVD REST API examples** (illustrative, based on ASAM SOVD V1.0.0 patterns):
+
+```
+GET  /sovd/v1/components
+     → lists all diagnosable components (body-controller-m7, vss-bridge, kuksa-val, etc.)
+
+GET  /sovd/v1/components/body-controller-m7/faults
+     → reads all active DTCs from M7 (proxied via UDS 0x19)
+
+DELETE /sovd/v1/components/body-controller-m7/faults
+     → clears DTCs (proxied via UDS 0x14)
+
+GET  /sovd/v1/components/body-controller-m7/data/auto-relock-enabled
+     → reads dealer config DID 0xF190 (proxied via UDS 0x22)
+
+PUT  /sovd/v1/components/body-controller-m7/data/auto-relock-enabled
+     { "value": false }
+     → writes dealer config (proxied via UDS 0x2E with 0x27 security access)
+
+GET  /sovd/v1/components/vss-bridge/data/signal-snapshot
+     → returns current values of all VSS signals from kuksa.val (native, no UDS)
+
+GET  /sovd/v1/components/vss-bridge/data/container-health
+     → returns uptime, memory usage, restart count (native)
+```
+
+**Relationship to the existing UDS server on M7**:
+
+SOVD does **not replace** the M7 UDS server. The M7 keeps its full UDS stack (ISO 14229) — it is the NVM owner, the security access authority, and the DTC manager. SOVD is a higher-level API layer on A53 that translates REST calls into UDS requests and forwards them to M7. The M7 does not know or care whether a 0x22 read came from a CAN-connected scan tool or from the SOVD Gateway over RPmsg.
+
+**Implementation approach**:
+
+| Component | Language | Container | Notes |
+|-----------|----------|-----------|-------|
+| SOVD HTTP server | Rust (axum or actix-web) | `sovd-gateway` (new Podman container) | OpenAPI spec auto-generated from ASAM SOVD schema |
+| Classic Diag Proxy | Rust | Same container | Translates REST→UDS, manages security access sessions |
+| UDS transport | Rust | Same container | Sends UDS frames to M7 via RPmsg (reuses `ipc_message.rs` framing) or DoIP over Ethernet |
+| Native endpoints | Rust | Same container | Reads from kuksa.val (gRPC), config system, container runtime |
+
+**Phase 2 deliverables**:
+1. SOVD Gateway container with OpenAPI server
+2. Classic Diagnostic Proxy (SOVD→UDS translation for M7)
+3. Native endpoints for HPC-resident services
+4. Authentication/authorization (TLS + token-based for cloud access, local-only for workshop)
+5. Integration tests: REST call → UDS proxy → M7 mock → response validation
+
+**What changes in Phase 1 to prepare for SOVD**:
+- Nothing. The M7 UDS server is designed correctly — it speaks standard UDS and doesn't care who the client is. The SOVD Gateway is an additive component on A53 that wraps the existing UDS interface. No M7 changes needed.
+- The `ipc_message.rs` wire format already carries UDS-compatible DIDs (Tier 4 config). The SOVD proxy will reuse this.
+
 ---
 
 ## 4. IPC Wire Format (A53 ↔ M7)
@@ -400,6 +503,7 @@ The Rust application layer runs in a Podman container on the A53. It is QM softw
 | **CrashUnlock** feature | Medium | Safety-critical: unlock on crash detection |
 | **GlinkBus / SomeIpBus** adapters | Future | Needed only when targeting non-NXP SoCs |
 | **WebSocket bridge** (L5 → L6 HMI) | Low | Connect HMI to live signal bus instead of mock store |
+| **SOVD Gateway** (Phase 2) | Phase 2 | HTTP/REST diagnostic API per ASAM SOVD V1.0.0. Classic Diag Proxy for M7 UDS, native endpoints for HPC services. See section 3.2.3. |
 
 ### 5.4 Four-Tier Configuration System
 
@@ -474,7 +578,11 @@ A53 cluster (Cortex-A53 x4)
     └── Podman (rootless)
         ├── kuksa-val          RHEL base  gRPC :55555
         ├── vss-bridge         RHEL base  WS :8080  gRPC client
-        └── hmi-server         RHEL base  HTTP :3000  static files
+        ├── hmi-server         RHEL base  HTTP :3000  static files
+        └── sovd-gateway       RHEL base  HTTP :8443  (Phase 2)
+                               REST/JSON diagnostic API
+                               Classic Diag Proxy (SOVD→UDS→M7)
+                               Native endpoints (HPC services)
 
     └── CarService / VHAL      (AAOS process, not containerised)
     └── Android Auto apps      (AAOS process, not containerised)
@@ -520,10 +628,17 @@ Signal IDs are generated by running `vspec --export-id` against the combined cat
 
 ### 9.3 For Application SW Team (Rust / A53)
 
+**Phase 1 (bring-up)**:
 1. **RpmsgBus adapter**: first priority — enables integration testing with real M7 hardware
 2. **kuksa.val gRPC sync**: enables full signal flow from M7 → Rust → kuksa.val → HMI
 3. **Remaining features**: LockFeedback, KeyfobPeps, KeyfobRke, AutoLock, LowBeam, HighBeam, DRL, DoorTrimButton, CrashUnlock, connectivity features
 4. **WebSocket bridge**: connect the HMI to live signal bus
+
+**Phase 2 (production hardening)**:
+5. **SOVD Gateway container**: HTTP/REST server (axum or actix-web) implementing ASAM SOVD V1.0.0
+6. **Classic Diagnostic Proxy**: SOVD→UDS translation layer for M7 diagnostics (DTC read/clear, dealer config, ECU ID)
+7. **Native SOVD endpoints**: container health, OTA status, signal snapshot, feature config status
+8. **SOVD authentication**: TLS + token-based auth for cloud/remote access; local-only mode for workshop
 
 ### 9.4 Building and Testing
 
