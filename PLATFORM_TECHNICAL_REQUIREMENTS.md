@@ -230,7 +230,7 @@ After a 0x2E write, M7 pushes the updated value to A53 via a `CONFIG_UPDATE` IPC
 - Routes safety-relevant `setValues()` calls through the Rust bridge → arbiter → RPmsg → Safety Monitor
 - CarService and VHAL are permanently QM — they cannot issue ASIL-B commands directly
 
-#### 3.2.3 SOVD Gateway (Phase 2)
+#### 3.2.3 SOVD Gateway
 
 **Standard**: ASAM SOVD V1.0.0 (2023) — Service-Oriented Vehicle Diagnostics. Developed by ASAM with AUTOSAR Adaptive input.
 
@@ -322,16 +322,14 @@ SOVD does **not replace** the M7 UDS server. The M7 keeps its full UDS stack (IS
 | UDS transport | Rust | Same container | Sends UDS frames to M7 via RPmsg (reuses `ipc_message.rs` framing) or DoIP over Ethernet |
 | Native endpoints | Rust | Same container | Reads from kuksa.val (gRPC), config system, container runtime |
 
-**Phase 2 deliverables**:
+**Deliverables**:
 1. SOVD Gateway container with OpenAPI server
 2. Classic Diagnostic Proxy (SOVD→UDS translation for M7)
 3. Native endpoints for HPC-resident services
 4. Authentication/authorization (TLS + token-based for cloud access, local-only for workshop)
 5. Integration tests: REST call → UDS proxy → M7 mock → response validation
 
-**What changes in Phase 1 to prepare for SOVD**:
-- Nothing. The M7 UDS server is designed correctly — it speaks standard UDS and doesn't care who the client is. The SOVD Gateway is an additive component on A53 that wraps the existing UDS interface. No M7 changes needed.
-- The `ipc_message.rs` wire format already carries UDS-compatible DIDs (Tier 4 config). The SOVD proxy will reuse this.
+**M7 impact**: None. The M7 UDS server speaks standard UDS and doesn't care who the client is. The SOVD Gateway is an additive component on A53 that wraps the existing UDS interface. The `ipc_message.rs` wire format already carries UDS-compatible DIDs (Tier 4 config). The SOVD proxy reuses this.
 
 ---
 
@@ -369,9 +367,9 @@ The current wire format is a custom 24-28 byte binary protocol over RPmsg. This 
 
 Three options are on the table:
 
-#### Option A: Custom binary protocol over RPmsg (current design)
+#### Option A: Custom binary protocol over RPmsg
 
-The current implementation. Fixed-size structs with hand-coded encode/decode on both sides.
+Fixed-size structs with hand-coded encode/decode on both sides. Optimized for the A53↔M7 shared-memory boundary.
 
 | Argument | For | Against |
 |----------|-----|---------|
@@ -381,7 +379,7 @@ The current implementation. Fixed-size structs with hand-coded encode/decode on 
 | **Tooling** | None needed — just a struct definition. | No service discovery, no IDL, no code generation. Schema is documentation, not machine-checkable. Drift between Rust and C is caught only by integration tests. |
 | **OEM perception** | N/A | OEM engineering teams may question a proprietary wire format. Standards like SOME/IP and DDS are recognized by AUTOSAR and the wider SDV ecosystem. |
 
-**Recommendation**: Best choice if the platform will always use heterogeneous SoCs (A53+M7 on the same chip) and the M7 is too resource-constrained for a middleware stack. Lowest risk for first hardware bring-up.
+**Recommendation**: Best choice for the A53↔M7 boundary on heterogeneous SoCs where the M7 is resource-constrained. Lowest latency, simplest M7 implementation.
 
 #### Option B: SOME/IP (AUTOSAR-standard service-oriented middleware)
 
@@ -396,7 +394,7 @@ Replace the custom binary protocol with SOME/IP serialization. On RPmsg, SOME/IP
 | **Ecosystem** | `vsomeip` (open-source, Covesa-adjacent) provides a mature Linux implementation. Rust bindings exist (`someip-rs`, `vsomeip-rs`). AUTOSAR Classic has native support. | `vsomeip` is C++ and pulls in Boost. Rust bindings are thin wrappers with FFI overhead. On M7, the AUTOSAR vendor's SOME/IP stack may have licensing costs. |
 | **OEM acceptance** | OEMs with existing SOME/IP infrastructure can integrate the body controller into their vehicle network without a protocol bridge. Strong selling point. | OEMs without SOME/IP (older programs, low-cost platforms) gain no benefit and pay the complexity cost. |
 
-**Recommendation**: Best choice if the platform will target domain controller topologies (Safety Monitor on a separate ECU over Ethernet) or if OEM customers already standardize on SOME/IP. Can be introduced incrementally — keep custom RPmsg for M7 local IPC, add SOME/IP for Ethernet-facing interfaces.
+**Recommendation**: Best choice for Ethernet-facing interfaces (A53 ↔ other ECUs, diagnostic tools, cloud gateway) and domain controller topologies where the Safety Monitor runs on a separate ECU. Can coexist with custom RPmsg on the local A53↔M7 boundary.
 
 #### Option C: DDS (Data Distribution Service)
 
@@ -413,7 +411,7 @@ Replace the custom protocol with OMG DDS (e.g., Eclipse Cyclone DDS, RTI Connext
 | **Ecosystem** | Cyclone DDS is open-source (Eclipse), Apache 2.0 licensed. Rust bindings (`cyclonedds-rs`) exist. Large community from ROS 2. | RTI Connext (the most feature-complete DDS) is commercial and expensive. Open-source alternatives (Cyclone, Fast DDS) have fewer QoS features and less automotive validation. No ASIL-certified DDS implementation exists today. |
 | **OEM acceptance** | Some OEMs (particularly those investing in ROS 2 or AUTOSAR Adaptive) are exploring DDS. Forward-looking choice for SDV roadmaps. | Most body domain OEMs today use SOME/IP or proprietary protocols. DDS is more common in ADAS/AD domains. Proposing DDS for a body controller may raise questions about maturity and fit. |
 
-**Recommendation**: Best choice if the platform roadmap includes ADAS integration, ROS 2 interop, or AUTOSAR Adaptive on the A53. However, the M7 gap is significant — DDS cannot run on AUTOSAR Classic M7, so a bridge layer is unavoidable. Consider DDS only for A53-to-A53 and A53-to-network communication, not for the safety-critical A53↔M7 boundary.
+**Recommendation**: Best choice for A53-to-A53 and A53-to-network communication when OEM roadmap includes ADAS integration, ROS 2 interop, or AUTOSAR Adaptive. The M7 gap is significant — DDS cannot run on AUTOSAR Classic, so a bridge layer is unavoidable. Not suitable for the safety-critical A53↔M7 boundary.
 
 #### Comparison Summary
 
@@ -432,17 +430,17 @@ Replace the custom protocol with OMG DDS (e.g., Eclipse Cyclone DDS, RTI Connext
 
 #### Recommended Approach
 
-**Phase 1 (first hardware bring-up)**: Use the custom RPmsg protocol. It is already designed, has matching Rust and C implementations planned, and carries zero risk. Get the Safety Monitor talking to the Rust bridge with the simplest possible wire format.
+**A53 ↔ M7 boundary**: Custom RPmsg protocol. The M7 Cortex-M7 cannot run SOME/IP or DDS stacks without significant resource pressure. RPmsg shared memory provides the lowest latency (~100 µs) and simplest M7 implementation (28-byte struct, no middleware). This boundary is internal to the SoC and not exposed to OEMs or external tools.
 
-**Phase 2 (production hardening)**: Evaluate SOME/IP for the Ethernet-facing interfaces (A53 ↔ other ECUs, diagnostic tools, cloud gateway). Keep custom RPmsg for the local A53↔M7 boundary where M7 resource constraints and latency requirements justify it. The `SignalBus` trait makes this a transport-layer change — no feature code is affected.
+**A53 ↔ other ECUs / external interfaces**: SOME/IP over Ethernet. This is the AUTOSAR-standard service-oriented protocol, works natively over GbE, and is expected by OEM vehicle network architects. The `SomeIpBus` adapter implements the `SignalBus` trait — no feature code changes.
 
-**Phase 3 (SDV roadmap, if applicable)**: If OEM customers require ROS 2 interop or AUTOSAR Adaptive, add a DDS adapter (`DdsBus` implementing `SignalBus`) for A53-side communication. The A53↔M7 boundary remains RPmsg or SOME/IP — DDS does not replace it.
+**A53 ↔ ROS 2 / AUTOSAR Adaptive (if required by OEM roadmap)**: DDS adapter (`DdsBus` implementing `SignalBus`). Only applicable when OEM customers require ROS 2 interop or AUTOSAR Adaptive on the A53. DDS does not replace the A53↔M7 boundary — it cannot run on AUTOSAR Classic.
 
-This phased approach avoids premature middleware adoption while keeping the door open. The `SignalBus` trait is the architectural insurance policy — it guarantees that the protocol decision can be revisited without rewriting features.
+**Multiple transports can coexist.** The `SignalBus` trait is the architectural insurance policy — it guarantees that the protocol decision can be revisited or mixed without rewriting features. A production deployment may use RPmsg for M7, SOME/IP for Ethernet backbone, and DDS for an ADAS gateway simultaneously.
 
 ---
 
-## 5. Application Layer (Rust on A53) — Current Status
+## 5. Application Layer (Rust on A53)
 
 The Rust application layer runs in a Podman container on the A53. It is QM software.
 
@@ -465,45 +463,42 @@ The Rust application layer runs in a Podman container on the A53. It is QM softw
 
 **Key principle**: Every feature and the arbiters depend only on the `SignalBus` trait. Swapping SoC means replacing one adapter file. No feature code changes.
 
-### 5.2 What's Implemented
+### 5.2 Component Inventory
 
-| Component | Status | File(s) |
-|-----------|--------|---------|
-| **SignalBus trait** | Done | `vss-bridge/src/signal_bus.rs` |
-| **MockBus** (test adapter) | Done | `vss-bridge/src/adapters/mock.rs` |
-| **IPC message schema** | Done | `vss-bridge/src/ipc_message.rs` |
-| **Signal ID constants** (86 signals) | Done | `vss-bridge/src/signal_ids.rs` |
-| **Lighting arbiter** (DomainArbiter) | Done | `vss-bridge/src/arbiter.rs` |
-| **DoorLock arbiter** (serialized queue) | Done | `vss-bridge/src/arbiter.rs` |
-| **Horn / Comfort arbiters** | Done (empty allow-lists, ready) | `vss-bridge/src/arbiter.rs` |
-| **HazardLighting** feature | Done + tests | `vss-bridge/src/features/hazard_lighting.rs` |
-| **TurnIndicator** feature | Done + tests (ignition-gated) | `vss-bridge/src/features/turn_indicator.rs` |
-| **AutoRelock** feature | Done + tests (crash-safe, power-cycle recovery) | `vss-bridge/src/features/auto_relock.rs` |
-| **SleepInhibitManager** | Done + tests | `vss-bridge/src/sleep_inhibit.rs` |
-| **4-tier config system** | Done + tests | `vss-bridge/src/config.rs` |
-| **VSS signal overlay** (switch inputs, door lock inputs) | Done | `vss-bridge/overlay/Body/` |
-| **Web HMI** (sensor simulator) | Done | `vss-hmi-body-sensors.html` |
-| **Gherkin feature specs** (10 features) | Done | `features/*.feature` |
-| **Config examples** (6 variants) | Done | `config/*.json` |
-
-### 5.3 What's NOT Yet Implemented
-
-| Component | Priority | Notes |
-|-----------|----------|-------|
-| **RpmsgBus** transport adapter | High — needed for HW bring-up | Opens `/dev/rpmsg0` and `/dev/rpmsg1`, encodes/decodes IPC messages |
-| **kuksa.val sync** (gRPC client) | High — needed for system integration | Bidirectional sync between SignalBus and kuksa.val data broker |
-| **LockFeedback** feature | Medium | On lock/unlock, blink indicators at HIGH (overlay pattern, then self-release) |
-| **KeyfobPeps** feature | Medium | Subscribes to `Body.PEPS.KeyPresent`, submits DoorLock arbiter request |
-| **KeyfobRke** feature | Medium | Keyfob remote lock/unlock/double-lock |
-| **AutoLock** feature | Medium | Speed-based auto-lock (requires Fully Awake for `Vehicle.Speed`) |
-| **LowBeam / HighBeam** features | Medium | Light switch → beam control |
-| **DRL** feature | Medium | Ignition ON + parking brake off → DRL on |
-| **DoorTrimButton** feature | Medium | Per-door interior lock/unlock buttons |
-| **PhoneApp / PhoneBle / NfcCard / NfcPhone** | Low | Connectivity-based lock sources |
-| **CrashUnlock** feature | Medium | Safety-critical: unlock on crash detection |
-| **GlinkBus / SomeIpBus** adapters | Future | Needed only when targeting non-NXP SoCs |
-| **WebSocket bridge** (L5 → L6 HMI) | Low | Connect HMI to live signal bus instead of mock store |
-| **SOVD Gateway** (Phase 2) | Phase 2 | HTTP/REST diagnostic API per ASAM SOVD V1.0.0. Classic Diag Proxy for M7 UDS, native endpoints for HPC services. See section 3.2.3. |
+| Component | Requirement | Implementation Status |
+|-----------|-------------|----------------------|
+| **SignalBus trait** | Portability seam — all features and arbiters depend only on this trait | Done (`vss-bridge/src/signal_bus.rs`) |
+| **MockBus** (test adapter) | In-memory adapter for unit tests and CI with no hardware dependency | Done (`vss-bridge/src/adapters/mock.rs`) |
+| **RpmsgBus** transport adapter | NXP S32G2 transport — opens `/dev/rpmsg0` and `/dev/rpmsg1`, encodes/decodes IPC messages | Not started |
+| **SomeIpBus** transport adapter | SOME/IP over Ethernet for domain controller topologies and non-NXP SoCs | Not started |
+| **GlinkBus** transport adapter | Qualcomm GLINK IPC for SA8775P targets | Not started |
+| **DdsBus** transport adapter | DDS middleware for ROS 2 / AUTOSAR Adaptive interop (if required by OEM) | Not started |
+| **IPC message schema** | Binary wire format (28 B) with CRC-16, matching Rust and C implementations | Done (`vss-bridge/src/ipc_message.rs`) |
+| **Signal ID constants** (86 signals) | Stable 32-bit IDs from `vspec2id`, shared between Rust and AUTOSAR C | Done (`vss-bridge/src/signal_ids.rs`) |
+| **Lighting arbiter** (DomainArbiter) | Per-signal priority resolution for direction indicators, beams, DRL | Done (`vss-bridge/src/arbiter.rs`) |
+| **DoorLock arbiter** | Serialized command queue with ACK handshake, crash-unlock protection | Done (`vss-bridge/src/arbiter.rs`) |
+| **Horn / Comfort arbiters** | Domain arbiters with empty allow-lists, ready for future features | Done (`vss-bridge/src/arbiter.rs`) |
+| **HazardLighting** feature | Both indicators at HIGH on hazard switch. No ignition gate. | Done + tests (`vss-bridge/src/features/hazard_lighting.rs`) |
+| **TurnIndicator** feature | Stalk-driven indicators at MEDIUM. Ignition-gated (ON/START only). | Done + tests (`vss-bridge/src/features/turn_indicator.rs`) |
+| **AutoRelock** feature | 45s relock timer. Crash-disables until full power cycle. | Done + tests (`vss-bridge/src/features/auto_relock.rs`) |
+| **LockFeedback** feature | On lock/unlock state change, blink indicators at HIGH (overlay), then self-release | Not started |
+| **KeyfobPeps** feature | Subscribes to `Body.PEPS.KeyPresent`, submits DoorLock arbiter request | Not started |
+| **KeyfobRke** feature | Keyfob remote lock/unlock/double-lock | Not started |
+| **AutoLock** feature | Speed-based auto-lock (requires Fully Awake for `Vehicle.Speed`) | Not started |
+| **LowBeam / HighBeam** features | Light switch → beam control | Not started |
+| **DRL** feature | Ignition ON + parking brake off → DRL on | Not started |
+| **DoorTrimButton** feature | Per-door interior lock/unlock buttons | Not started |
+| **CrashUnlock** feature | Safety-critical: unlock all doors on crash detection | Not started |
+| **PhoneApp / PhoneBle / NfcCard / NfcPhone** | Connectivity-based lock sources (cloud, BLE digital key, NFC) | Not started |
+| **SleepInhibitManager** | RAII-based wake claims with reaper and max-hold enforcement | Done + tests (`vss-bridge/src/sleep_inhibit.rs`) |
+| **4-tier config system** | Compile-time, vehicle-line, variant, and dealer-configurable parameters | Done + tests (`vss-bridge/src/config.rs`) |
+| **kuksa.val gRPC sync** | Bidirectional sync between SignalBus and kuksa.val data broker | Not started |
+| **WebSocket bridge** (L5 → L6 HMI) | Connect web HMI to live signal bus instead of mock store | Not started |
+| **SOVD Gateway** | HTTP/REST diagnostic API per ASAM SOVD V1.0.0. Classic Diag Proxy for M7 UDS, native endpoints for HPC services. See section 3.2.3. | Not started |
+| **VSS signal overlay** | Switch inputs, door lock inputs, door extensions | Done (`vss-bridge/overlay/Body/`) |
+| **Web HMI** (sensor simulator) | SVG vehicle views with toggle/slider controls for all 86 signals | Done (`vss-hmi-body-sensors.html`) |
+| **Gherkin feature specs** (10 features) | Requirements and acceptance scenarios for all body features | Done (`features/*.feature`) |
+| **Config examples** (6 variants) | JSON calibration files for sedan, truck, coupe, premium, base, offroad | Done (`config/*.json`) |
 
 ### 5.4 Four-Tier Configuration System
 
@@ -579,8 +574,8 @@ A53 cluster (Cortex-A53 x4)
         ├── kuksa-val          RHEL base  gRPC :55555
         ├── vss-bridge         RHEL base  WS :8080  gRPC client
         ├── hmi-server         RHEL base  HTTP :3000  static files
-        └── sovd-gateway       RHEL base  HTTP :8443  (Phase 2)
-                               REST/JSON diagnostic API
+        └── sovd-gateway       RHEL base  HTTP :8443
+                               REST/JSON diagnostic API (ASAM SOVD)
                                Classic Diag Proxy (SOVD→UDS→M7)
                                Native endpoints (HPC services)
 
@@ -628,17 +623,15 @@ Signal IDs are generated by running `vspec --export-id` against the combined cat
 
 ### 9.3 For Application SW Team (Rust / A53)
 
-**Phase 1 (bring-up)**:
-1. **RpmsgBus adapter**: first priority — enables integration testing with real M7 hardware
+1. **RpmsgBus adapter**: enables integration testing with real M7 hardware
 2. **kuksa.val gRPC sync**: enables full signal flow from M7 → Rust → kuksa.val → HMI
-3. **Remaining features**: LockFeedback, KeyfobPeps, KeyfobRke, AutoLock, LowBeam, HighBeam, DRL, DoorTrimButton, CrashUnlock, connectivity features
+3. **Feature business logic**: LockFeedback, KeyfobPeps, KeyfobRke, AutoLock, LowBeam, HighBeam, DRL, DoorTrimButton, CrashUnlock, connectivity features
 4. **WebSocket bridge**: connect the HMI to live signal bus
-
-**Phase 2 (production hardening)**:
-5. **SOVD Gateway container**: HTTP/REST server (axum or actix-web) implementing ASAM SOVD V1.0.0
-6. **Classic Diagnostic Proxy**: SOVD→UDS translation layer for M7 diagnostics (DTC read/clear, dealer config, ECU ID)
-7. **Native SOVD endpoints**: container health, OTA status, signal snapshot, feature config status
-8. **SOVD authentication**: TLS + token-based auth for cloud/remote access; local-only mode for workshop
+5. **SomeIpBus / GlinkBus / DdsBus adapters**: transport adapters for non-NXP SoCs and Ethernet topologies
+6. **SOVD Gateway container**: HTTP/REST server (axum or actix-web) implementing ASAM SOVD V1.0.0
+7. **Classic Diagnostic Proxy**: SOVD→UDS translation layer for M7 diagnostics (DTC read/clear, dealer config, ECU ID)
+8. **Native SOVD endpoints**: container health, OTA status, signal snapshot, feature config status
+9. **SOVD authentication**: TLS + token-based auth for cloud/remote access; local-only mode for workshop
 
 ### 9.4 Building and Testing
 
@@ -675,4 +668,5 @@ cargo check
 | **M7 handles critical path while A53 sleeps** | PEPS unlock, crash unlock, light switch all work without A53. A53 is never in the critical path. |
 | **ECU states independent of ignition** | M7 can wake A53 without ignition change. Features run when needed, not just when ignition is ON. |
 | **No blink timing in features** | UN R48 cadence is LED driver / body ECU firmware responsibility. Features set boolean intent only. |
-| **Custom RPmsg IPC for Phase 1** | Simplest, lowest-latency option for first bring-up. SOME/IP and DDS options evaluated in section 4.4 — SignalBus trait ensures protocol can be changed later without touching feature code. |
+| **Custom RPmsg for A53↔M7; SOME/IP for Ethernet** | RPmsg is lowest-latency for the on-chip boundary; SOME/IP is the AUTOSAR standard for Ethernet. DDS available for ROS 2/Adaptive interop. SignalBus trait allows all three to coexist — see section 4.4. |
+| **SOVD Gateway for diagnostics** | ASAM SOVD V1.0.0 HTTP/REST API on A53. Wraps existing M7 UDS server via Classic Diagnostic Proxy. Enables cloud diagnostics, tablet-based dealer tooling, and OEM diagnostic integration — see section 3.2.3. |
