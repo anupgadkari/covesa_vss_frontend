@@ -162,7 +162,7 @@ function App(){
     ws.onmessage=(e)=>{
       try{
         const msg=JSON.parse(e.data);
-        if(msg.state)setState(msg.state);
+        if(msg.state)setState(s=>({...s,...msg.state}));
       }catch(err){console.error('Parse error:',err)}
     };
     ws.onerror=()=>setConnected(false);
@@ -269,6 +269,46 @@ function App(){
               ))}
             </div>
             <div className="control-value">{state['Body.Lights.LightSwitch']}</div>
+          </div>
+        </div>
+
+        {/* ACTUATOR OUTPUTS (arbiter-resolved — read-only) */}
+        <div className="section" style={{borderColor:'#F59E0B',borderWidth:'2px'}}>
+          <div className="section-title" style={{color:'#F59E0B'}}>Actuator Outputs (from Arbiter)</div>
+          <div className="section-info">Read-only — these values come from the Lighting arbiter after priority resolution. They reflect what the body ECU would drive.</div>
+          <div style={{display:'flex',gap:'16px',padding:'8px 0'}}>
+            <div style={{display:'flex',alignItems:'center',gap:'8px',flex:1}}>
+              <div className={state['Body.Lights.DirectionIndicator.Left.IsSignaling']?'blink':''}
+                style={{width:'32px',height:'32px',borderRadius:'50%',
+                  background:state['Body.Lights.DirectionIndicator.Left.IsSignaling']?'#F59E0B':'#333',
+                  border:'2px solid #555',transition:'background 0.1s',
+                  boxShadow:state['Body.Lights.DirectionIndicator.Left.IsSignaling']?'0 0 12px #F59E0B':'none'}}/>
+              <div>
+                <div style={{fontSize:'11px',fontWeight:'bold',color:state['Body.Lights.DirectionIndicator.Left.IsSignaling']?'#F59E0B':'#888'}}>LEFT</div>
+                <div style={{fontSize:'9px',color:'#666'}}>Indicator</div>
+              </div>
+            </div>
+            <div style={{display:'flex',alignItems:'center',gap:'8px',flex:1,justifyContent:'flex-end'}}>
+              <div>
+                <div style={{fontSize:'11px',fontWeight:'bold',textAlign:'right',color:state['Body.Lights.DirectionIndicator.Right.IsSignaling']?'#F59E0B':'#888'}}>RIGHT</div>
+                <div style={{fontSize:'9px',color:'#666',textAlign:'right'}}>Indicator</div>
+              </div>
+              <div className={state['Body.Lights.DirectionIndicator.Right.IsSignaling']?'blink':''}
+                style={{width:'32px',height:'32px',borderRadius:'50%',
+                  background:state['Body.Lights.DirectionIndicator.Right.IsSignaling']?'#F59E0B':'#333',
+                  border:'2px solid #555',transition:'background 0.1s',
+                  boxShadow:state['Body.Lights.DirectionIndicator.Right.IsSignaling']?'0 0 12px #F59E0B':'none'}}/>
+            </div>
+          </div>
+          <div style={{display:'flex',justifyContent:'center',padding:'4px 0'}}>
+            <div style={{fontSize:'10px',padding:'3px 10px',borderRadius:'4px',
+              background:state['Body.Lights.DirectionIndicator.Left.IsSignaling']&&state['Body.Lights.DirectionIndicator.Right.IsSignaling']?'rgba(245,158,11,.2)':'transparent',
+              color:state['Body.Lights.DirectionIndicator.Left.IsSignaling']&&state['Body.Lights.DirectionIndicator.Right.IsSignaling']?'#F59E0B':'#555',
+              fontWeight:'bold'}}>
+              {state['Body.Lights.DirectionIndicator.Left.IsSignaling']&&state['Body.Lights.DirectionIndicator.Right.IsSignaling']?'HAZARD ACTIVE':
+               state['Body.Lights.DirectionIndicator.Left.IsSignaling']?'LEFT TURN':
+               state['Body.Lights.DirectionIndicator.Right.IsSignaling']?'RIGHT TURN':'OFF'}
+            </div>
           </div>
         </div>
 
