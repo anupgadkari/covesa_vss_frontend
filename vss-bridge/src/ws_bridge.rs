@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use futures::{SinkExt, StreamExt};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{broadcast, Mutex};
+use tokio::sync::{broadcast, Mutex, Notify};
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::ipc_message::SignalValue;
@@ -80,11 +80,18 @@ impl<B: SignalBus> WsBridge<B> {
         let output_state: Arc<Mutex<StateSnapshot>> = Arc::new(Mutex::new(HashMap::new()));
         let (update_tx, _) = broadcast::channel::<String>(256);
 
+        // Coalescing notifier — when any output signal changes, we poke this
+        // and a single broadcaster task waits a short debounce window before
+        // sending a combined snapshot. This ensures that when the arbiter
+        // publishes Left + Right within microseconds, the HMI receives ONE
+        // message with both changes, keeping CSS animations synchronized.
+        let coalesce_notify = Arc::new(Notify::new());
+
         // Subscribe to all output signals and update the shared state.
         for &signal in OUTPUT_SIGNALS {
             let bus = Arc::clone(&self.bus);
             let state = Arc::clone(&output_state);
-            let tx = update_tx.clone();
+            let notify = Arc::clone(&coalesce_notify);
 
             tokio::spawn(async move {
                 let mut stream = bus.subscribe(signal).await;
@@ -94,7 +101,28 @@ impl<B: SignalBus> WsBridge<B> {
                         let mut s = state.lock().await;
                         s.insert(signal, json_val);
                     }
-                    // Build full state message for HMI
+                    // Poke the coalescing broadcaster instead of sending immediately.
+                    notify.notify_one();
+                }
+            });
+        }
+
+        // Coalescing broadcaster — waits for a signal change, then pauses
+        // briefly to collect any additional changes before sending one
+        // combined snapshot to all connected HMI clients.
+        {
+            let state = Arc::clone(&output_state);
+            let tx = update_tx.clone();
+            let notify = Arc::clone(&coalesce_notify);
+
+            tokio::spawn(async move {
+                loop {
+                    // Wait for at least one signal change.
+                    notify.notified().await;
+                    // Brief debounce — collect rapid-fire changes from the
+                    // arbiter (e.g. left + right indicator in one resolution pass).
+                    tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+
                     let snapshot = {
                         let s = state.lock().await;
                         s.clone()
