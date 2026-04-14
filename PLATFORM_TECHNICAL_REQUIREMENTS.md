@@ -2,7 +2,7 @@
 
 **Document purpose**: Development guide for the hardware and embedded software teams building the body controller platform. Covers what needs to be designed, what needs to be brought up, and what's already implemented in the application layer.
 
-**Last updated**: 2026-04-09
+**Last updated**: 2026-04-14
 
 ---
 
@@ -34,6 +34,60 @@ This platform is a **product sold by a service company to OEM management**. It i
 | **PFE** (Packet Forwarding Engine) | GbE MAC + TSN forwarding. Used for SOME/IP Ethernet backbone if domain controller topology is adopted. |
 | **RPmsg** (virtio) | Shared-memory IPC between A53 and M7. Two channels: `vss-cmd` (A53→M7) and `vss-state` (M7→A53). Character devices `/dev/rpmsg0` and `/dev/rpmsg1`. |
 | **SEMA4** | Hardware semaphores for atomic NVM access on M7. Not exposed above BSP. |
+
+### 2.1.1 SoC Optionality — S32G vs. S32N vs. Third-Party
+
+The reference design targets NXP S32G2, but the platform must support alternate SoCs. The table below captures current options and their trade-offs.
+
+| Dimension | NXP S32G2/G3 (reference) | NXP S32N | Qualcomm SA8775P | Renesas R-Car S4 |
+|---|---|---|---|---|
+| **Application cores** | 4× Cortex-A53 @ 1 GHz | Cortex-A72 class, more cores | 4× Cortex-A78AE + GPU | 8× Cortex-A76 |
+| **Safety cores** | 3× Cortex-M7 | Multiple safety islands (R52) | Cortex-R52 safety island | Cortex-R52 lock-step |
+| **Best fit** | Body domain controller (standalone ECU) | Zonal compute (body + gateway + partial chassis on one chip) | Cockpit-body fusion (IVI + body on one SoC) | Zone/domain controller |
+| **I/O integration** | LLCE (CAN FD + LIN), PFE (GbE/TSN) | Higher I/O mux, more CAN/LIN/ETH | Limited automotive I/O (needs companion MCU for CAN/LIN) | CAN FD, Ethernet TSN |
+| **AUTOSAR Classic on safety core** | Yes (Cortex-M7) | Yes (R52 island) | Limited (R52 island, smaller ecosystem) | Yes (R52 lock-step) |
+| **Production maturity** | Production silicon, multiple OEM programs | Pre-production / early production | Production (cockpit), limited body-domain deployment | Production |
+| **BOM cost** | Lower (body-optimized) | Higher (zonal-class SoC) | Higher (cockpit-class SoC) | Comparable to S32G |
+| **A53↔M7 IPC** | RPmsg (shared memory, ~100 µs) | RPmsg variant | Qualcomm GLINK | Renesas ICCOM |
+
+**Guidance for SoC selection:**
+
+- **Standalone body controller** (most OEM programs today): NXP S32G2/G3. Purpose-built for this role, lowest BOM, mature BSP and AUTOSAR support. No reason to pay for silicon you don't use.
+- **Zonal architecture** (OEM consolidating body + gateway): NXP S32N. Body domain runs as one workload among several. The platform's container topology maps cleanly to this — body containers run alongside gateway containers on the same A-core cluster.
+- **Cockpit-body fusion** (OEM merging IVI + body onto one SoC): Qualcomm SA8775P. Body containers share the A-core cluster with Android Automotive IVI. Requires companion MCU for CAN/LIN I/O and safety functions — the platform's `GlinkBus` adapter handles the A-core ↔ MCU boundary.
+- **Future option**: Renesas R-Car S4 for OEMs with existing Renesas infrastructure.
+
+**The `SignalBus` trait guarantees portability.** Changing SoC means replacing the transport adapter (`RpmsgBus` → `GlinkBus` or `IccomBus`) and the BSP. Zero feature code changes.
+
+### 2.1.2 Application-Core OS Options
+
+The Rust application layer is OS-agnostic — it compiles as a statically-linked musl binary with no distribution-specific dependencies. The OS choice affects the BSP, container runtime, and support model.
+
+| Dimension | Yocto/Poky (reference) | Android Automotive OS | Red Hat In-Vehicle OS |
+|---|---|---|---|
+| **License model** | Open source (MIT/GPL). No per-unit cost. | AOSP is open source. Google Automotive Services (GAS) requires license. | Subscription-based per unit. |
+| **Image size** | Minimal: 50-100 MB. Fast boot (< 2s to userspace). | Full AAOS: 2-4 GB. Slower boot (5-10s). | 300-500 MB base. Boot ~3-5s. |
+| **Container runtime** | Podman, Docker, containerd — all supported | Podman runs under AAOS as userspace process | Podman (native, Red Hat is the upstream maintainer) |
+| **OEM familiarity** | Embedded teams know Yocto/BitBake. Standard in body/chassis domain. | IVI teams know AAOS. Body teams may not. | Enterprise IT teams know RHEL. Embedded teams may not. |
+| **Long-term support** | Community-maintained. Vendor BSP lifecycle varies (typically 5-7 years). LTS requires OEM or platform provider effort. | Google controls release cadence. OEM has limited influence on lifecycle. | Red Hat commits to 10+ year lifecycle with security patches. Best alignment with automotive production + support timelines. |
+| **Security patching** | Platform provider must track CVEs and rebuild images. No upstream SLA. | Google patches Android monthly. Body-specific BSP patches are OEM/provider responsibility. | Red Hat provides CVE response SLA. Dedicated automotive security team. |
+| **Certification/compliance** | No pre-certification. UNECE R155/R156 compliance is platform provider's responsibility. | Android CTS provides a baseline. Automotive-specific compliance is additional. | Red Hat pursuing ISO/SAE 21434 and UNECE R155/R156 alignment. |
+| **Best fit** | Standalone body controller with cost-sensitive OEMs. Platform provider controls the full stack. | OEMs requiring AAOS on the same SoC (cockpit-body fusion, VHAL integration). | OEMs requiring vendor-backed 10+ year lifecycle with SLA. Programs where procurement requires a named OS vendor. |
+
+**Recommendation**: Yocto as the reference BSP for development and cost-sensitive programs. Red Hat In-Vehicle OS as the supported option for OEMs requiring vendor-backed long-term support (10+ years) and security patching SLA — this aligns with the automotive production + field support timeline. AAOS when the OEM requires Android integration on the same SoC.
+
+**The platform provider (us) absorbs the OS complexity.** The OEM licenses the platform, not the OS. Whether we build on Yocto or Red Hat underneath, the OEM sees the same Rust service layer, the same VSS signal model, the same SOVD API. OS choice is a platform configuration parameter, not an OEM engineering decision.
+
+### 2.1.3 Safety-Core RTOS
+
+The safety core (M7 / R52) runs **AUTOSAR Classic CP**. This is a non-negotiable platform requirement for current and near-term OEM programs.
+
+**Rationale:**
+- Classic AUTOSAR provides the full BSW stack (CAN/LIN, UDS diagnostics, NvM, power management, COM) that body controllers depend on. No alternative RTOS provides this out of the box.
+- OEM compliance and validation teams expect AUTOSAR Classic on the safety core. Proposing a non-AUTOSAR safety stack adds certification risk and validation cost that OEMs will not accept.
+- Tool ecosystem (Vector CANoe, dSPACE, ETAS ISOLAR) integrates with AUTOSAR Classic. These tools are already deployed at every OEM.
+
+The platform's value proposition is that it **reduces** the OEM's Classic AUTOSAR scope: feature business logic moves to Rust on the A-core (QM), leaving only the thin BSW + safety monitor + I/O stack on the M7. This cuts AUTOSAR Classic development effort and seat licenses while keeping the proven stack where it earns its keep — the safety-critical I/O boundary.
 
 ### 2.2 What the Hardware Team Needs to Design
 
@@ -670,3 +724,6 @@ cargo check
 | **No blink timing in features** | UN R48 cadence is LED driver / body ECU firmware responsibility. Features set boolean intent only. |
 | **Custom RPmsg for A53↔M7; SOME/IP for Ethernet** | RPmsg is lowest-latency for the on-chip boundary; SOME/IP is the AUTOSAR standard for Ethernet. DDS available for ROS 2/Adaptive interop. SignalBus trait allows all three to coexist — see section 4.4. |
 | **SOVD Gateway for diagnostics** | ASAM SOVD V1.0.0 HTTP/REST API on A53. Wraps existing M7 UDS server via Classic Diagnostic Proxy. Enables cloud diagnostics, tablet-based dealer tooling, and OEM diagnostic integration — see section 3.2.3. |
+| **SoC optionality (S32G reference, S32N/SA8775P supported)** | S32G2 is the reference for standalone body controllers. S32N for zonal consolidation, SA8775P for cockpit-body fusion. SignalBus trait portability means SoC swap = one adapter file + BSP. See section 2.1.1. |
+| **OS optionality (Yocto reference, Red Hat/AAOS supported)** | Yocto for cost-sensitive programs. Red Hat In-Vehicle OS for OEMs requiring vendor-backed 10+ year support SLA. AAOS for cockpit-body fusion. Platform provider absorbs OS complexity — OEM licenses the platform, not the OS. See section 2.1.2. |
+| **AUTOSAR Classic on safety core (non-negotiable)** | Full BSW stack (CAN/LIN, UDS, NvM, COM) that body controllers require. Platform reduces AUTOSAR scope by moving feature logic to Rust/QM, cutting development effort and seat licenses. See section 2.1.3. |
