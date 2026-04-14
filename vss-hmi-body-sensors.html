@@ -88,7 +88,19 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--white);fo
 </style>
 </head>
 <body>
-<div id="root"></div>
+<div id="root"><p style="color:white;padding:20px;font-family:monospace">Loading…</p></div>
+<script>
+window.addEventListener('DOMContentLoaded', function() {
+  var missing = [];
+  if (typeof React === 'undefined') missing.push('React');
+  if (typeof ReactDOM === 'undefined') missing.push('ReactDOM');
+  if (missing.length) {
+    document.getElementById('root').innerHTML =
+      '<pre style="color:#F04040;padding:20px;font-family:monospace">Failed to load: ' + missing.join(', ') +
+      '\nThis page requires internet access to load React from CDN.\nServe via HTTP (not file://) — e.g. miniserve --port 3000 --index vss-hmi-body-sensors.html .</pre>';
+  }
+});
+</script>
 <script type="text/babel">
 const {useState,useEffect,useRef,useCallback}=React;
 
