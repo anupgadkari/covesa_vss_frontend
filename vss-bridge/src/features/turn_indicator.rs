@@ -122,19 +122,26 @@ impl<B: SignalBus> TurnIndicator<B> {
     }
 
     /// Request both indicator states through the arbiter.
+    ///
+    /// Claim the active side at MEDIUM priority; release the inactive side
+    /// so higher-priority claims (e.g. Hazard) are not blocked.
     async fn set_both(&self, left: bool, right: bool) {
         for (signal, active) in [(LEFT_INDICATOR, left), (RIGHT_INDICATOR, right)] {
-            if let Err(e) = self
-                .arbiter
-                .request(ActuatorRequest {
-                    signal,
-                    value: SignalValue::Bool(active),
-                    priority: Priority::Medium,
-                    feature_id: FeatureId::TurnIndicator,
-                })
-                .await
-            {
-                tracing::error!(error = %e, "TurnIndicator: arbiter request failed");
+            let result = if active {
+                self.arbiter
+                    .request(ActuatorRequest {
+                        signal,
+                        value: SignalValue::Bool(true),
+                        priority: Priority::Medium,
+                        feature_id: FeatureId::TurnIndicator,
+                    })
+                    .await
+            } else {
+                self.arbiter.release(signal, FeatureId::TurnIndicator).await
+            };
+
+            if let Err(e) = result {
+                tracing::error!(error = %e, "TurnIndicator: arbiter op failed");
             }
         }
     }
@@ -210,11 +217,13 @@ mod tests {
             "left indicator should be TRUE, history: {:?}",
             history
         );
+        // Under claim/release semantics the right side is never claimed, so
+        // the arbiter publishes nothing for it (it stays at default-off).
         assert!(
-            history.iter().any(|(sig, val)| {
-                *sig == RIGHT_INDICATOR && *val == SignalValue::Bool(false)
+            !history.iter().any(|(sig, val)| {
+                *sig == RIGHT_INDICATOR && *val == SignalValue::Bool(true)
             }),
-            "right indicator should be FALSE, history: {:?}",
+            "right indicator should never be TRUE, history: {:?}",
             history
         );
     }
@@ -236,10 +245,10 @@ mod tests {
             history
         );
         assert!(
-            history.iter().any(|(sig, val)| {
-                *sig == LEFT_INDICATOR && *val == SignalValue::Bool(false)
+            !history.iter().any(|(sig, val)| {
+                *sig == LEFT_INDICATOR && *val == SignalValue::Bool(true)
             }),
-            "left indicator should be FALSE, history: {:?}",
+            "left indicator should never be TRUE, history: {:?}",
             history
         );
     }
@@ -259,6 +268,8 @@ mod tests {
         sleep(Duration::from_millis(50)).await;
 
         let history = bus.history();
+        // Left was claimed true, so releasing it publishes false via
+        // the default-off fallback.
         assert!(
             history.iter().any(|(sig, val)| {
                 *sig == LEFT_INDICATOR && *val == SignalValue::Bool(false)
@@ -266,11 +277,10 @@ mod tests {
             "left should be FALSE after OFF, history: {:?}",
             history
         );
+        // Right was never claimed so no false publish is emitted.
         assert!(
-            history.iter().any(|(sig, val)| {
-                *sig == RIGHT_INDICATOR && *val == SignalValue::Bool(false)
-            }),
-            "right should be FALSE after OFF, history: {:?}",
+            !history.iter().any(|(sig, _)| *sig == RIGHT_INDICATOR),
+            "right should not be republished, history: {:?}",
             history
         );
     }
@@ -408,11 +418,10 @@ mod tests {
             "left should deactivate when ignition goes OFF, history: {:?}",
             history
         );
+        // Right was never claimed by Turn so no publish is emitted for it.
         assert!(
-            history.iter().any(|(sig, val)| {
-                *sig == RIGHT_INDICATOR && *val == SignalValue::Bool(false)
-            }),
-            "right should deactivate when ignition goes OFF, history: {:?}",
+            !history.iter().any(|(sig, _)| *sig == RIGHT_INDICATOR),
+            "right should not be republished, history: {:?}",
             history
         );
     }
@@ -434,11 +443,10 @@ mod tests {
         sleep(Duration::from_millis(50)).await;
 
         let history = bus.history();
+        // Left was never claimed, no publish for it.
         assert!(
-            history.iter().any(|(sig, val)| {
-                *sig == LEFT_INDICATOR && *val == SignalValue::Bool(false)
-            }),
-            "left should be FALSE when ignition goes to ACC, history: {:?}",
+            !history.iter().any(|(sig, _)| *sig == LEFT_INDICATOR),
+            "left should not be republished, history: {:?}",
             history
         );
         assert!(

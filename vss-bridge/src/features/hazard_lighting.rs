@@ -53,22 +53,25 @@ impl<B: SignalBus> HazardLighting<B> {
 
             tracing::debug!(engaged, "hazard switch changed");
 
-            let signal_value = SignalValue::Bool(engaged);
-
-            // Request both indicators at HIGH priority.
-            // Fire-and-forget — the arbiter resolves conflicts.
+            // When engaged, claim both indicators at HIGH priority.
+            // When disengaged, release the claims so lower-priority
+            // claims (e.g. an active turn signal) can resume.
             for &signal in &[LEFT_INDICATOR, RIGHT_INDICATOR] {
-                if let Err(e) = self
-                    .arbiter
-                    .request(ActuatorRequest {
-                        signal,
-                        value: signal_value.clone(),
-                        priority: Priority::High,
-                        feature_id: FeatureId::Hazard,
-                    })
-                    .await
-                {
-                    tracing::error!(error = %e, "HazardLighting: arbiter request failed");
+                let result = if engaged {
+                    self.arbiter
+                        .request(ActuatorRequest {
+                            signal,
+                            value: SignalValue::Bool(true),
+                            priority: Priority::High,
+                            feature_id: FeatureId::Hazard,
+                        })
+                        .await
+                } else {
+                    self.arbiter.release(signal, FeatureId::Hazard).await
+                };
+
+                if let Err(e) = result {
+                    tracing::error!(error = %e, "HazardLighting: arbiter op failed");
                 }
             }
         }

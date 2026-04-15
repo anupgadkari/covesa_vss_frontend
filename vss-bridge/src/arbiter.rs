@@ -51,12 +51,29 @@ pub struct AllowEntry {
 
 /// A domain-scoped arbiter that resolves per-actuator priority conflicts.
 ///
-/// Features submit `ActuatorRequest` via the `request()` method. The arbiter's
-/// background loop validates against the allow-list, tracks per-signal winners,
-/// and publishes arbitrated values to the `SignalBus`.
+/// Features submit `ActuatorRequest` via the `request()` method to **claim** a
+/// signal at a given priority+value. Claims persist until the feature explicitly
+/// **releases** them via `release()`. The resolved winner is the highest-priority
+/// active claim across all features (latest-wins on ties). When no claims remain
+/// for a signal, the arbiter publishes the default-off value (`Bool(false)` for
+/// boolean signals).
+///
+/// This claim/release model matches real body-ECU behavior: a feature actively
+/// holds the actuator while it wants control, and lower-priority features
+/// automatically resume when a higher-priority feature withdraws.
 pub struct DomainArbiter {
     pub name: &'static str,
-    tx: mpsc::Sender<ActuatorRequest>,
+    tx: mpsc::Sender<ArbiterMsg>,
+}
+
+/// Internal channel message — request to claim, or release to withdraw.
+#[derive(Debug)]
+enum ArbiterMsg {
+    Request(ActuatorRequest),
+    Release {
+        signal: VssPath,
+        feature_id: FeatureId,
+    },
 }
 
 impl DomainArbiter {
@@ -69,7 +86,7 @@ impl DomainArbiter {
         allow_list: Vec<AllowEntry>,
         bus: Arc<B>,
     ) -> (Self, impl std::future::Future<Output = ()>) {
-        let (tx, rx) = mpsc::channel::<ActuatorRequest>(256);
+        let (tx, rx) = mpsc::channel::<ArbiterMsg>(256);
 
         let arbiter = Self { name, tx };
         let loop_fut = arbiter_loop(name, allow_list, bus, rx);
@@ -77,11 +94,26 @@ impl DomainArbiter {
         (arbiter, loop_fut)
     }
 
-    /// Submit an actuator request. Fire-and-forget from the feature's perspective.
+    /// Submit an actuator claim. The claim persists until released or replaced
+    /// by another `request()` from the same feature on the same signal.
     /// Returns an error only if the arbiter loop has been dropped.
     pub async fn request(&self, req: ActuatorRequest) -> anyhow::Result<()> {
         self.tx
-            .send(req)
+            .send(ArbiterMsg::Request(req))
+            .await
+            .map_err(|_| anyhow::anyhow!("{}: arbiter channel closed", self.name))
+    }
+
+    /// Withdraw this feature's claim on a signal. After release, the next
+    /// highest-priority claim wins; if none remain, the signal reverts to the
+    /// default-off value.
+    pub async fn release(
+        &self,
+        signal: VssPath,
+        feature_id: FeatureId,
+    ) -> anyhow::Result<()> {
+        self.tx
+            .send(ArbiterMsg::Release { signal, feature_id })
             .await
             .map_err(|_| anyhow::anyhow!("{}: arbiter channel closed", self.name))
     }
@@ -91,76 +123,143 @@ impl DomainArbiter {
 // Arbiter resolution loop
 // ---------------------------------------------------------------------------
 
-/// Background task that receives requests, validates them, resolves priority,
-/// and publishes winning values downstream.
+/// One active claim on a signal, held by a specific feature.
+#[derive(Debug, Clone)]
+struct Claim {
+    priority: Priority,
+    value: SignalValue,
+    /// Monotonic sequence number — used to tiebreak claims at equal priority
+    /// (later claim wins, matching the legacy "equal priority replaces" rule).
+    seq: u64,
+}
+
+/// Background task that receives requests/releases, tracks per-feature claims,
+/// resolves the highest-priority active claim per signal, and publishes the
+/// resulting value downstream when it changes.
 async fn arbiter_loop<B: SignalBus>(
     name: &'static str,
     allow_list: Vec<AllowEntry>,
     bus: Arc<B>,
-    mut rx: mpsc::Receiver<ActuatorRequest>,
+    mut rx: mpsc::Receiver<ArbiterMsg>,
 ) {
-    // Per-signal current winner: signal → (winning request)
-    let mut winners: HashMap<VssPath, ActuatorRequest> = HashMap::new();
+    // Per-signal active claims, indexed by the claiming feature.
+    let mut claims: HashMap<VssPath, HashMap<FeatureId, Claim>> = HashMap::new();
+    // Last value published per signal — used to suppress duplicate publishes.
+    let mut last_published: HashMap<VssPath, SignalValue> = HashMap::new();
+    let mut next_seq: u64 = 0;
 
     tracing::info!(domain = name, signals = allow_list.len(), "arbiter started");
 
-    while let Some(req) = rx.recv().await {
-        // 1. Validate against the allow-list
-        let allowed = allow_list.iter().any(|entry| {
-            entry.feature_id == req.feature_id
-                && entry.signal == req.signal
-                && entry.priority == req.priority
-        });
+    while let Some(msg) = rx.recv().await {
+        match msg {
+            ArbiterMsg::Request(req) => {
+                // Validate against the allow-list.
+                let allowed = allow_list.iter().any(|entry| {
+                    entry.feature_id == req.feature_id
+                        && entry.signal == req.signal
+                        && entry.priority == req.priority
+                });
 
-        if !allowed {
-            tracing::warn!(
-                domain = name,
-                feature = ?req.feature_id,
-                signal = req.signal,
-                priority = ?req.priority,
-                "request rejected — not in allow-list"
-            );
-            continue;
-        }
+                if !allowed {
+                    tracing::warn!(
+                        domain = name,
+                        feature = ?req.feature_id,
+                        signal = req.signal,
+                        priority = ?req.priority,
+                        "request rejected — not in allow-list"
+                    );
+                    continue;
+                }
 
-        // 2. Priority resolution: new request wins if priority >= current winner
-        let should_emit = match winners.get(req.signal) {
-            None => true,
-            Some(current) => (req.priority as u8) >= (current.priority as u8),
-        };
+                next_seq += 1;
+                let claim = Claim {
+                    priority: req.priority,
+                    value: req.value.clone(),
+                    seq: next_seq,
+                };
 
-        if should_emit {
-            tracing::debug!(
-                domain = name,
-                feature = ?req.feature_id,
-                signal = req.signal,
-                value = ?req.value,
-                priority = ?req.priority,
-                "arbiter: new winner"
-            );
-
-            if let Err(e) = bus.publish(req.signal, req.value.clone()).await {
-                tracing::error!(
+                tracing::debug!(
                     domain = name,
+                    feature = ?req.feature_id,
                     signal = req.signal,
-                    error = %e,
-                    "failed to publish arbitrated value"
+                    value = ?req.value,
+                    priority = ?req.priority,
+                    "arbiter: claim"
                 );
-            }
 
-            winners.insert(req.signal, req);
-        } else {
-            tracing::debug!(
-                domain = name,
-                feature = ?req.feature_id,
-                signal = req.signal,
-                priority = ?req.priority,
-                "arbiter: lower priority, suppressed"
-            );
+                claims
+                    .entry(req.signal)
+                    .or_default()
+                    .insert(req.feature_id, claim);
+
+                publish_resolved(name, req.signal, &claims, &mut last_published, &bus).await;
+            }
+            ArbiterMsg::Release { signal, feature_id } => {
+                let removed = claims
+                    .get_mut(signal)
+                    .map(|sc| sc.remove(&feature_id).is_some())
+                    .unwrap_or(false);
+
+                if removed {
+                    tracing::debug!(
+                        domain = name,
+                        feature = ?feature_id,
+                        signal,
+                        "arbiter: release"
+                    );
+                    publish_resolved(name, signal, &claims, &mut last_published, &bus).await;
+                }
+            }
         }
     }
 
     tracing::info!(domain = name, "arbiter loop ended");
+}
+
+/// Resolve the winning value for a signal and publish if it changed.
+///
+/// Winner: claim with the highest (priority, seq) tuple — i.e. highest priority
+/// first, then most-recent claim on a tie. If no claims remain, default to
+/// `Bool(false)` (the off-state for boolean actuators).
+async fn publish_resolved<B: SignalBus>(
+    name: &'static str,
+    signal: VssPath,
+    claims: &HashMap<VssPath, HashMap<FeatureId, Claim>>,
+    last_published: &mut HashMap<VssPath, SignalValue>,
+    bus: &Arc<B>,
+) {
+    let resolved = claims
+        .get(signal)
+        .and_then(|sc| {
+            sc.values()
+                .max_by_key(|c| (c.priority as u8, c.seq))
+                .map(|c| c.value.clone())
+        })
+        .unwrap_or(SignalValue::Bool(false));
+
+    let changed = last_published.get(signal) != Some(&resolved);
+    if !changed {
+        return;
+    }
+
+    tracing::debug!(
+        domain = name,
+        signal,
+        value = ?resolved,
+        "arbiter: publishing resolved value"
+    );
+
+    if let Err(e) = bus.publish(signal, resolved.clone()).await {
+        tracing::error!(
+            domain = name,
+            signal,
+            error = %e,
+            "failed to publish arbitrated value"
+        );
+        return;
+    }
+
+    last_published.insert(signal, resolved);
 }
 
 // ---------------------------------------------------------------------------
@@ -797,6 +896,160 @@ mod tests {
 
         let history = bus.history();
         assert_eq!(history.len(), 0, "wrong priority should be rejected");
+    }
+
+    // -----------------------------------------------------------------------
+    // Claim / release semantics (regression tests for the bug where releasing
+    // a HIGH claim by publishing Bool(false) left the arbiter stuck with a
+    // cached HIGH=false winner, preventing MEDIUM claims from resuming).
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn release_lets_lower_priority_resume() {
+        let (arbiter, bus) = setup_lighting().await;
+        let sig = "Body.Lights.DirectionIndicator.Right.IsSignaling";
+
+        // Turn (medium) claims right indicator ON.
+        arbiter
+            .request(ActuatorRequest {
+                signal: sig,
+                value: SignalValue::Bool(true),
+                priority: Priority::Medium,
+                feature_id: FeatureId::TurnIndicator,
+            })
+            .await
+            .unwrap();
+        tokio::task::yield_now().await;
+
+        // Hazard (high) takes over — equal value so no publish change.
+        arbiter
+            .request(ActuatorRequest {
+                signal: sig,
+                value: SignalValue::Bool(true),
+                priority: Priority::High,
+                feature_id: FeatureId::Hazard,
+            })
+            .await
+            .unwrap();
+        tokio::task::yield_now().await;
+
+        // Hazard releases — Turn's MEDIUM claim is still active, resolved
+        // value is still true, so nothing new should be published.
+        arbiter
+            .release(sig, FeatureId::Hazard)
+            .await
+            .unwrap();
+        tokio::task::yield_now().await;
+
+        // Turn releases last — now no claims, default-off should publish.
+        arbiter
+            .release(sig, FeatureId::TurnIndicator)
+            .await
+            .unwrap();
+        tokio::task::yield_now().await;
+
+        let history = bus.history();
+        // Expect exactly two events: Turn's initial true, then the final false
+        // when the last claim is withdrawn.
+        assert_eq!(
+            history.len(),
+            2,
+            "expected 2 publishes (claim + final release), got: {:?}",
+            history
+        );
+        assert_eq!(history[0].1, SignalValue::Bool(true));
+        assert_eq!(history[1].1, SignalValue::Bool(false));
+    }
+
+    #[tokio::test]
+    async fn release_republishes_lower_priority_distinct_value() {
+        let (arbiter, bus) = setup_lighting().await;
+        let sig = "Body.Lights.DirectionIndicator.Left.IsSignaling";
+
+        // Turn claims MEDIUM OFF (explicit claim of false).
+        arbiter
+            .request(ActuatorRequest {
+                signal: sig,
+                value: SignalValue::Bool(false),
+                priority: Priority::Medium,
+                feature_id: FeatureId::TurnIndicator,
+            })
+            .await
+            .unwrap();
+        tokio::task::yield_now().await;
+
+        // Hazard overrides with HIGH TRUE.
+        arbiter
+            .request(ActuatorRequest {
+                signal: sig,
+                value: SignalValue::Bool(true),
+                priority: Priority::High,
+                feature_id: FeatureId::Hazard,
+            })
+            .await
+            .unwrap();
+        tokio::task::yield_now().await;
+
+        // Hazard releases — Turn's MEDIUM false claim is the only survivor,
+        // so the arbiter must republish false.
+        arbiter
+            .release(sig, FeatureId::Hazard)
+            .await
+            .unwrap();
+        tokio::task::yield_now().await;
+
+        let history = bus.history();
+        // Expect false (Turn), true (Hazard overrides), false (Turn resumes).
+        assert_eq!(history.len(), 3, "history: {:?}", history);
+        assert_eq!(history[0].1, SignalValue::Bool(false));
+        assert_eq!(history[1].1, SignalValue::Bool(true));
+        assert_eq!(history[2].1, SignalValue::Bool(false));
+    }
+
+    #[tokio::test]
+    async fn release_without_any_claims_publishes_default_off() {
+        let (arbiter, bus) = setup_lighting().await;
+        let sig = "Body.Lights.DirectionIndicator.Left.IsSignaling";
+
+        // Hazard claims ON.
+        arbiter
+            .request(ActuatorRequest {
+                signal: sig,
+                value: SignalValue::Bool(true),
+                priority: Priority::High,
+                feature_id: FeatureId::Hazard,
+            })
+            .await
+            .unwrap();
+        tokio::task::yield_now().await;
+
+        // Hazard releases — no other claims, so arbiter must publish the
+        // default-off value (Bool(false)).
+        arbiter
+            .release(sig, FeatureId::Hazard)
+            .await
+            .unwrap();
+        tokio::task::yield_now().await;
+
+        let history = bus.history();
+        assert_eq!(history.len(), 2, "history: {:?}", history);
+        assert_eq!(history[0].1, SignalValue::Bool(true));
+        assert_eq!(history[1].1, SignalValue::Bool(false));
+    }
+
+    #[tokio::test]
+    async fn release_of_nonexistent_claim_is_noop() {
+        let (arbiter, bus) = setup_lighting().await;
+        let sig = "Body.Lights.DirectionIndicator.Left.IsSignaling";
+
+        // Feature releases a signal it never claimed — should do nothing.
+        arbiter
+            .release(sig, FeatureId::Hazard)
+            .await
+            .unwrap();
+        tokio::task::yield_now().await;
+
+        assert_eq!(bus.history().len(), 0);
     }
 
     // -----------------------------------------------------------------------
