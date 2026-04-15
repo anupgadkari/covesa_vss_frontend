@@ -13,9 +13,13 @@ Feature: Hazard Lighting
   #              Lighting arbiter at priority HIGH (3).
   #
   # REQ-HAZ-002: When Body.Switches.Hazard.IsEngaged transitions to FALSE,
-  #              the feature SHALL request both DirectionIndicator.Left.IsSignaling
-  #              and DirectionIndicator.Right.IsSignaling to FALSE via the
-  #              Lighting arbiter at priority HIGH (3).
+  #              the feature SHALL release its Hazard claims on both
+  #              DirectionIndicator.Left.IsSignaling and
+  #              DirectionIndicator.Right.IsSignaling via the Lighting
+  #              arbiter. Release (rather than claim-FALSE) is what allows
+  #              any pending lower-priority claim (e.g. an active
+  #              TurnIndicator MEDIUM claim from the stalk) to resume; a
+  #              stuck HIGH FALSE claim would block this.
   #
   # REQ-HAZ-003: The hazard feature SHALL subscribe to the physical switch
   #              input (Body.Switches.Hazard.IsEngaged), NOT the actuator
@@ -59,8 +63,9 @@ Feature: Hazard Lighting
     And both direction indicators are signaling due to hazard
     When the driver disengages the hazard switch
     Then Body.Switches.Hazard.IsEngaged becomes FALSE
-    And the Hazard feature requests DirectionIndicator.Left.IsSignaling = FALSE at priority HIGH
-    And the Hazard feature requests DirectionIndicator.Right.IsSignaling = FALSE at priority HIGH
+    And the Hazard feature releases its claim on DirectionIndicator.Left.IsSignaling
+    And the Hazard feature releases its claim on DirectionIndicator.Right.IsSignaling
+    And with no other active claim, the arbiter publishes the default-off value on both indicators
 
   # --- REQ-HAZ-005 ---
   Scenario: Hazard overrides active turn signal

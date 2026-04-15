@@ -11,6 +11,7 @@ pub mod signal_ids;
 pub mod arbiter;
 pub mod adapters;
 pub mod features;
+pub mod plant_models;
 pub mod kuksa_sync;
 pub mod sleep_inhibit;
 pub mod ws_bridge;
@@ -21,6 +22,7 @@ use tracing_subscriber::EnvFilter;
 use adapters::mock::MockBus;
 use features::hazard_lighting::HazardLighting;
 use features::turn_indicator::TurnIndicator;
+use plant_models::blink_relay::BlinkRelay;
 use ipc_message::SignalValue;
 use signal_bus::SignalBus;
 use ws_bridge::WsBridge;
@@ -81,6 +83,13 @@ async fn main() -> anyhow::Result<()> {
     // tokio::spawn(AutoRelock::from_config(Arc::clone(&_door_lock_arb), Arc::clone(&bus), &_platform_config).run());
 
     tracing::info!("features spawned: HazardLighting, TurnIndicator");
+
+    // ── Plant Models ────────────────────────────────────────────────
+    // Simulate physical lamp behavior the M7 / smart actuator firmware
+    // would normally provide. Plant models bypass the arbiter and
+    // publish feedback signals (lamp on/off, defects) directly.
+    tokio::spawn(BlinkRelay::new(Arc::clone(&bus)).run());
+    tracing::info!("plant models spawned: BlinkRelay (1.5 Hz / 3 Hz on defect)");
 
     // ── WebSocket bridge for L6 HMI ─────────────────────────────────
     let ws_addr = "0.0.0.0:8080".parse()?;

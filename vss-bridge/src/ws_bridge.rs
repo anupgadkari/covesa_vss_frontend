@@ -16,7 +16,8 @@ use std::sync::Arc;
 
 use futures::{SinkExt, StreamExt};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{broadcast, Mutex};
+use tokio::sync::{broadcast, Mutex, Notify};
+use tokio::time::{sleep, Duration};
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::ipc_message::SignalValue;
@@ -41,6 +42,14 @@ const INPUT_SIGNALS: &[VssPath] = &[
     "Body.Connectivity.NfcCardPresent",
     "Body.Connectivity.NfcPhonePresent",
     "Vehicle.Safety.CrashDetected",
+    // Bulb defect fault-injection (HMI toggles to simulate failed lamp).
+    // Three physical lamps per side: Front, Side (mirror repeater), Rear.
+    "Body.Lights.DirectionIndicator.Left.Lamp.Front.IsDefect",
+    "Body.Lights.DirectionIndicator.Left.Lamp.Side.IsDefect",
+    "Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsDefect",
+    "Body.Lights.DirectionIndicator.Right.Lamp.Front.IsDefect",
+    "Body.Lights.DirectionIndicator.Right.Lamp.Side.IsDefect",
+    "Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsDefect",
 ];
 
 /// Signals the bridge pushes back to the HMI (actuator outputs from arbiters).
@@ -55,6 +64,14 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     "Body.Doors.Row1.Right.IsLocked",
     "Body.Doors.Row2.Left.IsLocked",
     "Body.Doors.Row2.Right.IsLocked",
+    // Plant model outputs — actual lamp state from BlinkRelay.
+    // Three physical lamps per side: Front, Side (mirror repeater), Rear.
+    "Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn",
+    "Body.Lights.DirectionIndicator.Left.Lamp.Side.IsOn",
+    "Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsOn",
+    "Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn",
+    "Body.Lights.DirectionIndicator.Right.Lamp.Side.IsOn",
+    "Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsOn",
 ];
 
 /// Shared state snapshot sent to HMI clients.
@@ -80,11 +97,19 @@ impl<B: SignalBus> WsBridge<B> {
         let output_state: Arc<Mutex<StateSnapshot>> = Arc::new(Mutex::new(HashMap::new()));
         let (update_tx, _) = broadcast::channel::<String>(256);
 
-        // Subscribe to all output signals and update the shared state.
+        // Coalesce per-signal updates into a single 10 ms batch so that
+        // multi-signal publications (e.g. BlinkRelay toggling three lamps
+        // on one side in the same tick) arrive at the HMI as a single
+        // snapshot. This prevents the "lamps flip one-by-one" visual
+        // stagger caused by sending one websocket message per signal.
+        let dirty = Arc::new(Notify::new());
+
+        // Subscriber tasks — update shared state and mark dirty; the
+        // broadcaster task handles the debounced snapshot send.
         for &signal in OUTPUT_SIGNALS {
             let bus = Arc::clone(&self.bus);
             let state = Arc::clone(&output_state);
-            let tx = update_tx.clone();
+            let dirty = Arc::clone(&dirty);
 
             tokio::spawn(async move {
                 let mut stream = bus.subscribe(signal).await;
@@ -94,7 +119,24 @@ impl<B: SignalBus> WsBridge<B> {
                         let mut s = state.lock().await;
                         s.insert(signal, json_val);
                     }
-                    // Build full state message for HMI
+                    dirty.notify_one();
+                }
+            });
+        }
+
+        // Broadcaster: waits for a dirty notification, sleeps 10 ms to
+        // collect further updates, then sends one coalesced snapshot.
+        {
+            let state = Arc::clone(&output_state);
+            let tx = update_tx.clone();
+            let dirty = Arc::clone(&dirty);
+            tokio::spawn(async move {
+                const BATCH_WINDOW: Duration = Duration::from_millis(10);
+                loop {
+                    dirty.notified().await;
+                    // Collect any further notifications that arrive
+                    // within the batch window.
+                    sleep(BATCH_WINDOW).await;
                     let snapshot = {
                         let s = state.lock().await;
                         s.clone()

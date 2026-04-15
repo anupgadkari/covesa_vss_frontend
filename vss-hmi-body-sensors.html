@@ -82,9 +82,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--white);fo
 /* STATUS BAR */
 .stbar{height:24px;background:var(--s1);border-top:1px solid var(--bdr);display:flex;align-items:center;padding:0 12px;gap:8px;flex-shrink:0;font-family:var(--fm);font-size:9px;color:var(--dim)}
 
-/* ANIMATIONS */
-@keyframes blink{0%,49%{opacity:1}50%,100%{opacity:.1}}
-.blink{animation:blink .7s infinite}
+/* Lamp state is driven by the BlinkRelay plant model — the bridge
+   pushes Lamp.IsOn updates at 1.5 Hz (or 3 Hz on bulb defect).
+   No CSS animation: the circle's background reflects real lamp state. */
 </style>
 </head>
 <body>
@@ -136,6 +136,21 @@ const INIT_STATE={
   'Body.Connectivity.NfcPhonePresent':false,
   // Safety
   'Vehicle.Safety.CrashDetected':false,
+  // Lamp defect fault injection (HMI → bridge: simulates a failed bulb;
+  // BlinkRelay plant model doubles blink rate per UN ECE R6).
+  'Body.Lights.DirectionIndicator.Left.Lamp.Front.IsDefect':false,
+  'Body.Lights.DirectionIndicator.Left.Lamp.Side.IsDefect':false,
+  'Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsDefect':false,
+  'Body.Lights.DirectionIndicator.Right.Lamp.Front.IsDefect':false,
+  'Body.Lights.DirectionIndicator.Right.Lamp.Side.IsDefect':false,
+  'Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsDefect':false,
+  // Lamp state (bridge → HMI): actual on/off toggled by BlinkRelay.
+  'Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn':false,
+  'Body.Lights.DirectionIndicator.Left.Lamp.Side.IsOn':false,
+  'Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsOn':false,
+  'Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn':false,
+  'Body.Lights.DirectionIndicator.Right.Lamp.Side.IsOn':false,
+  'Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsOn':false,
   // Doors — open, locked, latch state (all 4 doors)
   'Body.Doors.Row1.Left.IsOpen':false,
   'Body.Doors.Row1.Right.IsOpen':false,
@@ -284,44 +299,103 @@ function App(){
           </div>
         </div>
 
-        {/* ACTUATOR OUTPUTS (arbiter-resolved — read-only) */}
+        {/* ACTUATOR OUTPUTS (plant model — actual lamp state) */}
         <div className="section" style={{borderColor:'#F59E0B',borderWidth:'2px'}}>
-          <div className="section-title" style={{color:'#F59E0B'}}>Actuator Outputs (from Arbiter)</div>
-          <div className="section-info">Read-only — these values come from the Lighting arbiter after priority resolution. They reflect what the body ECU would drive.</div>
-          <div style={{display:'flex',gap:'16px',padding:'8px 0'}}>
-            <div style={{display:'flex',alignItems:'center',gap:'8px',flex:1}}>
-              <div className={state['Body.Lights.DirectionIndicator.Left.IsSignaling']?'blink':''}
-                style={{width:'32px',height:'32px',borderRadius:'50%',
-                  background:state['Body.Lights.DirectionIndicator.Left.IsSignaling']?'#F59E0B':'#333',
-                  border:'2px solid #555',transition:'background 0.1s',
-                  boxShadow:state['Body.Lights.DirectionIndicator.Left.IsSignaling']?'0 0 12px #F59E0B':'none'}}/>
-              <div>
-                <div style={{fontSize:'11px',fontWeight:'bold',color:state['Body.Lights.DirectionIndicator.Left.IsSignaling']?'#F59E0B':'#888'}}>LEFT</div>
-                <div style={{fontSize:'9px',color:'#666'}}>Indicator</div>
-              </div>
-            </div>
-            <div style={{display:'flex',alignItems:'center',gap:'8px',flex:1,justifyContent:'flex-end'}}>
-              <div>
-                <div style={{fontSize:'11px',fontWeight:'bold',textAlign:'right',color:state['Body.Lights.DirectionIndicator.Right.IsSignaling']?'#F59E0B':'#888'}}>RIGHT</div>
-                <div style={{fontSize:'9px',color:'#666',textAlign:'right'}}>Indicator</div>
-              </div>
-              <div className={state['Body.Lights.DirectionIndicator.Right.IsSignaling']?'blink':''}
-                style={{width:'32px',height:'32px',borderRadius:'50%',
-                  background:state['Body.Lights.DirectionIndicator.Right.IsSignaling']?'#F59E0B':'#333',
-                  border:'2px solid #555',transition:'background 0.1s',
-                  boxShadow:state['Body.Lights.DirectionIndicator.Right.IsSignaling']?'0 0 12px #F59E0B':'none'}}/>
-            </div>
+          <div className="section-title" style={{color:'#F59E0B'}}>Actuator Outputs (Lamp State)</div>
+          <div className="section-info">
+            Read-only. The arbiter publishes <b>IsSignaling</b> (intent), the
+            BlinkRelay plant model drives the lamps and reports <b>Lamp.IsOn</b>
+            back. Toggle the defect switches to inject a bulb-out fault — per
+            UN&nbsp;ECE&nbsp;R6 the blink rate doubles to ~3&nbsp;Hz.
           </div>
-          <div style={{display:'flex',justifyContent:'center',padding:'4px 0'}}>
-            <div style={{fontSize:'10px',padding:'3px 10px',borderRadius:'4px',
-              background:state['Body.Lights.DirectionIndicator.Left.IsSignaling']&&state['Body.Lights.DirectionIndicator.Right.IsSignaling']?'rgba(245,158,11,.2)':'transparent',
-              color:state['Body.Lights.DirectionIndicator.Left.IsSignaling']&&state['Body.Lights.DirectionIndicator.Right.IsSignaling']?'#F59E0B':'#555',
-              fontWeight:'bold'}}>
-              {state['Body.Lights.DirectionIndicator.Left.IsSignaling']&&state['Body.Lights.DirectionIndicator.Right.IsSignaling']?'HAZARD ACTIVE':
-               state['Body.Lights.DirectionIndicator.Left.IsSignaling']?'LEFT TURN':
-               state['Body.Lights.DirectionIndicator.Right.IsSignaling']?'RIGHT TURN':'OFF'}
-            </div>
-          </div>
+          {(() => {
+            const li = state['Body.Lights.DirectionIndicator.Left.IsSignaling'];
+            const ri = state['Body.Lights.DirectionIndicator.Right.IsSignaling'];
+            const L = {
+              Front: state['Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn'],
+              Side:  state['Body.Lights.DirectionIndicator.Left.Lamp.Side.IsOn'],
+              Rear:  state['Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsOn'],
+            };
+            const R = {
+              Front: state['Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn'],
+              Side:  state['Body.Lights.DirectionIndicator.Right.Lamp.Side.IsOn'],
+              Rear:  state['Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsOn'],
+            };
+            const Ldef = {
+              Front: state['Body.Lights.DirectionIndicator.Left.Lamp.Front.IsDefect'],
+              Side:  state['Body.Lights.DirectionIndicator.Left.Lamp.Side.IsDefect'],
+              Rear:  state['Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsDefect'],
+            };
+            const Rdef = {
+              Front: state['Body.Lights.DirectionIndicator.Right.Lamp.Front.IsDefect'],
+              Side:  state['Body.Lights.DirectionIndicator.Right.Lamp.Side.IsDefect'],
+              Rear:  state['Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsDefect'],
+            };
+            const anyLdef = Ldef.Front || Ldef.Side || Ldef.Rear;
+            const anyRdef = Rdef.Front || Rdef.Side || Rdef.Rear;
+            // Defect-rate only applies in single-side turn mode, not hazard.
+            const lFast = li && !ri && anyLdef;
+            const rFast = ri && !li && anyRdef;
+            const lampStyle = (on, defect) => ({
+              width:'26px',height:'26px',borderRadius:'50%',
+              background:on?(defect?'#F04040':'#F59E0B'):'#333',
+              border:`2px solid ${defect?'#F04040':'#555'}`,
+              transition:'background 0.05s, box-shadow 0.05s',
+              boxShadow:on?`0 0 10px ${defect?'#F04040':'#F59E0B'}`:'none'
+            });
+            const lampGroup = (lamps, defs) => (
+              <div style={{display:'flex',gap:'6px',alignItems:'center'}}>
+                {['Front','Side','Rear'].map(k => (
+                  <div key={k} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'2px'}}>
+                    <div style={lampStyle(lamps[k], defs[k])}/>
+                    <div style={{fontSize:'8px',color:defs[k]?'#F04040':'#666'}}>{k}</div>
+                  </div>
+                ))}
+              </div>
+            );
+            const defectToggles = (sideLabel, defs, pathPrefix) => (
+              <div style={{display:'flex',gap:'12px',padding:'4px 0',alignItems:'center'}}>
+                <div style={{fontSize:'10px',color:'#888',minWidth:'80px'}}>{sideLabel} Defects</div>
+                {['Front','Side','Rear'].map(k => (
+                  <div key={k} style={{display:'flex',alignItems:'center',gap:'4px'}}>
+                    <div className="tog" style={{transform:'scale(.7)',...(defs[k]?{borderColor:'#F04040',background:'rgba(240,64,64,.12)'}:{})}}
+                      onClick={()=>set(`${pathPrefix}.${k}.IsDefect`,!defs[k])}>
+                      <div className="knob" style={defs[k]?{transform:'translateX(20px)',background:'#F04040'}:{}}/>
+                    </div>
+                    <div style={{fontSize:'9px',color:defs[k]?'#F04040':'#888'}}>{k}</div>
+                  </div>
+                ))}
+              </div>
+            );
+            return <>
+              <div style={{display:'flex',gap:'16px',padding:'8px 0',justifyContent:'space-between',alignItems:'center'}}>
+                <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+                  {lampGroup(L, Ldef)}
+                  <div>
+                    <div style={{fontSize:'11px',fontWeight:'bold',color:li?'#F59E0B':'#888'}}>LEFT</div>
+                    <div style={{fontSize:'9px',color:'#666'}}>{lFast?'DEFECT · 3 Hz':(li?'1.5 Hz':'idle')}</div>
+                  </div>
+                </div>
+                <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+                  <div>
+                    <div style={{fontSize:'11px',fontWeight:'bold',textAlign:'right',color:ri?'#F59E0B':'#888'}}>RIGHT</div>
+                    <div style={{fontSize:'9px',color:'#666',textAlign:'right'}}>{rFast?'DEFECT · 3 Hz':(ri?'1.5 Hz':'idle')}</div>
+                  </div>
+                  {lampGroup(R, Rdef)}
+                </div>
+              </div>
+              <div style={{display:'flex',justifyContent:'center',padding:'4px 0'}}>
+                <div style={{fontSize:'10px',padding:'3px 10px',borderRadius:'4px',
+                  background:(li&&ri)?'rgba(245,158,11,.2)':'transparent',
+                  color:(li&&ri)?'#F59E0B':(li||ri?'#F59E0B':'#555'),
+                  fontWeight:'bold'}}>
+                  {li&&ri?'HAZARD ACTIVE (intent)':li?'LEFT TURN (intent)':ri?'RIGHT TURN (intent)':'OFF'}
+                </div>
+              </div>
+              {defectToggles('Left', Ldef, 'Body.Lights.DirectionIndicator.Left.Lamp')}
+              {defectToggles('Right', Rdef, 'Body.Lights.DirectionIndicator.Right.Lamp')}
+            </>;
+          })()}
         </div>
 
         {/* SWITCHES & STALKS (overlay inputs for FSMs) */}
