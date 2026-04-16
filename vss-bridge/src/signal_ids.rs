@@ -172,7 +172,10 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
 /// Returns the VSS path for a given signal ID, or `None` if unknown.
 pub fn id_to_path(id: u32) -> Option<VssPath> {
     // Reverse lookup — in production this would be a generated phf map.
-    ALL_SIGNALS.iter().find(|(_, sid)| *sid == id).map(|(p, _)| *p)
+    ALL_SIGNALS
+        .iter()
+        .find(|(_, sid)| *sid == id)
+        .map(|(p, _)| *p)
 }
 
 /// Complete signal catalog: (path, id) pairs.
@@ -188,21 +191,63 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Body.Lights.Brake.IsActive", 0x0002_0007),
     ("Body.Lights.Backup.IsActive", 0x0002_0008),
     ("Body.Lights.LicensePlate.IsOn", 0x0002_0009),
-    ("Body.Lights.DirectionIndicator.Left.IsSignaling", 0x0002_000A),
-    ("Body.Lights.DirectionIndicator.Right.IsSignaling", 0x0002_000B),
+    (
+        "Body.Lights.DirectionIndicator.Left.IsSignaling",
+        0x0002_000A,
+    ),
+    (
+        "Body.Lights.DirectionIndicator.Right.IsSignaling",
+        0x0002_000B,
+    ),
     ("Body.Lights.Hazard.IsSignaling", 0x0002_000C),
-    ("Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn", 0x0002_000D),
-    ("Body.Lights.DirectionIndicator.Left.Lamp.Side.IsOn", 0x0002_000E),
-    ("Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsOn", 0x0002_000F),
-    ("Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn", 0x0002_0010),
-    ("Body.Lights.DirectionIndicator.Right.Lamp.Side.IsOn", 0x0002_0011),
-    ("Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsOn", 0x0002_0012),
-    ("Body.Lights.DirectionIndicator.Left.Lamp.Front.IsDefect", 0x0002_0013),
-    ("Body.Lights.DirectionIndicator.Left.Lamp.Side.IsDefect", 0x0002_0014),
-    ("Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsDefect", 0x0002_0015),
-    ("Body.Lights.DirectionIndicator.Right.Lamp.Front.IsDefect", 0x0002_0016),
-    ("Body.Lights.DirectionIndicator.Right.Lamp.Side.IsDefect", 0x0002_0017),
-    ("Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsDefect", 0x0002_0018),
+    (
+        "Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn",
+        0x0002_000D,
+    ),
+    (
+        "Body.Lights.DirectionIndicator.Left.Lamp.Side.IsOn",
+        0x0002_000E,
+    ),
+    (
+        "Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsOn",
+        0x0002_000F,
+    ),
+    (
+        "Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn",
+        0x0002_0010,
+    ),
+    (
+        "Body.Lights.DirectionIndicator.Right.Lamp.Side.IsOn",
+        0x0002_0011,
+    ),
+    (
+        "Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsOn",
+        0x0002_0012,
+    ),
+    (
+        "Body.Lights.DirectionIndicator.Left.Lamp.Front.IsDefect",
+        0x0002_0013,
+    ),
+    (
+        "Body.Lights.DirectionIndicator.Left.Lamp.Side.IsDefect",
+        0x0002_0014,
+    ),
+    (
+        "Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsDefect",
+        0x0002_0015,
+    ),
+    (
+        "Body.Lights.DirectionIndicator.Right.Lamp.Front.IsDefect",
+        0x0002_0016,
+    ),
+    (
+        "Body.Lights.DirectionIndicator.Right.Lamp.Side.IsDefect",
+        0x0002_0017,
+    ),
+    (
+        "Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsDefect",
+        0x0002_0018,
+    ),
     ("Body.Windshield.Front.Wiping.Mode", 0x0003_0001),
     ("Body.Windshield.Front.Wiping.Intensity", 0x0003_0002),
     ("Body.Windshield.Front.Washing.IsActive", 0x0003_0003),
@@ -327,6 +372,10 @@ mod tests {
         let mut ids: Vec<u32> = ALL_SIGNALS.iter().map(|(_, id)| *id).collect();
         ids.sort();
         ids.dedup();
-        assert_eq!(ids.len(), ALL_SIGNALS.len(), "duplicate signal IDs detected");
+        assert_eq!(
+            ids.len(),
+            ALL_SIGNALS.len(),
+            "duplicate signal IDs detected"
+        );
     }
 }

@@ -207,12 +207,7 @@ async fn hazard_engaged_then_disengaged_with_turn_resuming() {
     let (mut tx, mut rx) = connect_ws().await;
 
     // Ignition ON + stalk RIGHT
-    send_sensor(
-        &mut tx,
-        "Vehicle.LowVoltageSystemState",
-        json!("ON"),
-    )
-    .await;
+    send_sensor(&mut tx, "Vehicle.LowVoltageSystemState", json!("ON")).await;
     sleep(Duration::from_millis(50)).await;
 
     send_sensor(
@@ -230,7 +225,10 @@ async fn hazard_engaged_then_disengaged_with_turn_resuming() {
         Duration::from_secs(2),
     )
     .await;
-    assert!(right_on, "Right should signal after stalk RIGHT + ignition ON");
+    assert!(
+        right_on,
+        "Right should signal after stalk RIGHT + ignition ON"
+    );
 
     // Engage hazard
     send_sensor(&mut tx, "Body.Switches.Hazard.IsEngaged", json!(true)).await;
@@ -270,23 +268,12 @@ async fn plant_model_blinks_at_expected_rate() {
 
     // Wait for the first lamp event to appear.
     let lamp_path = "Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn";
-    let started = wait_for_state(
-        &mut rx,
-        lamp_path,
-        json!(true),
-        Duration::from_secs(2),
-    )
-    .await;
+    let started = wait_for_state(&mut rx, lamp_path, json!(true), Duration::from_secs(2)).await;
     assert!(started, "plant model should start blinking");
 
     // Count transitions over 2 seconds at 1.5 Hz (333 ms half-period).
     // Expected: ~6 transitions (on→off→on→off→on→off) in 2s.
-    let transitions = count_transitions(
-        &mut rx,
-        lamp_path,
-        Duration::from_secs(2),
-    )
-    .await;
+    let transitions = count_transitions(&mut rx, lamp_path, Duration::from_secs(2)).await;
     assert!(
         (4..=8).contains(&transitions),
         "expected 4-8 lamp transitions in 2s at 1.5 Hz, got {transitions}"

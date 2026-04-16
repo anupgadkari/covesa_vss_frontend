@@ -299,10 +299,7 @@ mod tests {
     use crate::adapters::mock::MockBus;
     use tokio::time::advance;
 
-    fn lamp_events(
-        history: &[(VssPath, SignalValue)],
-        signal: VssPath,
-    ) -> Vec<bool> {
+    fn lamp_events(history: &[(VssPath, SignalValue)], signal: VssPath) -> Vec<bool> {
         history
             .iter()
             .filter(|(s, _)| *s == signal)
@@ -349,7 +346,12 @@ mod tests {
 
         for lamp in LEFT_LAMPS {
             let events = lamp_events(&bus.history(), lamp);
-            assert_eq!(events, vec![false], "{} should turn off at falling edge", lamp);
+            assert_eq!(
+                events,
+                vec![false],
+                "{} should turn off at falling edge",
+                lamp
+            );
         }
     }
 
@@ -367,8 +369,12 @@ mod tests {
         }
 
         let events = lamp_events(&bus.history(), LEFT_LAMP_FRONT);
-        assert_eq!(events, vec![true, false, true, false],
-            "expected 4 events at 1.5 Hz on front lamp: {:?}", events);
+        assert_eq!(
+            events,
+            vec![true, false, true, false],
+            "expected 4 events at 1.5 Hz on front lamp: {:?}",
+            events
+        );
     }
 
     #[tokio::test(start_paused = true)]
@@ -392,8 +398,13 @@ mod tests {
         // All three lamps on the left side should show the same pattern.
         for lamp in LEFT_LAMPS {
             let events = lamp_events(&bus.history(), lamp);
-            assert_eq!(events, vec![true, false, true, false, true],
-                "expected 5 events at 3 Hz (defect) on {}: {:?}", lamp, events);
+            assert_eq!(
+                events,
+                vec![true, false, true, false, true],
+                "expected 5 events at 3 Hz (defect) on {}: {:?}",
+                lamp,
+                events
+            );
         }
     }
 
@@ -417,8 +428,12 @@ mod tests {
 
         let events = lamp_events(&bus.history(), LEFT_LAMP_FRONT);
         // initial ON + one OFF toggle => 2 events
-        assert_eq!(events, vec![true, false],
-            "hazard should use 1.5 Hz despite defect: {:?}", events);
+        assert_eq!(
+            events,
+            vec![true, false],
+            "hazard should use 1.5 Hz despite defect: {:?}",
+            events
+        );
     }
 
     #[tokio::test(start_paused = true)]
@@ -442,9 +457,11 @@ mod tests {
 
         let left_events = lamp_events(&bus.history(), LEFT_LAMP_FRONT);
         let right_events = lamp_events(&bus.history(), RIGHT_LAMP_FRONT);
-        assert_eq!(left_events, right_events,
+        assert_eq!(
+            left_events, right_events,
             "left and right should toggle in sync in hazard: L={:?} R={:?}",
-            left_events, right_events);
+            left_events, right_events
+        );
         assert_eq!(left_events.len(), 1, "expected exactly one toggle in 333ms");
     }
 
@@ -513,7 +530,10 @@ mod tests {
         }
 
         let events = lamp_events(&bus.history(), RIGHT_LAMP_FRONT);
-        assert!(events.len() >= 2,
-            "right should keep blinking after left falling edge: {:?}", events);
+        assert!(
+            events.len() >= 2,
+            "right should keep blinking after left falling edge: {:?}",
+            events
+        );
     }
 }

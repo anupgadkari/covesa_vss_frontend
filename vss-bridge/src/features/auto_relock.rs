@@ -167,11 +167,8 @@ impl<B: SignalBus> AutoRelock<B> {
 
             if let Phase1Result::CrashDetected = phase1 {
                 tracing::warn!("AutoRelock: crash detected (idle), entering DISABLED state");
-                self.wait_for_power_cycle(
-                    &mut crash_stream,
-                    &mut power_stream,
-                )
-                .await;
+                self.wait_for_power_cycle(&mut crash_stream, &mut power_stream)
+                    .await;
                 continue; // Re-enter phase 1 in ENABLED mode
             }
 
@@ -232,11 +229,8 @@ impl<B: SignalBus> AutoRelock<B> {
                     tracing::warn!(
                         "AutoRelock: crash detected during timer, entering DISABLED state"
                     );
-                    self.wait_for_power_cycle(
-                        &mut crash_stream,
-                        &mut power_stream,
-                    )
-                    .await;
+                    self.wait_for_power_cycle(&mut crash_stream, &mut power_stream)
+                        .await;
                     // Re-enter phase 1 in ENABLED mode
                 }
             }
@@ -331,14 +325,17 @@ mod tests {
     /// Helper: set up AutoRelock with a short timeout for testing.
     async fn setup(
         timeout: Duration,
-    ) -> (Arc<MockBus>, Arc<DoorLockArbiter>, tokio::task::JoinHandle<()>) {
+    ) -> (
+        Arc<MockBus>,
+        Arc<DoorLockArbiter>,
+        tokio::task::JoinHandle<()>,
+    ) {
         let bus = Arc::new(MockBus::new());
         let (arbiter, _ack_tx, loop_fut) = door_lock_arbiter(Arc::clone(&bus));
         tokio::spawn(loop_fut);
         let arbiter = Arc::new(arbiter);
 
-        let feature = AutoRelock::new(Arc::clone(&arbiter), Arc::clone(&bus))
-            .with_timeout(timeout);
+        let feature = AutoRelock::new(Arc::clone(&arbiter), Arc::clone(&bus)).with_timeout(timeout);
         let handle = tokio::spawn(feature.run());
 
         // Let everything start up
@@ -446,25 +443,25 @@ mod tests {
         );
 
         // Feature should still be running (in DISABLED state, waiting for power cycle)
-        assert!(!handle.is_finished(), "AutoRelock should be alive in DISABLED state");
+        assert!(
+            !handle.is_finished(),
+            "AutoRelock should be alive in DISABLED state"
+        );
 
         // Simulate power cycle: OFF → ON
-        bus.inject(
-            POWER_STATE_SIGNAL,
-            SignalValue::String("OFF".to_string()),
-        );
+        bus.inject(POWER_STATE_SIGNAL, SignalValue::String("OFF".to_string()));
         tokio::task::yield_now().await;
         sleep(Duration::from_millis(10)).await;
 
-        bus.inject(
-            POWER_STATE_SIGNAL,
-            SignalValue::String("ON".to_string()),
-        );
+        bus.inject(POWER_STATE_SIGNAL, SignalValue::String("ON".to_string()));
         tokio::task::yield_now().await;
         sleep(Duration::from_millis(10)).await;
 
         // Feature should still be running (re-enabled, back in phase 1)
-        assert!(!handle.is_finished(), "AutoRelock should be re-enabled after power cycle");
+        assert!(
+            !handle.is_finished(),
+            "AutoRelock should be re-enabled after power cycle"
+        );
 
         // Now verify it works again: unlock → timeout → LOCK
         bus.clear_history();
@@ -494,7 +491,10 @@ mod tests {
         sleep(Duration::from_millis(50)).await;
 
         // Feature should still be alive (DISABLED, waiting for power cycle)
-        assert!(!handle.is_finished(), "AutoRelock should be in DISABLED state");
+        assert!(
+            !handle.is_finished(),
+            "AutoRelock should be in DISABLED state"
+        );
 
         // Unlock during DISABLED — should be ignored
         bus.inject("Body.Doors.Row1.Left.IsLocked", SignalValue::Bool(false));
@@ -522,27 +522,18 @@ mod tests {
         sleep(Duration::from_millis(50)).await;
 
         // Power cycle: OFF → ACC → ON
-        bus.inject(
-            POWER_STATE_SIGNAL,
-            SignalValue::String("OFF".to_string()),
-        );
+        bus.inject(POWER_STATE_SIGNAL, SignalValue::String("OFF".to_string()));
         tokio::task::yield_now().await;
         sleep(Duration::from_millis(10)).await;
 
-        bus.inject(
-            POWER_STATE_SIGNAL,
-            SignalValue::String("ACC".to_string()),
-        );
+        bus.inject(POWER_STATE_SIGNAL, SignalValue::String("ACC".to_string()));
         tokio::task::yield_now().await;
         sleep(Duration::from_millis(10)).await;
 
         // Should still be disabled — ACC is not ON/START
         // (We can't easily assert DISABLED here, but we verify ON re-enables)
 
-        bus.inject(
-            POWER_STATE_SIGNAL,
-            SignalValue::String("ON".to_string()),
-        );
+        bus.inject(POWER_STATE_SIGNAL, SignalValue::String("ON".to_string()));
         tokio::task::yield_now().await;
         sleep(Duration::from_millis(10)).await;
 

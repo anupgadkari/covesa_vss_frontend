@@ -71,9 +71,8 @@ impl VssWorld {
         self._tasks.push(tokio::spawn(
             HazardLighting::new(Arc::clone(&arb), Arc::clone(&bus)).run(),
         ));
-        self._tasks.push(tokio::spawn(
-            BlinkRelay::new(Arc::clone(&bus)).run(),
-        ));
+        self._tasks
+            .push(tokio::spawn(BlinkRelay::new(Arc::clone(&bus)).run()));
 
         // Yield enough times for every spawned task to reach its first
         // `.subscribe().await` so injections don't get lost.
@@ -147,11 +146,8 @@ async fn infrastructure(w: &mut VssWorld) {
 #[given(regex = r#"^the vehicle low-voltage system is in state "(ON|OFF|ACC|START)"$"#)]
 async fn given_ignition(w: &mut VssWorld, state: String) {
     w.ensure_started().await;
-    w.inject(
-        "Vehicle.LowVoltageSystemState",
-        SignalValue::String(state),
-    )
-    .await;
+    w.inject("Vehicle.LowVoltageSystemState", SignalValue::String(state))
+        .await;
 }
 
 // ---- Turn stalk position ----
@@ -238,11 +234,8 @@ async fn given_both_signaling(w: &mut VssWorld) {
 
 #[given(regex = r#"^Vehicle.LowVoltageSystemState was "([^"]+)" \(turn inactive\)$"#)]
 async fn given_ignition_was(w: &mut VssWorld, state: String) {
-    w.inject(
-        "Vehicle.LowVoltageSystemState",
-        SignalValue::String(state),
-    )
-    .await;
+    w.inject("Vehicle.LowVoltageSystemState", SignalValue::String(state))
+        .await;
 }
 
 // ===========================================================================
@@ -277,11 +270,8 @@ async fn when_hazard_off(w: &mut VssWorld) {
 #[when(regex = r#"^Vehicle.LowVoltageSystemState transitions to "(ON|OFF|ACC|START)"$"#)]
 async fn when_ignition(w: &mut VssWorld, state: String) {
     w.bus().clear_history();
-    w.inject(
-        "Vehicle.LowVoltageSystemState",
-        SignalValue::String(state),
-    )
-    .await;
+    w.inject("Vehicle.LowVoltageSystemState", SignalValue::String(state))
+        .await;
 }
 
 // Lock Feedback When/Then steps are intentionally NOT defined here.
@@ -318,8 +308,12 @@ async fn then_hazard_becomes_false(w: &mut VssWorld) {
 
 // ---- Feature requests (observable effect: signal becomes TRUE) ----
 
-#[then(regex = r"^the Turn feature requests DirectionIndicator\.(Left|Right)\.IsSignaling = TRUE at priority MEDIUM$")]
-#[then(regex = r"^the Hazard feature requests DirectionIndicator\.(Left|Right)\.IsSignaling = TRUE at priority HIGH$")]
+#[then(
+    regex = r"^the Turn feature requests DirectionIndicator\.(Left|Right)\.IsSignaling = TRUE at priority MEDIUM$"
+)]
+#[then(
+    regex = r"^the Hazard feature requests DirectionIndicator\.(Left|Right)\.IsSignaling = TRUE at priority HIGH$"
+)]
 async fn then_indicator_true(w: &mut VssWorld, side: String) {
     let path = indicator_path(&side);
     assert_eq!(
@@ -331,8 +325,12 @@ async fn then_indicator_true(w: &mut VssWorld, side: String) {
 
 // ---- Feature releases (observable: signal becomes FALSE if no other claim) ----
 
-#[then(regex = r"^the Turn feature releases its claim on DirectionIndicator\.(Left|Right)\.IsSignaling$")]
-#[then(regex = r"^the Hazard feature releases its claim on DirectionIndicator\.(Left|Right)\.IsSignaling$")]
+#[then(
+    regex = r"^the Turn feature releases its claim on DirectionIndicator\.(Left|Right)\.IsSignaling$"
+)]
+#[then(
+    regex = r"^the Hazard feature releases its claim on DirectionIndicator\.(Left|Right)\.IsSignaling$"
+)]
 async fn then_indicator_released(w: &mut VssWorld, side: String) {
     // A release doesn't necessarily mean FALSE — another feature's claim
     // may keep it TRUE. We verify by checking the resolved state:
@@ -348,7 +346,9 @@ async fn then_indicator_released(w: &mut VssWorld, side: String) {
 
 // ---- Hazard disengaged → default-off when no other claim ----
 
-#[then("with no other active claim, the arbiter publishes the default-off value on both indicators")]
+#[then(
+    "with no other active claim, the arbiter publishes the default-off value on both indicators"
+)]
 async fn then_both_default_off(w: &mut VssWorld) {
     assert_eq!(
         w.current_value(LEFT_SIGNALING),
@@ -456,8 +456,14 @@ async fn then_no_periodic_toggles(w: &mut VssWorld) {
 
     let after_left = w.publish_count(LEFT_SIGNALING);
     let after_right = w.publish_count(RIGHT_SIGNALING);
-    assert_eq!(before_left, after_left, "no extra Left.IsSignaling publishes");
-    assert_eq!(before_right, after_right, "no extra Right.IsSignaling publishes");
+    assert_eq!(
+        before_left, after_left,
+        "no extra Left.IsSignaling publishes"
+    );
+    assert_eq!(
+        before_right, after_right,
+        "no extra Right.IsSignaling publishes"
+    );
 }
 
 // ---- Turn does NOT act when ignition is off/acc ----

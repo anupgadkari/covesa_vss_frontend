@@ -132,7 +132,10 @@ mod tests {
 
         let hist = bus.history();
         assert_eq!(hist.len(), 2);
-        assert_eq!(hist[0], ("Body.Lights.Beam.Low.IsOn", SignalValue::Bool(true)));
+        assert_eq!(
+            hist[0],
+            ("Body.Lights.Beam.Low.IsOn", SignalValue::Bool(true))
+        );
         assert_eq!(hist[1], ("Body.Horn.IsActive", SignalValue::Bool(false)));
     }
 
@@ -147,13 +150,10 @@ mod tests {
             bus2.inject("Body.Lights.Beam.Low.IsOn", SignalValue::Bool(true));
         });
 
-        let val = tokio::time::timeout(
-            std::time::Duration::from_millis(100),
-            stream.next(),
-        )
-        .await
-        .expect("timed out")
-        .expect("stream ended");
+        let val = tokio::time::timeout(std::time::Duration::from_millis(100), stream.next())
+            .await
+            .expect("timed out")
+            .expect("stream ended");
 
         assert_eq!(val, SignalValue::Bool(true));
     }
@@ -162,7 +162,11 @@ mod tests {
     async fn publish_await_ack_returns_ok() {
         let bus = MockBus::new();
         let result = bus
-            .publish_await_ack("Body.Doors.Row1.Left.IsLocked", SignalValue::Bool(true), 100)
+            .publish_await_ack(
+                "Body.Doors.Row1.Left.IsLocked",
+                SignalValue::Bool(true),
+                100,
+            )
             .await
             .unwrap();
         assert_eq!(result, AckResult::Ok);
@@ -180,11 +184,8 @@ mod tests {
         bus.inject("Body.Horn.IsActive", SignalValue::Bool(true));
 
         // stream_a should not receive anything
-        let result = tokio::time::timeout(
-            std::time::Duration::from_millis(50),
-            stream_a.next(),
-        )
-        .await;
+        let result =
+            tokio::time::timeout(std::time::Duration::from_millis(50), stream_a.next()).await;
         assert!(result.is_err(), "should have timed out — wrong signal");
     }
 

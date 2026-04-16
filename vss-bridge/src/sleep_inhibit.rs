@@ -260,9 +260,15 @@ mod tests {
     async fn multiple_claims_all_must_release() {
         let mgr = SleepInhibitManager::new(Duration::from_secs(60));
 
-        let g1 = mgr.acquire("AutoRelockTimer", Duration::from_secs(60)).await;
-        let g2 = mgr.acquire("LockFeedbackBlink", Duration::from_secs(5)).await;
-        let g3 = mgr.acquire("DoorLockInFlight", Duration::from_secs(2)).await;
+        let g1 = mgr
+            .acquire("AutoRelockTimer", Duration::from_secs(60))
+            .await;
+        let g2 = mgr
+            .acquire("LockFeedbackBlink", Duration::from_secs(5))
+            .await;
+        let g3 = mgr
+            .acquire("DoorLockInFlight", Duration::from_secs(2))
+            .await;
         assert_eq!(mgr.active_count().await, 3);
 
         g1.release();
@@ -320,7 +326,9 @@ mod tests {
         // Reaper checks every 50ms; claim has max hold of 100ms.
         let mgr = SleepInhibitManager::new(Duration::from_millis(50));
 
-        let _guard = mgr.acquire("StuckFeature", Duration::from_millis(100)).await;
+        let _guard = mgr
+            .acquire("StuckFeature", Duration::from_millis(100))
+            .await;
         assert_eq!(mgr.active_count().await, 1);
 
         // Wait for the reaper to expire it (100ms max_hold + 50ms reaper interval + margin).
@@ -366,8 +374,12 @@ mod tests {
     async fn active_claims_returns_info() {
         let mgr = SleepInhibitManager::new(Duration::from_secs(60));
 
-        let _g1 = mgr.acquire("AutoRelockTimer", Duration::from_secs(60)).await;
-        let _g2 = mgr.acquire("LockFeedbackBlink", Duration::from_secs(5)).await;
+        let _g1 = mgr
+            .acquire("AutoRelockTimer", Duration::from_secs(60))
+            .await;
+        let _g2 = mgr
+            .acquire("LockFeedbackBlink", Duration::from_secs(5))
+            .await;
 
         let claims = mgr.active_claims().await;
         assert_eq!(claims.len(), 2);

@@ -1,0 +1,57 @@
+name: Playwright Smoke (Tier 3)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  playwright:
+    name: HMI Smoke Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: vss-bridge
+
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: "27.x"
+
+      - name: Build vss-bridge
+        run: cargo build --manifest-path vss-bridge/Cargo.toml --release
+
+      - name: Start vss-bridge
+        run: |
+          ./vss-bridge/target/release/vss-bridge &
+          sleep 2
+        env:
+          RUST_LOG: warn
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Playwright dependencies
+        working-directory: tests/playwright
+        run: |
+          npm ci
+          npx playwright install chromium --with-deps
+
+      - name: Run Playwright tests
+        working-directory: tests/playwright
+        run: npx playwright test
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: tests/playwright/playwright-report/
+          retention-days: 7

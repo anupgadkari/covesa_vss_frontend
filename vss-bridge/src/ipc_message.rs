@@ -35,11 +35,11 @@ pub enum SignalValue {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum SigType {
-    Bool   = 0,
-    Uint8  = 1,
-    Int16  = 2,
+    Bool = 0,
+    Uint8 = 1,
+    Int16 = 2,
     Uint16 = 3,
-    Float  = 4,
+    Float = 4,
 }
 
 impl SigType {
@@ -59,11 +59,11 @@ impl SignalValue {
     /// Returns the wire type tag for this value.
     pub fn sig_type(&self) -> SigType {
         match self {
-            Self::Bool(_)   => SigType::Bool,
-            Self::Uint8(_)  => SigType::Uint8,
-            Self::Int16(_)  => SigType::Int16,
+            Self::Bool(_) => SigType::Bool,
+            Self::Uint8(_) => SigType::Uint8,
+            Self::Int16(_) => SigType::Int16,
             Self::Uint16(_) => SigType::Uint16,
-            Self::Float(_)  => SigType::Float,
+            Self::Float(_) => SigType::Float,
             Self::String(_) => panic!("String values are not IPC-wire-encodable"),
         }
     }
@@ -74,9 +74,9 @@ impl SignalValue {
     /// application-layer only and not sent over the 28-byte IPC wire format.
     pub fn encode_bytes(&self) -> [u8; 4] {
         match self {
-            Self::Bool(v)   => [*v as u8, 0, 0, 0],
-            Self::Uint8(v)  => [*v, 0, 0, 0],
-            Self::Int16(v)  => {
+            Self::Bool(v) => [*v as u8, 0, 0, 0],
+            Self::Uint8(v) => [*v, 0, 0, 0],
+            Self::Int16(v) => {
                 let b = v.to_le_bytes();
                 [b[0], b[1], 0, 0]
             }
@@ -84,7 +84,7 @@ impl SignalValue {
                 let b = v.to_le_bytes();
                 [b[0], b[1], 0, 0]
             }
-            Self::Float(v)  => v.to_le_bytes(),
+            Self::Float(v) => v.to_le_bytes(),
             Self::String(_) => panic!("String values are not IPC-wire-encodable"),
         }
     }
@@ -92,11 +92,11 @@ impl SignalValue {
     /// Decode a value from a 4-byte buffer given the type tag.
     pub fn decode_bytes(sig_type: SigType, bytes: [u8; 4]) -> Self {
         match sig_type {
-            SigType::Bool   => Self::Bool(bytes[0] != 0),
-            SigType::Uint8  => Self::Uint8(bytes[0]),
-            SigType::Int16  => Self::Int16(i16::from_le_bytes([bytes[0], bytes[1]])),
+            SigType::Bool => Self::Bool(bytes[0] != 0),
+            SigType::Uint8 => Self::Uint8(bytes[0]),
+            SigType::Int16 => Self::Int16(i16::from_le_bytes([bytes[0], bytes[1]])),
             SigType::Uint16 => Self::Uint16(u16::from_le_bytes([bytes[0], bytes[1]])),
-            SigType::Float  => Self::Float(f32::from_le_bytes(bytes)),
+            SigType::Float => Self::Float(f32::from_le_bytes(bytes)),
         }
     }
 }
@@ -109,23 +109,23 @@ impl SignalValue {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum FeatureId {
-    KeyfobPeps     = 0x01,
-    Hazard         = 0x02,
-    TurnIndicator  = 0x03,
-    LowBeam        = 0x04,
-    HighBeam       = 0x05,
-    Drl            = 0x06,
-    AutoLock       = 0x07,
-    LockFeedback   = 0x08,
-    Welcome        = 0x09,
+    KeyfobPeps = 0x01,
+    Hazard = 0x02,
+    TurnIndicator = 0x03,
+    LowBeam = 0x04,
+    HighBeam = 0x05,
+    Drl = 0x06,
+    AutoLock = 0x07,
+    LockFeedback = 0x08,
+    Welcome = 0x09,
     DoorTrimButton = 0x0A,
-    KeyfobRke      = 0x0B,
-    PhoneApp       = 0x0C,
-    CrashUnlock    = 0x0D,
-    PhoneBle       = 0x0E,
-    NfcCard        = 0x0F,
-    NfcPhone       = 0x10,
-    AutoRelock     = 0x11,
+    KeyfobRke = 0x0B,
+    PhoneApp = 0x0C,
+    CrashUnlock = 0x0D,
+    PhoneBle = 0x0E,
+    NfcCard = 0x0F,
+    NfcPhone = 0x10,
+    AutoRelock = 0x11,
 }
 
 impl FeatureId {
@@ -148,7 +148,7 @@ impl FeatureId {
             0x0F => Some(Self::NfcCard),
             0x10 => Some(Self::NfcPhone),
             0x11 => Some(Self::AutoRelock),
-            _    => None,
+            _ => None,
         }
     }
 }
@@ -157,9 +157,9 @@ impl FeatureId {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum Priority {
-    Low    = 1,
+    Low = 1,
     Medium = 2,
-    High   = 3,
+    High = 3,
 }
 
 impl Priority {
@@ -177,10 +177,10 @@ impl Priority {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum MsgType {
-    ActuatorCmd  = 0x01,
-    StateUpdate  = 0x02,
-    CmdAck       = 0x03,
-    FaultReport  = 0x04,
+    ActuatorCmd = 0x01,
+    StateUpdate = 0x02,
+    CmdAck = 0x03,
+    FaultReport = 0x04,
 }
 
 impl MsgType {
@@ -199,12 +199,12 @@ impl MsgType {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum AckStatus {
-    Ok            = 0x00,
-    ErrSafety     = 0x01,
-    ErrPriority   = 0x02,
-    ErrState      = 0x03,
-    ErrChecksum   = 0x04,
-    ErrVersion    = 0x05,
+    Ok = 0x00,
+    ErrSafety = 0x01,
+    ErrPriority = 0x02,
+    ErrState = 0x03,
+    ErrChecksum = 0x04,
+    ErrVersion = 0x05,
     ErrUnknownSig = 0x06,
 }
 
@@ -218,7 +218,7 @@ impl AckStatus {
             0x04 => Some(Self::ErrChecksum),
             0x05 => Some(Self::ErrVersion),
             0x06 => Some(Self::ErrUnknownSig),
-            _    => None,
+            _ => None,
         }
     }
 }
@@ -227,11 +227,11 @@ impl AckStatus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum FaultCode {
-    LampOpenCircuit  = 0x01,
-    LampShort        = 0x02,
-    ActuatorTimeout  = 0x03,
-    SensorLost       = 0x04,
-    NvmError         = 0x05,
+    LampOpenCircuit = 0x01,
+    LampShort = 0x02,
+    ActuatorTimeout = 0x03,
+    SensorLost = 0x04,
+    NvmError = 0x05,
 }
 
 impl FaultCode {
@@ -242,7 +242,7 @@ impl FaultCode {
             0x03 => Some(Self::ActuatorTimeout),
             0x04 => Some(Self::SensorLost),
             0x05 => Some(Self::NvmError),
-            _    => None,
+            _ => None,
         }
     }
 }
@@ -251,7 +251,7 @@ impl FaultCode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum FaultSeverity {
-    Warning  = 0,
+    Warning = 0,
     Critical = 1,
 }
 
@@ -261,10 +261,10 @@ pub enum FaultSeverity {
 
 #[derive(Debug, Clone)]
 pub struct IpcHeader {
-    pub magic:     u32,
-    pub version:   u8,
-    pub msg_type:  MsgType,
-    pub seq:       u16,
+    pub magic: u32,
+    pub version: u8,
+    pub msg_type: MsgType,
+    pub seq: u16,
     pub timestamp: u32,
     pub signal_id: u32,
 }
@@ -296,7 +296,14 @@ impl IpcHeader {
         let timestamp = u32::from_le_bytes([buf[8], buf[9], buf[10], buf[11]]);
         let signal_id = u32::from_le_bytes([buf[12], buf[13], buf[14], buf[15]]);
 
-        Ok(Self { magic, version, msg_type, seq, timestamp, signal_id })
+        Ok(Self {
+            magic,
+            version,
+            msg_type,
+            seq,
+            timestamp,
+            signal_id,
+        })
     }
 }
 
@@ -307,10 +314,10 @@ impl IpcHeader {
 /// A53 → M7: actuator command (28 bytes total).
 #[derive(Debug, Clone)]
 pub struct VssActuatorCmd {
-    pub header:     IpcHeader,
+    pub header: IpcHeader,
     pub feature_id: FeatureId,
-    pub priority:   Priority,
-    pub value:      SignalValue,
+    pub priority: Priority,
+    pub value: SignalValue,
 }
 
 impl VssActuatorCmd {
@@ -333,22 +340,25 @@ impl VssActuatorCmd {
     pub fn decode(buf: &[u8; Self::SIZE]) -> Result<Self, DecodeError> {
         let header = IpcHeader::decode(buf)?;
         verify_crc(buf, 24)?;
-        let feature_id = FeatureId::from_u8(buf[16])
-            .ok_or(DecodeError::UnknownFeatureId(buf[16]))?;
-        let priority = Priority::from_u8(buf[17])
-            .ok_or(DecodeError::UnknownPriority(buf[17]))?;
-        let sig_type = SigType::from_u8(buf[18])
-            .ok_or(DecodeError::UnknownSigType(buf[18]))?;
+        let feature_id =
+            FeatureId::from_u8(buf[16]).ok_or(DecodeError::UnknownFeatureId(buf[16]))?;
+        let priority = Priority::from_u8(buf[17]).ok_or(DecodeError::UnknownPriority(buf[17]))?;
+        let sig_type = SigType::from_u8(buf[18]).ok_or(DecodeError::UnknownSigType(buf[18]))?;
         let value = SignalValue::decode_bytes(sig_type, [buf[20], buf[21], buf[22], buf[23]]);
-        Ok(Self { header, feature_id, priority, value })
+        Ok(Self {
+            header,
+            feature_id,
+            priority,
+            value,
+        })
     }
 }
 
 /// M7 → A53: state update (28 bytes total).
 #[derive(Debug, Clone)]
 pub struct VssStateUpdate {
-    pub header:       IpcHeader,
-    pub value:        SignalValue,
+    pub header: IpcHeader,
+    pub value: SignalValue,
     pub last_feature: FeatureId,
 }
 
@@ -371,21 +381,24 @@ impl VssStateUpdate {
     pub fn decode(buf: &[u8; Self::SIZE]) -> Result<Self, DecodeError> {
         let header = IpcHeader::decode(buf)?;
         verify_crc(buf, 24)?;
-        let sig_type = SigType::from_u8(buf[16])
-            .ok_or(DecodeError::UnknownSigType(buf[16]))?;
-        let last_feature = FeatureId::from_u8(buf[17])
-            .ok_or(DecodeError::UnknownFeatureId(buf[17]))?;
+        let sig_type = SigType::from_u8(buf[16]).ok_or(DecodeError::UnknownSigType(buf[16]))?;
+        let last_feature =
+            FeatureId::from_u8(buf[17]).ok_or(DecodeError::UnknownFeatureId(buf[17]))?;
         let value = SignalValue::decode_bytes(sig_type, [buf[20], buf[21], buf[22], buf[23]]);
-        Ok(Self { header, value, last_feature })
+        Ok(Self {
+            header,
+            value,
+            last_feature,
+        })
     }
 }
 
 /// M7 → A53: command acknowledgement (24 bytes total).
 #[derive(Debug, Clone)]
 pub struct VssCmdAck {
-    pub header:  IpcHeader,
+    pub header: IpcHeader,
     pub ack_seq: u16,
-    pub status:  AckStatus,
+    pub status: AckStatus,
 }
 
 impl VssCmdAck {
@@ -407,18 +420,21 @@ impl VssCmdAck {
         let header = IpcHeader::decode(buf)?;
         verify_crc(buf, 20)?;
         let ack_seq = u16::from_le_bytes([buf[16], buf[17]]);
-        let status = AckStatus::from_u8(buf[18])
-            .ok_or(DecodeError::UnknownAckStatus(buf[18]))?;
-        Ok(Self { header, ack_seq, status })
+        let status = AckStatus::from_u8(buf[18]).ok_or(DecodeError::UnknownAckStatus(buf[18]))?;
+        Ok(Self {
+            header,
+            ack_seq,
+            status,
+        })
     }
 }
 
 /// M7 → A53: fault report (24 bytes total).
 #[derive(Debug, Clone)]
 pub struct VssFaultReport {
-    pub header:     IpcHeader,
+    pub header: IpcHeader,
     pub fault_code: FaultCode,
-    pub severity:   FaultSeverity,
+    pub severity: FaultSeverity,
 }
 
 impl VssFaultReport {
@@ -439,14 +455,18 @@ impl VssFaultReport {
     pub fn decode(buf: &[u8; Self::SIZE]) -> Result<Self, DecodeError> {
         let header = IpcHeader::decode(buf)?;
         verify_crc(buf, 20)?;
-        let fault_code = FaultCode::from_u8(buf[16])
-            .ok_or(DecodeError::UnknownFaultCode(buf[16]))?;
+        let fault_code =
+            FaultCode::from_u8(buf[16]).ok_or(DecodeError::UnknownFaultCode(buf[16]))?;
         let severity = match buf[17] {
             0 => FaultSeverity::Warning,
             1 => FaultSeverity::Critical,
             v => return Err(DecodeError::UnknownSeverity(v)),
         };
-        Ok(Self { header, fault_code, severity })
+        Ok(Self {
+            header,
+            fault_code,
+            severity,
+        })
     }
 }
 
