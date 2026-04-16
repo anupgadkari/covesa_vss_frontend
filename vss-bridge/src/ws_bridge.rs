@@ -183,7 +183,7 @@ async fn handle_connection<B: SignalBus>(
         let snapshot = output_state.lock().await.clone();
         if !snapshot.is_empty() {
             let msg = serde_json::json!({ "state": snapshot });
-            ws_tx.send(Message::Text(msg.to_string())).await?;
+            ws_tx.send(Message::Text(msg.to_string().into())).await?;
         }
     }
 
@@ -208,7 +208,7 @@ async fn handle_connection<B: SignalBus>(
             }
             // bridge → HMI: output state update
             Ok(json_str) = update_rx.recv() => {
-                if ws_tx.send(Message::Text(json_str)).await.is_err() {
+                if ws_tx.send(Message::Text(json_str.into())).await.is_err() {
                     break;
                 }
             }
