@@ -4,28 +4,20 @@
 //! It bridges the Safety Monitor (M7, RPmsg) with kuksa.val (gRPC)
 //! and the Web HMI (WebSocket).
 
-pub mod config;
-pub mod ipc_message;
-pub mod signal_bus;
-pub mod signal_ids;
-pub mod arbiter;
-pub mod adapters;
-pub mod features;
-pub mod plant_models;
-pub mod kuksa_sync;
-pub mod sleep_inhibit;
-pub mod ws_bridge;
-
 use std::sync::Arc;
 use tracing_subscriber::EnvFilter;
 
-use adapters::mock::MockBus;
-use features::hazard_lighting::HazardLighting;
-use features::turn_indicator::TurnIndicator;
-use plant_models::blink_relay::BlinkRelay;
-use ipc_message::SignalValue;
-use signal_bus::SignalBus;
-use ws_bridge::WsBridge;
+use vss_bridge::adapters::mock::MockBus;
+use vss_bridge::arbiter;
+use vss_bridge::config;
+use vss_bridge::features::hazard_lighting::HazardLighting;
+use vss_bridge::features::turn_indicator::TurnIndicator;
+use vss_bridge::ipc_message::SignalValue;
+use vss_bridge::kuksa_sync;
+use vss_bridge::plant_models::blink_relay::BlinkRelay;
+use vss_bridge::signal_bus::SignalBus;
+use vss_bridge::signal_ids;
+use vss_bridge::ws_bridge::WsBridge;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
