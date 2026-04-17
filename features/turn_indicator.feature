@@ -54,6 +54,37 @@ Feature: Turn Indicator
   #               Rationale: turn signals require ignition ON per vehicle
   #               electrical architecture — the turn signal relay is
   #               powered from the ignition-switched bus.
+  #
+  # REQ-TURN-009: (Auto lane change / comfort blink) When
+  #               Body.Switches.TurnIndicator.Direction transitions from
+  #               "LEFT" or "RIGHT" to "OFF", the feature SHALL NOT
+  #               immediately release its arbiter claim. Instead it SHALL
+  #               maintain the active indicator for a configurable number
+  #               of complete flash cycles (vehicle-line calibration
+  #               parameter `lane_change_flash_count`, default 3). A
+  #               "flash" is one complete on+off cycle of the physical
+  #               lamps, counted by observing the BlinkRelay lamp
+  #               feedback signal's falling edge (on→off transition).
+  #
+  # REQ-TURN-010: When `lane_change_flash_count` is 0, comfort blink
+  #               SHALL be disabled and the feature SHALL immediately
+  #               release the arbiter claim when the stalk returns to OFF
+  #               (REQ-TURN-003 original behavior).
+  #
+  # REQ-TURN-011: The comfort blink countdown SHALL be immediately
+  #               cancelled (arbiter claim released, lamps stop) when:
+  #               (a) Vehicle.LowVoltageSystemState transitions away from
+  #                   ON/START (REQ-TURN-008 takes precedence), or
+  #               (b) Body.Switches.TurnIndicator.Direction transitions
+  #                   to the opposite direction (the new direction
+  #                   activates immediately and the old side is released).
+  #
+  # REQ-TURN-012: The comfort blink countdown SHALL NOT be cancelled by
+  #               hazard switch engagement. If the hazard feature engages
+  #               at priority HIGH during comfort blink, the arbiter
+  #               suppresses the MEDIUM comfort claim while hazard is
+  #               active. When hazard disengages, any remaining comfort
+  #               flashes may resume (arbiter claim still held).
   # -------------------------------------------------------------------------
 
   Background:
@@ -77,21 +108,56 @@ Feature: Turn Indicator
     And the Turn feature requests DirectionIndicator.Right.IsSignaling = TRUE at priority MEDIUM
     And the Turn feature releases its claim on DirectionIndicator.Left.IsSignaling
 
-  # --- REQ-TURN-003 ---
-  Scenario: Turn stalk returned to OFF
+  # --- REQ-TURN-009 ---
+  Scenario: Turn stalk returned to OFF enters comfort blink
     Given the turn stalk is in position LEFT
     And the left direction indicator is signaling
     When the driver returns the turn stalk to OFF
-    Then Body.Switches.TurnIndicator.Direction becomes "OFF"
-    And the Turn feature releases its claim on DirectionIndicator.Left.IsSignaling
+    Then the left direction indicator continues signaling during comfort blink countdown
+
+  # --- REQ-TURN-009 ---
+  Scenario: Comfort blink completes after configured number of flashes
+    Given the turn stalk is in position LEFT
+    And the left direction indicator is signaling
+    When the driver returns the turn stalk to OFF
+    And 3 complete flash cycles elapse
+    Then the Turn feature releases its claim on DirectionIndicator.Left.IsSignaling
     And the Turn feature releases its claim on DirectionIndicator.Right.IsSignaling
 
-  # --- REQ-TURN-001, REQ-TURN-002 ---
+  # --- REQ-TURN-009 ---
+  Scenario: Comfort blink still active before flash count reached
+    Given the turn stalk is in position LEFT
+    And the left direction indicator is signaling
+    When the driver returns the turn stalk to OFF
+    And 2 complete flash cycles elapse
+    Then the left direction indicator continues signaling during comfort blink countdown
+
+  # --- REQ-TURN-001, REQ-TURN-002, REQ-TURN-011b ---
   Scenario: Turn stalk changes directly from LEFT to RIGHT
     Given the turn stalk is in position LEFT
     When the driver moves the turn stalk to RIGHT
     Then the Turn feature releases its claim on DirectionIndicator.Left.IsSignaling
     And the Turn feature requests DirectionIndicator.Right.IsSignaling = TRUE at priority MEDIUM
+
+  # --- REQ-TURN-011b ---
+  Scenario: Comfort blink cancelled by opposite stalk direction
+    Given the turn stalk is in position LEFT
+    And the left direction indicator is signaling
+    When the driver returns the turn stalk to OFF
+    And 1 complete flash cycle elapses
+    And the driver moves the turn stalk to RIGHT
+    Then the Turn feature releases its claim on DirectionIndicator.Left.IsSignaling
+    And the Turn feature requests DirectionIndicator.Right.IsSignaling = TRUE at priority MEDIUM
+
+  # --- REQ-TURN-011a ---
+  Scenario: Comfort blink cancelled by ignition OFF
+    Given the turn stalk is in position LEFT
+    And the left direction indicator is signaling
+    When the driver returns the turn stalk to OFF
+    And 1 complete flash cycle elapses
+    And Vehicle.LowVoltageSystemState transitions to "OFF"
+    Then the Turn feature releases its claim on DirectionIndicator.Left.IsSignaling
+    And the Turn feature releases its claim on DirectionIndicator.Right.IsSignaling
 
   # --- REQ-TURN-005 ---
   Scenario: Turn signal suppressed while hazard is active

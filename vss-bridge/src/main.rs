@@ -63,8 +63,15 @@ async fn main() -> anyhow::Result<()> {
     // HazardLighting — no ignition gate, works in any power state
     tokio::spawn(HazardLighting::new(Arc::clone(&lighting_arb), Arc::clone(&bus)).run());
 
-    // TurnIndicator — ignition-gated (ON/START only)
-    tokio::spawn(TurnIndicator::new(Arc::clone(&lighting_arb), Arc::clone(&bus)).run());
+    // TurnIndicator — ignition-gated (ON/START only), with comfort blink
+    tokio::spawn(
+        TurnIndicator::with_config(
+            Arc::clone(&lighting_arb),
+            Arc::clone(&bus),
+            Arc::clone(&_platform_config),
+        )
+        .run(),
+    );
 
     // TODO: remaining features
     // tokio::spawn(AutoRelock::from_config(Arc::clone(&_door_lock_arb), Arc::clone(&bus), &_platform_config).run());

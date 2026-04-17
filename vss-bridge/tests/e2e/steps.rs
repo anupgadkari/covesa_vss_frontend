@@ -119,6 +119,21 @@ async fn settle() {
     }
 }
 
+/// Advance time for N complete flash cycles at the normal blink rate
+/// (333ms half-period = 666ms per flash). Uses full settle between
+/// each half-period so timer fires and bus publishes propagate through
+/// all tasks before the next advance.
+async fn advance_flashes(n: u32) {
+    for _ in 0..n {
+        // ON half-period — timer fires, lamp toggles, event propagates.
+        advance(Duration::from_millis(333)).await;
+        settle().await;
+        // OFF half-period — same.
+        advance(Duration::from_millis(333)).await;
+        settle().await;
+    }
+}
+
 /// Map a short indicator name to its full VSS path.
 fn indicator_path(name: &str) -> VssPath {
     match name {
@@ -274,6 +289,13 @@ async fn when_ignition(w: &mut VssWorld, state: String) {
         .await;
 }
 
+// ---- Comfort blink timing steps ----
+
+#[when(regex = r"^(\d+) complete flash cycles? elapses?$")]
+async fn when_flash_cycles(_w: &mut VssWorld, count: u32) {
+    advance_flashes(count).await;
+}
+
 // Lock Feedback When/Then steps are intentionally NOT defined here.
 // cucumber-rs treats unmatched steps as "skipped" (yellow/pending),
 // which correctly signals that this scenario is not yet testable.
@@ -342,6 +364,18 @@ async fn then_indicator_released(w: &mut VssWorld, side: String) {
     let _current = w.current_value(path);
     // No assertion — the observable effect depends on what other claims
     // exist, which is asserted by the next Then step(s).
+}
+
+// ---- Comfort blink: indicator continues signaling during countdown ----
+
+#[then(regex = r"^the (left|right) direction indicator continues signaling during comfort blink countdown$")]
+async fn then_indicator_still_signaling(w: &mut VssWorld, side: String) {
+    let path = indicator_path(&side);
+    assert_eq!(
+        w.current_value(path),
+        Some(SignalValue::Bool(true)),
+        "{side}.IsSignaling should remain TRUE during comfort blink"
+    );
 }
 
 // ---- Hazard disengaged → default-off when no other claim ----
