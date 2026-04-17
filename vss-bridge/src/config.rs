@@ -765,8 +765,8 @@ mod tests {
     fn platform_config_defaults() {
         let cfg = PlatformConfig::defaults();
         assert_eq!(cfg.auto_relock_timeout(), Duration::from_secs(45));
-        assert!(cfg.is_feature_enabled("double_lock") == false);
-        assert!(cfg.is_feature_enabled("unknown_feature") == true);
+        assert!(!cfg.is_feature_enabled("double_lock"));
+        assert!(cfg.is_feature_enabled("unknown_feature"));
         assert!(cfg.dealer_config().auto_relock_enabled);
     }
 

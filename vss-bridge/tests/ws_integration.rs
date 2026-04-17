@@ -107,7 +107,7 @@ async fn wait_for_state(
     let result = timeout(max_wait, async {
         while let Some(Ok(msg)) = rx.next().await {
             if let Message::Text(text) = msg {
-                if let Ok(parsed) = serde_json::from_str::<Value>(&*text) {
+                if let Ok(parsed) = serde_json::from_str::<Value>(&text) {
                     if let Some(state) = parsed.get("state") {
                         if state.get(path) == Some(&expected) {
                             return true;
@@ -138,7 +138,7 @@ async fn count_transitions(
     let _ = timeout(duration, async {
         while let Some(Ok(msg)) = rx.next().await {
             if let Message::Text(text) = msg {
-                if let Ok(parsed) = serde_json::from_str::<Value>(&*text) {
+                if let Ok(parsed) = serde_json::from_str::<Value>(&text) {
                     if let Some(state) = parsed.get("state") {
                         if let Some(val) = state.get(path) {
                             if last_val.as_ref() != Some(val) {

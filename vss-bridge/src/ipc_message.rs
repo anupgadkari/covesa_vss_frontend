@@ -587,7 +587,7 @@ mod tests {
             SignalValue::Uint8(42),
             SignalValue::Int16(-1234),
             SignalValue::Uint16(65000),
-            SignalValue::Float(3.14),
+            SignalValue::Float(3.15),
         ];
         for val in cases {
             let encoded = val.encode_bytes();
