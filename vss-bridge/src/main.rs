@@ -4,35 +4,26 @@
 //! It bridges the Safety Monitor (M7, RPmsg) with kuksa.val (gRPC)
 //! and the Web HMI (WebSocket).
 
-pub mod config;
-pub mod ipc_message;
-pub mod signal_bus;
-pub mod signal_ids;
-pub mod arbiter;
-pub mod adapters;
-pub mod features;
-pub mod plant_models;
-pub mod kuksa_sync;
-pub mod sleep_inhibit;
-pub mod ws_bridge;
-
 use std::sync::Arc;
 use tracing_subscriber::EnvFilter;
 
-use adapters::mock::MockBus;
-use features::hazard_lighting::HazardLighting;
-use features::turn_indicator::TurnIndicator;
-use plant_models::blink_relay::BlinkRelay;
-use ipc_message::SignalValue;
-use signal_bus::SignalBus;
-use ws_bridge::WsBridge;
+use vss_bridge::adapters::mock::MockBus;
+use vss_bridge::arbiter;
+use vss_bridge::config;
+use vss_bridge::features::hazard_lighting::HazardLighting;
+use vss_bridge::features::turn_indicator::TurnIndicator;
+use vss_bridge::ipc_message::SignalValue;
+use vss_bridge::kuksa_sync;
+use vss_bridge::plant_models::blink_relay::BlinkRelay;
+use vss_bridge::signal_bus::SignalBus;
+use vss_bridge::signal_ids;
+use vss_bridge::ws_bridge::WsBridge;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("info")),
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
         )
         .init();
 
@@ -70,14 +61,10 @@ async fn main() -> anyhow::Result<()> {
 
     // ── Feature Business Logic ──────────────────────────────────────
     // HazardLighting — no ignition gate, works in any power state
-    tokio::spawn(
-        HazardLighting::new(Arc::clone(&lighting_arb), Arc::clone(&bus)).run(),
-    );
+    tokio::spawn(HazardLighting::new(Arc::clone(&lighting_arb), Arc::clone(&bus)).run());
 
     // TurnIndicator — ignition-gated (ON/START only)
-    tokio::spawn(
-        TurnIndicator::new(Arc::clone(&lighting_arb), Arc::clone(&bus)).run(),
-    );
+    tokio::spawn(TurnIndicator::new(Arc::clone(&lighting_arb), Arc::clone(&bus)).run());
 
     // TODO: remaining features
     // tokio::spawn(AutoRelock::from_config(Arc::clone(&_door_lock_arb), Arc::clone(&bus), &_platform_config).run());
@@ -109,8 +96,8 @@ async fn main() -> anyhow::Result<()> {
     .await?;
 
     // gRPC client for kuksa.val databroker at L4 (optional — fails gracefully)
-    let kuksa_endpoint = std::env::var("KUKSA_ENDPOINT")
-        .unwrap_or_else(|_| "http://localhost:55555".to_string());
+    let kuksa_endpoint =
+        std::env::var("KUKSA_ENDPOINT").unwrap_or_else(|_| "http://localhost:55555".to_string());
     let kuksa = kuksa_sync::KuksaSync::new(&kuksa_endpoint, Arc::clone(&bus));
     tokio::spawn(async move { kuksa.run().await });
 

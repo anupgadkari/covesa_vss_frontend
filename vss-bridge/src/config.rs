@@ -276,64 +276,78 @@ impl DoorConfig {
     /// a 4-door sedan.
     pub fn present_doors(&self) -> Vec<&'static str> {
         let mut doors = Vec::with_capacity(4);
-        if self.row1_left { doors.push("Row1.Left"); }
-        if self.row1_right { doors.push("Row1.Right"); }
-        if self.row2_left { doors.push("Row2.Left"); }
-        if self.row2_right { doors.push("Row2.Right"); }
+        if self.row1_left {
+            doors.push("Row1.Left");
+        }
+        if self.row1_right {
+            doors.push("Row1.Right");
+        }
+        if self.row2_left {
+            doors.push("Row2.Left");
+        }
+        if self.row2_right {
+            doors.push("Row2.Right");
+        }
         doors
     }
 
     /// Returns full VSS paths for IsLocked signals of present doors.
     pub fn lock_signals(&self) -> Vec<&'static str> {
-        self.present_doors().iter().map(|d| match *d {
-            "Row1.Left" => "Body.Doors.Row1.Left.IsLocked",
-            "Row1.Right" => "Body.Doors.Row1.Right.IsLocked",
-            "Row2.Left" => "Body.Doors.Row2.Left.IsLocked",
-            "Row2.Right" => "Body.Doors.Row2.Right.IsLocked",
-            _ => unreachable!(),
-        }).collect()
+        self.present_doors()
+            .iter()
+            .map(|d| match *d {
+                "Row1.Left" => "Body.Doors.Row1.Left.IsLocked",
+                "Row1.Right" => "Body.Doors.Row1.Right.IsLocked",
+                "Row2.Left" => "Body.Doors.Row2.Left.IsLocked",
+                "Row2.Right" => "Body.Doors.Row2.Right.IsLocked",
+                _ => unreachable!(),
+            })
+            .collect()
     }
 
     /// Returns full VSS paths for IsOpen signals of present doors.
     pub fn open_signals(&self) -> Vec<&'static str> {
-        self.present_doors().iter().map(|d| match *d {
-            "Row1.Left" => "Body.Doors.Row1.Left.IsOpen",
-            "Row1.Right" => "Body.Doors.Row1.Right.IsOpen",
-            "Row2.Left" => "Body.Doors.Row2.Left.IsOpen",
-            "Row2.Right" => "Body.Doors.Row2.Right.IsOpen",
-            _ => unreachable!(),
-        }).collect()
+        self.present_doors()
+            .iter()
+            .map(|d| match *d {
+                "Row1.Left" => "Body.Doors.Row1.Left.IsOpen",
+                "Row1.Right" => "Body.Doors.Row1.Right.IsOpen",
+                "Row2.Left" => "Body.Doors.Row2.Left.IsOpen",
+                "Row2.Right" => "Body.Doors.Row2.Right.IsOpen",
+                _ => unreachable!(),
+            })
+            .collect()
     }
 
     /// Returns full VSS paths for IsRemoved signals (only meaningful
     /// when `removable` is true).
     pub fn removed_signals(&self) -> Vec<&'static str> {
-        if !self.removable { return Vec::new(); }
-        self.present_doors().iter().map(|d| match *d {
-            "Row1.Left" => "Body.Doors.Row1.Left.IsRemoved",
-            "Row1.Right" => "Body.Doors.Row1.Right.IsRemoved",
-            "Row2.Left" => "Body.Doors.Row2.Left.IsRemoved",
-            "Row2.Right" => "Body.Doors.Row2.Right.IsRemoved",
-            _ => unreachable!(),
-        }).collect()
+        if !self.removable {
+            return Vec::new();
+        }
+        self.present_doors()
+            .iter()
+            .map(|d| match *d {
+                "Row1.Left" => "Body.Doors.Row1.Left.IsRemoved",
+                "Row1.Right" => "Body.Doors.Row1.Right.IsRemoved",
+                "Row2.Left" => "Body.Doors.Row2.Left.IsRemoved",
+                "Row2.Right" => "Body.Doors.Row2.Right.IsRemoved",
+                _ => unreachable!(),
+            })
+            .collect()
     }
 }
 
 /// Welcome light pattern options.
-#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
 pub enum WelcomeLightPattern {
     /// Simple on/off.
+    #[default]
     Simple,
     /// Sequential sweep (premium).
     Sequential,
     /// No welcome lights.
     Disabled,
-}
-
-impl Default for WelcomeLightPattern {
-    fn default() -> Self {
-        Self::Simple
-    }
 }
 
 impl Default for VariantCal {
@@ -386,18 +400,13 @@ pub struct DealerConfig {
 }
 
 /// PEPS approach unlock behavior.
-#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
 pub enum ApproachUnlockMode {
     /// Unlock driver door only on first approach; second pull unlocks all.
+    #[default]
     DriverOnly,
     /// Unlock all doors on approach.
     All,
-}
-
-impl Default for ApproachUnlockMode {
-    fn default() -> Self {
-        Self::DriverOnly
-    }
 }
 
 impl Default for DealerConfig {
@@ -434,12 +443,9 @@ impl PlatformConfig {
     /// Missing files are not an error — defaults are used. This allows
     /// development without a full calibration file set.
     pub fn load() -> Arc<Self> {
-        let vehicle_line = load_json_or_default::<VehicleLineCal>(
-            "/etc/vss-bridge/vehicle_line.json",
-        );
-        let variant = load_json_or_default::<VariantCal>(
-            "/etc/vss-bridge/variant.json",
-        );
+        let vehicle_line =
+            load_json_or_default::<VehicleLineCal>("/etc/vss-bridge/vehicle_line.json");
+        let variant = load_json_or_default::<VariantCal>("/etc/vss-bridge/variant.json");
         let dealer = DealerConfig::default(); // M7 pushes real values at boot
 
         let (dealer_config_tx, dealer_config_rx) = watch::channel(dealer);
@@ -462,15 +468,12 @@ impl PlatformConfig {
     }
 
     /// Load from explicit paths (for testing or non-standard deployments).
-    pub fn load_from(
-        vehicle_line_path: Option<&str>,
-        variant_path: Option<&str>,
-    ) -> Arc<Self> {
+    pub fn load_from(vehicle_line_path: Option<&str>, variant_path: Option<&str>) -> Arc<Self> {
         let vehicle_line = vehicle_line_path
-            .map(|p| load_json_or_default::<VehicleLineCal>(p))
+            .map(load_json_or_default::<VehicleLineCal>)
             .unwrap_or_default();
         let variant = variant_path
-            .map(|p| load_json_or_default::<VariantCal>(p))
+            .map(load_json_or_default::<VariantCal>)
             .unwrap_or_default();
         let dealer = DealerConfig::default();
 
@@ -486,8 +489,7 @@ impl PlatformConfig {
 
     /// Create with all defaults (for unit tests).
     pub fn defaults() -> Arc<Self> {
-        let (dealer_config_tx, dealer_config_rx) =
-            watch::channel(DealerConfig::default());
+        let (dealer_config_tx, dealer_config_rx) = watch::channel(DealerConfig::default());
         Arc::new(Self {
             vehicle_line: VehicleLineCal::default(),
             variant: VariantCal::default(),
@@ -648,7 +650,7 @@ mod tests {
         assert_eq!(vc.auto_lock_speed_kmh, 20);
         assert!(!vc.double_lock_enabled);
         assert!(!vc.nfc_enabled);
-        assert!(vc.doors.row2_left);  // 4-door by default
+        assert!(vc.doors.row2_left); // 4-door by default
         assert!(!vc.doors.removable); // not removable by default
 
         let dc = DealerConfig::default();
@@ -763,8 +765,8 @@ mod tests {
     fn platform_config_defaults() {
         let cfg = PlatformConfig::defaults();
         assert_eq!(cfg.auto_relock_timeout(), Duration::from_secs(45));
-        assert!(cfg.is_feature_enabled("double_lock") == false);
-        assert!(cfg.is_feature_enabled("unknown_feature") == true);
+        assert!(!cfg.is_feature_enabled("double_lock"));
+        assert!(cfg.is_feature_enabled("unknown_feature"));
         assert!(cfg.dealer_config().auto_relock_enabled);
     }
 
@@ -807,9 +809,7 @@ mod tests {
 
     #[test]
     fn missing_file_returns_defaults() {
-        let vl = load_json_or_default::<VehicleLineCal>(
-            "/nonexistent/path/vehicle_line.json",
-        );
+        let vl = load_json_or_default::<VehicleLineCal>("/nonexistent/path/vehicle_line.json");
         assert_eq!(vl.auto_relock_timeout_secs, 45);
     }
 
@@ -819,7 +819,7 @@ mod tests {
         let json = r#"{"auto_relock_timeout_secs": 60}"#;
         let vl: VehicleLineCal = serde_json::from_str(json).unwrap();
         assert_eq!(vl.auto_relock_timeout_secs, 60);
-        assert_eq!(vl.peps_lf_window_ms, 3000);      // default
-        assert_eq!(vl.lock_feedback_blink_count, 3);   // default
+        assert_eq!(vl.peps_lf_window_ms, 3000); // default
+        assert_eq!(vl.lock_feedback_blink_count, 3); // default
     }
 }

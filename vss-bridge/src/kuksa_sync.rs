@@ -25,7 +25,9 @@ pub mod proto {
 }
 
 use proto::val_client::ValClient;
-use proto::{datapoint, DataEntry, Datapoint, EntryUpdate, Field, SubscribeEntry, SubscribeRequest, View};
+use proto::{
+    datapoint, DataEntry, Datapoint, EntryUpdate, Field, SubscribeEntry, SubscribeRequest, View,
+};
 
 const INITIAL_BACKOFF: Duration = Duration::from_secs(1);
 const MAX_BACKOFF: Duration = Duration::from_secs(30);

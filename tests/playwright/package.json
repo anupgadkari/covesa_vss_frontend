@@ -1,0 +1,18 @@
+{
+  "name": "vss-hmi-smoke",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Tier 3 — Playwright smoke tests for the VSS HMI",
+  "scripts": {
+    "test": "npx playwright test",
+    "test:headed": "npx playwright test --headed"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  },
+  "dependencies": {
+    "@types/ws": "^8.18.1",
+    "serve": "^14.2.6",
+    "ws": "^8.20.0"
+  }
+}

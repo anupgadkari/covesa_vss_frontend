@@ -151,27 +151,27 @@ impl<B: SignalBus> BlinkRelay<B> {
                 }
                 Some(val) = left_def_f.next() => {
                     left.defect_front = as_bool(&val);
-                    rearm_if_signaling(&left, right.signaling, &mut left_tick);
+                    rearm_on_defect(&left, &right, &mut left_tick, &mut right_tick);
                 }
                 Some(val) = left_def_s.next() => {
                     left.defect_side = as_bool(&val);
-                    rearm_if_signaling(&left, right.signaling, &mut left_tick);
+                    rearm_on_defect(&left, &right, &mut left_tick, &mut right_tick);
                 }
                 Some(val) = left_def_r.next() => {
                     left.defect_rear = as_bool(&val);
-                    rearm_if_signaling(&left, right.signaling, &mut left_tick);
+                    rearm_on_defect(&left, &right, &mut left_tick, &mut right_tick);
                 }
                 Some(val) = right_def_f.next() => {
                     right.defect_front = as_bool(&val);
-                    rearm_if_signaling(&right, left.signaling, &mut right_tick);
+                    rearm_on_defect(&right, &left, &mut right_tick, &mut left_tick);
                 }
                 Some(val) = right_def_s.next() => {
                     right.defect_side = as_bool(&val);
-                    rearm_if_signaling(&right, left.signaling, &mut right_tick);
+                    rearm_on_defect(&right, &left, &mut right_tick, &mut left_tick);
                 }
                 Some(val) = right_def_r.next() => {
                     right.defect_rear = as_bool(&val);
-                    rearm_if_signaling(&right, left.signaling, &mut right_tick);
+                    rearm_on_defect(&right, &left, &mut right_tick, &mut left_tick);
                 }
                 _ = &mut left_tick, if left.signaling => {
                     left.lamp_on = !left.lamp_on;
@@ -198,6 +198,7 @@ impl<B: SignalBus> BlinkRelay<B> {
 /// lamp group is forced off. If the other side is already signaling on
 /// a rising edge, the other side's phase is also reset so the two sides
 /// blink in sync (classic hazard behavior).
+#[allow(clippy::type_complexity)]
 async fn handle_intent_change<B: SignalBus>(
     bus: &Arc<B>,
     side: &mut SideState,
@@ -250,10 +251,26 @@ async fn handle_intent_change<B: SignalBus>(
     }
 }
 
-fn rearm_if_signaling(side: &SideState, other_signaling: bool, tick: &mut Pin<Box<Sleep>>) {
-    if side.signaling {
-        let p = period_for(side, other_signaling);
-        tick.as_mut().reset(tokio::time::Instant::now() + p);
+/// Re-arm timers after a defect change.  In hazard mode (both sides
+/// signaling) both timers must be reset together to preserve phase
+/// sync — otherwise only the defect side's timer shifts and the two
+/// sides drift apart.
+fn rearm_on_defect(
+    side: &SideState,
+    other: &SideState,
+    tick: &mut Pin<Box<Sleep>>,
+    other_tick: &mut Pin<Box<Sleep>>,
+) {
+    if !side.signaling {
+        return;
+    }
+    let now = tokio::time::Instant::now();
+    let p = period_for(side, other.signaling);
+    tick.as_mut().reset(now + p);
+    // In hazard mode, keep the other side's timer in sync.
+    if other.signaling {
+        let op = period_for(other, side.signaling);
+        other_tick.as_mut().reset(now + op);
     }
 }
 
@@ -283,10 +300,7 @@ mod tests {
     use crate::adapters::mock::MockBus;
     use tokio::time::advance;
 
-    fn lamp_events(
-        history: &[(VssPath, SignalValue)],
-        signal: VssPath,
-    ) -> Vec<bool> {
+    fn lamp_events(history: &[(VssPath, SignalValue)], signal: VssPath) -> Vec<bool> {
         history
             .iter()
             .filter(|(s, _)| *s == signal)
@@ -333,7 +347,12 @@ mod tests {
 
         for lamp in LEFT_LAMPS {
             let events = lamp_events(&bus.history(), lamp);
-            assert_eq!(events, vec![false], "{} should turn off at falling edge", lamp);
+            assert_eq!(
+                events,
+                vec![false],
+                "{} should turn off at falling edge",
+                lamp
+            );
         }
     }
 
@@ -351,8 +370,12 @@ mod tests {
         }
 
         let events = lamp_events(&bus.history(), LEFT_LAMP_FRONT);
-        assert_eq!(events, vec![true, false, true, false],
-            "expected 4 events at 1.5 Hz on front lamp: {:?}", events);
+        assert_eq!(
+            events,
+            vec![true, false, true, false],
+            "expected 4 events at 1.5 Hz on front lamp: {:?}",
+            events
+        );
     }
 
     #[tokio::test(start_paused = true)]
@@ -376,8 +399,13 @@ mod tests {
         // All three lamps on the left side should show the same pattern.
         for lamp in LEFT_LAMPS {
             let events = lamp_events(&bus.history(), lamp);
-            assert_eq!(events, vec![true, false, true, false, true],
-                "expected 5 events at 3 Hz (defect) on {}: {:?}", lamp, events);
+            assert_eq!(
+                events,
+                vec![true, false, true, false, true],
+                "expected 5 events at 3 Hz (defect) on {}: {:?}",
+                lamp,
+                events
+            );
         }
     }
 
@@ -401,8 +429,12 @@ mod tests {
 
         let events = lamp_events(&bus.history(), LEFT_LAMP_FRONT);
         // initial ON + one OFF toggle => 2 events
-        assert_eq!(events, vec![true, false],
-            "hazard should use 1.5 Hz despite defect: {:?}", events);
+        assert_eq!(
+            events,
+            vec![true, false],
+            "hazard should use 1.5 Hz despite defect: {:?}",
+            events
+        );
     }
 
     #[tokio::test(start_paused = true)]
@@ -426,10 +458,52 @@ mod tests {
 
         let left_events = lamp_events(&bus.history(), LEFT_LAMP_FRONT);
         let right_events = lamp_events(&bus.history(), RIGHT_LAMP_FRONT);
-        assert_eq!(left_events, right_events,
+        assert_eq!(
+            left_events, right_events,
             "left and right should toggle in sync in hazard: L={:?} R={:?}",
-            left_events, right_events);
+            left_events, right_events
+        );
         assert_eq!(left_events.len(), 1, "expected exactly one toggle in 333ms");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn defect_during_hazard_keeps_sides_in_sync() {
+        // Regression: injecting a lamp defect while hazards are blinking
+        // used to reset only the defect side's timer, breaking phase sync.
+        let (bus, _h) = setup().await;
+
+        bus.inject(LEFT_INTENT, SignalValue::Bool(true));
+        bus.inject(RIGHT_INTENT, SignalValue::Bool(true));
+        tokio::task::yield_now().await;
+        advance(Duration::from_millis(1)).await;
+
+        // Let one tick happen so both sides are mid-cycle.
+        advance(Duration::from_millis(333)).await;
+        tokio::task::yield_now().await;
+
+        // Advance partway into the next half-period, then inject a defect.
+        advance(Duration::from_millis(150)).await;
+        tokio::task::yield_now().await;
+
+        bus.inject(LEFT_DEFECT_FRONT, SignalValue::Bool(true));
+        tokio::task::yield_now().await;
+
+        // After the defect, both timers should be re-armed together.
+        // Collect transitions over the next 2 seconds — left and right
+        // front lamps must toggle the same number of times.
+        bus.clear_history();
+        for _ in 0..6 {
+            advance(Duration::from_millis(333)).await;
+            tokio::task::yield_now().await;
+        }
+
+        let left_events = lamp_events(&bus.history(), LEFT_LAMP_FRONT);
+        let right_events = lamp_events(&bus.history(), RIGHT_LAMP_FRONT);
+        assert_eq!(
+            left_events, right_events,
+            "left and right must stay in sync after defect during hazard: L={:?} R={:?}",
+            left_events, right_events
+        );
     }
 
     #[tokio::test(start_paused = true)]
@@ -457,7 +531,10 @@ mod tests {
         }
 
         let events = lamp_events(&bus.history(), RIGHT_LAMP_FRONT);
-        assert!(events.len() >= 2,
-            "right should keep blinking after left falling edge: {:?}", events);
+        assert!(
+            events.len() >= 2,
+            "right should keep blinking after left falling edge: {:?}",
+            events
+        );
     }
 }

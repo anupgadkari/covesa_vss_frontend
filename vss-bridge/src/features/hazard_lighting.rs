@@ -92,7 +92,11 @@ mod tests {
     use std::time::Duration;
     use tokio::time::sleep;
 
-    async fn setup() -> (Arc<MockBus>, Arc<DomainArbiter>, tokio::task::JoinHandle<()>) {
+    async fn setup() -> (
+        Arc<MockBus>,
+        Arc<DomainArbiter>,
+        tokio::task::JoinHandle<()>,
+    ) {
         let bus = Arc::new(MockBus::new());
         let (arbiter, arbiter_fut) = lighting_arbiter(Arc::clone(&bus));
         tokio::spawn(arbiter_fut);
@@ -115,16 +119,16 @@ mod tests {
 
         let history = bus.history();
         assert!(
-            history.iter().any(|(sig, val)| {
-                *sig == LEFT_INDICATOR && *val == SignalValue::Bool(true)
-            }),
+            history
+                .iter()
+                .any(|(sig, val)| { *sig == LEFT_INDICATOR && *val == SignalValue::Bool(true) }),
             "left indicator should be TRUE, history: {:?}",
             history
         );
         assert!(
-            history.iter().any(|(sig, val)| {
-                *sig == RIGHT_INDICATOR && *val == SignalValue::Bool(true)
-            }),
+            history
+                .iter()
+                .any(|(sig, val)| { *sig == RIGHT_INDICATOR && *val == SignalValue::Bool(true) }),
             "right indicator should be TRUE, history: {:?}",
             history
         );
@@ -146,16 +150,16 @@ mod tests {
 
         let history = bus.history();
         assert!(
-            history.iter().any(|(sig, val)| {
-                *sig == LEFT_INDICATOR && *val == SignalValue::Bool(false)
-            }),
+            history
+                .iter()
+                .any(|(sig, val)| { *sig == LEFT_INDICATOR && *val == SignalValue::Bool(false) }),
             "left indicator should be FALSE after disengage, history: {:?}",
             history
         );
         assert!(
-            history.iter().any(|(sig, val)| {
-                *sig == RIGHT_INDICATOR && *val == SignalValue::Bool(false)
-            }),
+            history
+                .iter()
+                .any(|(sig, val)| { *sig == RIGHT_INDICATOR && *val == SignalValue::Bool(false) }),
             "right indicator should be FALSE after disengage, history: {:?}",
             history
         );
@@ -179,8 +183,14 @@ mod tests {
             .iter()
             .filter(|(sig, val)| *sig == RIGHT_INDICATOR && *val == SignalValue::Bool(true))
             .count();
-        assert_eq!(left_true_count, 1, "should publish exactly once per indicator");
-        assert_eq!(right_true_count, 1, "should publish exactly once per indicator");
+        assert_eq!(
+            left_true_count, 1,
+            "should publish exactly once per indicator"
+        );
+        assert_eq!(
+            right_true_count, 1,
+            "should publish exactly once per indicator"
+        );
     }
 
     #[tokio::test]
@@ -195,7 +205,10 @@ mod tests {
         tokio::task::yield_now().await;
         sleep(Duration::from_millis(50)).await;
 
-        assert!(!handle.is_finished(), "feature should still be running after toggle");
+        assert!(
+            !handle.is_finished(),
+            "feature should still be running after toggle"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -221,16 +234,16 @@ mod tests {
 
         let history = bus.history();
         assert!(
-            history.iter().any(|(sig, val)| {
-                *sig == LEFT_INDICATOR && *val == SignalValue::Bool(true)
-            }),
+            history
+                .iter()
+                .any(|(sig, val)| { *sig == LEFT_INDICATOR && *val == SignalValue::Bool(true) }),
             "hazard should work with ignition OFF, history: {:?}",
             history
         );
         assert!(
-            history.iter().any(|(sig, val)| {
-                *sig == RIGHT_INDICATOR && *val == SignalValue::Bool(true)
-            }),
+            history
+                .iter()
+                .any(|(sig, val)| { *sig == RIGHT_INDICATOR && *val == SignalValue::Bool(true) }),
             "hazard should work with ignition OFF, history: {:?}",
             history
         );

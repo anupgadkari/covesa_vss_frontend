@@ -291,7 +291,7 @@ fn json_to_signal_value(val: &serde_json::Value) -> SignalValue {
         serde_json::Value::String(s) => SignalValue::String(s.clone()),
         serde_json::Value::Number(n) => {
             if let Some(f) = n.as_f64() {
-                if f.fract() == 0.0 && f >= 0.0 && f <= 255.0 {
+                if f.fract() == 0.0 && (0.0..=255.0).contains(&f) {
                     SignalValue::Uint8(f as u8)
                 } else if f.fract() == 0.0 {
                     SignalValue::Int16(f as i16)

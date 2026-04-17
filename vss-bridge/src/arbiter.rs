@@ -107,11 +107,7 @@ impl DomainArbiter {
     /// Withdraw this feature's claim on a signal. After release, the next
     /// highest-priority claim wins; if none remain, the signal reverts to the
     /// default-off value.
-    pub async fn release(
-        &self,
-        signal: VssPath,
-        feature_id: FeatureId,
-    ) -> anyhow::Result<()> {
+    pub async fn release(&self, signal: VssPath, feature_id: FeatureId) -> anyhow::Result<()> {
         self.tx
             .send(ArbiterMsg::Release { signal, feature_id })
             .await
@@ -407,7 +403,11 @@ impl DoorLockArbiter {
     pub fn new<B: SignalBus>(
         allow_list: Vec<DoorLockAllowEntry>,
         bus: Arc<B>,
-    ) -> (Self, mpsc::Sender<LockAck>, impl std::future::Future<Output = ()>) {
+    ) -> (
+        Self,
+        mpsc::Sender<LockAck>,
+        impl std::future::Future<Output = ()>,
+    ) {
         let (cmd_tx, cmd_rx) = mpsc::channel::<DoorLockMsg>(64);
         let ack_tx = {
             let cmd_tx_clone = cmd_tx.clone();
@@ -425,7 +425,9 @@ impl DoorLockArbiter {
             ack_tx
         };
 
-        let arbiter = Self { cmd_tx: cmd_tx.clone() };
+        let arbiter = Self {
+            cmd_tx: cmd_tx.clone(),
+        };
         let loop_fut = door_lock_loop(allow_list, bus, cmd_rx);
 
         (arbiter, ack_tx, loop_fut)
@@ -495,10 +497,8 @@ async fn door_lock_loop<B: SignalBus>(
 
                     // Start crash lockout if this is a CrashUnlock
                     if req.feature_id == FeatureId::CrashUnlock {
-                        crash_lockout_until = Some(
-                            tokio::time::Instant::now()
-                                + std::time::Duration::from_secs(10),
-                        );
+                        crash_lockout_until =
+                            Some(tokio::time::Instant::now() + std::time::Duration::from_secs(10));
                     }
 
                     active = Some(req);
@@ -544,10 +544,8 @@ async fn door_lock_loop<B: SignalBus>(
                     dispatch_lock_command(&next, &bus).await;
 
                     if next.feature_id == FeatureId::CrashUnlock {
-                        crash_lockout_until = Some(
-                            tokio::time::Instant::now()
-                                + std::time::Duration::from_secs(10),
-                        );
+                        crash_lockout_until =
+                            Some(tokio::time::Instant::now() + std::time::Duration::from_secs(10));
                     }
 
                     active = Some(next);
@@ -599,18 +597,42 @@ async fn dispatch_lock_command<B: SignalBus>(req: &DoorLockRequest, bus: &Arc<B>
 /// Create the DoorLock arbiter with all authorized lock requestors.
 pub fn door_lock_arbiter<B: SignalBus>(
     bus: Arc<B>,
-) -> (DoorLockArbiter, mpsc::Sender<LockAck>, impl std::future::Future<Output = ()>) {
+) -> (
+    DoorLockArbiter,
+    mpsc::Sender<LockAck>,
+    impl std::future::Future<Output = ()>,
+) {
     let allow_list = vec![
-        DoorLockAllowEntry { feature_id: FeatureId::KeyfobPeps },
-        DoorLockAllowEntry { feature_id: FeatureId::AutoLock },
-        DoorLockAllowEntry { feature_id: FeatureId::DoorTrimButton },
-        DoorLockAllowEntry { feature_id: FeatureId::KeyfobRke },
-        DoorLockAllowEntry { feature_id: FeatureId::PhoneApp },
-        DoorLockAllowEntry { feature_id: FeatureId::PhoneBle },
-        DoorLockAllowEntry { feature_id: FeatureId::NfcCard },
-        DoorLockAllowEntry { feature_id: FeatureId::NfcPhone },
-        DoorLockAllowEntry { feature_id: FeatureId::AutoRelock },
-        DoorLockAllowEntry { feature_id: FeatureId::CrashUnlock },
+        DoorLockAllowEntry {
+            feature_id: FeatureId::KeyfobPeps,
+        },
+        DoorLockAllowEntry {
+            feature_id: FeatureId::AutoLock,
+        },
+        DoorLockAllowEntry {
+            feature_id: FeatureId::DoorTrimButton,
+        },
+        DoorLockAllowEntry {
+            feature_id: FeatureId::KeyfobRke,
+        },
+        DoorLockAllowEntry {
+            feature_id: FeatureId::PhoneApp,
+        },
+        DoorLockAllowEntry {
+            feature_id: FeatureId::PhoneBle,
+        },
+        DoorLockAllowEntry {
+            feature_id: FeatureId::NfcCard,
+        },
+        DoorLockAllowEntry {
+            feature_id: FeatureId::NfcPhone,
+        },
+        DoorLockAllowEntry {
+            feature_id: FeatureId::AutoRelock,
+        },
+        DoorLockAllowEntry {
+            feature_id: FeatureId::CrashUnlock,
+        },
     ];
 
     DoorLockArbiter::new(allow_list, bus)
@@ -781,7 +803,7 @@ mod tests {
         let history = bus.history();
         // Both published: Hazard ON, then LockFeedback OFF (overlay)
         assert_eq!(history.len(), 2);
-        assert_eq!(history[0].1, SignalValue::Bool(true));  // Hazard
+        assert_eq!(history[0].1, SignalValue::Bool(true)); // Hazard
         assert_eq!(history[1].1, SignalValue::Bool(false)); // LockFeedback overlay
     }
 
@@ -935,10 +957,7 @@ mod tests {
 
         // Hazard releases — Turn's MEDIUM claim is still active, resolved
         // value is still true, so nothing new should be published.
-        arbiter
-            .release(sig, FeatureId::Hazard)
-            .await
-            .unwrap();
+        arbiter.release(sig, FeatureId::Hazard).await.unwrap();
         tokio::task::yield_now().await;
 
         // Turn releases last — now no claims, default-off should publish.
@@ -992,10 +1011,7 @@ mod tests {
 
         // Hazard releases — Turn's MEDIUM false claim is the only survivor,
         // so the arbiter must republish false.
-        arbiter
-            .release(sig, FeatureId::Hazard)
-            .await
-            .unwrap();
+        arbiter.release(sig, FeatureId::Hazard).await.unwrap();
         tokio::task::yield_now().await;
 
         let history = bus.history();
@@ -1025,10 +1041,7 @@ mod tests {
 
         // Hazard releases — no other claims, so arbiter must publish the
         // default-off value (Bool(false)).
-        arbiter
-            .release(sig, FeatureId::Hazard)
-            .await
-            .unwrap();
+        arbiter.release(sig, FeatureId::Hazard).await.unwrap();
         tokio::task::yield_now().await;
 
         let history = bus.history();
@@ -1043,10 +1056,7 @@ mod tests {
         let sig = "Body.Lights.DirectionIndicator.Left.IsSignaling";
 
         // Feature releases a signal it never claimed — should do nothing.
-        arbiter
-            .release(sig, FeatureId::Hazard)
-            .await
-            .unwrap();
+        arbiter.release(sig, FeatureId::Hazard).await.unwrap();
         tokio::task::yield_now().await;
 
         assert_eq!(bus.history().len(), 0);
@@ -1261,6 +1271,10 @@ mod tests {
             .unwrap();
         tokio::task::yield_now().await;
 
-        assert_eq!(bus.history().len(), 0, "unauthorized request should not dispatch");
+        assert_eq!(
+            bus.history().len(),
+            0,
+            "unauthorized request should not dispatch"
+        );
     }
 }

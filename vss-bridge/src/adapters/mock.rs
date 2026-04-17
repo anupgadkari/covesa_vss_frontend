@@ -22,6 +22,8 @@ pub struct MockBus {
     channels: Mutex<HashMap<VssPath, broadcast::Sender<SignalValue>>>,
     /// Ordered history of all published signals for test assertions.
     history: Mutex<Vec<(VssPath, SignalValue)>>,
+    /// Latest published value per signal — survives `clear_history()`.
+    latest: Mutex<HashMap<VssPath, SignalValue>>,
 }
 
 impl MockBus {
@@ -29,6 +31,7 @@ impl MockBus {
         Self {
             channels: Mutex::new(HashMap::new()),
             history: Mutex::new(Vec::new()),
+            latest: Mutex::new(HashMap::new()),
         }
     }
 
@@ -37,14 +40,23 @@ impl MockBus {
         self.history.lock().unwrap().clone()
     }
 
-    /// Clears the publish history.
+    /// Clears the publish history. The `latest` state map is NOT cleared
+    /// — use `latest_value()` to read the most-recent value for a signal
+    /// regardless of when history was last cleared.
     pub fn clear_history(&self) {
         self.history.lock().unwrap().clear();
     }
 
+    /// Returns the most recently published value for a signal (survives
+    /// `clear_history()`). Returns `None` if the signal was never published.
+    pub fn latest_value(&self, signal: VssPath) -> Option<SignalValue> {
+        self.latest.lock().unwrap().get(signal).cloned()
+    }
+
     /// Inject a signal value as if it came from the Safety Monitor.
-    /// Sends to all subscribers of the given signal.
+    /// Sends to all subscribers of the given signal and records in `latest`.
     pub fn inject(&self, signal: VssPath, value: SignalValue) {
+        self.latest.lock().unwrap().insert(signal, value.clone());
         let channels = self.channels.lock().unwrap();
         if let Some(tx) = channels.get(signal) {
             // Ignore send errors (no active subscribers).
@@ -72,6 +84,7 @@ impl Default for MockBus {
 impl SignalBus for MockBus {
     async fn publish(&self, signal: VssPath, value: SignalValue) -> anyhow::Result<()> {
         self.history.lock().unwrap().push((signal, value.clone()));
+        self.latest.lock().unwrap().insert(signal, value.clone());
         // Also broadcast so subscribers see outbound values (useful in tests).
         let tx = self.get_or_create_channel(signal);
         let _ = tx.send(value);
@@ -119,7 +132,10 @@ mod tests {
 
         let hist = bus.history();
         assert_eq!(hist.len(), 2);
-        assert_eq!(hist[0], ("Body.Lights.Beam.Low.IsOn", SignalValue::Bool(true)));
+        assert_eq!(
+            hist[0],
+            ("Body.Lights.Beam.Low.IsOn", SignalValue::Bool(true))
+        );
         assert_eq!(hist[1], ("Body.Horn.IsActive", SignalValue::Bool(false)));
     }
 
@@ -134,13 +150,10 @@ mod tests {
             bus2.inject("Body.Lights.Beam.Low.IsOn", SignalValue::Bool(true));
         });
 
-        let val = tokio::time::timeout(
-            std::time::Duration::from_millis(100),
-            stream.next(),
-        )
-        .await
-        .expect("timed out")
-        .expect("stream ended");
+        let val = tokio::time::timeout(std::time::Duration::from_millis(100), stream.next())
+            .await
+            .expect("timed out")
+            .expect("stream ended");
 
         assert_eq!(val, SignalValue::Bool(true));
     }
@@ -149,7 +162,11 @@ mod tests {
     async fn publish_await_ack_returns_ok() {
         let bus = MockBus::new();
         let result = bus
-            .publish_await_ack("Body.Doors.Row1.Left.IsLocked", SignalValue::Bool(true), 100)
+            .publish_await_ack(
+                "Body.Doors.Row1.Left.IsLocked",
+                SignalValue::Bool(true),
+                100,
+            )
             .await
             .unwrap();
         assert_eq!(result, AckResult::Ok);
@@ -167,11 +184,8 @@ mod tests {
         bus.inject("Body.Horn.IsActive", SignalValue::Bool(true));
 
         // stream_a should not receive anything
-        let result = tokio::time::timeout(
-            std::time::Duration::from_millis(50),
-            stream_a.next(),
-        )
-        .await;
+        let result =
+            tokio::time::timeout(std::time::Duration::from_millis(50), stream_a.next()).await;
         assert!(result.is_err(), "should have timed out — wrong signal");
     }
 

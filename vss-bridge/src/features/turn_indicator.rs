@@ -160,7 +160,11 @@ mod tests {
     use tokio::time::sleep;
 
     /// Helper: set up TurnIndicator with ignition ON (normal operation).
-    async fn setup() -> (Arc<MockBus>, Arc<DomainArbiter>, tokio::task::JoinHandle<()>) {
+    async fn setup() -> (
+        Arc<MockBus>,
+        Arc<DomainArbiter>,
+        tokio::task::JoinHandle<()>,
+    ) {
         let bus = Arc::new(MockBus::new());
         let (arbiter, arbiter_fut) = lighting_arbiter(Arc::clone(&bus));
         tokio::spawn(arbiter_fut);
@@ -180,7 +184,11 @@ mod tests {
     }
 
     /// Helper: set up TurnIndicator WITHOUT turning on ignition.
-    async fn setup_ignition_off() -> (Arc<MockBus>, Arc<DomainArbiter>, tokio::task::JoinHandle<()>) {
+    async fn setup_ignition_off() -> (
+        Arc<MockBus>,
+        Arc<DomainArbiter>,
+        tokio::task::JoinHandle<()>,
+    ) {
         let bus = Arc::new(MockBus::new());
         let (arbiter, arbiter_fut) = lighting_arbiter(Arc::clone(&bus));
         tokio::spawn(arbiter_fut);
@@ -211,18 +219,18 @@ mod tests {
 
         let history = bus.history();
         assert!(
-            history.iter().any(|(sig, val)| {
-                *sig == LEFT_INDICATOR && *val == SignalValue::Bool(true)
-            }),
+            history
+                .iter()
+                .any(|(sig, val)| { *sig == LEFT_INDICATOR && *val == SignalValue::Bool(true) }),
             "left indicator should be TRUE, history: {:?}",
             history
         );
         // Under claim/release semantics the right side is never claimed, so
         // the arbiter publishes nothing for it (it stays at default-off).
         assert!(
-            !history.iter().any(|(sig, val)| {
-                *sig == RIGHT_INDICATOR && *val == SignalValue::Bool(true)
-            }),
+            !history
+                .iter()
+                .any(|(sig, val)| { *sig == RIGHT_INDICATOR && *val == SignalValue::Bool(true) }),
             "right indicator should never be TRUE, history: {:?}",
             history
         );
@@ -238,16 +246,16 @@ mod tests {
 
         let history = bus.history();
         assert!(
-            history.iter().any(|(sig, val)| {
-                *sig == RIGHT_INDICATOR && *val == SignalValue::Bool(true)
-            }),
+            history
+                .iter()
+                .any(|(sig, val)| { *sig == RIGHT_INDICATOR && *val == SignalValue::Bool(true) }),
             "right indicator should be TRUE, history: {:?}",
             history
         );
         assert!(
-            !history.iter().any(|(sig, val)| {
-                *sig == LEFT_INDICATOR && *val == SignalValue::Bool(true)
-            }),
+            !history
+                .iter()
+                .any(|(sig, val)| { *sig == LEFT_INDICATOR && *val == SignalValue::Bool(true) }),
             "left indicator should never be TRUE, history: {:?}",
             history
         );
@@ -271,9 +279,9 @@ mod tests {
         // Left was claimed true, so releasing it publishes false via
         // the default-off fallback.
         assert!(
-            history.iter().any(|(sig, val)| {
-                *sig == LEFT_INDICATOR && *val == SignalValue::Bool(false)
-            }),
+            history
+                .iter()
+                .any(|(sig, val)| { *sig == LEFT_INDICATOR && *val == SignalValue::Bool(false) }),
             "left should be FALSE after OFF, history: {:?}",
             history
         );
@@ -300,16 +308,16 @@ mod tests {
 
         let history = bus.history();
         assert!(
-            history.iter().any(|(sig, val)| {
-                *sig == LEFT_INDICATOR && *val == SignalValue::Bool(false)
-            }),
+            history
+                .iter()
+                .any(|(sig, val)| { *sig == LEFT_INDICATOR && *val == SignalValue::Bool(false) }),
             "left should turn OFF when switching to RIGHT, history: {:?}",
             history
         );
         assert!(
-            history.iter().any(|(sig, val)| {
-                *sig == RIGHT_INDICATOR && *val == SignalValue::Bool(true)
-            }),
+            history
+                .iter()
+                .any(|(sig, val)| { *sig == RIGHT_INDICATOR && *val == SignalValue::Bool(true) }),
             "right should turn ON when switching to RIGHT, history: {:?}",
             history
         );
@@ -338,9 +346,9 @@ mod tests {
         let history = bus.history();
         // Both indicators should be TRUE (hazard HIGH wins over turn MEDIUM)
         assert!(
-            history.iter().any(|(sig, val)| {
-                *sig == RIGHT_INDICATOR && *val == SignalValue::Bool(true)
-            }),
+            history
+                .iter()
+                .any(|(sig, val)| { *sig == RIGHT_INDICATOR && *val == SignalValue::Bool(true) }),
             "hazard should override: right should be TRUE, history: {:?}",
             history
         );
@@ -361,9 +369,9 @@ mod tests {
 
         let history = bus.history();
         assert!(
-            !history.iter().any(|(sig, val)| {
-                *sig == LEFT_INDICATOR && *val == SignalValue::Bool(true)
-            }),
+            !history
+                .iter()
+                .any(|(sig, val)| { *sig == LEFT_INDICATOR && *val == SignalValue::Bool(true) }),
             "left indicator should NOT activate when ignition off, history: {:?}",
             history
         );
@@ -386,9 +394,9 @@ mod tests {
 
         let history = bus.history();
         assert!(
-            !history.iter().any(|(sig, val)| {
-                *sig == LEFT_INDICATOR && *val == SignalValue::Bool(true)
-            }),
+            !history
+                .iter()
+                .any(|(sig, val)| { *sig == LEFT_INDICATOR && *val == SignalValue::Bool(true) }),
             "left indicator should NOT activate in ACC, history: {:?}",
             history
         );
@@ -412,9 +420,9 @@ mod tests {
 
         let history = bus.history();
         assert!(
-            history.iter().any(|(sig, val)| {
-                *sig == LEFT_INDICATOR && *val == SignalValue::Bool(false)
-            }),
+            history
+                .iter()
+                .any(|(sig, val)| { *sig == LEFT_INDICATOR && *val == SignalValue::Bool(false) }),
             "left should deactivate when ignition goes OFF, history: {:?}",
             history
         );
@@ -450,9 +458,9 @@ mod tests {
             history
         );
         assert!(
-            history.iter().any(|(sig, val)| {
-                *sig == RIGHT_INDICATOR && *val == SignalValue::Bool(false)
-            }),
+            history
+                .iter()
+                .any(|(sig, val)| { *sig == RIGHT_INDICATOR && *val == SignalValue::Bool(false) }),
             "right should be FALSE when ignition goes to ACC, history: {:?}",
             history
         );
@@ -476,9 +484,9 @@ mod tests {
 
         let history = bus.history();
         assert!(
-            history.iter().any(|(sig, val)| {
-                *sig == LEFT_INDICATOR && *val == SignalValue::Bool(true)
-            }),
+            history
+                .iter()
+                .any(|(sig, val)| { *sig == LEFT_INDICATOR && *val == SignalValue::Bool(true) }),
             "left should activate when ignition returns to ON, history: {:?}",
             history
         );
@@ -501,9 +509,9 @@ mod tests {
 
         let history = bus.history();
         assert!(
-            history.iter().any(|(sig, val)| {
-                *sig == RIGHT_INDICATOR && *val == SignalValue::Bool(true)
-            }),
+            history
+                .iter()
+                .any(|(sig, val)| { *sig == RIGHT_INDICATOR && *val == SignalValue::Bool(true) }),
             "right should activate in START state, history: {:?}",
             history
         );
