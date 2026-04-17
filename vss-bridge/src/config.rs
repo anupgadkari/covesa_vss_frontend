@@ -339,20 +339,15 @@ impl DoorConfig {
 }
 
 /// Welcome light pattern options.
-#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
 pub enum WelcomeLightPattern {
     /// Simple on/off.
+    #[default]
     Simple,
     /// Sequential sweep (premium).
     Sequential,
     /// No welcome lights.
     Disabled,
-}
-
-impl Default for WelcomeLightPattern {
-    fn default() -> Self {
-        Self::Simple
-    }
 }
 
 impl Default for VariantCal {
@@ -405,18 +400,13 @@ pub struct DealerConfig {
 }
 
 /// PEPS approach unlock behavior.
-#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
 pub enum ApproachUnlockMode {
     /// Unlock driver door only on first approach; second pull unlocks all.
+    #[default]
     DriverOnly,
     /// Unlock all doors on approach.
     All,
-}
-
-impl Default for ApproachUnlockMode {
-    fn default() -> Self {
-        Self::DriverOnly
-    }
 }
 
 impl Default for DealerConfig {
@@ -480,10 +470,10 @@ impl PlatformConfig {
     /// Load from explicit paths (for testing or non-standard deployments).
     pub fn load_from(vehicle_line_path: Option<&str>, variant_path: Option<&str>) -> Arc<Self> {
         let vehicle_line = vehicle_line_path
-            .map(|p| load_json_or_default::<VehicleLineCal>(p))
+            .map(load_json_or_default::<VehicleLineCal>)
             .unwrap_or_default();
         let variant = variant_path
-            .map(|p| load_json_or_default::<VariantCal>(p))
+            .map(load_json_or_default::<VariantCal>)
             .unwrap_or_default();
         let dealer = DealerConfig::default();
 

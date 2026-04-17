@@ -198,6 +198,7 @@ impl<B: SignalBus> BlinkRelay<B> {
 /// lamp group is forced off. If the other side is already signaling on
 /// a rising edge, the other side's phase is also reset so the two sides
 /// blink in sync (classic hazard behavior).
+#[allow(clippy::type_complexity)]
 async fn handle_intent_change<B: SignalBus>(
     bus: &Arc<B>,
     side: &mut SideState,

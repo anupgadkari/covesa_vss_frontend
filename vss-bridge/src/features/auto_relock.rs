@@ -25,7 +25,7 @@ use tokio::select;
 use tokio::time::sleep;
 
 use crate::arbiter::{DoorLockArbiter, DoorLockRequest, LockCommand};
-use crate::config::{DoorConfig, PlatformConfig};
+use crate::config::PlatformConfig;
 use crate::ipc_message::{FeatureId, SignalValue};
 use crate::signal_bus::{SignalBus, VssPath};
 
