@@ -55,14 +55,19 @@ Feature: Turn Indicator
   #               electrical architecture — the turn signal relay is
   #               powered from the ignition-switched bus.
   #
-  # REQ-TURN-009: (Auto lane change / comfort blink) When
+  # REQ-TURN-009: (Auto lane change / comfort blink / tip-to-signal)
+  #               The feature SHALL count complete flash cycles (on+off)
+  #               while the stalk is held. When
   #               Body.Switches.TurnIndicator.Direction transitions from
-  #               "LEFT" or "RIGHT" to "OFF", the feature SHALL NOT
-  #               immediately release its arbiter claim. Instead it SHALL
-  #               maintain the active indicator for a configurable number
-  #               of complete flash cycles (vehicle-line calibration
-  #               parameter `lane_change_flash_count`, default 3). A
-  #               "flash" is one complete on+off cycle of the physical
+  #               "LEFT" or "RIGHT" to "OFF":
+  #               (a) If fewer than `lane_change_flash_count` (default 3)
+  #                   flashes have completed, the feature SHALL maintain
+  #                   the arbiter claim and continue signaling until the
+  #                   total reaches `lane_change_flash_count`.
+  #               (b) If `lane_change_flash_count` or more flashes have
+  #                   already completed, the feature SHALL release its
+  #                   arbiter claim immediately (no additional flashes).
+  #               A "flash" is one complete on+off cycle of the physical
   #               lamps, counted by observing the BlinkRelay lamp
   #               feedback signal's falling edge (on→off transition).
   #
@@ -108,15 +113,15 @@ Feature: Turn Indicator
     And the Turn feature requests DirectionIndicator.Right.IsSignaling = TRUE at priority MEDIUM
     And the Turn feature releases its claim on DirectionIndicator.Left.IsSignaling
 
-  # --- REQ-TURN-009 ---
-  Scenario: Turn stalk returned to OFF enters comfort blink
+  # --- REQ-TURN-009a ---
+  Scenario: Quick tap enters comfort blink to reach configured flash count
     Given the turn stalk is in position LEFT
     And the left direction indicator is signaling
     When the driver returns the turn stalk to OFF
     Then the left direction indicator continues signaling during comfort blink countdown
 
-  # --- REQ-TURN-009 ---
-  Scenario: Comfort blink completes after configured number of flashes
+  # --- REQ-TURN-009a ---
+  Scenario: Quick tap completes exactly the configured number of total flashes
     Given the turn stalk is in position LEFT
     And the left direction indicator is signaling
     When the driver returns the turn stalk to OFF
@@ -124,13 +129,22 @@ Feature: Turn Indicator
     Then the Turn feature releases its claim on DirectionIndicator.Left.IsSignaling
     And the Turn feature releases its claim on DirectionIndicator.Right.IsSignaling
 
-  # --- REQ-TURN-009 ---
-  Scenario: Comfort blink still active before flash count reached
+  # --- REQ-TURN-009a ---
+  Scenario: Comfort blink still active before total flash count reached
     Given the turn stalk is in position LEFT
     And the left direction indicator is signaling
     When the driver returns the turn stalk to OFF
     And 2 complete flash cycles elapse
     Then the left direction indicator continues signaling during comfort blink countdown
+
+  # --- REQ-TURN-009b ---
+  Scenario: Long hold releases immediately when stalk returns to OFF
+    Given the turn stalk is in position LEFT
+    And the left direction indicator is signaling
+    When 3 complete flash cycles elapse
+    And the driver returns the turn stalk to OFF
+    Then the Turn feature releases its claim on DirectionIndicator.Left.IsSignaling
+    And the Turn feature releases its claim on DirectionIndicator.Right.IsSignaling
 
   # --- REQ-TURN-001, REQ-TURN-002, REQ-TURN-011b ---
   Scenario: Turn stalk changes directly from LEFT to RIGHT

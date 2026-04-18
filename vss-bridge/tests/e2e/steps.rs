@@ -49,6 +49,18 @@ impl std::fmt::Debug for VssWorld {
     }
 }
 
+impl Drop for VssWorld {
+    fn drop(&mut self) {
+        // Abort all spawned tasks to prevent zombie tasks from accumulating
+        // across scenarios in the shared tokio runtime. Zombie timers from
+        // old BlinkRelay tasks would fire during advance() calls in later
+        // scenarios, corrupting virtual-time determinism.
+        for task in self._tasks.drain(..) {
+            task.abort();
+        }
+    }
+}
+
 impl VssWorld {
     async fn new() -> Self {
         Self::default()
@@ -120,18 +132,19 @@ async fn settle() {
 }
 
 /// Advance time for N complete flash cycles at the normal blink rate
-/// (333ms half-period = 666ms per flash). Uses full settle between
-/// each half-period so timer fires and bus publishes propagate through
-/// all tasks before the next advance.
+/// (333ms half-period = 666ms per flash cycle).
+///
+/// Uses a single `advance(666ms)` per cycle rather than two 333ms
+/// advances with yields in between.  Splitting into half-periods with
+/// `yield_now()` between them is unsafe: tokio's auto-advance in paused
+/// mode can fire intermediate BlinkRelay timers during yields when all
+/// *other* tasks are idle, advancing the clock by extra 333ms increments
+/// and producing spurious flash counts.
 async fn advance_flashes(n: u32) {
     for _ in 0..n {
-        // ON half-period — timer fires, lamp toggles, event propagates.
-        advance(Duration::from_millis(333)).await;
-        settle().await;
-        // OFF half-period — same.
-        advance(Duration::from_millis(333)).await;
-        settle().await;
+        advance(Duration::from_millis(666)).await;
     }
+    settle().await;
 }
 
 /// Map a short indicator name to its full VSS path.

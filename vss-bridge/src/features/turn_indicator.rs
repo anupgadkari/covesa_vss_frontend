@@ -13,13 +13,19 @@
 //!   - Body.Lights.DirectionIndicator.Left.IsSignaling  @ MEDIUM (2)
 //!   - Body.Lights.DirectionIndicator.Right.IsSignaling @ MEDIUM (2)
 //!
-//! ## Auto lane change (comfort blink)
+//! ## Auto lane change (comfort blink / tip-to-signal)
 //!
-//! When the turn stalk returns to OFF while an indicator is active,
-//! the feature does not immediately release its arbiter claim. Instead
-//! it enters a **comfort-blink countdown**, keeping the indicator
-//! signaling for a configurable number of complete flash cycles
-//! (default 3, vehicle-line calibratable via `lane_change_flash_count`).
+//! The feature counts complete flash cycles (on+off) while the stalk
+//! is held. When the stalk returns to OFF:
+//!   - If the indicator has already completed `lane_change_flash_count`
+//!     (default 3) or more flashes, it releases **immediately** (normal
+//!     full-engagement turn signal).
+//!   - If fewer than `lane_change_flash_count` flashes have completed
+//!     (quick tap / tip), it continues signaling for the remaining
+//!     flashes so the total always reaches the configured count.
+//!
+//! This means a quick tap always produces exactly N flashes total,
+//! while a long hold stops as soon as the driver releases the stalk.
 //!
 //! A "flash" is one complete on+off cycle of the physical lamps. The
 //! feature counts falling edges (on→off transitions) from the
@@ -141,7 +147,10 @@ impl<B: SignalBus> TurnIndicator<B> {
         let mut ignition_on = false;
         // Which side is currently active via the stalk (not comfort blink).
         let mut active_side: Option<&str> = None;
-        // Comfort blink countdown state.
+        // Number of complete flash cycles counted since the stalk was
+        // engaged. Reset to 0 whenever a new direction is activated.
+        let mut flashes_counted: u8 = 0;
+        // Comfort blink countdown state (remaining flashes after stalk OFF).
         let mut comfort = ComfortBlink::None;
         // Track lamp state for edge detection (we count on→off transitions).
         let mut left_lamp_was_on = false;
@@ -167,32 +176,45 @@ impl<B: SignalBus> TurnIndicator<B> {
                             // Cancel any comfort blink (including same side — driver
                             // re-engaged the stalk) and activate left.
                             comfort = ComfortBlink::None;
+                            flashes_counted = 0;
                             active_side = Some("LEFT");
                             self.set_both(true, false).await;
                         }
                         "RIGHT" => {
                             comfort = ComfortBlink::None;
+                            flashes_counted = 0;
                             active_side = Some("RIGHT");
                             self.set_both(false, true).await;
                         }
                         _ => {
                             // Stalk returned to OFF.
                             if let Some(side) = active_side.take() {
-                                if flash_count > 0 {
-                                    // Enter comfort blink countdown.
+                                let remaining = flash_count.saturating_sub(flashes_counted);
+                                if remaining > 0 {
+                                    // Quick tap — fewer than N flashes so far.
+                                    // Continue for the remaining flashes.
                                     comfort = match side {
-                                        "LEFT" => ComfortBlink::Left(flash_count),
-                                        "RIGHT" => ComfortBlink::Right(flash_count),
+                                        "LEFT" => ComfortBlink::Left(remaining),
+                                        "RIGHT" => ComfortBlink::Right(remaining),
                                         _ => ComfortBlink::None,
                                     };
                                     tracing::info!(
                                         side,
-                                        flashes = flash_count,
+                                        flashes_so_far = flashes_counted,
+                                        remaining,
                                         "TurnIndicator: comfort blink started"
                                     );
                                     // Keep the arbiter claim active — don't release yet.
                                 } else {
-                                    // Comfort blink disabled — release immediately.
+                                    // Already completed N+ flashes, or comfort
+                                    // blink disabled (flash_count=0) — release
+                                    // immediately.
+                                    tracing::debug!(
+                                        side,
+                                        flashes_so_far = flashes_counted,
+                                        "TurnIndicator: stalk OFF, no comfort blink needed"
+                                    );
+                                    flashes_counted = 0;
                                     self.set_both(false, false).await;
                                 }
                             } else if comfort.is_active() {
@@ -214,6 +236,7 @@ impl<B: SignalBus> TurnIndicator<B> {
                         tracing::info!(state = ?val, "TurnIndicator: ignition off, deactivating");
                         comfort = ComfortBlink::None;
                         active_side = None;
+                        flashes_counted = 0;
                         self.set_both(false, false).await;
                     } else if !was_on && ignition_on {
                         // Ignition entered ON/START — re-apply current stalk position.
@@ -224,30 +247,44 @@ impl<B: SignalBus> TurnIndicator<B> {
                 Some(val) = left_lamp_stream.next() => {
                     let is_on = matches!(val, SignalValue::Bool(true));
                     // Count falling edges (on → off = one complete flash).
-                    if comfort.is_left() && left_lamp_was_on && !is_on {
-                        if let ComfortBlink::Left(ref mut remaining) = comfort {
-                            *remaining = remaining.saturating_sub(1);
-                            tracing::debug!(remaining = *remaining, "TurnIndicator: left comfort flash counted");
-                            if *remaining == 0 {
-                                tracing::info!("TurnIndicator: left comfort blink complete");
-                                comfort = ComfortBlink::None;
-                                self.set_both(false, false).await;
+                    if left_lamp_was_on && !is_on {
+                        if comfort.is_left() {
+                            // Counting during comfort blink countdown.
+                            if let ComfortBlink::Left(ref mut remaining) = comfort {
+                                *remaining = remaining.saturating_sub(1);
+                                tracing::debug!(remaining = *remaining, "TurnIndicator: left comfort flash counted");
+                                if *remaining == 0 {
+                                    tracing::info!("TurnIndicator: left comfort blink complete");
+                                    comfort = ComfortBlink::None;
+                                    flashes_counted = 0;
+                                    self.set_both(false, false).await;
+                                }
                             }
+                        } else if active_side == Some("LEFT") {
+                            // Counting while stalk is held — for tip-to-signal logic.
+                            flashes_counted = flashes_counted.saturating_add(1);
+                            tracing::debug!(flashes_counted, "TurnIndicator: left flash while stalk held");
                         }
                     }
                     left_lamp_was_on = is_on;
                 }
                 Some(val) = right_lamp_stream.next() => {
                     let is_on = matches!(val, SignalValue::Bool(true));
-                    if comfort.is_right() && right_lamp_was_on && !is_on {
-                        if let ComfortBlink::Right(ref mut remaining) = comfort {
-                            *remaining = remaining.saturating_sub(1);
-                            tracing::debug!(remaining = *remaining, "TurnIndicator: right comfort flash counted");
-                            if *remaining == 0 {
-                                tracing::info!("TurnIndicator: right comfort blink complete");
-                                comfort = ComfortBlink::None;
-                                self.set_both(false, false).await;
+                    if right_lamp_was_on && !is_on {
+                        if comfort.is_right() {
+                            if let ComfortBlink::Right(ref mut remaining) = comfort {
+                                *remaining = remaining.saturating_sub(1);
+                                tracing::debug!(remaining = *remaining, "TurnIndicator: right comfort flash counted");
+                                if *remaining == 0 {
+                                    tracing::info!("TurnIndicator: right comfort blink complete");
+                                    comfort = ComfortBlink::None;
+                                    flashes_counted = 0;
+                                    self.set_both(false, false).await;
+                                }
                             }
+                        } else if active_side == Some("RIGHT") {
+                            flashes_counted = flashes_counted.saturating_add(1);
+                            tracing::debug!(flashes_counted, "TurnIndicator: right flash while stalk held");
                         }
                     }
                     right_lamp_was_on = is_on;
@@ -823,6 +860,90 @@ mod tests {
                 .any(|(sig, val)| { *sig == RIGHT_INDICATOR && *val == SignalValue::Bool(true) }),
             "right should activate in START state, history: {:?}",
             history
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Tip-to-signal: long hold releases immediately
+    // -----------------------------------------------------------------------
+
+    #[tokio::test(start_paused = true)]
+    async fn long_hold_releases_immediately_on_stalk_off() {
+        let (bus, _arb, _handle) = setup().await;
+
+        // Activate left turn
+        bus.inject(TURN_STALK, s("LEFT"));
+        settle().await;
+
+        // Hold stalk for 3 complete flash cycles
+        advance_flashes(3).await;
+        settle().await;
+
+        // Return stalk to OFF — should release immediately (no comfort blink)
+        bus.clear_history();
+        bus.inject(TURN_STALK, s("OFF"));
+        settle().await;
+
+        assert_eq!(
+            bus.latest_value(LEFT_INDICATOR),
+            Some(SignalValue::Bool(false)),
+            "left should be FALSE immediately — held long enough, no comfort blink"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn long_hold_more_than_configured_releases_immediately() {
+        let (bus, _arb, _handle) = setup().await;
+
+        bus.inject(TURN_STALK, s("LEFT"));
+        settle().await;
+
+        // Hold stalk for 5 complete flash cycles (more than the 3 configured)
+        advance_flashes(5).await;
+        settle().await;
+
+        bus.clear_history();
+        bus.inject(TURN_STALK, s("OFF"));
+        settle().await;
+
+        assert_eq!(
+            bus.latest_value(LEFT_INDICATOR),
+            Some(SignalValue::Bool(false)),
+            "left should be FALSE immediately — held well past configured count"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn partial_hold_gets_remaining_comfort_flashes() {
+        // Hold stalk for 1 flash, then release — should get 2 more comfort flashes
+        let (bus, _arb, _handle) = setup().await;
+
+        bus.inject(TURN_STALK, s("LEFT"));
+        settle().await;
+
+        // Hold for 1 flash
+        advance_flashes(1).await;
+        settle().await;
+
+        // Release stalk
+        bus.inject(TURN_STALK, s("OFF"));
+        settle().await;
+
+        // Should still be signaling (2 remaining comfort flashes)
+        assert_eq!(
+            bus.latest_value(LEFT_INDICATOR),
+            Some(SignalValue::Bool(true)),
+            "left should remain TRUE — 2 comfort flashes remaining"
+        );
+
+        // Advance 2 more flashes to complete the total of 3
+        advance_flashes(2).await;
+        settle().await;
+
+        assert_eq!(
+            bus.latest_value(LEFT_INDICATOR),
+            Some(SignalValue::Bool(false)),
+            "left should be FALSE after 3 total flashes (1 held + 2 comfort)"
         );
     }
 
