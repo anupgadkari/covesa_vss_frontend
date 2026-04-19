@@ -381,7 +381,9 @@ async fn then_indicator_released(w: &mut VssWorld, side: String) {
 
 // ---- Comfort blink: indicator continues signaling during countdown ----
 
-#[then(regex = r"^the (left|right) direction indicator continues signaling during comfort blink countdown$")]
+#[then(
+    regex = r"^the (left|right) direction indicator continues signaling during comfort blink countdown$"
+)]
 async fn then_indicator_still_signaling(w: &mut VssWorld, side: String) {
     let path = indicator_path(&side);
     assert_eq!(

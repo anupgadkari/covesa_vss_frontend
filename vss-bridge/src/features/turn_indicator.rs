@@ -402,11 +402,7 @@ mod tests {
         tokio::spawn(relay.run());
 
         let cfg = PlatformConfig::defaults_with_lane_change_flash_count(count);
-        let feature = TurnIndicator::with_config(
-            Arc::clone(&arbiter),
-            Arc::clone(&bus),
-            cfg,
-        );
+        let feature = TurnIndicator::with_config(Arc::clone(&arbiter), Arc::clone(&bus), cfg);
         let handle = tokio::spawn(feature.run());
         tokio::task::yield_now().await;
 
