@@ -1879,6 +1879,7 @@ dependencies = [
  "bytes",
  "crc",
  "cucumber",
+ "fastrand",
  "futures",
  "prost",
  "prost-types",

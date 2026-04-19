@@ -38,6 +38,7 @@ tokio-stream    = { version = "0.1", features = ["sync"] }
 anyhow          = "1"
 tracing         = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+fastrand         = "2"
 
 [dev-dependencies]
 tokio           = { version = "1", features = ["full", "test-util"] }

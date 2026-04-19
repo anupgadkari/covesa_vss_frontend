@@ -165,6 +165,65 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // Safety signals
         "Vehicle.Safety.CrashDetected" => Some(0x000F_0001),
 
+        // PEPS plant model — key fob zones
+        "Body.PEPS.Plant.KeyFob.1.Zone" => Some(0x0010_0001),
+        "Body.PEPS.Plant.KeyFob.2.Zone" => Some(0x0010_0002),
+        "Body.PEPS.Plant.KeyFob.3.Zone" => Some(0x0010_0003),
+        "Body.PEPS.Plant.KeyFob.4.Zone" => Some(0x0010_0004),
+        "Body.PEPS.Plant.KeyFob.5.Zone" => Some(0x0010_0005),
+        "Body.PEPS.Plant.KeyFob.6.Zone" => Some(0x0010_0006),
+        // PEPS plant model — key fob button presses
+        "Body.PEPS.Plant.KeyFob.1.ButtonPress" => Some(0x0010_0011),
+        "Body.PEPS.Plant.KeyFob.2.ButtonPress" => Some(0x0010_0012),
+        "Body.PEPS.Plant.KeyFob.3.ButtonPress" => Some(0x0010_0013),
+        "Body.PEPS.Plant.KeyFob.4.ButtonPress" => Some(0x0010_0014),
+        // PEPS plant model — key fob pairing
+        "Body.PEPS.Plant.KeyFob.1.Paired" => Some(0x0010_0021),
+        "Body.PEPS.Plant.KeyFob.2.Paired" => Some(0x0010_0022),
+        "Body.PEPS.Plant.KeyFob.3.Paired" => Some(0x0010_0023),
+        "Body.PEPS.Plant.KeyFob.4.Paired" => Some(0x0010_0024),
+        "Body.PEPS.Plant.KeyFob.5.Paired" => Some(0x0010_0025),
+        "Body.PEPS.Plant.KeyFob.6.Paired" => Some(0x0010_0026),
+        // PEPS plant model — key fob challenge responses
+        "Body.PEPS.Plant.KeyFob.1.ChallengeResponse" => Some(0x0010_0031),
+        "Body.PEPS.Plant.KeyFob.2.ChallengeResponse" => Some(0x0010_0032),
+        "Body.PEPS.Plant.KeyFob.3.ChallengeResponse" => Some(0x0010_0033),
+        "Body.PEPS.Plant.KeyFob.4.ChallengeResponse" => Some(0x0010_0034),
+        "Body.PEPS.Plant.KeyFob.5.ChallengeResponse" => Some(0x0010_0035),
+        "Body.PEPS.Plant.KeyFob.6.ChallengeResponse" => Some(0x0010_0036),
+        // PEPS plant model — key fob RSSI responses
+        "Body.PEPS.Plant.KeyFob.1.RssiResponse" => Some(0x0010_0041),
+        "Body.PEPS.Plant.KeyFob.2.RssiResponse" => Some(0x0010_0042),
+        "Body.PEPS.Plant.KeyFob.3.RssiResponse" => Some(0x0010_0043),
+        "Body.PEPS.Plant.KeyFob.4.RssiResponse" => Some(0x0010_0044),
+        "Body.PEPS.Plant.KeyFob.5.RssiResponse" => Some(0x0010_0045),
+        "Body.PEPS.Plant.KeyFob.6.RssiResponse" => Some(0x0010_0046),
+        // PEPS plant model — key fob RF messages
+        "Body.PEPS.Plant.KeyFob.1.RfMessage" => Some(0x0010_0051),
+        "Body.PEPS.Plant.KeyFob.2.RfMessage" => Some(0x0010_0052),
+        "Body.PEPS.Plant.KeyFob.3.RfMessage" => Some(0x0010_0053),
+        "Body.PEPS.Plant.KeyFob.4.RfMessage" => Some(0x0010_0054),
+        // PEPS plant model — BLE phone zones
+        "Body.PEPS.Plant.BlePhone.1.Zone" => Some(0x0011_0001),
+        "Body.PEPS.Plant.BlePhone.2.Zone" => Some(0x0011_0002),
+        // PEPS plant model — BLE phone challenge responses
+        "Body.PEPS.Plant.BlePhone.1.ChallengeResponse" => Some(0x0011_0011),
+        "Body.PEPS.Plant.BlePhone.2.ChallengeResponse" => Some(0x0011_0012),
+        // PEPS plant model — BLE phone RSSI responses
+        "Body.PEPS.Plant.BlePhone.1.RssiResponse" => Some(0x0011_0021),
+        "Body.PEPS.Plant.BlePhone.2.RssiResponse" => Some(0x0011_0022),
+        // PEPS plant model — NFC card positions
+        "Body.PEPS.Plant.NfcCard.1.Position" => Some(0x0012_0001),
+        "Body.PEPS.Plant.NfcCard.2.Position" => Some(0x0012_0002),
+        // PEPS plant model — NFC card challenge responses
+        "Body.PEPS.Plant.NfcCard.1.ChallengeResponse" => Some(0x0012_0011),
+        "Body.PEPS.Plant.NfcCard.2.ChallengeResponse" => Some(0x0012_0012),
+        // PEPS vehicle-side challenge/poll signals
+        "Body.PEPS.LfChallenge" => Some(0x0013_0001),
+        "Body.PEPS.BleChallenge" => Some(0x0013_0002),
+        "Body.PEPS.NfcChallenge" => Some(0x0013_0003),
+        "Body.PEPS.ApproachPoll" => Some(0x0013_0004),
+
         _ => None,
     }
 }
@@ -341,6 +400,64 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Body.Doors.Row2.Right.IsRemoved", 0x000E_0043),
     // Safety signals
     ("Vehicle.Safety.CrashDetected", 0x000F_0001),
+    // PEPS plant model — key fob zones
+    ("Body.PEPS.Plant.KeyFob.1.Zone", 0x0010_0001),
+    ("Body.PEPS.Plant.KeyFob.2.Zone", 0x0010_0002),
+    ("Body.PEPS.Plant.KeyFob.3.Zone", 0x0010_0003),
+    ("Body.PEPS.Plant.KeyFob.4.Zone", 0x0010_0004),
+    ("Body.PEPS.Plant.KeyFob.5.Zone", 0x0010_0005),
+    ("Body.PEPS.Plant.KeyFob.6.Zone", 0x0010_0006),
+    // PEPS plant model — key fob button presses
+    ("Body.PEPS.Plant.KeyFob.1.ButtonPress", 0x0010_0011),
+    ("Body.PEPS.Plant.KeyFob.2.ButtonPress", 0x0010_0012),
+    ("Body.PEPS.Plant.KeyFob.3.ButtonPress", 0x0010_0013),
+    ("Body.PEPS.Plant.KeyFob.4.ButtonPress", 0x0010_0014),
+    // PEPS plant model — key fob pairing
+    ("Body.PEPS.Plant.KeyFob.1.Paired", 0x0010_0021),
+    ("Body.PEPS.Plant.KeyFob.2.Paired", 0x0010_0022),
+    ("Body.PEPS.Plant.KeyFob.3.Paired", 0x0010_0023),
+    ("Body.PEPS.Plant.KeyFob.4.Paired", 0x0010_0024),
+    ("Body.PEPS.Plant.KeyFob.5.Paired", 0x0010_0025),
+    ("Body.PEPS.Plant.KeyFob.6.Paired", 0x0010_0026),
+    // PEPS plant model — key fob challenge responses
+    ("Body.PEPS.Plant.KeyFob.1.ChallengeResponse", 0x0010_0031),
+    ("Body.PEPS.Plant.KeyFob.2.ChallengeResponse", 0x0010_0032),
+    ("Body.PEPS.Plant.KeyFob.3.ChallengeResponse", 0x0010_0033),
+    ("Body.PEPS.Plant.KeyFob.4.ChallengeResponse", 0x0010_0034),
+    ("Body.PEPS.Plant.KeyFob.5.ChallengeResponse", 0x0010_0035),
+    ("Body.PEPS.Plant.KeyFob.6.ChallengeResponse", 0x0010_0036),
+    // PEPS plant model — key fob RSSI responses
+    ("Body.PEPS.Plant.KeyFob.1.RssiResponse", 0x0010_0041),
+    ("Body.PEPS.Plant.KeyFob.2.RssiResponse", 0x0010_0042),
+    ("Body.PEPS.Plant.KeyFob.3.RssiResponse", 0x0010_0043),
+    ("Body.PEPS.Plant.KeyFob.4.RssiResponse", 0x0010_0044),
+    ("Body.PEPS.Plant.KeyFob.5.RssiResponse", 0x0010_0045),
+    ("Body.PEPS.Plant.KeyFob.6.RssiResponse", 0x0010_0046),
+    // PEPS plant model — key fob RF messages
+    ("Body.PEPS.Plant.KeyFob.1.RfMessage", 0x0010_0051),
+    ("Body.PEPS.Plant.KeyFob.2.RfMessage", 0x0010_0052),
+    ("Body.PEPS.Plant.KeyFob.3.RfMessage", 0x0010_0053),
+    ("Body.PEPS.Plant.KeyFob.4.RfMessage", 0x0010_0054),
+    // PEPS plant model — BLE phone zones
+    ("Body.PEPS.Plant.BlePhone.1.Zone", 0x0011_0001),
+    ("Body.PEPS.Plant.BlePhone.2.Zone", 0x0011_0002),
+    // PEPS plant model — BLE phone challenge responses
+    ("Body.PEPS.Plant.BlePhone.1.ChallengeResponse", 0x0011_0011),
+    ("Body.PEPS.Plant.BlePhone.2.ChallengeResponse", 0x0011_0012),
+    // PEPS plant model — BLE phone RSSI responses
+    ("Body.PEPS.Plant.BlePhone.1.RssiResponse", 0x0011_0021),
+    ("Body.PEPS.Plant.BlePhone.2.RssiResponse", 0x0011_0022),
+    // PEPS plant model — NFC card positions
+    ("Body.PEPS.Plant.NfcCard.1.Position", 0x0012_0001),
+    ("Body.PEPS.Plant.NfcCard.2.Position", 0x0012_0002),
+    // PEPS plant model — NFC card challenge responses
+    ("Body.PEPS.Plant.NfcCard.1.ChallengeResponse", 0x0012_0011),
+    ("Body.PEPS.Plant.NfcCard.2.ChallengeResponse", 0x0012_0012),
+    // PEPS vehicle-side challenge/poll signals
+    ("Body.PEPS.LfChallenge", 0x0013_0001),
+    ("Body.PEPS.BleChallenge", 0x0013_0002),
+    ("Body.PEPS.NfcChallenge", 0x0013_0003),
+    ("Body.PEPS.ApproachPoll", 0x0013_0004),
 ];
 
 #[cfg(test)]
