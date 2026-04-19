@@ -98,31 +98,68 @@ impl<B: SignalBus> PepsPlantModel<B> {
         }
     }
 
-    /// Move a key fob to a new zone. Enforces Cabin/Trunk exclusivity.
-    pub fn set_fob_zone(&mut self, index: usize, zone: Zone) {
-        if let Some(fob) = self.fobs.get_mut(index) {
-            let old = fob.zone;
-            fob.zone = zone;
-            tracing::debug!(
-                fob = fob.index,
-                from = %old,
-                to = %zone,
-                "PEPS plant: fob zone changed"
-            );
+    /// Move a key fob to a new zone.
+    /// Automatically publishes RSSI if the fob enters an LF-capable zone,
+    /// or clears RSSI if it leaves LF range.
+    pub async fn set_fob_zone(&mut self, index: usize, zone: Zone) {
+        let fob = match self.fobs.get_mut(index) {
+            Some(f) => f,
+            None => return,
+        };
+        let old = fob.zone;
+        fob.zone = zone;
+        tracing::debug!(
+            fob = fob.index,
+            from = %old,
+            to = %zone,
+            "PEPS plant: fob zone changed"
+        );
+
+        // Publish RSSI feedback when in an LF zone, clear when leaving.
+        let rssi_signal = signals::KEYFOB_RSSIS[index];
+        if zone.supports_rssi() {
+            let rssi = device::RssiResponse::for_zone(zone);
+            let _ = self
+                .bus
+                .publish(rssi_signal, SignalValue::String(rssi.to_signal_string()))
+                .await;
+        } else if old.supports_rssi() {
+            // Left LF range — clear RSSI
+            let _ = self
+                .bus
+                .publish(rssi_signal, SignalValue::String("{}".into()))
+                .await;
         }
     }
 
-    /// Move a BLE phone to a new zone. Enforces Cabin/Trunk exclusivity.
-    pub fn set_phone_zone(&mut self, index: usize, zone: Zone) {
-        if let Some(phone) = self.phones.get_mut(index) {
-            let old = phone.zone;
-            phone.zone = zone;
-            tracing::debug!(
-                phone = phone.index,
-                from = %old,
-                to = %zone,
-                "PEPS plant: phone zone changed"
-            );
+    /// Move a BLE phone to a new zone.
+    /// Automatically publishes BLE RSSI feedback.
+    pub async fn set_phone_zone(&mut self, index: usize, zone: Zone) {
+        let phone = match self.phones.get_mut(index) {
+            Some(p) => p,
+            None => return,
+        };
+        let old = phone.zone;
+        phone.zone = zone;
+        tracing::debug!(
+            phone = phone.index,
+            from = %old,
+            to = %zone,
+            "PEPS plant: phone zone changed"
+        );
+
+        let rssi_signal = signals::PHONE_RSSIS[index];
+        if zone.supports_rssi() {
+            let rssi = device::RssiResponse::for_zone(zone);
+            let _ = self
+                .bus
+                .publish(rssi_signal, SignalValue::String(rssi.to_signal_string()))
+                .await;
+        } else if old.supports_rssi() {
+            let _ = self
+                .bus
+                .publish(rssi_signal, SignalValue::String("{}".into()))
+                .await;
         }
     }
 
@@ -279,22 +316,22 @@ impl<B: SignalBus> PepsPlantModel<B> {
             tokio::select! {
                 // ── Fob zone changes ───────────────────────────────
                 Some(val) = fz0.next() => {
-                    if let Some(z) = str_to_zone(&val) { self.set_fob_zone(0, z); }
+                    if let Some(z) = str_to_zone(&val) { self.set_fob_zone(0, z).await; }
                 }
                 Some(val) = fz1.next() => {
-                    if let Some(z) = str_to_zone(&val) { self.set_fob_zone(1, z); }
+                    if let Some(z) = str_to_zone(&val) { self.set_fob_zone(1, z).await; }
                 }
                 Some(val) = fz2.next() => {
-                    if let Some(z) = str_to_zone(&val) { self.set_fob_zone(2, z); }
+                    if let Some(z) = str_to_zone(&val) { self.set_fob_zone(2, z).await; }
                 }
                 Some(val) = fz3.next() => {
-                    if let Some(z) = str_to_zone(&val) { self.set_fob_zone(3, z); }
+                    if let Some(z) = str_to_zone(&val) { self.set_fob_zone(3, z).await; }
                 }
                 Some(val) = fz4.next() => {
-                    if let Some(z) = str_to_zone(&val) { self.set_fob_zone(4, z); }
+                    if let Some(z) = str_to_zone(&val) { self.set_fob_zone(4, z).await; }
                 }
                 Some(val) = fz5.next() => {
-                    if let Some(z) = str_to_zone(&val) { self.set_fob_zone(5, z); }
+                    if let Some(z) = str_to_zone(&val) { self.set_fob_zone(5, z).await; }
                 }
 
                 // ── Fob button presses ─────────────────────────────
@@ -313,10 +350,10 @@ impl<B: SignalBus> PepsPlantModel<B> {
 
                 // ── Phone zone changes ─────────────────────────────
                 Some(val) = pz0.next() => {
-                    if let Some(z) = str_to_zone(&val) { self.set_phone_zone(0, z); }
+                    if let Some(z) = str_to_zone(&val) { self.set_phone_zone(0, z).await; }
                 }
                 Some(val) = pz1.next() => {
-                    if let Some(z) = str_to_zone(&val) { self.set_phone_zone(1, z); }
+                    if let Some(z) = str_to_zone(&val) { self.set_phone_zone(1, z).await; }
                 }
 
                 // ── NFC position changes ───────────────────────────
@@ -438,24 +475,24 @@ mod tests {
         }
     }
 
-    #[test]
-    fn set_fob_zone() {
+    #[tokio::test]
+    async fn set_fob_zone() {
         let bus = Arc::new(MockBus::new());
-        let mut model = PepsPlantModel::new(bus);
+        let mut model = PepsPlantModel::new(Arc::clone(&bus));
 
-        model.set_fob_zone(0, Zone::DriverDoor);
+        model.set_fob_zone(0, Zone::DriverDoor).await;
         assert_eq!(model.fobs[0].zone, Zone::DriverDoor);
 
-        model.set_fob_zone(0, Zone::Cabin);
+        model.set_fob_zone(0, Zone::Cabin).await;
         assert_eq!(model.fobs[0].zone, Zone::Cabin);
     }
 
-    #[test]
-    fn set_phone_zone() {
+    #[tokio::test]
+    async fn set_phone_zone() {
         let bus = Arc::new(MockBus::new());
-        let mut model = PepsPlantModel::new(bus);
+        let mut model = PepsPlantModel::new(Arc::clone(&bus));
 
-        model.set_phone_zone(0, Zone::Approach);
+        model.set_phone_zone(0, Zone::Approach).await;
         assert_eq!(model.phones[0].zone, Zone::Approach);
     }
 
@@ -535,7 +572,7 @@ mod tests {
         let bus = Arc::new(MockBus::new());
         let mut model = PepsPlantModel::new(Arc::clone(&bus));
 
-        model.set_fob_zone(0, Zone::RfRange);
+        model.set_fob_zone(0, Zone::RfRange).await;
         model.handle_fob_button(0, FobButton::Lock).await;
 
         let history = bus.history();
@@ -558,9 +595,10 @@ mod tests {
         let mut model = PepsPlantModel::new(Arc::clone(&bus));
 
         // Put fob 1 at driver door, fob 2 at approach, rest out of range
-        model.set_fob_zone(0, Zone::DriverDoor);
-        model.set_fob_zone(1, Zone::Approach);
+        model.set_fob_zone(0, Zone::DriverDoor).await;
+        model.set_fob_zone(1, Zone::Approach).await;
 
+        bus.clear_history(); // clear RSSI publishes from zone changes
         let nonce = [0x42u8; 16];
         model.handle_lf_challenge(&nonce).await;
 
@@ -590,10 +628,11 @@ mod tests {
         let bus = Arc::new(MockBus::new());
         let mut model = PepsPlantModel::new(Arc::clone(&bus));
 
-        model.set_fob_zone(0, Zone::Approach);
-        model.set_fob_zone(1, Zone::OutOfRange);
-        model.set_phone_zone(0, Zone::DriverDoor);
+        model.set_fob_zone(0, Zone::Approach).await;
+        model.set_fob_zone(1, Zone::OutOfRange).await;
+        model.set_phone_zone(0, Zone::DriverDoor).await;
 
+        bus.clear_history(); // clear RSSI publishes from zone changes
         model.handle_approach_poll().await;
 
         let history = bus.history();
@@ -613,5 +652,221 @@ mod tests {
             history.iter().any(|(p, _)| *p == signals::PHONE_1_RSSI),
             "phone 1 at DriverDoor should publish RSSI"
         );
+    }
+
+    // ── Phase 2: automatic RSSI on zone change ────────────────────
+
+    #[tokio::test]
+    async fn fob_zone_change_to_lf_publishes_rssi() {
+        let bus = Arc::new(MockBus::new());
+        let mut model = PepsPlantModel::new(Arc::clone(&bus));
+
+        model.set_fob_zone(0, Zone::DriverDoor).await;
+
+        let history = bus.history();
+        let rssi_msgs: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::KEYFOB_1_RSSI)
+            .collect();
+        assert_eq!(
+            rssi_msgs.len(),
+            1,
+            "zone change to LF should auto-publish RSSI"
+        );
+
+        if let SignalValue::String(payload) = &rssi_msgs[0].1 {
+            assert!(
+                payload.contains("\"driver\":"),
+                "RSSI should contain driver antenna: {payload}"
+            );
+        } else {
+            panic!("RSSI should be a String signal");
+        }
+    }
+
+    #[tokio::test]
+    async fn fob_zone_change_to_approach_publishes_weaker_rssi() {
+        let bus = Arc::new(MockBus::new());
+        let mut model = PepsPlantModel::new(Arc::clone(&bus));
+
+        model.set_fob_zone(0, Zone::Approach).await;
+
+        let history = bus.history();
+        let rssi_msgs: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::KEYFOB_1_RSSI)
+            .collect();
+        assert_eq!(rssi_msgs.len(), 1);
+
+        // Approach RSSI should have weaker values than proximity
+        if let SignalValue::String(payload) = &rssi_msgs[0].1 {
+            // -75 dBm for approach vs -30 dBm for proximity
+            assert!(
+                payload.contains("-75"),
+                "approach RSSI should show ~-75 dBm: {payload}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn fob_zone_change_to_out_of_range_clears_rssi() {
+        let bus = Arc::new(MockBus::new());
+        let mut model = PepsPlantModel::new(Arc::clone(&bus));
+
+        // First move to an LF zone, then out of range
+        model.set_fob_zone(0, Zone::DriverDoor).await;
+        bus.clear_history();
+
+        model.set_fob_zone(0, Zone::OutOfRange).await;
+
+        let history = bus.history();
+        let rssi_msgs: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::KEYFOB_1_RSSI)
+            .collect();
+        assert_eq!(rssi_msgs.len(), 1, "should publish cleared RSSI");
+
+        if let SignalValue::String(payload) = &rssi_msgs[0].1 {
+            assert_eq!(payload, "{}", "out-of-range should clear RSSI to empty");
+        }
+    }
+
+    #[tokio::test]
+    async fn fob_zone_change_rf_range_no_rssi() {
+        let bus = Arc::new(MockBus::new());
+        let mut model = PepsPlantModel::new(Arc::clone(&bus));
+
+        // OutOfRange → RfRange: neither has LF, so no RSSI publish
+        model.set_fob_zone(0, Zone::RfRange).await;
+
+        let history = bus.history();
+        let rssi_msgs: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::KEYFOB_1_RSSI)
+            .collect();
+        assert_eq!(rssi_msgs.len(), 0, "RF range should not publish RSSI");
+    }
+
+    #[tokio::test]
+    async fn phone_zone_change_publishes_rssi() {
+        let bus = Arc::new(MockBus::new());
+        let mut model = PepsPlantModel::new(Arc::clone(&bus));
+
+        model.set_phone_zone(0, Zone::PassengerDoor).await;
+
+        let history = bus.history();
+        let rssi_msgs: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::PHONE_1_RSSI)
+            .collect();
+        assert_eq!(
+            rssi_msgs.len(),
+            1,
+            "phone zone change should auto-publish RSSI"
+        );
+
+        if let SignalValue::String(payload) = &rssi_msgs[0].1 {
+            // At passenger door, passenger antenna should be strongest (-30)
+            assert!(
+                payload.contains("\"passenger\":-30"),
+                "passenger antenna should be strongest: {payload}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn fob_rssi_values_differ_by_zone() {
+        let bus = Arc::new(MockBus::new());
+        let mut model = PepsPlantModel::new(Arc::clone(&bus));
+
+        // Move fob through several zones, check RSSI changes
+        model.set_fob_zone(0, Zone::DriverDoor).await;
+        model.set_fob_zone(0, Zone::Trunk).await;
+
+        let history = bus.history();
+        let rssi_msgs: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::KEYFOB_1_RSSI)
+            .collect();
+        assert_eq!(
+            rssi_msgs.len(),
+            2,
+            "two zone changes should produce two RSSI publishes"
+        );
+
+        // The two payloads should differ (driver door vs trunk)
+        if let (SignalValue::String(p1), SignalValue::String(p2)) =
+            (&rssi_msgs[0].1, &rssi_msgs[1].1)
+        {
+            assert_ne!(p1, p2, "RSSI should differ between DriverDoor and Trunk");
+        }
+    }
+
+    #[tokio::test]
+    async fn run_loop_responds_to_zone_signal() {
+        let bus = Arc::new(MockBus::new());
+        let model = PepsPlantModel::new(Arc::clone(&bus));
+
+        let handle = tokio::spawn(model.run());
+        // Let the event loop subscribe
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        // Inject a zone change via the bus
+        bus.inject(
+            signals::KEYFOB_1_ZONE,
+            SignalValue::String("DriverDoor".into()),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        let history = bus.history();
+        let rssi_msgs: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::KEYFOB_1_RSSI)
+            .collect();
+        assert_eq!(
+            rssi_msgs.len(),
+            1,
+            "event loop should auto-publish RSSI on zone change"
+        );
+
+        handle.abort();
+    }
+
+    #[tokio::test]
+    async fn run_loop_responds_to_approach_poll() {
+        let bus = Arc::new(MockBus::new());
+        let model = PepsPlantModel::new(Arc::clone(&bus));
+
+        let handle = tokio::spawn(model.run());
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        // Place fob 1 at approach, then trigger a poll
+        bus.inject(
+            signals::KEYFOB_1_ZONE,
+            SignalValue::String("Approach".into()),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        bus.clear_history();
+        bus.inject(signals::PEPS_APPROACH_POLL, SignalValue::String("1".into()));
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        let history = bus.history();
+        let rssi_msgs: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::KEYFOB_1_RSSI)
+            .collect();
+        assert_eq!(
+            rssi_msgs.len(),
+            1,
+            "approach poll should trigger RSSI from fob in approach zone"
+        );
+
+        handle.abort();
     }
 }
