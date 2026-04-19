@@ -1794,4 +1794,414 @@ mod tests {
 
         handle.abort();
     }
+
+    // ── Phase 6: NFC card event-loop integration ───────────────────
+
+    #[tokio::test]
+    async fn run_loop_nfc_position_change_via_bus() {
+        let bus = Arc::new(MockBus::new());
+        let model = PepsPlantModel::new(Arc::clone(&bus));
+        let nfc1_secret = model.nfc_cards[0].secret;
+
+        let handle = tokio::spawn(model.run());
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        // Place NFC card 1 at DriverHandle
+        bus.inject(
+            signals::NFC_1_POSITION,
+            SignalValue::String("DriverHandle".into()),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        bus.clear_history();
+
+        // Send NFC challenge
+        let nonce = [0xAAu8; 16];
+        bus.inject(
+            signals::PEPS_NFC_CHALLENGE,
+            SignalValue::String(bytes_to_hex(&nonce)),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        let history = bus.history();
+        let resps: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::NFC_1_CHALLENGE_RESP)
+            .collect();
+        assert_eq!(resps.len(), 1, "NFC card at DriverHandle should respond");
+
+        if let SignalValue::String(hex) = &resps[0].1 {
+            let expected = crypto::compute_challenge_response(&nfc1_secret, &nonce);
+            assert_eq!(hex_to_bytes(hex).as_slice(), &expected);
+        }
+
+        handle.abort();
+    }
+
+    #[tokio::test]
+    async fn run_loop_nfc_at_push_button_responds() {
+        let bus = Arc::new(MockBus::new());
+        let model = PepsPlantModel::new(Arc::clone(&bus));
+        let nfc1_secret = model.nfc_cards[0].secret;
+
+        let handle = tokio::spawn(model.run());
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        bus.inject(
+            signals::NFC_1_POSITION,
+            SignalValue::String("PushButton".into()),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        bus.clear_history();
+
+        let nonce = [0x55u8; 16];
+        bus.inject(
+            signals::PEPS_NFC_CHALLENGE,
+            SignalValue::String(bytes_to_hex(&nonce)),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        let history = bus.history();
+        let resps: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::NFC_1_CHALLENGE_RESP)
+            .collect();
+        assert_eq!(resps.len(), 1, "NFC card at PushButton should respond");
+
+        if let SignalValue::String(hex) = &resps[0].1 {
+            let expected = crypto::compute_challenge_response(&nfc1_secret, &nonce);
+            assert_eq!(hex_to_bytes(hex).as_slice(), &expected);
+        }
+
+        handle.abort();
+    }
+
+    #[tokio::test]
+    async fn run_loop_nfc_removed_stops_responding() {
+        let bus = Arc::new(MockBus::new());
+        let model = PepsPlantModel::new(Arc::clone(&bus));
+
+        let handle = tokio::spawn(model.run());
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        // Place card, then remove it
+        bus.inject(
+            signals::NFC_1_POSITION,
+            SignalValue::String("DriverHandle".into()),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        bus.inject(
+            signals::NFC_1_POSITION,
+            SignalValue::String("NotPresent".into()),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        bus.clear_history();
+
+        let nonce = [0x77u8; 16];
+        bus.inject(
+            signals::PEPS_NFC_CHALLENGE,
+            SignalValue::String(bytes_to_hex(&nonce)),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        let history = bus.history();
+        let resps: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::NFC_1_CHALLENGE_RESP)
+            .collect();
+        assert_eq!(
+            resps.len(),
+            0,
+            "NFC card removed from reader should not respond"
+        );
+
+        handle.abort();
+    }
+
+    // ── Phase 7: Unpaired fob verification ───────────────────────
+
+    #[tokio::test]
+    async fn run_loop_unpaired_fob6_also_responds_with_wrong_key() {
+        let bus = Arc::new(MockBus::new());
+        let model = PepsPlantModel::new(Arc::clone(&bus));
+        let fob6_secret = model.fobs[5].secret; // unpaired fob 6
+
+        // Verify its secret differs from every paired fob
+        for i in 0..4 {
+            assert_ne!(
+                fob6_secret,
+                model.fobs[i].secret,
+                "unpaired fob 6 secret must differ from paired fob {}",
+                i + 1
+            );
+        }
+
+        let handle = tokio::spawn(model.run());
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        // Place unpaired fob 6 at PassengerDoor
+        bus.inject(
+            signals::KEYFOB_6_ZONE,
+            SignalValue::String("PassengerDoor".into()),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        bus.clear_history();
+
+        let nonce = [0xEEu8; 16];
+        bus.inject(
+            signals::PEPS_LF_CHALLENGE,
+            SignalValue::String(bytes_to_hex(&nonce)),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        let history = bus.history();
+        let fob6_resps: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::KEYFOB_6_CHALLENGE_RESP)
+            .collect();
+        assert_eq!(
+            fob6_resps.len(),
+            1,
+            "unpaired fob 6 at proximity should still respond physically"
+        );
+
+        // Response must match fob 6's own secret, not any paired fob
+        if let SignalValue::String(hex) = &fob6_resps[0].1 {
+            let expected = crypto::compute_challenge_response(&fob6_secret, &nonce);
+            assert_eq!(hex_to_bytes(hex).as_slice(), &expected);
+        }
+
+        handle.abort();
+    }
+
+    #[tokio::test]
+    async fn run_loop_unpaired_fob_response_differs_from_all_paired() {
+        let bus = Arc::new(MockBus::new());
+        let model = PepsPlantModel::new(Arc::clone(&bus));
+        let paired_secrets: Vec<_> = model.fobs[..4].iter().map(|f| f.secret).collect();
+        let fob5_secret = model.fobs[4].secret;
+
+        let handle = tokio::spawn(model.run());
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        // Place unpaired fob 5 and all paired fobs at DriverDoor
+        bus.inject(
+            signals::KEYFOB_5_ZONE,
+            SignalValue::String("DriverDoor".into()),
+        );
+        bus.inject(
+            signals::KEYFOB_1_ZONE,
+            SignalValue::String("DriverDoor".into()),
+        );
+        bus.inject(
+            signals::KEYFOB_2_ZONE,
+            SignalValue::String("DriverDoor".into()),
+        );
+        bus.inject(
+            signals::KEYFOB_3_ZONE,
+            SignalValue::String("DriverDoor".into()),
+        );
+        bus.inject(
+            signals::KEYFOB_4_ZONE,
+            SignalValue::String("DriverDoor".into()),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        bus.clear_history();
+
+        let nonce = [0xABu8; 16];
+        bus.inject(
+            signals::PEPS_LF_CHALLENGE,
+            SignalValue::String(bytes_to_hex(&nonce)),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        let history = bus.history();
+
+        // Unpaired fob 5's response should differ from every paired fob's response
+        let fob5_resp: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::KEYFOB_5_CHALLENGE_RESP)
+            .collect();
+        assert_eq!(fob5_resp.len(), 1);
+
+        if let SignalValue::String(hex5) = &fob5_resp[0].1 {
+            let resp5 = hex_to_bytes(hex5);
+            let expected5 = crypto::compute_challenge_response(&fob5_secret, &nonce);
+            assert_eq!(resp5.as_slice(), &expected5);
+
+            // Check against all 4 paired fobs
+            for (i, secret) in paired_secrets.iter().enumerate() {
+                let paired_resp = crypto::compute_challenge_response(secret, &nonce);
+                assert_ne!(
+                    resp5.as_slice(),
+                    &paired_resp,
+                    "unpaired fob 5 response must differ from paired fob {}",
+                    i + 1
+                );
+            }
+        }
+
+        handle.abort();
+    }
+
+    #[tokio::test]
+    async fn run_loop_unpaired_fob_rssi_still_works() {
+        // Physical presence is real — unpaired fobs still emit RSSI
+        let bus = Arc::new(MockBus::new());
+        let model = PepsPlantModel::new(Arc::clone(&bus));
+
+        let handle = tokio::spawn(model.run());
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        // Place unpaired fob 5 in Approach zone
+        bus.inject(
+            signals::KEYFOB_5_ZONE,
+            SignalValue::String("Approach".into()),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        // Zone change should trigger RSSI publish
+        let history = bus.history();
+        let rssi: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::KEYFOB_5_RSSI)
+            .collect();
+        assert_eq!(
+            rssi.len(),
+            1,
+            "unpaired fob still emits RSSI — it physically exists"
+        );
+
+        // Also responds to approach poll
+        bus.clear_history();
+        bus.inject(
+            signals::PEPS_APPROACH_POLL,
+            SignalValue::String("POLL".into()),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        let history = bus.history();
+        let poll_rssi: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::KEYFOB_5_RSSI)
+            .collect();
+        assert_eq!(
+            poll_rssi.len(),
+            1,
+            "unpaired fob should respond to approach poll"
+        );
+
+        handle.abort();
+    }
+
+    #[tokio::test]
+    async fn run_loop_unpaired_fob_cannot_press_buttons() {
+        // Unpaired fobs have no button signals (only fobs 1-4 do),
+        // and press_button() returns None for unpaired fobs anyway.
+        // Verify at the device level that unpaired fobs reject button presses.
+        let mut fob = KeyFob::new(5, false, [0xFFu8; 16]);
+        fob.zone = Zone::RfRange;
+        assert!(
+            fob.press_button(FobButton::Lock).is_none(),
+            "unpaired fob must not generate RF messages"
+        );
+        assert!(
+            fob.press_button(FobButton::Unlock).is_none(),
+            "unpaired fob must not generate RF messages"
+        );
+        assert!(
+            fob.press_button(FobButton::TrunkRelease).is_none(),
+            "unpaired fob must not generate RF messages"
+        );
+        assert!(
+            fob.press_button(FobButton::PanicAlarm).is_none(),
+            "unpaired fob must not generate RF messages"
+        );
+    }
+
+    #[tokio::test]
+    async fn run_loop_two_nfc_cards_independent() {
+        let bus = Arc::new(MockBus::new());
+        let model = PepsPlantModel::new(Arc::clone(&bus));
+        let nfc1_secret = model.nfc_cards[0].secret;
+        let nfc2_secret = model.nfc_cards[1].secret;
+
+        let handle = tokio::spawn(model.run());
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        // Card 1 at DriverHandle, Card 2 at PushButton
+        bus.inject(
+            signals::NFC_1_POSITION,
+            SignalValue::String("DriverHandle".into()),
+        );
+        bus.inject(
+            signals::NFC_2_POSITION,
+            SignalValue::String("PushButton".into()),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        bus.clear_history();
+
+        let nonce = [0x12u8; 16];
+        bus.inject(
+            signals::PEPS_NFC_CHALLENGE,
+            SignalValue::String(bytes_to_hex(&nonce)),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        let history = bus.history();
+
+        // Both should respond
+        let c1: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::NFC_1_CHALLENGE_RESP)
+            .collect();
+        let c2: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::NFC_2_CHALLENGE_RESP)
+            .collect();
+        assert_eq!(c1.len(), 1, "NFC card 1 at DriverHandle should respond");
+        assert_eq!(c2.len(), 1, "NFC card 2 at PushButton should respond");
+
+        // Verify different secrets produce different responses
+        if let (SignalValue::String(h1), SignalValue::String(h2)) = (&c1[0].1, &c2[0].1) {
+            assert_ne!(
+                h1, h2,
+                "different NFC cards should produce different responses"
+            );
+            let exp1 = crypto::compute_challenge_response(&nfc1_secret, &nonce);
+            let exp2 = crypto::compute_challenge_response(&nfc2_secret, &nonce);
+            assert_eq!(hex_to_bytes(h1).as_slice(), &exp1);
+            assert_eq!(hex_to_bytes(h2).as_slice(), &exp2);
+        }
+
+        handle.abort();
+    }
 }
