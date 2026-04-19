@@ -125,6 +125,23 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--white);fo
 .blink{animation:blink .7s infinite}
 .blinks{animation:blink 1.4s infinite}
 .pulse{animation:pulse .5s infinite}
+
+/* PEPS PANEL */
+.peps-card{background:var(--s2);border-radius:var(--r6);padding:8px 10px;border:1px solid var(--bdr);display:flex;flex-direction:column;gap:5px;margin-bottom:6px}
+.peps-card.intruder{border-color:rgba(240,64,64,.4);background:var(--red2)}
+.peps-badge{display:inline-flex;align-items:center;gap:4px;font-family:var(--fm);font-size:8px;padding:2px 6px;border-radius:3px;font-weight:600}
+.peps-badge.paired{background:var(--green2);color:var(--green);border:1px solid rgba(16,217,138,.3)}
+.peps-badge.unpaired{background:var(--red2);color:var(--red);border:1px solid rgba(240,64,64,.3)}
+.peps-title{font-family:var(--fm);font-size:10px;color:var(--amber);font-weight:600;display:flex;align-items:center;gap:6px}
+.peps-row{display:flex;align-items:center;justify-content:space-between;gap:4px}
+.peps-label{font-family:var(--fm);font-size:10px;color:var(--dim)}
+.peps-status{font-family:var(--fm);font-size:9px;color:var(--muted);padding:2px 4px;background:var(--s3);border-radius:2px;border:1px solid var(--bdr);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.peps-btnrow{display:flex;gap:3px;flex-wrap:wrap;margin-top:2px}
+.peps-btn{padding:3px 7px;border-radius:3px;font-family:var(--fm);font-size:8px;border:1px solid var(--bdr2);background:var(--s3);color:var(--dim);cursor:pointer;transition:all .13s;font-weight:600;letter-spacing:.04em}
+.peps-btn:hover{color:var(--white);border-color:var(--white)}
+.peps-btn.active{background:var(--amber2);border-color:rgba(245,158,11,.4);color:var(--amber)}
+.peps-section{font-family:var(--fd);font-size:9px;letter-spacing:.14em;color:var(--dim);padding:8px 12px 4px;font-weight:500}
+.peps-device-icon{transition:all .3s ease}
 </style>
 </head>
 <body>
@@ -202,6 +219,41 @@ const INIT_STATE={
   'Body.Trunk.IsLocked':true,
   'Body.FuelLid.IsOpen':false,
   'Body.ChargeLid.IsOpen':false,
+  // PEPS — Key Fobs (1-4 paired, 5-6 unpaired intruders)
+  'Body.PEPS.Plant.KeyFob.1.Zone':'OutOfRange',
+  'Body.PEPS.Plant.KeyFob.1.ButtonPress':'NONE',
+  'Body.PEPS.Plant.KeyFob.1.Paired':true,
+  'Body.PEPS.Plant.KeyFob.1.RssiResponse':'',
+  'Body.PEPS.Plant.KeyFob.1.RfMessage':'',
+  'Body.PEPS.Plant.KeyFob.2.Zone':'OutOfRange',
+  'Body.PEPS.Plant.KeyFob.2.ButtonPress':'NONE',
+  'Body.PEPS.Plant.KeyFob.2.Paired':true,
+  'Body.PEPS.Plant.KeyFob.2.RssiResponse':'',
+  'Body.PEPS.Plant.KeyFob.2.RfMessage':'',
+  'Body.PEPS.Plant.KeyFob.3.Zone':'OutOfRange',
+  'Body.PEPS.Plant.KeyFob.3.ButtonPress':'NONE',
+  'Body.PEPS.Plant.KeyFob.3.Paired':true,
+  'Body.PEPS.Plant.KeyFob.3.RssiResponse':'',
+  'Body.PEPS.Plant.KeyFob.3.RfMessage':'',
+  'Body.PEPS.Plant.KeyFob.4.Zone':'OutOfRange',
+  'Body.PEPS.Plant.KeyFob.4.ButtonPress':'NONE',
+  'Body.PEPS.Plant.KeyFob.4.Paired':true,
+  'Body.PEPS.Plant.KeyFob.4.RssiResponse':'',
+  'Body.PEPS.Plant.KeyFob.4.RfMessage':'',
+  'Body.PEPS.Plant.KeyFob.5.Zone':'OutOfRange',
+  'Body.PEPS.Plant.KeyFob.5.Paired':false,
+  'Body.PEPS.Plant.KeyFob.5.RssiResponse':'',
+  'Body.PEPS.Plant.KeyFob.6.Zone':'OutOfRange',
+  'Body.PEPS.Plant.KeyFob.6.Paired':false,
+  'Body.PEPS.Plant.KeyFob.6.RssiResponse':'',
+  // PEPS — BLE Phones
+  'Body.PEPS.Plant.BlePhone.1.Zone':'OutOfRange',
+  'Body.PEPS.Plant.BlePhone.1.RssiResponse':'',
+  'Body.PEPS.Plant.BlePhone.2.Zone':'OutOfRange',
+  'Body.PEPS.Plant.BlePhone.2.RssiResponse':'',
+  // PEPS — NFC Cards
+  'Body.PEPS.Plant.NfcCard.1.Position':'NotPresent',
+  'Body.PEPS.Plant.NfcCard.2.Position':'NotPresent',
 };
 
 /* ══════ COMPONENTS ══════ */
@@ -809,6 +861,251 @@ function CockpitView({s,set}){
   </svg>;
 }
 
+/* ═══════════════ PEPS ZONE VIEW SVG ═══════════════ */
+function PepsZoneView({s}){
+  // Collect all devices with their current zones
+  const devices=[];
+  for(let i=1;i<=6;i++){
+    const zone=s[`Body.PEPS.Plant.KeyFob.${i}.Zone`]||'OutOfRange';
+    const paired=i<=4;
+    devices.push({type:'fob',id:i,label:`F${i}`,zone,paired,color:paired?'#F59E0B':'#F04040'});
+  }
+  for(let i=1;i<=2;i++){
+    const zone=s[`Body.PEPS.Plant.BlePhone.${i}.Zone`]||'OutOfRange';
+    devices.push({type:'phone',id:i,label:`P${i}`,zone,paired:true,color:'#4A9EF5'});
+  }
+  for(let i=1;i<=2;i++){
+    const pos=s[`Body.PEPS.Plant.NfcCard.${i}.Position`]||'NotPresent';
+    const zone=pos==='DriverHandle'?'DriverDoor':pos==='PushButton'?'Cabin':'OutOfRange';
+    devices.push({type:'nfc',id:i,label:`N${i}`,zone,paired:true,color:'#0DC8C8',nfcPos:pos});
+  }
+
+  const cx=300,cy=340;
+
+  // Group devices by zone for staggered positioning
+  const byZone={};
+  devices.forEach(d=>{
+    if(!byZone[d.zone])byZone[d.zone]=[];
+    byZone[d.zone].push(d);
+  });
+
+  // Position each device based on zone + index within that zone
+  const zonePos=(zone,idx,total)=>{
+    const spread=22;
+    const off=(idx-(total-1)/2)*spread;
+    switch(zone){
+      case 'Cabin':        return {x:cx+off,       y:cy};
+      case 'DriverDoor':   return {x:cx-105,       y:cy-30+idx*28};
+      case 'PassengerDoor':return {x:cx+105,       y:cy-30+idx*28};
+      case 'Hood':         return {x:cx+off,       y:cy-135};
+      case 'Trunk':        return {x:cx+off,       y:cy+135};
+      case 'TrunkInside':  return {x:cx+off,       y:cy+72};
+      case 'Approach':     return {x:cx-155+off,   y:cy-185+idx*35};
+      case 'RfRange':      return {x:cx+140+off*0.5, y:cy-240+idx*35};
+      case 'OutOfRange':   return {x:50+idx*55,    y:42};
+      default:             return {x:50+idx*55,    y:42};
+    }
+  };
+
+  const positioned=devices.map(d=>{
+    const group=byZone[d.zone];
+    const idx=group.indexOf(d);
+    const pos=zonePos(d.zone,idx,group.length);
+    return {...d,...pos};
+  });
+
+  const DeviceIcon=({d})=>{
+    const shape=d.type==='fob'
+      ? <rect x={d.x-9} y={d.y-6} width={18} height={12} rx={3} fill={d.color} opacity={.85}/>
+      : d.type==='phone'
+      ? <rect x={d.x-5} y={d.y-8} width={10} height={16} rx={2} fill={d.color} opacity={.85}/>
+      : <circle cx={d.x} cy={d.y} r={7} fill={d.color} opacity={.85}/>;
+
+    return <g className="peps-device-icon">
+      {d.zone!=='OutOfRange'&&<circle cx={d.x} cy={d.y} r={16} fill={d.color} opacity={.08}/>}
+      {shape}
+      <text x={d.x} y={d.y+4} textAnchor="middle" fill="#000" fontSize="7" fontFamily="Share Tech Mono" fontWeight="700">{d.label}</text>
+      <text x={d.x} y={d.y+24} textAnchor="middle" fill={d.color} fontSize="7" fontFamily="Share Tech Mono" fontWeight="600" opacity={.7}>
+        {d.type==='nfc'?(d.nfcPos||''):d.zone==='OutOfRange'?'':d.zone}
+      </text>
+      {!d.paired&&<text x={d.x+12} y={d.y-8} fill="#F04040" fontSize="11" fontWeight="bold">!</text>}
+    </g>;
+  };
+
+  return <svg viewBox="0 0 600 700" style={{maxHeight:'62vh',height:'100%'}}>
+    <defs>
+      <pattern id="pepsgrid" width="30" height="30" patternUnits="userSpaceOnUse">
+        <path d="M 30 0 L 0 0 0 30" fill="none" stroke="#0a1420" strokeWidth="0.4"/>
+      </pattern>
+    </defs>
+    <rect width="600" height="700" fill="url(#pepsgrid)" opacity="0.08"/>
+
+    {/* OutOfRange label */}
+    <text x="300" y="22" textAnchor="middle" fill="#2E3E55" fontSize="8" fontFamily="Share Tech Mono">OUT OF RANGE</text>
+
+    {/* RfRange ring */}
+    <ellipse cx={cx} cy={cy} rx={235} ry={270} fill="none" stroke="#4A9EF5" strokeWidth={1} opacity={.15} strokeDasharray="6,3"/>
+    <text x={cx+237} y={cy-252} fill="#4A9EF5" fontSize="7" fontFamily="Share Tech Mono" opacity={.45}>RF RANGE</text>
+
+    {/* Approach ring */}
+    <ellipse cx={cx} cy={cy} rx={165} ry={200} fill="none" stroke="#F59E0B" strokeWidth={1} opacity={.2} strokeDasharray="4,3"/>
+    <text x={cx+167} y={cy-182} fill="#F59E0B" fontSize="7" fontFamily="Share Tech Mono" opacity={.45}>APPROACH</text>
+
+    {/* Proximity band */}
+    <ellipse cx={cx} cy={cy} rx={115} ry={145} fill="none" stroke="#10D98A" strokeWidth={1} opacity={.2} strokeDasharray="3,2"/>
+    <text x={cx+117} y={cy-128} fill="#10D98A" fontSize="7" fontFamily="Share Tech Mono" opacity={.4}>PROXIMITY</text>
+
+    {/* Vehicle body — simplified top-down */}
+    <rect x={cx-48} y={cy-95} width={96} height={190} rx={14} fill="#0C1825" stroke="#1A2838" strokeWidth={1.5}/>
+    {/* Hood section */}
+    <rect x={cx-38} y={cy-90} width={76} height={35} rx={5} fill="#09111E" stroke="#182030" strokeWidth={.5}/>
+    <text x={cx} y={cy-68} textAnchor="middle" fill="#1E3040" fontSize="8" fontFamily="Share Tech Mono">HOOD</text>
+    {/* Cabin section */}
+    <rect x={cx-38} y={cy-48} width={76} height={96} rx={3} fill="#152840" stroke="#1E3650" strokeWidth={.5} opacity={.5}/>
+    <text x={cx} y={cy+5} textAnchor="middle" fill="#9B6DFF" fontSize="9" fontFamily="Share Tech Mono" opacity={.5}>CABIN</text>
+    {/* Trunk section */}
+    <rect x={cx-38} y={cy+55} width={76} height={35} rx={5} fill="#070E18" stroke="#182030" strokeWidth={.5}/>
+    <text x={cx} y={cy+77} textAnchor="middle" fill="#1E3040" fontSize="8" fontFamily="Share Tech Mono">TRUNK</text>
+
+    {/* Door zone labels */}
+    <text x={cx-80} y={cy+5} textAnchor="middle" fill="#10D98A" fontSize="7" fontFamily="Share Tech Mono" opacity={.4}>DRIVER</text>
+    <text x={cx+80} y={cy+5} textAnchor="middle" fill="#10D98A" fontSize="7" fontFamily="Share Tech Mono" opacity={.4}>PASSENGER</text>
+
+    {/* NFC reader indicators on vehicle body */}
+    <circle cx={cx-48} cy={cy-20} r={3} fill="#0DC8C8" opacity={.3}/>
+    <text x={cx-48} y={cy-10} textAnchor="middle" fill="#0DC8C8" fontSize="5" fontFamily="Share Tech Mono" opacity={.3}>NFC</text>
+    <circle cx={cx} cy={cy+50} r={3} fill="#0DC8C8" opacity={.3}/>
+    <text x={cx} y={cy+60} textAnchor="middle" fill="#0DC8C8" fontSize="5" fontFamily="Share Tech Mono" opacity={.3}>NFC</text>
+
+    {/* Device icons */}
+    {positioned.map(d=><DeviceIcon key={`${d.type}-${d.id}`} d={d}/>)}
+
+    {/* Legend */}
+    <g transform="translate(30,660)">
+      <rect x={0} y={-3} width={14} height={9} rx={3} fill="#F59E0B" opacity={.85}/>
+      <text x={18} y={4} fill="#6B7E99" fontSize="7" fontFamily="Share Tech Mono">Key Fob</text>
+      <rect x={80} y={-5} width={8} height={12} rx={2} fill="#4A9EF5" opacity={.85}/>
+      <text x={92} y={4} fill="#6B7E99" fontSize="7" fontFamily="Share Tech Mono">BLE Phone</text>
+      <circle cx={178} cy={1} r={5} fill="#0DC8C8" opacity={.85}/>
+      <text x={187} y={4} fill="#6B7E99" fontSize="7" fontFamily="Share Tech Mono">NFC Card</text>
+      <rect x={252} y={-3} width={14} height={9} rx={3} fill="#F04040" opacity={.85}/>
+      <text x={268} y={0} fill="#F04040" fontSize="8" fontWeight="bold">!</text>
+      <text x={278} y={4} fill="#6B7E99" fontSize="7" fontFamily="Share Tech Mono">Unpaired</text>
+    </g>
+  </svg>;
+}
+
+/* ═══════════════ PEPS DEVICE CARDS (top-level to avoid remount) ═══════════════ */
+const PEPS_ZONE_OPTS=['OutOfRange','RfRange','Approach','DriverDoor','PassengerDoor','Hood','Trunk','TrunkInside','Cabin'];
+const PEPS_BTN_OPTS=[
+  {val:'LOCK',label:'LOCK'},{val:'UNLOCK',label:'UNLOCK'},
+  {val:'TRUNK_RELEASE',label:'TRUNK'},{val:'REMOTE_START',label:'START'},
+  {val:'PANIC_ALARM',label:'PANIC'}
+];
+const PEPS_NFC_POS_OPTS=['NotPresent','DriverHandle','PushButton'];
+
+function PepsFobCard({id,s,set}){
+  const pfx=`Body.PEPS.Plant.KeyFob.${id}`;
+  const paired=id<=4;
+  const zone=s[`${pfx}.Zone`]||'OutOfRange';
+  const rssi=s[`${pfx}.RssiResponse`]||'';
+  const rfMsg=id<=4?(s[`${pfx}.RfMessage`]||''):'';
+
+  return <div className={`peps-card ${!paired?'intruder':''}`}>
+    <div className="peps-title">
+      FOB {id}
+      <span className={`peps-badge ${paired?'paired':'unpaired'}`}>
+        {paired?'PAIRED':'INTRUDER'}
+      </span>
+    </div>
+    <div className="peps-row">
+      <span className="peps-label">Zone</span>
+      <select className="sel" value={zone} onChange={e=>set(`${pfx}.Zone`,e.target.value)}>
+        {PEPS_ZONE_OPTS.map(o=><option key={o} value={o}>{o}</option>)}
+      </select>
+    </div>
+    {rssi&&<div className="peps-row">
+      <span className="peps-label">RSSI</span>
+      <span className="peps-status" title={rssi}>{rssi}</span>
+    </div>}
+    {rfMsg&&<div className="peps-row">
+      <span className="peps-label">RF</span>
+      <span className="peps-status" title={rfMsg}>{rfMsg}</span>
+    </div>}
+    {paired&&<div style={{marginTop:2}}>
+      <span className="peps-label">Remote</span>
+      <div className="peps-btnrow">
+        {PEPS_BTN_OPTS.map(b=>(
+          <button key={b.val} className="peps-btn"
+            onClick={()=>set(`${pfx}.ButtonPress`,b.val)}>
+            {b.label}
+          </button>
+        ))}
+      </div>
+    </div>}
+  </div>;
+}
+
+function PepsPhoneCard({id,s,set}){
+  const pfx=`Body.PEPS.Plant.BlePhone.${id}`;
+  const zone=s[`${pfx}.Zone`]||'OutOfRange';
+  const rssi=s[`${pfx}.RssiResponse`]||'';
+  return <div className="peps-card">
+    <div className="peps-title">PHONE {id}
+      <span className="peps-badge paired">BLE</span>
+    </div>
+    <div className="peps-row">
+      <span className="peps-label">Zone</span>
+      <select className="sel" value={zone} onChange={e=>set(`${pfx}.Zone`,e.target.value)}>
+        {PEPS_ZONE_OPTS.map(o=><option key={o} value={o}>{o}</option>)}
+      </select>
+    </div>
+    {rssi&&<div className="peps-row">
+      <span className="peps-label">RSSI</span>
+      <span className="peps-status" title={rssi}>{rssi}</span>
+    </div>}
+  </div>;
+}
+
+function PepsNfcCard({id,s,set}){
+  const pfx=`Body.PEPS.Plant.NfcCard.${id}`;
+  const pos=s[`${pfx}.Position`]||'NotPresent';
+  return <div className="peps-card">
+    <div className="peps-title">NFC {id}
+      <span className="peps-badge paired">TAP</span>
+    </div>
+    <div className="peps-row">
+      <span className="peps-label">Position</span>
+      <select className="sel" value={pos} onChange={e=>set(`${pfx}.Position`,e.target.value)}>
+        {PEPS_NFC_POS_OPTS.map(o=><option key={o} value={o}>{o}</option>)}
+      </select>
+    </div>
+  </div>;
+}
+
+/* ═══════════════ PEPS DEVICE PANEL ═══════════════ */
+function PepsPanel({s,set}){
+  return <div className="cp">
+    <div className="cphdr">
+      <div style={{width:7,height:7,borderRadius:2,background:'var(--teal)',opacity:.5}}/>
+      <span className="cptitle">PEPS DEVICE CONTROL</span>
+    </div>
+    <div className="cpscroll">
+      <div className="peps-section">KEY FOBS</div>
+      {[1,2,3,4].map(i=><div key={i} style={{padding:'0 10px'}}><PepsFobCard id={i} s={s} set={set}/></div>)}
+
+      <div className="peps-section">INTRUDER FOBS</div>
+      {[5,6].map(i=><div key={i} style={{padding:'0 10px'}}><PepsFobCard id={i} s={s} set={set}/></div>)}
+
+      <div className="peps-section">BLE PHONES</div>
+      {[1,2].map(i=><div key={i} style={{padding:'0 10px'}}><PepsPhoneCard id={i} s={s} set={set}/></div>)}
+
+      <div className="peps-section">NFC CARDS</div>
+      {[1,2].map(i=><div key={i} style={{padding:'0 10px'}}><PepsNfcCard id={i} s={s} set={set}/></div>)}
+    </div>
+  </div>;
+}
+
 /* ═══════════════ CONTROL PANEL ═══════════════ */
 function ControlPanel({s,set}){
   const anyLight=Object.keys(s).some(k=>k.startsWith('Body.Lights')&&s[k]===true);
@@ -996,8 +1293,14 @@ function App(){
 
         ws.onmessage=(event)=>{
           try {
-            const {path,value}=JSON.parse(event.data);
-            setS(prev=>({...prev,[path]:value}));
+            const msg=JSON.parse(event.data);
+            if(msg.state) {
+              // Batch state snapshot from bridge: {"state":{"signal":value,...}}
+              setS(prev=>({...prev,...msg.state}));
+            } else if(msg.path!==undefined) {
+              // Single signal update: {"path":"...","value":...}
+              setS(prev=>({...prev,[msg.path]:msg.value}));
+            }
           } catch(e) {
             console.error('[HMI] Failed to parse message:',e);
           }
@@ -1040,13 +1343,12 @@ function App(){
 
   // Send state updates via WebSocket or use mock
   const set=useCallback((k,v)=>{
+    // Always update local state optimistically so the UI reflects immediately.
+    setS(prev=>({...prev,[k]:v}));
     if(wsRef.current?.readyState===WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({path:k,value:v}));
-    } else if(useMockFallback) {
-      // In mock mode, update local state
-      setS(prev=>({...prev,[k]:v}));
-    } else {
-      console.warn('[HMI] WebSocket not connected, queuing update would be here');
+      wsRef.current.send(JSON.stringify({type:'sensor',path:k,value:v}));
+    } else if(!useMockFallback) {
+      console.warn('[HMI] WebSocket not connected, update applied locally only');
     }
   },[useMockFallback]);
 
@@ -1056,9 +1358,10 @@ function App(){
     {id:'top',label:'TOP',icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="8" y="2" width="8" height="20" rx="3"/><rect x="4" y="6" width="4" height="12" rx="2" opacity=".5"/><rect x="16" y="6" width="4" height="12" rx="2" opacity=".5"/><rect x="6" y="15" width="3" height="5" rx="1" opacity=".4"/><rect x="15" y="15" width="3" height="5" rx="1" opacity=".4"/></svg>},
     {id:'side',label:'SIDE',icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M2 14L6 8l6-2h5l3 2v6H2Z"/><path d="M2 14h18"/><circle cx="6" cy="17" r="3"/><circle cx="16" cy="17" r="3"/></svg>},
     {id:'cockpit',label:'DASH',icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M2 12Q12 6 22 12"/><circle cx="12" cy="14" r="4"/><path d="M12 10V8M8 12l-2-2M16 12l2-2"/></svg>},
+    {id:'peps',label:'PEPS',icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9" strokeDasharray="3,2"/><circle cx="12" cy="12" r="5" opacity=".6"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2" strokeWidth="1.5"/></svg>},
   ];
 
-  const viewLabels={top:'TOP VIEW · XY PLANE',side:'SIDE VIEW · XZ PLANE',cockpit:'COCKPIT · INSTRUMENT CLUSTER'};
+  const viewLabels={top:'TOP VIEW · XY PLANE',side:'SIDE VIEW · XZ PLANE',cockpit:'COCKPIT · INSTRUMENT CLUSTER',peps:'PEPS · PASSIVE ENTRY/START ZONES'};
 
   return <div style={{display:'flex',flexDirection:'column',height:'100vh',overflow:'hidden'}}>
     <div className="hdr">
@@ -1102,6 +1405,7 @@ function App(){
           {view==='top'&&<TopView s={s}/>}
           {view==='side'&&<SideView s={s}/>}
           {view==='cockpit'&&<CockpitView s={s} set={set}/>}
+          {view==='peps'&&<PepsZoneView s={s}/>}
         </div>
         <div className="stbar">
           {[
@@ -1111,6 +1415,7 @@ function App(){
             {label:'HVAC',active:s['Cabin.HVAC.IsAirConditioningActive'],c:'var(--teal)'},
             {label:'HORN',active:s['Body.Horn.IsActive'],c:'var(--red)'},
             {label:'AMBIENT',active:s['Cabin.Lights.Ambient.Intensity']>0,c:'var(--violet)'},
+            {label:'PEPS',active:[1,2,3,4,5,6].some(i=>s[`Body.PEPS.Plant.KeyFob.${i}.Zone`]&&s[`Body.PEPS.Plant.KeyFob.${i}.Zone`]!=='OutOfRange')||[1,2].some(i=>s[`Body.PEPS.Plant.BlePhone.${i}.Zone`]&&s[`Body.PEPS.Plant.BlePhone.${i}.Zone`]!=='OutOfRange')||[1,2].some(i=>s[`Body.PEPS.Plant.NfcCard.${i}.Position`]&&s[`Body.PEPS.Plant.NfcCard.${i}.Position`]!=='NotPresent'),c:'var(--teal)'},
           ].map(({label,active,c})=>(
             <div key={label} className="sti">
               <div className="stid" style={{background:active?c:'var(--muted)',boxShadow:active?`0 0 6px ${c}`:''}}/>
@@ -1122,7 +1427,7 @@ function App(){
           </div>
         </div>
       </div>
-      <ControlPanel s={s} set={set}/>
+      {view==='peps'?<PepsPanel s={s} set={set}/>:<ControlPanel s={s} set={set}/>}
     </div>
   </div>;
 }

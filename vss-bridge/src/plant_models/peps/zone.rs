@@ -10,15 +10,16 @@
 //! | PassengerDoor | yes | yes | -   | -   | Challenge-response (AES-128) |
 //! | Hood          | yes | yes | -   | -   | Challenge-response (AES-128) |
 //! | Trunk         | yes | yes | -   | -   | Challenge-response (AES-128) |
+//! | TrunkInside   | yes | yes | -   | -   | Challenge-response (AES-128) |
 //! | Cabin         | yes | yes | -   | -   | Challenge-response (AES-128) |
 //! | Approach      | yes | yes | -   | -   | RSSI only (no crypto)        |
 //! | RfRange       | -   | -   | -   | yes | Rolling code (fob buttons)   |
 //! | OutOfRange    | -   | -   | -   | -   | No communication             |
 //!
-//! **Cabin / Trunk exclusivity:** A device cannot be in both Cabin and Trunk
-//! simultaneously — they represent physically distinct enclosed spaces.
-//! Setting a device to Trunk clears Cabin and vice versa. This enables
-//! features like "key left in trunk" detection.
+//! **Cabin / TrunkInside exclusivity:** A device cannot be in both Cabin and
+//! TrunkInside simultaneously — they represent physically distinct enclosed
+//! spaces. Setting a device to TrunkInside clears Cabin and vice versa.
+//! This enables features like "key left in trunk" detection.
 
 use std::fmt;
 
@@ -31,9 +32,12 @@ pub enum Zone {
     PassengerDoor,
     /// ~1m from hood — LF antenna present.
     Hood,
-    /// ~1m from trunk — LF antenna present. Exclusive with Cabin.
+    /// ~1m from trunk/liftgate — LF antenna present (standing behind car).
     Trunk,
-    /// Inside cabin — LF antennas present. Exclusive with Trunk.
+    /// Physically inside the trunk/cargo area — LF antenna present.
+    /// Exclusive with Cabin.
+    TrunkInside,
+    /// Inside cabin — LF antennas present. Exclusive with TrunkInside.
     Cabin,
     /// ~5m approach range — LF antennas active but only RSSI polling (no crypto challenge).
     Approach,
@@ -52,6 +56,7 @@ impl Zone {
                 | Zone::PassengerDoor
                 | Zone::Hood
                 | Zone::Trunk
+                | Zone::TrunkInside
                 | Zone::Cabin
                 | Zone::Approach
         )
@@ -62,7 +67,12 @@ impl Zone {
     pub fn supports_challenge_response(self) -> bool {
         matches!(
             self,
-            Zone::DriverDoor | Zone::PassengerDoor | Zone::Hood | Zone::Trunk | Zone::Cabin
+            Zone::DriverDoor
+                | Zone::PassengerDoor
+                | Zone::Hood
+                | Zone::Trunk
+                | Zone::TrunkInside
+                | Zone::Cabin
         )
     }
 
@@ -89,6 +99,7 @@ impl Zone {
             "PassengerDoor" => Some(Zone::PassengerDoor),
             "Hood" => Some(Zone::Hood),
             "Trunk" => Some(Zone::Trunk),
+            "TrunkInside" => Some(Zone::TrunkInside),
             "Cabin" => Some(Zone::Cabin),
             "Approach" => Some(Zone::Approach),
             "RfRange" => Some(Zone::RfRange),
@@ -104,6 +115,7 @@ impl Zone {
             Zone::PassengerDoor => "PassengerDoor",
             Zone::Hood => "Hood",
             Zone::Trunk => "Trunk",
+            Zone::TrunkInside => "TrunkInside",
             Zone::Cabin => "Cabin",
             Zone::Approach => "Approach",
             Zone::RfRange => "RfRange",
@@ -175,6 +187,7 @@ mod tests {
             Zone::PassengerDoor,
             Zone::Hood,
             Zone::Trunk,
+            Zone::TrunkInside,
             Zone::Cabin,
         ] {
             assert!(
@@ -218,6 +231,7 @@ mod tests {
             Zone::PassengerDoor,
             Zone::Hood,
             Zone::Trunk,
+            Zone::TrunkInside,
             Zone::Cabin,
             Zone::Approach,
             Zone::RfRange,

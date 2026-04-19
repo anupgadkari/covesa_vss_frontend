@@ -50,6 +50,21 @@ const INPUT_SIGNALS: &[VssPath] = &[
     "Body.Lights.DirectionIndicator.Right.Lamp.Front.IsDefect",
     "Body.Lights.DirectionIndicator.Right.Lamp.Side.IsDefect",
     "Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsDefect",
+    // PEPS plant model inputs — HMI positions devices and presses fob buttons.
+    "Body.PEPS.Plant.KeyFob.1.Zone",
+    "Body.PEPS.Plant.KeyFob.2.Zone",
+    "Body.PEPS.Plant.KeyFob.3.Zone",
+    "Body.PEPS.Plant.KeyFob.4.Zone",
+    "Body.PEPS.Plant.KeyFob.5.Zone",
+    "Body.PEPS.Plant.KeyFob.6.Zone",
+    "Body.PEPS.Plant.KeyFob.1.ButtonPress",
+    "Body.PEPS.Plant.KeyFob.2.ButtonPress",
+    "Body.PEPS.Plant.KeyFob.3.ButtonPress",
+    "Body.PEPS.Plant.KeyFob.4.ButtonPress",
+    "Body.PEPS.Plant.BlePhone.1.Zone",
+    "Body.PEPS.Plant.BlePhone.2.Zone",
+    "Body.PEPS.Plant.NfcCard.1.Position",
+    "Body.PEPS.Plant.NfcCard.2.Position",
 ];
 
 /// Signals the bridge pushes back to the HMI (actuator outputs from arbiters).
@@ -72,6 +87,19 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     "Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn",
     "Body.Lights.DirectionIndicator.Right.Lamp.Side.IsOn",
     "Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsOn",
+    // PEPS plant model outputs — RSSI, challenge responses, RF messages.
+    "Body.PEPS.Plant.KeyFob.1.RssiResponse",
+    "Body.PEPS.Plant.KeyFob.2.RssiResponse",
+    "Body.PEPS.Plant.KeyFob.3.RssiResponse",
+    "Body.PEPS.Plant.KeyFob.4.RssiResponse",
+    "Body.PEPS.Plant.KeyFob.5.RssiResponse",
+    "Body.PEPS.Plant.KeyFob.6.RssiResponse",
+    "Body.PEPS.Plant.KeyFob.1.RfMessage",
+    "Body.PEPS.Plant.KeyFob.2.RfMessage",
+    "Body.PEPS.Plant.KeyFob.3.RfMessage",
+    "Body.PEPS.Plant.KeyFob.4.RfMessage",
+    "Body.PEPS.Plant.BlePhone.1.RssiResponse",
+    "Body.PEPS.Plant.BlePhone.2.RssiResponse",
 ];
 
 /// Shared state snapshot sent to HMI clients.

@@ -99,6 +99,13 @@ impl RssiResponse {
                 trunk_dbm: -30,
                 cabin_dbm: -60,
             },
+            Zone::TrunkInside => RssiResponse {
+                driver_door_dbm: -75,
+                passenger_door_dbm: -75,
+                hood_dbm: -80,
+                trunk_dbm: -25,
+                cabin_dbm: -55,
+            },
             Zone::Cabin => RssiResponse {
                 driver_door_dbm: -50,
                 passenger_door_dbm: -50,
