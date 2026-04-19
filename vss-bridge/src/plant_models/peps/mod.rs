@@ -1597,4 +1597,201 @@ mod tests {
 
         handle.abort();
     }
+
+    // ── Phase 5: BLE phone event-loop integration ──────────────────
+
+    #[tokio::test]
+    async fn run_loop_phone_zone_change_publishes_rssi() {
+        let bus = Arc::new(MockBus::new());
+        let model = PepsPlantModel::new(Arc::clone(&bus));
+
+        let handle = tokio::spawn(model.run());
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        bus.inject(
+            signals::PHONE_1_ZONE,
+            SignalValue::String("PassengerDoor".into()),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        let history = bus.history();
+        let rssi_msgs: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::PHONE_1_RSSI)
+            .collect();
+        assert_eq!(
+            rssi_msgs.len(),
+            1,
+            "phone zone change via bus should auto-publish RSSI"
+        );
+
+        if let SignalValue::String(payload) = &rssi_msgs[0].1 {
+            assert!(
+                payload.contains("\"passenger\":-30"),
+                "passenger antenna should be strongest at PassengerDoor: {payload}"
+            );
+        }
+
+        handle.abort();
+    }
+
+    #[tokio::test]
+    async fn run_loop_phone_zone_out_of_range_clears_rssi() {
+        let bus = Arc::new(MockBus::new());
+        let model = PepsPlantModel::new(Arc::clone(&bus));
+
+        let handle = tokio::spawn(model.run());
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        // Move to LF zone first, then out
+        bus.inject(signals::PHONE_1_ZONE, SignalValue::String("Cabin".into()));
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        bus.clear_history();
+        bus.inject(
+            signals::PHONE_1_ZONE,
+            SignalValue::String("OutOfRange".into()),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        let history = bus.history();
+        let rssi_msgs: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::PHONE_1_RSSI)
+            .collect();
+        assert_eq!(rssi_msgs.len(), 1, "leaving LF range should clear RSSI");
+        if let SignalValue::String(payload) = &rssi_msgs[0].1 {
+            assert_eq!(payload, "{}");
+        }
+
+        handle.abort();
+    }
+
+    #[tokio::test]
+    async fn run_loop_two_phones_independent_ble_challenge() {
+        let bus = Arc::new(MockBus::new());
+        let model = PepsPlantModel::new(Arc::clone(&bus));
+        let phone1_secret = model.phones[0].secret;
+        let phone2_secret = model.phones[1].secret;
+
+        let handle = tokio::spawn(model.run());
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        // Phone 1 at DriverDoor (proximity), Phone 2 at Approach (no challenge)
+        bus.inject(
+            signals::PHONE_1_ZONE,
+            SignalValue::String("DriverDoor".into()),
+        );
+        bus.inject(
+            signals::PHONE_2_ZONE,
+            SignalValue::String("Approach".into()),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        bus.clear_history();
+
+        let nonce = [0xBBu8; 16];
+        bus.inject(
+            signals::PEPS_BLE_CHALLENGE,
+            SignalValue::String(bytes_to_hex(&nonce)),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        let history = bus.history();
+
+        // Phone 1 should respond (proximity)
+        let p1: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::PHONE_1_CHALLENGE_RESP)
+            .collect();
+        assert_eq!(p1.len(), 1, "phone 1 at DriverDoor should respond");
+        if let SignalValue::String(hex) = &p1[0].1 {
+            let expected = crypto::compute_challenge_response(&phone1_secret, &nonce);
+            assert_eq!(hex_to_bytes(hex).as_slice(), &expected);
+        }
+
+        // Phone 2 should NOT respond (approach)
+        let p2: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::PHONE_2_CHALLENGE_RESP)
+            .collect();
+        assert_eq!(
+            p2.len(),
+            0,
+            "phone 2 at Approach should not respond to challenge"
+        );
+
+        // Now move phone 2 to proximity and re-challenge
+        bus.inject(signals::PHONE_2_ZONE, SignalValue::String("Hood".into()));
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        bus.clear_history();
+        let nonce2 = [0xCCu8; 16];
+        bus.inject(
+            signals::PEPS_BLE_CHALLENGE,
+            SignalValue::String(bytes_to_hex(&nonce2)),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        let history = bus.history();
+        let p2_now: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::PHONE_2_CHALLENGE_RESP)
+            .collect();
+        assert_eq!(p2_now.len(), 1, "phone 2 now at Hood should respond");
+        if let SignalValue::String(hex) = &p2_now[0].1 {
+            let expected = crypto::compute_challenge_response(&phone2_secret, &nonce2);
+            assert_eq!(hex_to_bytes(hex).as_slice(), &expected);
+        }
+
+        handle.abort();
+    }
+
+    #[tokio::test]
+    async fn run_loop_phone_approach_poll_rssi() {
+        let bus = Arc::new(MockBus::new());
+        let model = PepsPlantModel::new(Arc::clone(&bus));
+
+        let handle = tokio::spawn(model.run());
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        bus.inject(
+            signals::PHONE_1_ZONE,
+            SignalValue::String("Approach".into()),
+        );
+        bus.inject(
+            signals::PHONE_2_ZONE,
+            SignalValue::String("OutOfRange".into()),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        bus.clear_history();
+        bus.inject(signals::PEPS_APPROACH_POLL, SignalValue::String("1".into()));
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        let history = bus.history();
+        assert!(
+            history.iter().any(|(p, _)| *p == signals::PHONE_1_RSSI),
+            "phone 1 at Approach should respond to poll"
+        );
+        assert!(
+            !history.iter().any(|(p, _)| *p == signals::PHONE_2_RSSI),
+            "phone 2 OutOfRange should not respond to poll"
+        );
+
+        handle.abort();
+    }
 }
