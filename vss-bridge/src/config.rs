@@ -154,6 +154,12 @@ pub struct VehicleLineCal {
     /// After ignition OFF or M7-initiated wake work complete, how long
     /// the A53 stays alive for pending operations before powering down.
     pub shutdown_grace_secs: u64,
+
+    /// Lane-change comfort blink flash count.
+    /// When the turn stalk returns to OFF while signaling, the indicator
+    /// continues for this many complete flash cycles (on + off = one flash)
+    /// before releasing. Set to 0 to disable comfort blink.
+    pub lane_change_flash_count: u8,
 }
 
 impl Default for VehicleLineCal {
@@ -166,6 +172,7 @@ impl Default for VehicleLineCal {
             lock_feedback_blink_count: 3,
             lock_feedback_blink_period_ms: 400,
             shutdown_grace_secs: 30,
+            lane_change_flash_count: 3,
         }
     }
 }
@@ -498,6 +505,21 @@ impl PlatformConfig {
         })
     }
 
+    /// Create with a custom lane-change flash count (for unit tests).
+    pub fn defaults_with_lane_change_flash_count(count: u8) -> Arc<Self> {
+        let vl = VehicleLineCal {
+            lane_change_flash_count: count,
+            ..VehicleLineCal::default()
+        };
+        let (dealer_config_tx, dealer_config_rx) = watch::channel(DealerConfig::default());
+        Arc::new(Self {
+            vehicle_line: vl,
+            variant: VariantCal::default(),
+            dealer_config_tx,
+            dealer_config_rx,
+        })
+    }
+
     // ── Tier 2 convenience accessors ────────────────────────────────
 
     /// Auto-relock timeout as a `Duration`.
@@ -513,6 +535,11 @@ impl PlatformConfig {
     /// A53 shutdown grace period as a `Duration`.
     pub fn shutdown_grace(&self) -> Duration {
         Duration::from_secs(self.vehicle_line.shutdown_grace_secs)
+    }
+
+    /// Lane-change comfort blink flash count (0 = disabled).
+    pub fn lane_change_flash_count(&self) -> u8 {
+        self.vehicle_line.lane_change_flash_count
     }
 
     // ── Tier 3 convenience accessors ────────────────────────────────

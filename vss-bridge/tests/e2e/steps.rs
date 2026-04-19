@@ -49,6 +49,18 @@ impl std::fmt::Debug for VssWorld {
     }
 }
 
+impl Drop for VssWorld {
+    fn drop(&mut self) {
+        // Abort all spawned tasks to prevent zombie tasks from accumulating
+        // across scenarios in the shared tokio runtime. Zombie timers from
+        // old BlinkRelay tasks would fire during advance() calls in later
+        // scenarios, corrupting virtual-time determinism.
+        for task in self._tasks.drain(..) {
+            task.abort();
+        }
+    }
+}
+
 impl VssWorld {
     async fn new() -> Self {
         Self::default()
@@ -117,6 +129,22 @@ async fn settle() {
     for _ in 0..4 {
         tokio::task::yield_now().await;
     }
+}
+
+/// Advance time for N complete flash cycles at the normal blink rate
+/// (333ms half-period = 666ms per flash cycle).
+///
+/// Uses a single `advance(666ms)` per cycle rather than two 333ms
+/// advances with yields in between.  Splitting into half-periods with
+/// `yield_now()` between them is unsafe: tokio's auto-advance in paused
+/// mode can fire intermediate BlinkRelay timers during yields when all
+/// *other* tasks are idle, advancing the clock by extra 333ms increments
+/// and producing spurious flash counts.
+async fn advance_flashes(n: u32) {
+    for _ in 0..n {
+        advance(Duration::from_millis(666)).await;
+    }
+    settle().await;
 }
 
 /// Map a short indicator name to its full VSS path.
@@ -274,6 +302,13 @@ async fn when_ignition(w: &mut VssWorld, state: String) {
         .await;
 }
 
+// ---- Comfort blink timing steps ----
+
+#[when(regex = r"^(\d+) complete flash cycles? elapses?$")]
+async fn when_flash_cycles(_w: &mut VssWorld, count: u32) {
+    advance_flashes(count).await;
+}
+
 // Lock Feedback When/Then steps are intentionally NOT defined here.
 // cucumber-rs treats unmatched steps as "skipped" (yellow/pending),
 // which correctly signals that this scenario is not yet testable.
@@ -342,6 +377,20 @@ async fn then_indicator_released(w: &mut VssWorld, side: String) {
     let _current = w.current_value(path);
     // No assertion — the observable effect depends on what other claims
     // exist, which is asserted by the next Then step(s).
+}
+
+// ---- Comfort blink: indicator continues signaling during countdown ----
+
+#[then(
+    regex = r"^the (left|right) direction indicator continues signaling during comfort blink countdown$"
+)]
+async fn then_indicator_still_signaling(w: &mut VssWorld, side: String) {
+    let path = indicator_path(&side);
+    assert_eq!(
+        w.current_value(path),
+        Some(SignalValue::Bool(true)),
+        "{side}.IsSignaling should remain TRUE during comfort blink"
+    );
 }
 
 // ---- Hazard disengaged → default-off when no other claim ----
