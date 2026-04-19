@@ -653,10 +653,10 @@ function CockpitView({s,set}){
   const ac=s['Cabin.HVAC.IsAirConditioningActive'];
   const defF=s['Cabin.HVAC.IsFrontDefrosterActive'],defR=s['Cabin.HVAC.IsRearDefrosterActive'];
   const recirc=s['Cabin.HVAC.IsRecirculationActive'];
-  const dT=s['Cabin.HVAC.Station.Row1.Left.Temperature'];
-  const pT=s['Cabin.HVAC.Station.Row1.Right.Temperature'];
-  const dF=s['Cabin.HVAC.Station.Row1.Left.FanSpeed'];
-  const pF=s['Cabin.HVAC.Station.Row1.Right.FanSpeed'];
+  const dT=s['Cabin.HVAC.Station.Row1.Left.Temperature']??22;
+  const pT=s['Cabin.HVAC.Station.Row1.Right.Temperature']??22;
+  const dF=s['Cabin.HVAC.Station.Row1.Left.FanSpeed']??0;
+  const pF=s['Cabin.HVAC.Station.Row1.Right.FanSpeed']??0;
   const wf=s['Body.Windshield.Front.Wiping.Mode'];
   const horn=s['Body.Horn.IsActive'];
   const dome=s['Cabin.Lights.IsDomeOn'];
