@@ -869,4 +869,732 @@ mod tests {
 
         handle.abort();
     }
+
+    // ── Phase 3: LF / BLE / NFC challenge-response via event loop ──
+
+    /// Helper: decode a hex string to bytes.
+    fn hex_to_bytes(hex: &str) -> Vec<u8> {
+        (0..hex.len())
+            .step_by(2)
+            .filter_map(|i| u8::from_str_radix(&hex[i..i + 2], 16).ok())
+            .collect()
+    }
+
+    /// Helper: encode bytes to hex string (for nonce injection).
+    fn bytes_to_hex(bytes: &[u8]) -> String {
+        bytes.iter().map(|b| format!("{b:02x}")).collect()
+    }
+
+    #[tokio::test]
+    async fn run_loop_lf_challenge_fob_in_proximity_responds() {
+        let bus = Arc::new(MockBus::new());
+        let model = PepsPlantModel::new(Arc::clone(&bus));
+
+        // Grab fob 1's secret before moving model into the task
+        let fob1_secret = model.fobs[0].secret;
+
+        let handle = tokio::spawn(model.run());
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        // Place fob 1 at DriverDoor (proximity)
+        bus.inject(
+            signals::KEYFOB_1_ZONE,
+            SignalValue::String("DriverDoor".into()),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        bus.clear_history();
+
+        // Send LF challenge with a known nonce
+        let nonce = [0x42u8; 16];
+        bus.inject(
+            signals::PEPS_LF_CHALLENGE,
+            SignalValue::String(bytes_to_hex(&nonce)),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        let history = bus.history();
+        let fob1_resps: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::KEYFOB_1_CHALLENGE_RESP)
+            .collect();
+        assert_eq!(fob1_resps.len(), 1, "fob 1 in proximity should respond");
+
+        // Verify the response is cryptographically correct
+        if let SignalValue::String(hex_resp) = &fob1_resps[0].1 {
+            let resp_bytes = hex_to_bytes(hex_resp);
+            assert_eq!(resp_bytes.len(), 16, "response should be 16 bytes");
+
+            let expected = crypto::compute_challenge_response(&fob1_secret, &nonce);
+            assert_eq!(
+                resp_bytes.as_slice(),
+                &expected,
+                "response should match AES-128(secret, nonce)"
+            );
+        } else {
+            panic!("challenge response should be a String");
+        }
+
+        handle.abort();
+    }
+
+    #[tokio::test]
+    async fn run_loop_lf_challenge_fob_in_approach_does_not_respond() {
+        let bus = Arc::new(MockBus::new());
+        let model = PepsPlantModel::new(Arc::clone(&bus));
+
+        let handle = tokio::spawn(model.run());
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        // Place fob 1 at Approach (only RSSI, no challenge-response)
+        bus.inject(
+            signals::KEYFOB_1_ZONE,
+            SignalValue::String("Approach".into()),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        bus.clear_history();
+
+        let nonce = [0x77u8; 16];
+        bus.inject(
+            signals::PEPS_LF_CHALLENGE,
+            SignalValue::String(bytes_to_hex(&nonce)),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        let history = bus.history();
+        let fob1_resps: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::KEYFOB_1_CHALLENGE_RESP)
+            .collect();
+        assert_eq!(
+            fob1_resps.len(),
+            0,
+            "fob in approach should NOT respond to LF challenge"
+        );
+
+        handle.abort();
+    }
+
+    #[tokio::test]
+    async fn run_loop_lf_challenge_multiple_fobs_in_different_zones() {
+        let bus = Arc::new(MockBus::new());
+        let model = PepsPlantModel::new(Arc::clone(&bus));
+        let fob1_secret = model.fobs[0].secret;
+        let fob3_secret = model.fobs[2].secret;
+
+        let handle = tokio::spawn(model.run());
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        // Fob 1 at Cabin (proximity), fob 2 at OutOfRange, fob 3 at Trunk (proximity)
+        bus.inject(signals::KEYFOB_1_ZONE, SignalValue::String("Cabin".into()));
+        bus.inject(signals::KEYFOB_3_ZONE, SignalValue::String("Trunk".into()));
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        bus.clear_history();
+
+        let nonce = [0xABu8; 16];
+        bus.inject(
+            signals::PEPS_LF_CHALLENGE,
+            SignalValue::String(bytes_to_hex(&nonce)),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        let history = bus.history();
+
+        // Fob 1 (Cabin) should respond
+        let fob1: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::KEYFOB_1_CHALLENGE_RESP)
+            .collect();
+        assert_eq!(fob1.len(), 1, "fob 1 in Cabin should respond");
+        if let SignalValue::String(hex) = &fob1[0].1 {
+            let expected = crypto::compute_challenge_response(&fob1_secret, &nonce);
+            assert_eq!(hex_to_bytes(hex).as_slice(), &expected);
+        }
+
+        // Fob 2 (OutOfRange) should NOT respond
+        let fob2: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::KEYFOB_2_CHALLENGE_RESP)
+            .collect();
+        assert_eq!(fob2.len(), 0, "fob 2 OutOfRange should not respond");
+
+        // Fob 3 (Trunk) should respond
+        let fob3: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::KEYFOB_3_CHALLENGE_RESP)
+            .collect();
+        assert_eq!(fob3.len(), 1, "fob 3 in Trunk should respond");
+        if let SignalValue::String(hex) = &fob3[0].1 {
+            let expected = crypto::compute_challenge_response(&fob3_secret, &nonce);
+            assert_eq!(hex_to_bytes(hex).as_slice(), &expected);
+        }
+
+        handle.abort();
+    }
+
+    #[tokio::test]
+    async fn run_loop_unpaired_fob_responds_with_wrong_key() {
+        let bus = Arc::new(MockBus::new());
+        let model = PepsPlantModel::new(Arc::clone(&bus));
+        let fob5_secret = model.fobs[4].secret; // unpaired fob
+        let fob1_secret = model.fobs[0].secret; // paired fob
+
+        let handle = tokio::spawn(model.run());
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        // Place unpaired fob 5 at DriverDoor
+        bus.inject(
+            signals::KEYFOB_5_ZONE,
+            SignalValue::String("DriverDoor".into()),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        bus.clear_history();
+
+        let nonce = [0x33u8; 16];
+        bus.inject(
+            signals::PEPS_LF_CHALLENGE,
+            SignalValue::String(bytes_to_hex(&nonce)),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        let history = bus.history();
+        let fob5_resps: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::KEYFOB_5_CHALLENGE_RESP)
+            .collect();
+        assert_eq!(
+            fob5_resps.len(),
+            1,
+            "unpaired fob at proximity should still respond"
+        );
+
+        // But its response should NOT match any paired key
+        if let SignalValue::String(hex) = &fob5_resps[0].1 {
+            let unpaired_resp = hex_to_bytes(hex);
+            let paired_resp = crypto::compute_challenge_response(&fob1_secret, &nonce);
+            assert_ne!(
+                unpaired_resp.as_slice(),
+                &paired_resp,
+                "unpaired fob response must differ from paired fob"
+            );
+            // But should match its own secret
+            let expected = crypto::compute_challenge_response(&fob5_secret, &nonce);
+            assert_eq!(unpaired_resp.as_slice(), &expected);
+        }
+
+        handle.abort();
+    }
+
+    #[tokio::test]
+    async fn run_loop_ble_challenge_phone_in_proximity_responds() {
+        let bus = Arc::new(MockBus::new());
+        let model = PepsPlantModel::new(Arc::clone(&bus));
+        let phone1_secret = model.phones[0].secret;
+
+        let handle = tokio::spawn(model.run());
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        // Place phone 1 at PassengerDoor
+        bus.inject(
+            signals::PHONE_1_ZONE,
+            SignalValue::String("PassengerDoor".into()),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        bus.clear_history();
+
+        let nonce = [0xEEu8; 16];
+        bus.inject(
+            signals::PEPS_BLE_CHALLENGE,
+            SignalValue::String(bytes_to_hex(&nonce)),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        let history = bus.history();
+        let phone1_resps: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::PHONE_1_CHALLENGE_RESP)
+            .collect();
+        assert_eq!(
+            phone1_resps.len(),
+            1,
+            "phone in proximity should respond to BLE challenge"
+        );
+
+        if let SignalValue::String(hex) = &phone1_resps[0].1 {
+            let expected = crypto::compute_challenge_response(&phone1_secret, &nonce);
+            assert_eq!(hex_to_bytes(hex).as_slice(), &expected);
+        }
+
+        handle.abort();
+    }
+
+    #[tokio::test]
+    async fn run_loop_ble_challenge_phone_in_approach_does_not_respond() {
+        let bus = Arc::new(MockBus::new());
+        let model = PepsPlantModel::new(Arc::clone(&bus));
+
+        let handle = tokio::spawn(model.run());
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        bus.inject(
+            signals::PHONE_1_ZONE,
+            SignalValue::String("Approach".into()),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        bus.clear_history();
+
+        let nonce = [0xDDu8; 16];
+        bus.inject(
+            signals::PEPS_BLE_CHALLENGE,
+            SignalValue::String(bytes_to_hex(&nonce)),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        let history = bus.history();
+        let phone1_resps: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::PHONE_1_CHALLENGE_RESP)
+            .collect();
+        assert_eq!(
+            phone1_resps.len(),
+            0,
+            "phone in approach should NOT respond to BLE challenge"
+        );
+
+        handle.abort();
+    }
+
+    #[tokio::test]
+    async fn run_loop_nfc_challenge_card_at_reader_responds() {
+        let bus = Arc::new(MockBus::new());
+        let model = PepsPlantModel::new(Arc::clone(&bus));
+        let nfc1_secret = model.nfc_cards[0].secret;
+
+        let handle = tokio::spawn(model.run());
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        // Place NFC card 1 at DriverHandle reader
+        bus.inject(
+            signals::NFC_1_POSITION,
+            SignalValue::String("DriverHandle".into()),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        bus.clear_history();
+
+        let nonce = [0x99u8; 16];
+        bus.inject(
+            signals::PEPS_NFC_CHALLENGE,
+            SignalValue::String(bytes_to_hex(&nonce)),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        let history = bus.history();
+        let nfc1_resps: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::NFC_1_CHALLENGE_RESP)
+            .collect();
+        assert_eq!(nfc1_resps.len(), 1, "NFC card at reader should respond");
+
+        if let SignalValue::String(hex) = &nfc1_resps[0].1 {
+            let expected = crypto::compute_challenge_response(&nfc1_secret, &nonce);
+            assert_eq!(hex_to_bytes(hex).as_slice(), &expected);
+        }
+
+        handle.abort();
+    }
+
+    #[tokio::test]
+    async fn run_loop_nfc_challenge_card_not_present_no_response() {
+        let bus = Arc::new(MockBus::new());
+        let model = PepsPlantModel::new(Arc::clone(&bus));
+
+        let handle = tokio::spawn(model.run());
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        // NFC card 1 defaults to NotPresent — don't move it
+        bus.clear_history();
+
+        let nonce = [0x11u8; 16];
+        bus.inject(
+            signals::PEPS_NFC_CHALLENGE,
+            SignalValue::String(bytes_to_hex(&nonce)),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        let history = bus.history();
+        let nfc1_resps: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::NFC_1_CHALLENGE_RESP)
+            .collect();
+        assert_eq!(
+            nfc1_resps.len(),
+            0,
+            "NFC card not at reader should NOT respond"
+        );
+
+        handle.abort();
+    }
+
+    // ── Phase 4: RF remote actions via event loop ──────────────────
+
+    #[tokio::test]
+    async fn run_loop_fob_button_lock_publishes_rf_message() {
+        let bus = Arc::new(MockBus::new());
+        let model = PepsPlantModel::new(Arc::clone(&bus));
+
+        let handle = tokio::spawn(model.run());
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        // Place fob 1 in RF range
+        bus.inject(
+            signals::KEYFOB_1_ZONE,
+            SignalValue::String("RfRange".into()),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        bus.clear_history();
+
+        // Press LOCK button
+        bus.inject(signals::KEYFOB_1_BUTTON, SignalValue::String("LOCK".into()));
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        let history = bus.history();
+        let rf_msgs: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::KEYFOB_1_RF_MSG)
+            .collect();
+        assert_eq!(rf_msgs.len(), 1, "LOCK button should publish RF message");
+
+        if let SignalValue::String(payload) = &rf_msgs[0].1 {
+            assert!(
+                payload.starts_with("LOCK:"),
+                "payload should start with LOCK: {payload}"
+            );
+            // After "LOCK:" should be 32 hex chars (16 bytes encrypted)
+            let hex_part = &payload[5..];
+            assert_eq!(
+                hex_part.len(),
+                32,
+                "encrypted rolling code should be 32 hex chars"
+            );
+        }
+
+        handle.abort();
+    }
+
+    #[tokio::test]
+    async fn run_loop_fob_button_all_actions() {
+        let bus = Arc::new(MockBus::new());
+        let model = PepsPlantModel::new(Arc::clone(&bus));
+
+        let handle = tokio::spawn(model.run());
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        bus.inject(
+            signals::KEYFOB_1_ZONE,
+            SignalValue::String("RfRange".into()),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        // Press each button type
+        for action in [
+            "LOCK",
+            "UNLOCK",
+            "TRUNK_RELEASE",
+            "REMOTE_START",
+            "PANIC_ALARM",
+        ] {
+            bus.clear_history();
+            bus.inject(signals::KEYFOB_1_BUTTON, SignalValue::String(action.into()));
+            tokio::task::yield_now().await;
+            tokio::task::yield_now().await;
+
+            let history = bus.history();
+            let rf_msgs: Vec<_> = history
+                .iter()
+                .filter(|(p, _)| *p == signals::KEYFOB_1_RF_MSG)
+                .collect();
+            assert_eq!(rf_msgs.len(), 1, "{action} should publish RF message");
+
+            if let SignalValue::String(payload) = &rf_msgs[0].1 {
+                assert!(
+                    payload.starts_with(&format!("{action}:")),
+                    "payload should start with {action}: got {payload}"
+                );
+            }
+        }
+
+        handle.abort();
+    }
+
+    #[tokio::test]
+    async fn run_loop_fob_rolling_code_increments() {
+        let bus = Arc::new(MockBus::new());
+        let model = PepsPlantModel::new(Arc::clone(&bus));
+        let fob1_secret = model.fobs[0].secret;
+
+        let handle = tokio::spawn(model.run());
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        bus.inject(
+            signals::KEYFOB_1_ZONE,
+            SignalValue::String("RfRange".into()),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        // Press LOCK three times — each should have a different encrypted payload
+        let mut payloads = Vec::new();
+        for _ in 0..3 {
+            bus.clear_history();
+            bus.inject(signals::KEYFOB_1_BUTTON, SignalValue::String("LOCK".into()));
+            tokio::task::yield_now().await;
+            tokio::task::yield_now().await;
+
+            let history = bus.history();
+            let rf: Vec<_> = history
+                .iter()
+                .filter(|(p, _)| *p == signals::KEYFOB_1_RF_MSG)
+                .collect();
+            assert_eq!(rf.len(), 1);
+            if let SignalValue::String(payload) = &rf[0].1 {
+                payloads.push(payload.clone());
+            }
+        }
+
+        // All three payloads should differ (rolling code increments)
+        assert_ne!(
+            payloads[0], payloads[1],
+            "rolling code should differ between presses"
+        );
+        assert_ne!(
+            payloads[1], payloads[2],
+            "rolling code should differ between presses"
+        );
+        assert_ne!(
+            payloads[0], payloads[2],
+            "rolling code should differ between presses"
+        );
+
+        // Verify each payload decrypts to the expected counter
+        for (i, payload) in payloads.iter().enumerate() {
+            let hex_part = &payload[5..]; // skip "LOCK:"
+            let encrypted = hex_to_bytes(hex_part);
+            let expected_encrypted = crypto::encrypt_rolling_code(&fob1_secret, (i + 1) as u32);
+            assert_eq!(
+                encrypted.as_slice(),
+                &expected_encrypted,
+                "press {} should encrypt counter {}",
+                i + 1,
+                i + 1
+            );
+        }
+
+        handle.abort();
+    }
+
+    #[tokio::test]
+    async fn run_loop_fob_button_out_of_range_no_rf() {
+        let bus = Arc::new(MockBus::new());
+        let model = PepsPlantModel::new(Arc::clone(&bus));
+
+        let handle = tokio::spawn(model.run());
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        // Fob 1 defaults to OutOfRange — don't move it
+        bus.clear_history();
+
+        bus.inject(signals::KEYFOB_1_BUTTON, SignalValue::String("LOCK".into()));
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        let history = bus.history();
+        let rf_msgs: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::KEYFOB_1_RF_MSG)
+            .collect();
+        assert_eq!(
+            rf_msgs.len(),
+            0,
+            "fob out of range should NOT publish RF message"
+        );
+
+        handle.abort();
+    }
+
+    #[tokio::test]
+    async fn run_loop_fob_button_from_proximity_works() {
+        // RF buttons work from any reachable zone, not just RfRange
+        let bus = Arc::new(MockBus::new());
+        let model = PepsPlantModel::new(Arc::clone(&bus));
+
+        let handle = tokio::spawn(model.run());
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        bus.inject(
+            signals::KEYFOB_1_ZONE,
+            SignalValue::String("DriverDoor".into()),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        bus.clear_history();
+        bus.inject(
+            signals::KEYFOB_1_BUTTON,
+            SignalValue::String("PANIC_ALARM".into()),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        let history = bus.history();
+        let rf_msgs: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::KEYFOB_1_RF_MSG)
+            .collect();
+        assert_eq!(
+            rf_msgs.len(),
+            1,
+            "fob button should work from proximity zone too"
+        );
+
+        if let SignalValue::String(payload) = &rf_msgs[0].1 {
+            assert!(payload.starts_with("PANIC_ALARM:"));
+        }
+
+        handle.abort();
+    }
+
+    #[tokio::test]
+    async fn run_loop_different_fobs_have_independent_rolling_codes() {
+        let bus = Arc::new(MockBus::new());
+        let model = PepsPlantModel::new(Arc::clone(&bus));
+
+        let handle = tokio::spawn(model.run());
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        // Place fob 1 and fob 2 in range
+        bus.inject(
+            signals::KEYFOB_1_ZONE,
+            SignalValue::String("RfRange".into()),
+        );
+        bus.inject(
+            signals::KEYFOB_2_ZONE,
+            SignalValue::String("RfRange".into()),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        bus.clear_history();
+
+        // Press LOCK on both fobs
+        bus.inject(signals::KEYFOB_1_BUTTON, SignalValue::String("LOCK".into()));
+        bus.inject(
+            signals::KEYFOB_2_BUTTON,
+            SignalValue::String("UNLOCK".into()),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        let history = bus.history();
+
+        let fob1_rf: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::KEYFOB_1_RF_MSG)
+            .collect();
+        let fob2_rf: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::KEYFOB_2_RF_MSG)
+            .collect();
+
+        assert_eq!(fob1_rf.len(), 1, "fob 1 should publish");
+        assert_eq!(fob2_rf.len(), 1, "fob 2 should publish");
+
+        // Different fobs have different secrets → different encrypted payloads
+        if let (SignalValue::String(p1), SignalValue::String(p2)) = (&fob1_rf[0].1, &fob2_rf[0].1) {
+            // Strip action prefix, compare encrypted parts
+            let enc1 = &p1[5..]; // "LOCK:"
+            let enc2 = &p2[7..]; // "UNLOCK:"
+            assert_ne!(
+                enc1, enc2,
+                "different fobs with different secrets should produce different ciphertext"
+            );
+        }
+
+        handle.abort();
+    }
+
+    #[tokio::test]
+    async fn run_loop_none_button_does_not_publish() {
+        let bus = Arc::new(MockBus::new());
+        let model = PepsPlantModel::new(Arc::clone(&bus));
+
+        let handle = tokio::spawn(model.run());
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        bus.inject(
+            signals::KEYFOB_1_ZONE,
+            SignalValue::String("RfRange".into()),
+        );
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        bus.clear_history();
+
+        // "NONE" means button released / no action
+        bus.inject(signals::KEYFOB_1_BUTTON, SignalValue::String("NONE".into()));
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        let history = bus.history();
+        let rf_msgs: Vec<_> = history
+            .iter()
+            .filter(|(p, _)| *p == signals::KEYFOB_1_RF_MSG)
+            .collect();
+        assert_eq!(
+            rf_msgs.len(),
+            0,
+            "NONE button should not produce RF message"
+        );
+
+        handle.abort();
+    }
 }
