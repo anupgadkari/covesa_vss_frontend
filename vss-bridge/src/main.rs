@@ -16,6 +16,7 @@ use vss_bridge::features::turn_indicator::TurnIndicator;
 use vss_bridge::ipc_message::SignalValue;
 use vss_bridge::kuksa_sync;
 use vss_bridge::plant_models::blink_relay::BlinkRelay;
+use vss_bridge::plant_models::door_lock::DoorLockPlantModel;
 use vss_bridge::plant_models::peps::PepsPlantModel;
 use vss_bridge::signal_bus::SignalBus;
 use vss_bridge::signal_ids;
@@ -81,10 +82,10 @@ async fn main() -> anyhow::Result<()> {
     // In production these come from key provisioning (not hard-coded here).
     let rke_fobs: Vec<PairedFob> = (1u8..=4)
         .map(|i| {
-            // Must match plant model's default_secret(device_type=0, index=i).
+            // Must match plant model's default_secret(b'F', index).
             // Formula: key[0]=device_type, key[1]=index,
             //          key[k] = device_type*17 + index*31 + k  (for k >= 2)
-            const DEVICE_TYPE: u8 = 0; // 0 = keyfob in the plant model
+            const DEVICE_TYPE: u8 = b'F'; // b'F' = 70, matches PepsPlantModel keyfob secrets
             let mut key = [0u8; 16];
             key[0] = DEVICE_TYPE;
             key[1] = i;
@@ -116,8 +117,9 @@ async fn main() -> anyhow::Result<()> {
     // would normally provide. Plant models bypass the arbiter and
     // publish feedback signals (lamp on/off, defects) directly.
     tokio::spawn(BlinkRelay::new(Arc::clone(&bus)).run());
+    tokio::spawn(DoorLockPlantModel::new(Arc::clone(&bus)).run());
     tokio::spawn(PepsPlantModel::new(Arc::clone(&bus)).run());
-    tracing::info!("plant models spawned: BlinkRelay, PepsPlantModel");
+    tracing::info!("plant models spawned: BlinkRelay, DoorLockPlantModel, PepsPlantModel");
 
     // ── WebSocket bridge for L6 HMI ─────────────────────────────────
     let ws_addr = "0.0.0.0:8080".parse()?;

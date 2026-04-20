@@ -79,6 +79,10 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     "Body.Doors.Row1.Right.IsLocked",
     "Body.Doors.Row2.Left.IsLocked",
     "Body.Doors.Row2.Right.IsLocked",
+    "Body.Doors.Row1.Left.IsDoubleLocked",
+    "Body.Doors.Row1.Right.IsDoubleLocked",
+    "Body.Doors.Row2.Left.IsDoubleLocked",
+    "Body.Doors.Row2.Right.IsDoubleLocked",
     // Plant model outputs — actual lamp state from BlinkRelay.
     // Three physical lamps per side: Front, Side (mirror repeater), Rear.
     "Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn",

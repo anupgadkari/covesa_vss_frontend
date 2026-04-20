@@ -557,30 +557,43 @@ async fn door_lock_loop<B: SignalBus>(
     tracing::info!("DoorLock arbiter loop ended");
 }
 
-/// Dispatch a lock command to the SignalBus (which forwards to Classic AUTOSAR via IPC).
+/// Lock command signals written by the arbiter (intent / command to M7 actuator SWC).
+///
+/// These are analogous to `Body.Lights.*.IsSignaling` in the lighting domain:
+/// the arbiter publishes what it *wants* the actuator to do; the
+/// `DoorLockPlantModel` (M7 actuator simulator) reads these and publishes
+/// the confirmed `IsLocked` / `IsDoubleLocked` state back.
+pub const DOOR_LOCK_CMD_SIGNALS: [VssPath; 4] = [
+    "Body.Doors.Row1.Left.LockCmd",
+    "Body.Doors.Row1.Right.LockCmd",
+    "Body.Doors.Row2.Left.LockCmd",
+    "Body.Doors.Row2.Right.LockCmd",
+];
+
+/// Double-lock command signals (superlock engaged).
+pub const DOOR_DOUBLE_LOCK_CMD_SIGNALS: [VssPath; 4] = [
+    "Body.Doors.Row1.Left.DoubleLockCmd",
+    "Body.Doors.Row1.Right.DoubleLockCmd",
+    "Body.Doors.Row2.Left.DoubleLockCmd",
+    "Body.Doors.Row2.Right.DoubleLockCmd",
+];
+
+/// Dispatch a lock command to the SignalBus.
+///
+/// Writes to the `LockCmd` / `DoubleLockCmd` intent signals.
+/// The `DoorLockPlantModel` subscribes to these and publishes confirmed
+/// `IsLocked` / `IsDoubleLocked` state (simulating M7 actuator feedback).
 async fn dispatch_lock_command<B: SignalBus>(req: &DoorLockRequest, bus: &Arc<B>) {
     let lock_value = match req.command {
         LockCommand::Unlock => SignalValue::Bool(false),
         LockCommand::Lock => SignalValue::Bool(true),
-        // DoubleLock uses a distinct signal value — the Classic AUTOSAR SWC
-        // interprets Bool(true) on the .IsDoubleLocked path.
         LockCommand::DoubleLock => SignalValue::Bool(true),
     };
 
     let signals: &[VssPath] = if req.command == LockCommand::DoubleLock {
-        &[
-            "Body.Doors.Row1.Left.IsDoubleLocked",
-            "Body.Doors.Row1.Right.IsDoubleLocked",
-            "Body.Doors.Row2.Left.IsDoubleLocked",
-            "Body.Doors.Row2.Right.IsDoubleLocked",
-        ]
+        &DOOR_DOUBLE_LOCK_CMD_SIGNALS
     } else {
-        &[
-            "Body.Doors.Row1.Left.IsLocked",
-            "Body.Doors.Row1.Right.IsLocked",
-            "Body.Doors.Row2.Left.IsLocked",
-            "Body.Doors.Row2.Right.IsLocked",
-        ]
+        &DOOR_LOCK_CMD_SIGNALS
     };
 
     for &signal in signals {
@@ -1090,7 +1103,7 @@ mod tests {
         let history = bus.history();
         // 4 door signals dispatched
         assert_eq!(history.len(), 4);
-        assert_eq!(history[0].0, "Body.Doors.Row1.Left.IsLocked");
+        assert_eq!(history[0].0, "Body.Doors.Row1.Left.LockCmd");
         assert_eq!(history[0].1, SignalValue::Bool(false)); // unlock
     }
 
@@ -1184,8 +1197,8 @@ mod tests {
         let history = bus.history();
         // 4 unlock + 4 double-lock
         assert_eq!(history.len(), 8);
-        // Double-lock uses IsDoubleLocked path
-        assert_eq!(history[4].0, "Body.Doors.Row1.Left.IsDoubleLocked");
+        // Double-lock uses DoubleLockCmd path
+        assert_eq!(history[4].0, "Body.Doors.Row1.Left.DoubleLockCmd");
     }
 
     #[tokio::test]
