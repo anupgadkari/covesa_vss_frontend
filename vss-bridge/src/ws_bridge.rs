@@ -65,6 +65,34 @@ const INPUT_SIGNALS: &[VssPath] = &[
     "Body.PEPS.Plant.BlePhone.2.Zone",
     "Body.PEPS.Plant.NfcCard.1.Position",
     "Body.PEPS.Plant.NfcCard.2.Position",
+    // Door handle plant model inputs — HMI top-view physical interactions.
+    "Body.Doors.Row1.Left.Handle.Inside.IsPulled",
+    "Body.Doors.Row1.Right.Handle.Inside.IsPulled",
+    "Body.Doors.Row2.Left.Handle.Inside.IsPulled",
+    "Body.Doors.Row2.Right.Handle.Inside.IsPulled",
+    "Body.Doors.Row1.Left.Handle.Outside.IsPulled",
+    "Body.Doors.Row1.Right.Handle.Outside.IsPulled",
+    "Body.Doors.Row2.Left.Handle.Outside.IsPulled",
+    "Body.Doors.Row2.Right.Handle.Outside.IsPulled",
+    // Soldier (interior lock knob) — per-door manual lock override.
+    "Body.Doors.Row1.Left.Soldier.IsUnlocked",
+    "Body.Doors.Row1.Right.Soldier.IsUnlocked",
+    "Body.Doors.Row2.Left.Soldier.IsUnlocked",
+    "Body.Doors.Row2.Right.Soldier.IsUnlocked",
+    // Close command — sent when user clicks an ajar door in the top view.
+    "Body.Doors.Row1.Left.CloseCmd",
+    "Body.Doors.Row1.Right.CloseCmd",
+    "Body.Doors.Row2.Left.CloseCmd",
+    "Body.Doors.Row2.Right.CloseCmd",
+    // Diagnostic overrides (DoorCard direct-write).
+    "Body.Doors.Row1.Left.IsOpen",
+    "Body.Doors.Row1.Right.IsOpen",
+    "Body.Doors.Row2.Left.IsOpen",
+    "Body.Doors.Row2.Right.IsOpen",
+    "Body.Doors.Row1.Left.IsDoubleLocked",
+    "Body.Doors.Row1.Right.IsDoubleLocked",
+    "Body.Doors.Row2.Left.IsDoubleLocked",
+    "Body.Doors.Row2.Right.IsDoubleLocked",
 ];
 
 /// Signals the bridge pushes back to the HMI (actuator outputs from arbiters).
@@ -83,6 +111,15 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     "Body.Doors.Row1.Right.IsDoubleLocked",
     "Body.Doors.Row2.Left.IsDoubleLocked",
     "Body.Doors.Row2.Right.IsDoubleLocked",
+    // Door handle plant model outputs — ajar switch and latch state.
+    "Body.Doors.Row1.Left.IsOpen",
+    "Body.Doors.Row1.Right.IsOpen",
+    "Body.Doors.Row2.Left.IsOpen",
+    "Body.Doors.Row2.Right.IsOpen",
+    "Body.Doors.Row1.Left.Latch.IsLatched",
+    "Body.Doors.Row1.Right.Latch.IsLatched",
+    "Body.Doors.Row2.Left.Latch.IsLatched",
+    "Body.Doors.Row2.Right.Latch.IsLatched",
     // Plant model outputs — actual lamp state from BlinkRelay.
     // Three physical lamps per side: Front, Side (mirror repeater), Rear.
     "Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn",

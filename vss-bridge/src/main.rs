@@ -16,6 +16,7 @@ use vss_bridge::features::turn_indicator::TurnIndicator;
 use vss_bridge::ipc_message::SignalValue;
 use vss_bridge::kuksa_sync;
 use vss_bridge::plant_models::blink_relay::BlinkRelay;
+use vss_bridge::plant_models::door_handle::DoorHandlePlantModel;
 use vss_bridge::plant_models::door_lock::DoorLockPlantModel;
 use vss_bridge::plant_models::peps::PepsPlantModel;
 use vss_bridge::signal_bus::SignalBus;
@@ -118,8 +119,9 @@ async fn main() -> anyhow::Result<()> {
     // publish feedback signals (lamp on/off, defects) directly.
     tokio::spawn(BlinkRelay::new(Arc::clone(&bus)).run());
     tokio::spawn(DoorLockPlantModel::with_ack_tx(Arc::clone(&bus), door_lock_ack_tx).run());
+    tokio::spawn(DoorHandlePlantModel::new(Arc::clone(&bus)).run());
     tokio::spawn(PepsPlantModel::new(Arc::clone(&bus)).run());
-    tracing::info!("plant models spawned: BlinkRelay, DoorLockPlantModel, PepsPlantModel");
+    tracing::info!("plant models spawned: BlinkRelay, DoorLockPlantModel, DoorHandlePlantModel, PepsPlantModel");
 
     // ── WebSocket bridge for L6 HMI ─────────────────────────────────
     let ws_addr = "0.0.0.0:8080".parse()?;
