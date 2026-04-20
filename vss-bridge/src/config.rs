@@ -404,6 +404,17 @@ pub struct DealerConfig {
     /// DID 0xF194. DRIVER_ONLY = unlock driver door on first PEPS
     /// approach, ALL = unlock all doors.
     pub approach_unlock_mode: ApproachUnlockMode,
+
+    /// RKE two-stage unlock enable.
+    /// DID 0xF195. When true, first RKE UNLOCK press unlocks driver door
+    /// only; a second press within 3 s unlocks all doors.
+    /// When false, each UNLOCK press unlocks all doors immediately.
+    pub two_stage_unlock: bool,
+
+    /// Driver door side (LHD vs. RHD).
+    /// DID 0xF196. Determines which door is unlocked on first press of
+    /// RKE UNLOCK in two-stage mode.
+    pub driver_door_side: DriverDoorSide,
 }
 
 /// PEPS approach unlock behavior.
@@ -416,6 +427,17 @@ pub enum ApproachUnlockMode {
     All,
 }
 
+/// Which side of the vehicle has the driver door.
+/// Affects RKE two-stage unlock (first press unlocks driver door only).
+#[derive(Debug, Clone, Default, Deserialize, PartialEq, Copy)]
+pub enum DriverDoorSide {
+    /// Left-hand drive (most markets). Row1.Left is the driver door.
+    #[default]
+    Left,
+    /// Right-hand drive (UK, Japan, Australia, etc.). Row1.Right is the driver door.
+    Right,
+}
+
 impl Default for DealerConfig {
     fn default() -> Self {
         Self {
@@ -424,6 +446,8 @@ impl Default for DealerConfig {
             courtesy_light_timeout_secs: 30,
             remote_start_max_minutes: 10,
             approach_unlock_mode: ApproachUnlockMode::DriverOnly,
+            two_stage_unlock: true,
+            driver_door_side: DriverDoorSide::Left,
         }
     }
 }

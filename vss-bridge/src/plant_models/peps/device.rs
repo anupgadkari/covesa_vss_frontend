@@ -6,7 +6,8 @@
 //! state transitions based on incoming VSS signal changes.
 
 use super::crypto::{
-    compute_challenge_response, encrypt_rolling_code, Challenge, ChallengeResponse, SharedSecret,
+    aes_cmac_truncated, compute_challenge_response, Challenge, ChallengeResponse, RfMac,
+    SharedSecret, RF_MAC_LEN,
 };
 use super::zone::{NfcPosition, Zone};
 
@@ -42,17 +43,105 @@ impl FobButton {
             FobButton::PanicAlarm => "PANIC_ALARM",
         }
     }
+
+    /// Single-byte action code used in the RF message payload covered by the MAC.
+    pub fn to_action_byte(self) -> u8 {
+        match self {
+            FobButton::Lock => 0x01,
+            FobButton::Unlock => 0x02,
+            FobButton::TrunkRelease => 0x03,
+            FobButton::RemoteStart => 0x04,
+            FobButton::PanicAlarm => 0x05,
+        }
+    }
+
+    /// Parse from the action byte in an RF message.
+    pub fn from_action_byte(b: u8) -> Option<Self> {
+        match b {
+            0x01 => Some(FobButton::Lock),
+            0x02 => Some(FobButton::Unlock),
+            0x03 => Some(FobButton::TrunkRelease),
+            0x04 => Some(FobButton::RemoteStart),
+            0x05 => Some(FobButton::PanicAlarm),
+            _ => None,
+        }
+    }
 }
 
-/// Result of an RF button press — contains encrypted rolling code + action.
+/// RF message produced by a key-fob button press.
+///
+/// Wire layout (16 bytes, transmitted over 433/868 MHz RF):
+/// ```text
+/// ┌──────────────┬────────┬──────────────┬─────────────────┐
+/// │  fob_id (4B) │act (1B)│  rolling (4B)│  MAC (7B CMAC)  │
+/// └──────────────┴────────┴──────────────┴─────────────────┘
+/// ```
+/// The AES-CMAC is computed over `fob_id ‖ action_byte ‖ rolling_code`
+/// (9 bytes) using the fob's shared secret.
+///
+/// The rolling code is transmitted **unencrypted** — confidentiality is not
+/// the goal; the MAC provides authenticity and the rolling code prevents replay.
 #[derive(Debug, Clone)]
 pub struct RfMessage {
-    /// The action the user pressed.
+    /// Fob-unique 32-bit identifier (derived from pairing; 1-based index in sim).
+    pub fob_id: u32,
+    /// The button the user pressed.
     pub action: FobButton,
-    /// AES-128 encrypted rolling code counter.
-    pub encrypted_rolling_code: [u8; 16],
-    /// The raw rolling code counter (for vehicle-side debug/logging only).
-    pub counter: u32,
+    /// Unencrypted rolling code counter (vehicle-side validates forward-only window).
+    pub rolling_code: u32,
+    /// Truncated AES-CMAC (7 bytes) over `fob_id ‖ action_byte ‖ rolling_code`.
+    pub mac: RfMac,
+}
+
+impl RfMessage {
+    /// Serialise to the 16-byte on-air format (little-endian integers).
+    pub fn to_wire(&self) -> [u8; 16] {
+        let mut buf = [0u8; 16];
+        buf[0..4].copy_from_slice(&self.fob_id.to_le_bytes());
+        buf[4] = self.action.to_action_byte();
+        buf[5..9].copy_from_slice(&self.rolling_code.to_le_bytes());
+        buf[9..16].copy_from_slice(&self.mac);
+        buf
+    }
+
+    /// Deserialise from the 16-byte on-air format.
+    /// Returns `None` if the action byte is unrecognised.
+    pub fn from_wire(buf: &[u8; 16]) -> Option<Self> {
+        let fob_id = u32::from_le_bytes(buf[0..4].try_into().unwrap());
+        let action = FobButton::from_action_byte(buf[4])?;
+        let rolling_code = u32::from_le_bytes(buf[5..9].try_into().unwrap());
+        let mut mac = [0u8; RF_MAC_LEN];
+        mac.copy_from_slice(&buf[9..16]);
+        Some(RfMessage { fob_id, action, rolling_code, mac })
+    }
+
+    /// Encode as a 32-character lowercase hex string for VSS signal transport.
+    pub fn to_hex(&self) -> String {
+        self.to_wire().iter().map(|b| format!("{b:02x}")).collect()
+    }
+
+    /// Decode from a 32-character hex string.
+    pub fn from_hex(s: &str) -> Option<Self> {
+        if s.len() != 32 {
+            return None;
+        }
+        let mut buf = [0u8; 16];
+        for (i, chunk) in s.as_bytes().chunks(2).enumerate() {
+            let hi = hex_nibble(chunk[0])?;
+            let lo = hex_nibble(chunk[1])?;
+            buf[i] = (hi << 4) | lo;
+        }
+        Self::from_wire(&buf)
+    }
+}
+
+fn hex_nibble(b: u8) -> Option<u8> {
+    match b {
+        b'0'..=b'9' => Some(b - b'0'),
+        b'a'..=b'f' => Some(b - b'a' + 10),
+        b'A'..=b'F' => Some(b - b'A' + 10),
+        _ => None,
+    }
 }
 
 /// Simulated RSSI readings from LF antennas.
@@ -152,6 +241,10 @@ impl RssiResponse {
 pub struct KeyFob {
     /// 1-based device index (1..=6).
     pub index: u8,
+    /// 32-bit fob identifier broadcast in every RF message.
+    /// In simulation this is `index as u32`; in real hardware it is burned in
+    /// during manufacture and exchanged during pairing.
+    pub fob_id: u32,
     /// Current physical zone.
     pub zone: Zone,
     /// Whether this fob is paired with the vehicle.
@@ -167,6 +260,7 @@ impl KeyFob {
     pub fn new(index: u8, paired: bool, secret: SharedSecret) -> Self {
         Self {
             index,
+            fob_id: index as u32,
             zone: Zone::OutOfRange,
             paired,
             secret,
@@ -192,21 +286,38 @@ impl KeyFob {
         Some(RssiResponse::for_zone(self.zone))
     }
 
-    /// Handle an RF button press. Increments the rolling code counter and
-    /// returns an encrypted RF message. Only works for paired fobs in RF range
-    /// (or any reachable zone — fob buttons work regardless of LF).
+    /// Handle an RF button press.
+    ///
+    /// Increments the rolling code counter, computes an AES-CMAC over
+    /// `fob_id ‖ action_byte ‖ rolling_code`, and returns the RF message.
+    /// Only paired fobs in a reachable zone can press buttons.
     pub fn press_button(&mut self, button: FobButton) -> Option<RfMessage> {
         if !self.paired || !self.zone.is_reachable() {
             return None;
         }
         self.rolling_counter += 1;
-        let encrypted = encrypt_rolling_code(&self.secret, self.rolling_counter);
+
+        // Build the 9-byte payload that the MAC covers.
+        let mac_payload = build_mac_payload(self.fob_id, button, self.rolling_counter);
+        let mac = aes_cmac_truncated(&self.secret, &mac_payload);
+
         Some(RfMessage {
+            fob_id: self.fob_id,
             action: button,
-            encrypted_rolling_code: encrypted,
-            counter: self.rolling_counter,
+            rolling_code: self.rolling_counter,
+            mac,
         })
     }
+}
+
+/// Build the 9-byte buffer that the AES-CMAC covers:
+/// `fob_id (4 LE) ‖ action_byte (1) ‖ rolling_code (4 LE)`
+pub fn build_mac_payload(fob_id: u32, action: FobButton, rolling_code: u32) -> [u8; 9] {
+    let mut buf = [0u8; 9];
+    buf[0..4].copy_from_slice(&fob_id.to_le_bytes());
+    buf[4] = action.to_action_byte();
+    buf[5..9].copy_from_slice(&rolling_code.to_le_bytes());
+    buf
 }
 
 // ---------------------------------------------------------------------------
@@ -352,15 +463,46 @@ mod tests {
         fob.zone = Zone::RfRange;
 
         let msg1 = fob.press_button(FobButton::Lock).unwrap();
-        assert_eq!(msg1.counter, 1);
+        assert_eq!(msg1.rolling_code, 1);
         assert_eq!(msg1.action, FobButton::Lock);
+        assert_eq!(msg1.fob_id, 1);
 
         let msg2 = fob.press_button(FobButton::Unlock).unwrap();
-        assert_eq!(msg2.counter, 2);
+        assert_eq!(msg2.rolling_code, 2);
         assert_eq!(msg2.action, FobButton::Unlock);
 
-        // Encrypted payloads must differ
-        assert_ne!(msg1.encrypted_rolling_code, msg2.encrypted_rolling_code);
+        // Different counter → different MAC
+        assert_ne!(msg1.mac, msg2.mac);
+    }
+
+    #[test]
+    fn rf_message_wire_roundtrip() {
+        let mut fob = KeyFob::new(3, true, test_secret(0xCC));
+        fob.zone = Zone::RfRange;
+        let msg = fob.press_button(FobButton::TrunkRelease).unwrap();
+
+        let hex = msg.to_hex();
+        assert_eq!(hex.len(), 32, "hex-encoded RF message must be 32 chars");
+
+        let decoded = RfMessage::from_hex(&hex).expect("should decode back");
+        assert_eq!(decoded.fob_id, msg.fob_id);
+        assert_eq!(decoded.action, msg.action);
+        assert_eq!(decoded.rolling_code, msg.rolling_code);
+        assert_eq!(decoded.mac, msg.mac);
+    }
+
+    #[test]
+    fn rf_message_mac_covers_all_fields() {
+        let secret = test_secret(0xAA);
+        let mut fob = KeyFob::new(2, true, secret);
+        fob.zone = Zone::RfRange;
+
+        let msg = fob.press_button(FobButton::Lock).unwrap();
+
+        // Verify MAC independently using the public helper
+        let payload = build_mac_payload(msg.fob_id, msg.action, msg.rolling_code);
+        let expected_mac = super::super::crypto::aes_cmac_truncated(&secret, &payload);
+        assert_eq!(msg.mac, expected_mac, "MAC must match independent computation");
     }
 
     #[test]

@@ -186,20 +186,16 @@ impl<B: SignalBus> PepsPlantModel<B> {
 
         if let Some(rf_msg) = fob.press_button(button) {
             let signal = signals::KEYFOB_RF_MSGS[fob_index];
-            // Encode as hex string: action + encrypted rolling code
-            let hex: String = rf_msg
-                .encrypted_rolling_code
-                .iter()
-                .map(|b| format!("{b:02x}"))
-                .collect();
-            let payload = format!("{}:{}", rf_msg.action.as_str(), hex);
+            // Encode as 32-char hex string: 16-byte on-air RF message.
+            // Layout: fob_id(4B LE) | action(1B) | rolling_code(4B LE) | CMAC(7B)
+            let payload = rf_msg.to_hex();
             if let Err(e) = self.bus.publish(signal, SignalValue::String(payload)).await {
                 tracing::error!(error = %e, "PEPS plant: failed to publish RF message");
             }
             tracing::info!(
                 fob = fob.index,
                 action = rf_msg.action.as_str(),
-                counter = rf_msg.counter,
+                rolling_code = rf_msg.rolling_code,
                 "PEPS plant: fob RF button press"
             );
         }
@@ -583,7 +579,14 @@ mod tests {
         assert_eq!(rf_msgs.len(), 1, "should publish one RF message");
 
         if let SignalValue::String(payload) = &rf_msgs[0].1 {
-            assert!(payload.starts_with("LOCK:"), "payload: {payload}");
+            // New format: 32-char hex string (16-byte on-air RF message)
+            assert_eq!(payload.len(), 32, "RF payload must be 32 hex chars: {payload}");
+            // Decode and verify the action field
+            let msg = device::RfMessage::from_hex(payload)
+                .expect("should decode RF message from hex");
+            assert_eq!(msg.action, FobButton::Lock, "action must be LOCK");
+            assert_eq!(msg.fob_id, 1, "fob_id must be 1 (index 0 → fob id 1)");
+            assert_eq!(msg.rolling_code, 1, "first press = rolling_code 1");
         } else {
             panic!("RF message should be a String");
         }
@@ -1298,17 +1301,12 @@ mod tests {
         assert_eq!(rf_msgs.len(), 1, "LOCK button should publish RF message");
 
         if let SignalValue::String(payload) = &rf_msgs[0].1 {
-            assert!(
-                payload.starts_with("LOCK:"),
-                "payload should start with LOCK: {payload}"
-            );
-            // After "LOCK:" should be 32 hex chars (16 bytes encrypted)
-            let hex_part = &payload[5..];
-            assert_eq!(
-                hex_part.len(),
-                32,
-                "encrypted rolling code should be 32 hex chars"
-            );
+            // New format: 32-char hex string (16-byte on-air RF message)
+            assert_eq!(payload.len(), 32, "RF payload must be 32 hex chars: {payload}");
+            let msg = device::RfMessage::from_hex(payload)
+                .expect("should decode RF message");
+            assert_eq!(msg.action, FobButton::Lock, "action must be LOCK");
+            assert_eq!(msg.rolling_code, 1, "first press rolling_code = 1");
         }
 
         handle.abort();
@@ -1351,10 +1349,12 @@ mod tests {
             assert_eq!(rf_msgs.len(), 1, "{action} should publish RF message");
 
             if let SignalValue::String(payload) = &rf_msgs[0].1 {
-                assert!(
-                    payload.starts_with(&format!("{action}:")),
-                    "payload should start with {action}: got {payload}"
-                );
+                assert_eq!(payload.len(), 32, "{action}: payload must be 32 hex chars: {payload}");
+                let msg = device::RfMessage::from_hex(payload)
+                    .expect("should decode RF message");
+                let expected_btn = FobButton::from_str_value(action)
+                    .expect("action must be valid");
+                assert_eq!(msg.action, expected_btn, "decoded action must match {action}");
             }
         }
 
@@ -1411,16 +1411,23 @@ mod tests {
             "rolling code should differ between presses"
         );
 
-        // Verify each payload decrypts to the expected counter
+        // Verify each payload decodes correctly and has the right rolling code + valid MAC
         for (i, payload) in payloads.iter().enumerate() {
-            let hex_part = &payload[5..]; // skip "LOCK:"
-            let encrypted = hex_to_bytes(hex_part);
-            let expected_encrypted = crypto::encrypt_rolling_code(&fob1_secret, (i + 1) as u32);
+            assert_eq!(payload.len(), 32, "press {}: payload must be 32 hex chars", i + 1);
+            let msg = device::RfMessage::from_hex(payload)
+                .unwrap_or_else(|| panic!("press {}: should decode RF message", i + 1));
             assert_eq!(
-                encrypted.as_slice(),
-                &expected_encrypted,
-                "press {} should encrypt counter {}",
-                i + 1,
+                msg.rolling_code,
+                (i + 1) as u32,
+                "press {} should have rolling_code {}",
+                i + 1, i + 1
+            );
+            assert_eq!(msg.action, FobButton::Lock);
+            // Verify MAC using the known secret
+            let mac_payload = device::build_mac_payload(msg.fob_id, msg.action, msg.rolling_code);
+            assert!(
+                crypto::aes_cmac_verify(&fob1_secret, &mac_payload, &msg.mac),
+                "press {}: MAC must verify with fob1_secret",
                 i + 1
             );
         }
@@ -1495,7 +1502,10 @@ mod tests {
         );
 
         if let SignalValue::String(payload) = &rf_msgs[0].1 {
-            assert!(payload.starts_with("PANIC_ALARM:"));
+            assert_eq!(payload.len(), 32, "RF payload must be 32 hex chars: {payload}");
+            let msg = device::RfMessage::from_hex(payload)
+                .expect("should decode RF message");
+            assert_eq!(msg.action, FobButton::PanicAlarm);
         }
 
         handle.abort();

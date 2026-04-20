@@ -7,9 +7,13 @@
 //!   LF (or BLE / NFC); the device encrypts it with the shared secret and
 //!   returns the ciphertext. The vehicle-side feature logic verifies.
 //!
-//! - **Rolling code:** RF fob button presses include an encrypted rolling
-//!   code counter. The plant model increments and encrypts; the vehicle-side
-//!   RKE feature logic handles validation and resync windowing.
+//! - **AES-CMAC (RFC 4493):** RF messages are authenticated with a truncated
+//!   AES-CMAC tag. The plant model generates the MAC; the vehicle-side RKE
+//!   feature logic verifies it before acting on the command.
+//!
+//! - **Rolling code:** RF fob button presses include an unencrypted rolling
+//!   code counter plus a MAC covering fob_id + action + counter. The vehicle-
+//!   side RKE feature logic handles validation and resync windowing.
 //!
 //! This module uses software AES-128-ECB for simulation. In a real system
 //! the key fob has a hardware AES engine and the vehicle uses an HSM.
@@ -46,6 +50,146 @@ pub fn encrypt_rolling_code(key: &SharedSecret, counter: u32) -> [u8; 16] {
     let mut block = [0u8; 16];
     block[0..4].copy_from_slice(&counter.to_le_bytes());
     aes128_encrypt_block(key, &block)
+}
+
+/// Truncated AES-CMAC tag length used in RF messages (7 bytes = 56 bits).
+///
+/// 56 bits provides adequate security for short-range RF with a rolling code;
+/// accepted by the RKE receiver provided the rolling code and fob ID also match.
+pub const RF_MAC_LEN: usize = 7;
+
+/// Truncated AES-CMAC tag for an RF message.
+pub type RfMac = [u8; RF_MAC_LEN];
+
+/// Compute AES-CMAC (RFC 4493) over `message` using `key`, then truncate to
+/// `RF_MAC_LEN` bytes.
+///
+/// The CMAC covers the full RF message payload — fob ID, action byte, and
+/// rolling code — so the MAC binds all three fields together.
+///
+/// # Algorithm (RFC 4493 §2.4)
+/// 1. Derive subkeys K1, K2 from AES(key, 0^128).
+/// 2. Split message into 16-byte blocks; pad last block if needed.
+/// 3. XOR last block with K1 (complete) or K2 (padded).
+/// 4. CBC-MAC: X₀ = 0^128, Xᵢ = AES(key, Xᵢ₋₁ ⊕ Mᵢ).
+/// 5. Return first `RF_MAC_LEN` bytes of the final block.
+pub fn aes_cmac_truncated(key: &SharedSecret, message: &[u8]) -> RfMac {
+    let (k1, k2) = cmac_generate_subkeys(key);
+
+    // Split message into 16-byte blocks.
+    let msg_len = message.len();
+    let (n, last_complete) = if msg_len == 0 {
+        (1usize, false)
+    } else {
+        let n = msg_len.div_ceil(16);
+        let last_complete = msg_len.is_multiple_of(16);
+        (n, last_complete)
+    };
+
+    // Build the (potentially padded) last block.
+    let mut last_block = [0u8; 16];
+    if msg_len == 0 {
+        // Empty message: pad with 0x80 00 .. 00 and use K2.
+        last_block[0] = 0x80;
+    } else {
+        let last_start = (n - 1) * 16;
+        let last_bytes = &message[last_start..];
+        last_block[..last_bytes.len()].copy_from_slice(last_bytes);
+        if !last_complete {
+            // Apply ISO/IEC 7816-4 padding: append 0x80 after the last data byte.
+            last_block[last_bytes.len()] = 0x80;
+        }
+    }
+
+    // XOR last block with appropriate subkey.
+    let subkey = if last_complete { &k1 } else { &k2 };
+    for i in 0..16 {
+        last_block[i] ^= subkey[i];
+    }
+
+    // CBC-MAC over blocks 0..n-1 using last_block as block n-1.
+    let round_keys = aes128_key_expansion(key);
+    let mut x = [0u8; 16];
+
+    // All blocks except the last.
+    for block_idx in 0..n.saturating_sub(1) {
+        let start = block_idx * 16;
+        let end = start + 16;
+        let block = &message[start..end];
+        for i in 0..16 {
+            x[i] ^= block[i];
+        }
+        aes128_encrypt_state(&mut x, &round_keys);
+    }
+
+    // Final block.
+    for i in 0..16 {
+        x[i] ^= last_block[i];
+    }
+    aes128_encrypt_state(&mut x, &round_keys);
+
+    // Truncate to RF_MAC_LEN.
+    let mut tag = [0u8; RF_MAC_LEN];
+    tag.copy_from_slice(&x[..RF_MAC_LEN]);
+    tag
+}
+
+/// Verify an AES-CMAC tag (constant-time byte comparison).
+///
+/// Returns `true` if the provided `tag` matches the MAC computed over
+/// `message` with `key`.
+pub fn aes_cmac_verify(key: &SharedSecret, message: &[u8], tag: &RfMac) -> bool {
+    let expected = aes_cmac_truncated(key, message);
+    // Constant-time comparison to resist timing attacks.
+    let mut diff = 0u8;
+    for i in 0..RF_MAC_LEN {
+        diff |= expected[i] ^ tag[i];
+    }
+    diff == 0
+}
+
+/// Derive CMAC subkeys K1 and K2 from the cipher key (RFC 4493 §2.3).
+fn cmac_generate_subkeys(key: &SharedSecret) -> ([u8; 16], [u8; 16]) {
+    // L = AES(key, 0^128)
+    let round_keys = aes128_key_expansion(key);
+    let mut l = [0u8; 16];
+    aes128_encrypt_state(&mut l, &round_keys);
+
+    // Rb for AES-128: 0x00..00 0x87
+    const RB: u8 = 0x87;
+
+    // K1 = (MSB(L) == 0) ? L << 1 : (L << 1) XOR Rb
+    let k1 = {
+        let msb = l[0] & 0x80;
+        let mut k = left_shift_one(&l);
+        if msb != 0 {
+            k[15] ^= RB;
+        }
+        k
+    };
+
+    // K2 = (MSB(K1) == 0) ? K1 << 1 : (K1 << 1) XOR Rb
+    let k2 = {
+        let msb = k1[0] & 0x80;
+        let mut k = left_shift_one(&k1);
+        if msb != 0 {
+            k[15] ^= RB;
+        }
+        k
+    };
+
+    (k1, k2)
+}
+
+/// Left-shift a 16-byte block by one bit (MSB first).
+fn left_shift_one(block: &[u8; 16]) -> [u8; 16] {
+    let mut out = [0u8; 16];
+    let mut carry = 0u8;
+    for i in (0..16).rev() {
+        out[i] = (block[i] << 1) | carry;
+        carry = (block[i] >> 7) & 1;
+    }
+    out
 }
 
 /// Generate a random 128-bit nonce (for challenges).
@@ -267,4 +411,203 @@ mod tests {
         // Very unlikely all zeros from random
         assert!(n.iter().any(|&b| b != 0), "nonce should not be all zeros");
     }
+
+    // -----------------------------------------------------------------------
+    // AES-CMAC tests (RFC 4493 §D test vectors)
+    // -----------------------------------------------------------------------
+    // Key used by all RFC 4493 test cases:
+    // 2b7e1516 28aed2a6 abf71588 09cf4f3c
+    fn rfc4493_key() -> SharedSecret {
+        [
+            0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6,
+            0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c,
+        ]
+    }
+
+    /// RFC 4493 §D Example 1: empty message.
+    /// Full CMAC (16 bytes) = bb1d6929 e9593728 7fa37d12 9b756746
+    #[test]
+    fn cmac_rfc4493_example1_empty() {
+        let key = rfc4493_key();
+        let full_mac = aes_cmac_full(&key, &[]);
+        let expected: [u8; 16] = [
+            0xbb, 0x1d, 0x69, 0x29, 0xe9, 0x59, 0x37, 0x28,
+            0x7f, 0xa3, 0x7d, 0x12, 0x9b, 0x75, 0x67, 0x46,
+        ];
+        assert_eq!(full_mac, expected, "RFC 4493 Example 1 (empty message) failed");
+    }
+
+    /// RFC 4493 §D Example 2: 16-byte message.
+    /// Message = 6bc1bee2 2e409f96 e93d7e11 7393172a
+    /// Full CMAC = 070a16b4 6b4d4144 f79bdd9d d04a287c
+    #[test]
+    fn cmac_rfc4493_example2_one_block() {
+        let key = rfc4493_key();
+        let msg: [u8; 16] = [
+            0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96,
+            0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a,
+        ];
+        let full_mac = aes_cmac_full(&key, &msg);
+        let expected: [u8; 16] = [
+            0x07, 0x0a, 0x16, 0xb4, 0x6b, 0x4d, 0x41, 0x44,
+            0xf7, 0x9b, 0xdd, 0x9d, 0xd0, 0x4a, 0x28, 0x7c,
+        ];
+        assert_eq!(full_mac, expected, "RFC 4493 Example 2 (16-byte message) failed");
+    }
+
+    /// RFC 4493 §D Example 3: 40-byte message (2.5 blocks).
+    /// Message = 6bc1bee2 2e409f96 e93d7e11 7393172a
+    ///           ae2d8a57 1e03ac9c 9eb76fac 45af8e51
+    ///           30c81c46 a35ce411
+    /// Full CMAC = dfa66747 de9ae630 30ca3261 1497c827
+    #[test]
+    fn cmac_rfc4493_example3_partial_last_block() {
+        let key = rfc4493_key();
+        let msg: [u8; 40] = [
+            0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96,
+            0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a,
+            0xae, 0x2d, 0x8a, 0x57, 0x1e, 0x03, 0xac, 0x9c,
+            0x9e, 0xb7, 0x6f, 0xac, 0x45, 0xaf, 0x8e, 0x51,
+            0x30, 0xc8, 0x1c, 0x46, 0xa3, 0x5c, 0xe4, 0x11,
+        ];
+        let full_mac = aes_cmac_full(&key, &msg);
+        let expected: [u8; 16] = [
+            0xdf, 0xa6, 0x67, 0x47, 0xde, 0x9a, 0xe6, 0x30,
+            0x30, 0xca, 0x32, 0x61, 0x14, 0x97, 0xc8, 0x27,
+        ];
+        assert_eq!(full_mac, expected, "RFC 4493 Example 3 (40-byte message) failed");
+    }
+
+    /// RFC 4493 §D Example 4: 64-byte message (exactly 4 blocks).
+    /// Full CMAC = 51f0bebf 7e3b9d92 fc497417 79363cfe
+    #[test]
+    fn cmac_rfc4493_example4_four_blocks() {
+        let key = rfc4493_key();
+        let msg: [u8; 64] = [
+            0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96,
+            0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a,
+            0xae, 0x2d, 0x8a, 0x57, 0x1e, 0x03, 0xac, 0x9c,
+            0x9e, 0xb7, 0x6f, 0xac, 0x45, 0xaf, 0x8e, 0x51,
+            0x30, 0xc8, 0x1c, 0x46, 0xa3, 0x5c, 0xe4, 0x11,
+            0xe5, 0xfb, 0xc1, 0x19, 0x1a, 0x0a, 0x52, 0xef,
+            0xf6, 0x9f, 0x24, 0x45, 0xdf, 0x4f, 0x9b, 0x17,
+            0xad, 0x2b, 0x41, 0x7b, 0xe6, 0x6c, 0x37, 0x10,
+        ];
+        let full_mac = aes_cmac_full(&key, &msg);
+        let expected: [u8; 16] = [
+            0x51, 0xf0, 0xbe, 0xbf, 0x7e, 0x3b, 0x9d, 0x92,
+            0xfc, 0x49, 0x74, 0x17, 0x79, 0x36, 0x3c, 0xfe,
+        ];
+        assert_eq!(full_mac, expected, "RFC 4493 Example 4 (64-byte message) failed");
+    }
+
+    /// Truncated CMAC: first 7 bytes of example 4 must match.
+    #[test]
+    fn cmac_truncated_matches_full_prefix() {
+        let key = rfc4493_key();
+        let msg: [u8; 64] = [
+            0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96,
+            0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a,
+            0xae, 0x2d, 0x8a, 0x57, 0x1e, 0x03, 0xac, 0x9c,
+            0x9e, 0xb7, 0x6f, 0xac, 0x45, 0xaf, 0x8e, 0x51,
+            0x30, 0xc8, 0x1c, 0x46, 0xa3, 0x5c, 0xe4, 0x11,
+            0xe5, 0xfb, 0xc1, 0x19, 0x1a, 0x0a, 0x52, 0xef,
+            0xf6, 0x9f, 0x24, 0x45, 0xdf, 0x4f, 0x9b, 0x17,
+            0xad, 0x2b, 0x41, 0x7b, 0xe6, 0x6c, 0x37, 0x10,
+        ];
+        let full = aes_cmac_full(&key, &msg);
+        let truncated = aes_cmac_truncated(&key, &msg);
+        assert_eq!(
+            truncated,
+            full[..RF_MAC_LEN],
+            "truncated CMAC must be the first RF_MAC_LEN bytes of the full CMAC"
+        );
+    }
+
+    /// Verify: correct tag passes, flipped bit fails.
+    #[test]
+    fn cmac_verify_accept_reject() {
+        let key = rfc4493_key();
+        let msg = b"fob0001\x02\x00\x00\x04\x00"; // sample RF payload
+        let tag = aes_cmac_truncated(&key, msg);
+        assert!(aes_cmac_verify(&key, msg, &tag), "valid tag must verify");
+
+        let mut bad_tag = tag;
+        bad_tag[3] ^= 0x01;
+        assert!(
+            !aes_cmac_verify(&key, msg, &bad_tag),
+            "tampered tag must not verify"
+        );
+    }
+
+    /// Different keys produce different MACs.
+    #[test]
+    fn cmac_key_sensitivity() {
+        let key_a: SharedSecret = [0x01; 16];
+        let key_b: SharedSecret = [0x02; 16];
+        let msg = b"same message";
+        let mac_a = aes_cmac_truncated(&key_a, msg);
+        let mac_b = aes_cmac_truncated(&key_b, msg);
+        assert_ne!(mac_a, mac_b, "different keys must produce different MACs");
+    }
+
+    /// Different messages produce different MACs (same key).
+    #[test]
+    fn cmac_message_sensitivity() {
+        let key = rfc4493_key();
+        let mac_a = aes_cmac_truncated(&key, b"message one");
+        let mac_b = aes_cmac_truncated(&key, b"message two");
+        assert_ne!(mac_a, mac_b, "different messages must produce different MACs");
+    }
+}
+
+// Helper exposed only for tests: full 16-byte AES-CMAC (no truncation).
+#[cfg(test)]
+fn aes_cmac_full(key: &SharedSecret, message: &[u8]) -> [u8; 16] {
+    let (k1, k2) = cmac_generate_subkeys(key);
+
+    let msg_len = message.len();
+    let (n, last_complete) = if msg_len == 0 {
+        (1usize, false)
+    } else {
+        let n = msg_len.div_ceil(16);
+        let last_complete = msg_len.is_multiple_of(16);
+        (n, last_complete)
+    };
+
+    let mut last_block = [0u8; 16];
+    if msg_len == 0 {
+        last_block[0] = 0x80;
+    } else {
+        let last_start = (n - 1) * 16;
+        let last_bytes = &message[last_start..];
+        last_block[..last_bytes.len()].copy_from_slice(last_bytes);
+        if !last_complete {
+            last_block[last_bytes.len()] = 0x80;
+        }
+    }
+
+    let subkey = if last_complete { &k1 } else { &k2 };
+    for i in 0..16 {
+        last_block[i] ^= subkey[i];
+    }
+
+    let round_keys = aes128_key_expansion(key);
+    let mut x = [0u8; 16];
+
+    for block_idx in 0..n.saturating_sub(1) {
+        let start = block_idx * 16;
+        let end = start + 16;
+        let block = &message[start..end];
+        for i in 0..16 {
+            x[i] ^= block[i];
+        }
+        aes128_encrypt_state(&mut x, &round_keys);
+    }
+
+    for i in 0..16 {
+        x[i] ^= last_block[i];
+    }
+    aes128_encrypt_state(&mut x, &round_keys);
+    x
 }
