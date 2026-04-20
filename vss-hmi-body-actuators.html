@@ -1352,7 +1352,7 @@ function App(){
     }
   },[useMockFallback]);
 
-  const activeCount=Object.values(s).filter(v=>v===true||(typeof v==='string'&&v!=='OFF'&&!v.includes('#')&&!['FULL_LATCHED','DASHBOARD'].includes(v))).length;
+  const activeCount=Object.values(s).filter(v=>v===true||(typeof v==='string'&&v!=='OFF'&&v!==''&&!v.includes('#')&&!['FULL_LATCHED','DASHBOARD','OutOfRange','NotPresent','NONE','COMBUSTION'].includes(v))).length;
 
   const views=[
     {id:'top',label:'TOP',icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="8" y="2" width="8" height="20" rx="3"/><rect x="4" y="6" width="4" height="12" rx="2" opacity=".5"/><rect x="16" y="6" width="4" height="12" rx="2" opacity=".5"/><rect x="6" y="15" width="3" height="5" rx="1" opacity=".4"/><rect x="15" y="15" width="3" height="5" rx="1" opacity=".4"/></svg>},
