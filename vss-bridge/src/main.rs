@@ -50,7 +50,7 @@ async fn main() -> anyhow::Result<()> {
 
     // ── Domain Arbiters ─────────────────────────────────────────────
     let (lighting_arb, lighting_fut) = arbiter::lighting_arbiter(Arc::clone(&bus));
-    let (door_lock_arb, _door_lock_ack_tx, door_lock_fut) =
+    let (door_lock_arb, door_lock_ack_tx, door_lock_fut) =
         arbiter::door_lock_arbiter(Arc::clone(&bus));
     let (_horn_arb, horn_fut) = arbiter::horn_arbiter(Arc::clone(&bus));
     let (_comfort_arb, comfort_fut) = arbiter::comfort_arbiter(Arc::clone(&bus));
@@ -117,7 +117,7 @@ async fn main() -> anyhow::Result<()> {
     // would normally provide. Plant models bypass the arbiter and
     // publish feedback signals (lamp on/off, defects) directly.
     tokio::spawn(BlinkRelay::new(Arc::clone(&bus)).run());
-    tokio::spawn(DoorLockPlantModel::new(Arc::clone(&bus)).run());
+    tokio::spawn(DoorLockPlantModel::with_ack_tx(Arc::clone(&bus), door_lock_ack_tx).run());
     tokio::spawn(PepsPlantModel::new(Arc::clone(&bus)).run());
     tracing::info!("plant models spawned: BlinkRelay, DoorLockPlantModel, PepsPlantModel");
 

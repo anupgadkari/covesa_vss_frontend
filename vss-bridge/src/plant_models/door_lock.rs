@@ -37,8 +37,9 @@ use std::sync::Arc;
 
 use futures::StreamExt;
 use tokio::select;
+use tokio::sync::mpsc;
 
-use crate::arbiter::{DOOR_DOUBLE_LOCK_CMD_SIGNALS, DOOR_LOCK_CMD_SIGNALS};
+use crate::arbiter::{LockAck, DOOR_DOUBLE_LOCK_CMD_SIGNALS, DOOR_LOCK_CMD_SIGNALS};
 use crate::ipc_message::SignalValue;
 use crate::signal_bus::SignalBus;
 
@@ -65,20 +66,66 @@ const ROW2_LEFT: usize = 2;
 const ROW2_RIGHT: usize = 3;
 
 /// Door lock plant model. Spawn with `.run()`.
+///
+/// In production the M7 Classic AUTOSAR Locking SWC sends a `LockAck`
+/// after the door motors finish actuating (~300 ms). This plant model
+/// simulates that: it sends a `LockAck` after processing each command
+/// signal so the `DoorLockArbiter` queue doesn't stall.
+///
+/// Use [`DoorLockPlantModel::new`] in tests (no-ack mode) and
+/// [`DoorLockPlantModel::with_ack_tx`] in `main` (wired to the arbiter).
 pub struct DoorLockPlantModel<B: SignalBus> {
     bus: Arc<B>,
+    /// Optional ACK channel back to the DoorLockArbiter.
+    /// If `None`, no ACKs are sent (test / standalone mode).
+    ack_tx: Option<mpsc::Sender<LockAck>>,
     /// Confirmed locked state per door.
     locked: [bool; 4],
     /// Confirmed double-locked state per door.
     double_locked: [bool; 4],
+    /// Monotonic counter for LockAck event numbers.
+    event_number: u32,
 }
 
 impl<B: SignalBus + Send + Sync + 'static> DoorLockPlantModel<B> {
+    /// Create in standalone / test mode — no ACKs sent to any arbiter.
     pub fn new(bus: Arc<B>) -> Self {
         Self {
             bus,
+            ack_tx: None,
             locked: [false; 4],
             double_locked: [false; 4],
+            event_number: 0,
+        }
+    }
+
+    /// Create wired to the `DoorLockArbiter`'s ACK channel.
+    ///
+    /// Pass the `mpsc::Sender<LockAck>` returned by `door_lock_arbiter()`.
+    /// The plant model will send one `LockAck` after processing each command
+    /// signal, allowing the arbiter to dequeue and dispatch the next pending
+    /// request.
+    pub fn with_ack_tx(bus: Arc<B>, ack_tx: mpsc::Sender<LockAck>) -> Self {
+        Self {
+            bus,
+            ack_tx: Some(ack_tx),
+            locked: [false; 4],
+            double_locked: [false; 4],
+            event_number: 0,
+        }
+    }
+
+    /// Send a `LockAck` to the arbiter (no-op if no ACK channel configured).
+    async fn send_ack(&mut self) {
+        if let Some(tx) = &self.ack_tx {
+            self.event_number = self.event_number.wrapping_add(1);
+            let ack = LockAck {
+                event_number: self.event_number,
+                door_results: [true; 4],
+            };
+            if tx.send(ack).await.is_err() {
+                tracing::warn!("DoorLock plant: ACK channel closed — arbiter may be gone");
+            }
         }
     }
 
@@ -193,41 +240,49 @@ impl<B: SignalBus + Send + Sync + 'static> DoorLockPlantModel<B> {
                 Some(val) = lc0.next() => {
                     if let Some(b) = Self::to_bool(&val) {
                         self.apply_lock_cmd(ROW1_LEFT, b).await;
+                        self.send_ack().await;
                     }
                 }
                 Some(val) = lc1.next() => {
                     if let Some(b) = Self::to_bool(&val) {
                         self.apply_lock_cmd(ROW1_RIGHT, b).await;
+                        self.send_ack().await;
                     }
                 }
                 Some(val) = lc2.next() => {
                     if let Some(b) = Self::to_bool(&val) {
                         self.apply_lock_cmd(ROW2_LEFT, b).await;
+                        self.send_ack().await;
                     }
                 }
                 Some(val) = lc3.next() => {
                     if let Some(b) = Self::to_bool(&val) {
                         self.apply_lock_cmd(ROW2_RIGHT, b).await;
+                        self.send_ack().await;
                     }
                 }
                 Some(val) = dlc0.next() => {
                     if let Some(b) = Self::to_bool(&val) {
                         self.apply_double_lock_cmd(ROW1_LEFT, b).await;
+                        self.send_ack().await;
                     }
                 }
                 Some(val) = dlc1.next() => {
                     if let Some(b) = Self::to_bool(&val) {
                         self.apply_double_lock_cmd(ROW1_RIGHT, b).await;
+                        self.send_ack().await;
                     }
                 }
                 Some(val) = dlc2.next() => {
                     if let Some(b) = Self::to_bool(&val) {
                         self.apply_double_lock_cmd(ROW2_LEFT, b).await;
+                        self.send_ack().await;
                     }
                 }
                 Some(val) = dlc3.next() => {
                     if let Some(b) = Self::to_bool(&val) {
                         self.apply_double_lock_cmd(ROW2_RIGHT, b).await;
+                        self.send_ack().await;
                     }
                 }
             }
