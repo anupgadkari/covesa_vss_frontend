@@ -11,6 +11,7 @@ use vss_bridge::adapters::mock::MockBus;
 use vss_bridge::arbiter;
 use vss_bridge::config;
 use vss_bridge::features::hazard_lighting::HazardLighting;
+use vss_bridge::features::rke::{PairedFob, RkeFeature};
 use vss_bridge::features::turn_indicator::TurnIndicator;
 use vss_bridge::ipc_message::SignalValue;
 use vss_bridge::kuksa_sync;
@@ -48,7 +49,7 @@ async fn main() -> anyhow::Result<()> {
 
     // ── Domain Arbiters ─────────────────────────────────────────────
     let (lighting_arb, lighting_fut) = arbiter::lighting_arbiter(Arc::clone(&bus));
-    let (_door_lock_arb, _door_lock_ack_tx, door_lock_fut) =
+    let (door_lock_arb, _door_lock_ack_tx, door_lock_fut) =
         arbiter::door_lock_arbiter(Arc::clone(&bus));
     let (_horn_arb, horn_fut) = arbiter::horn_arbiter(Arc::clone(&bus));
     let (_comfort_arb, comfort_fut) = arbiter::comfort_arbiter(Arc::clone(&bus));
@@ -59,6 +60,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(comfort_fut);
 
     let lighting_arb = Arc::new(lighting_arb);
+    let door_lock_arb = Arc::new(door_lock_arb);
 
     // ── Feature Business Logic ──────────────────────────────────────
     // HazardLighting — no ignition gate, works in any power state
@@ -74,10 +76,40 @@ async fn main() -> anyhow::Result<()> {
         .run(),
     );
 
-    // TODO: remaining features
-    // tokio::spawn(AutoRelock::from_config(Arc::clone(&_door_lock_arb), Arc::clone(&bus), &_platform_config).run());
+    // RKE — Remote Keyless Entry.
+    // Provisioned fob secrets must match the PEPS plant model's default_secret().
+    // In production these come from key provisioning (not hard-coded here).
+    let rke_fobs: Vec<PairedFob> = (1u8..=4)
+        .map(|i| {
+            // Must match plant model's default_secret(device_type=0, index=i).
+            // Formula: key[0]=device_type, key[1]=index,
+            //          key[k] = device_type*17 + index*31 + k  (for k >= 2)
+            const DEVICE_TYPE: u8 = 0; // 0 = keyfob in the plant model
+            let mut key = [0u8; 16];
+            key[0] = DEVICE_TYPE;
+            key[1] = i;
+            for (k, byte) in key.iter_mut().enumerate().skip(2) {
+                *byte = (DEVICE_TYPE.wrapping_mul(17))
+                    .wrapping_add(i.wrapping_mul(31).wrapping_add(k as u8));
+            }
+            PairedFob::new(i as u32, key)
+        })
+        .collect();
 
-    tracing::info!("features spawned: HazardLighting, TurnIndicator");
+    tokio::spawn(
+        RkeFeature::new(
+            Arc::clone(&bus),
+            Arc::clone(&door_lock_arb),
+            Arc::clone(&_platform_config),
+            rke_fobs,
+        )
+        .run(),
+    );
+
+    // TODO: remaining features
+    // tokio::spawn(AutoRelock::from_config(Arc::clone(&door_lock_arb), Arc::clone(&bus), &_platform_config).run());
+
+    tracing::info!("features spawned: HazardLighting, TurnIndicator, RKE");
 
     // ── Plant Models ────────────────────────────────────────────────
     // Simulate physical lamp behavior the M7 / smart actuator firmware
