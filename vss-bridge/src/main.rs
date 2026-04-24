@@ -19,6 +19,7 @@ use vss_bridge::plant_models::blink_relay::BlinkRelay;
 use vss_bridge::plant_models::door_handle::DoorHandlePlantModel;
 use vss_bridge::plant_models::door_lock::DoorLockPlantModel;
 use vss_bridge::plant_models::peps::PepsPlantModel;
+use vss_bridge::plant_models::trunk::TrunkPlantModel;
 use vss_bridge::signal_bus::SignalBus;
 use vss_bridge::signal_ids;
 use vss_bridge::ws_bridge::WsBridge;
@@ -120,12 +121,13 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(BlinkRelay::new(Arc::clone(&bus)).run());
     tokio::spawn(DoorLockPlantModel::with_ack_tx(Arc::clone(&bus), door_lock_ack_tx).run());
     tokio::spawn(DoorHandlePlantModel::new(Arc::clone(&bus)).run());
+    tokio::spawn(TrunkPlantModel::new(Arc::clone(&bus)).run());
     tokio::spawn(PepsPlantModel::new(Arc::clone(&bus)).run());
-    tracing::info!("plant models spawned: BlinkRelay, DoorLockPlantModel, DoorHandlePlantModel, PepsPlantModel");
+    tracing::info!("plant models spawned: BlinkRelay, DoorLockPlantModel, DoorHandlePlantModel, TrunkPlantModel, PepsPlantModel");
 
     // ── WebSocket bridge for L6 HMI ─────────────────────────────────
     let ws_addr = "0.0.0.0:8080".parse()?;
-    let ws_bridge = WsBridge::new(ws_addr, Arc::clone(&bus));
+    let ws_bridge = WsBridge::new(ws_addr, Arc::clone(&bus), Arc::clone(&_platform_config));
     tokio::spawn(async move {
         if let Err(e) = ws_bridge.run().await {
             tracing::error!(error = %e, "WebSocket bridge failed");

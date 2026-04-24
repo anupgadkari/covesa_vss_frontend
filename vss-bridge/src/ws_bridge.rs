@@ -4,7 +4,9 @@
 //!
 //! Protocol (JSON):
 //!   HMI → bridge:  {"type":"sensor","path":"Body.Switches.Hazard.IsEngaged","value":true}
+//!   HMI → bridge:  {"type":"config_set","key":"dealer.two_stage_unlock","value":true}
 //!   bridge → HMI:  {"state":{"Body.Lights.DirectionIndicator.Left.IsSignaling":true,...}}
+//!   bridge → HMI:  {"config":{"dealer":{...},"variant":{...},"vehicle_line":{...}}}
 //!
 //! The bridge injects sensor values into the SignalBus (simulating physical
 //! switch inputs). It subscribes to output signals (actuator results from the
@@ -20,6 +22,7 @@ use tokio::sync::{broadcast, Mutex, Notify};
 use tokio::time::{sleep, Duration};
 use tokio_tungstenite::tungstenite::Message;
 
+use crate::config::PlatformConfig;
 use crate::ipc_message::SignalValue;
 use crate::signal_bus::{SignalBus, VssPath};
 
@@ -84,11 +87,15 @@ const INPUT_SIGNALS: &[VssPath] = &[
     "Body.Doors.Row1.Right.CloseCmd",
     "Body.Doors.Row2.Left.CloseCmd",
     "Body.Doors.Row2.Right.CloseCmd",
+    // Trunk close command — sent when user taps the open trunk in the HMI.
+    "Body.Trunk.CloseCmd",
     // Diagnostic overrides (DoorCard direct-write).
     "Body.Doors.Row1.Left.IsOpen",
     "Body.Doors.Row1.Right.IsOpen",
     "Body.Doors.Row2.Left.IsOpen",
     "Body.Doors.Row2.Right.IsOpen",
+    // Direct trunk open/close override (control panel and sensor page).
+    "Body.Trunk.IsOpen",
     "Body.Doors.Row1.Left.IsDoubleLocked",
     "Body.Doors.Row1.Right.IsDoubleLocked",
     "Body.Doors.Row2.Left.IsDoubleLocked",
@@ -111,6 +118,11 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     "Body.Doors.Row1.Right.IsDoubleLocked",
     "Body.Doors.Row2.Left.IsDoubleLocked",
     "Body.Doors.Row2.Right.IsDoubleLocked",
+    // Soldier knob state — mirrors central lock actuator (published by DoorLockPlantModel).
+    "Body.Doors.Row1.Left.Soldier.IsUnlocked",
+    "Body.Doors.Row1.Right.Soldier.IsUnlocked",
+    "Body.Doors.Row2.Left.Soldier.IsUnlocked",
+    "Body.Doors.Row2.Right.Soldier.IsUnlocked",
     // Door handle plant model outputs — ajar switch and latch state.
     "Body.Doors.Row1.Left.IsOpen",
     "Body.Doors.Row1.Right.IsOpen",
@@ -141,6 +153,8 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     "Body.PEPS.Plant.KeyFob.4.RfMessage",
     "Body.PEPS.Plant.BlePhone.1.RssiResponse",
     "Body.PEPS.Plant.BlePhone.2.RssiResponse",
+    // Trunk plant model output — open/close state driven by RKE or CloseCmd.
+    "Body.Trunk.IsOpen",
 ];
 
 /// Shared state snapshot sent to HMI clients.
@@ -149,11 +163,12 @@ type StateSnapshot = HashMap<&'static str, serde_json::Value>;
 pub struct WsBridge<B: SignalBus> {
     bus: Arc<B>,
     addr: SocketAddr,
+    platform_config: Arc<PlatformConfig>,
 }
 
 impl<B: SignalBus> WsBridge<B> {
-    pub fn new(addr: SocketAddr, bus: Arc<B>) -> Self {
-        Self { bus, addr }
+    pub fn new(addr: SocketAddr, bus: Arc<B>, platform_config: Arc<PlatformConfig>) -> Self {
+        Self { bus, addr, platform_config }
     }
 
     /// Run the WebSocket server. Spawns a background task that listens
@@ -216,6 +231,10 @@ impl<B: SignalBus> WsBridge<B> {
             });
         }
 
+        // Config broadcast channel — separate from signal-state so config HMI
+        // can subscribe without receiving every signal update.
+        let (config_tx, _) = broadcast::channel::<String>(32);
+
         // Accept connections
         loop {
             let (stream, peer) = listener.accept().await?;
@@ -224,10 +243,15 @@ impl<B: SignalBus> WsBridge<B> {
             let bus = Arc::clone(&self.bus);
             let output_state = Arc::clone(&output_state);
             let update_rx = update_tx.subscribe();
+            let config_rx = config_tx.subscribe();
+            let platform_config = Arc::clone(&self.platform_config);
+            let config_tx2 = config_tx.clone();
 
             tokio::spawn(async move {
-                if let Err(e) = handle_connection(stream, bus, output_state, update_rx, peer).await
-                {
+                if let Err(e) = handle_connection(
+                    stream, bus, output_state, update_rx,
+                    config_rx, config_tx2, platform_config, peer,
+                ).await {
                     tracing::warn!(%peer, error = %e, "HMI client disconnected");
                 }
             });
@@ -240,6 +264,9 @@ async fn handle_connection<B: SignalBus>(
     bus: Arc<B>,
     output_state: Arc<Mutex<StateSnapshot>>,
     mut update_rx: broadcast::Receiver<String>,
+    mut config_rx: broadcast::Receiver<String>,
+    config_tx: broadcast::Sender<String>,
+    platform_config: Arc<PlatformConfig>,
     peer: SocketAddr,
 ) -> anyhow::Result<()> {
     let ws_stream = tokio_tungstenite::accept_async(stream).await?;
@@ -247,7 +274,7 @@ async fn handle_connection<B: SignalBus>(
 
     tracing::info!(%peer, "HMI client connected");
 
-    // Send current output state immediately on connect.
+    // Send current signal state immediately on connect.
     {
         let snapshot = output_state.lock().await.clone();
         if !snapshot.is_empty() {
@@ -256,13 +283,34 @@ async fn handle_connection<B: SignalBus>(
         }
     }
 
+    // Send current config state immediately on connect.
+    {
+        let cfg_msg = build_config_msg(&platform_config);
+        ws_tx.send(Message::Text(cfg_msg.into())).await?;
+    }
+
     loop {
         tokio::select! {
-            // HMI → bridge: sensor input
+            // HMI → bridge: sensor or config input
             msg = ws_rx.next() => {
                 match msg {
                     Some(Ok(Message::Text(text))) => {
-                        handle_hmi_message(&text, &bus).await;
+                        let parsed: serde_json::Value = match serde_json::from_str(&text) {
+                            Ok(v) => v,
+                            Err(_) => { continue; }
+                        };
+                        match parsed.get("type").and_then(|v| v.as_str()) {
+                            Some("config_set") => {
+                                if handle_config_set(&parsed, &platform_config) {
+                                    // Broadcast updated config to all connected HMIs.
+                                    let cfg_msg = build_config_msg(&platform_config);
+                                    let _ = config_tx.send(cfg_msg);
+                                }
+                            }
+                            _ => {
+                                handle_hmi_message(&text, &bus).await;
+                            }
+                        }
                     }
                     Some(Ok(Message::Close(_))) | None => {
                         tracing::info!(%peer, "HMI client disconnected");
@@ -272,12 +320,18 @@ async fn handle_connection<B: SignalBus>(
                         tracing::warn!(%peer, error = %e, "WebSocket read error");
                         break;
                     }
-                    _ => {} // ping/pong/binary — ignore
+                    _ => {}
                 }
             }
-            // bridge → HMI: output state update
+            // bridge → HMI: signal state update
             Ok(json_str) = update_rx.recv() => {
                 if ws_tx.send(Message::Text(json_str.into())).await.is_err() {
+                    break;
+                }
+            }
+            // bridge → HMI: config update (triggered by another client or M7)
+            Ok(cfg_str) = config_rx.recv() => {
+                if ws_tx.send(Message::Text(cfg_str.into())).await.is_err() {
                     break;
                 }
             }
@@ -285,6 +339,101 @@ async fn handle_connection<B: SignalBus>(
     }
 
     Ok(())
+}
+
+/// Serialize current platform config into a `{"config":{...}}` JSON string.
+fn build_config_msg(cfg: &PlatformConfig) -> String {
+    let dealer = cfg.dealer_config();
+    let variant = cfg.variant_cal();
+    let vl = &cfg.vehicle_line;
+
+    let msg = serde_json::json!({
+        "config": {
+            "dealer": {
+                "auto_relock_enabled":        dealer.auto_relock_enabled,
+                "horn_chirp_on_lock":         dealer.horn_chirp_on_lock,
+                "courtesy_light_timeout_secs":dealer.courtesy_light_timeout_secs,
+                "remote_start_max_minutes":   dealer.remote_start_max_minutes,
+                "two_stage_unlock":           dealer.two_stage_unlock,
+                "driver_door_side":           format!("{:?}", dealer.driver_door_side),
+            },
+            "variant": {
+                "double_lock_enabled":  variant.double_lock_enabled,
+                "nfc_enabled":          variant.nfc_enabled,
+                "ble_key_enabled":      variant.ble_key_enabled,
+                "remote_lock_enabled":  variant.remote_lock_enabled,
+                "auto_lock_speed_kmh":  variant.auto_lock_speed_kmh,
+                "welcome_light_pattern":format!("{:?}", variant.welcome_light_pattern),
+                "doors_row2_left":      variant.doors.row2_left,
+                "doors_row2_right":     variant.doors.row2_right,
+                "doors_removable":      variant.doors.removable,
+            },
+            "vehicle_line": {
+                "auto_relock_timeout_secs":    vl.auto_relock_timeout_secs,
+                "lock_feedback_blink_count":   vl.lock_feedback_blink_count,
+                "lock_feedback_blink_period_ms":vl.lock_feedback_blink_period_ms,
+                "welcome_light_duration_secs": vl.welcome_light_duration_secs,
+                "lane_change_flash_count":     vl.lane_change_flash_count,
+                "shutdown_grace_secs":         vl.shutdown_grace_secs,
+            }
+        }
+    });
+    msg.to_string()
+}
+
+/// Apply a `config_set` message to PlatformConfig.
+/// Returns `true` if the config was changed (triggers broadcast).
+fn handle_config_set(msg: &serde_json::Value, cfg: &PlatformConfig) -> bool {
+    use crate::config::DriverDoorSide;
+
+    let key   = msg.get("key").and_then(|v| v.as_str()).unwrap_or("");
+    let value = match msg.get("value") { Some(v) => v, None => return false };
+
+    tracing::debug!(key, "config_set received");
+
+    // ── Dealer config ─────────────────────────────────────────────────────
+    let mut dealer = cfg.dealer_config();
+    let dealer_changed = match key {
+        "dealer.auto_relock_enabled"         => { if let Some(b) = value.as_bool() { dealer.auto_relock_enabled = b;               true } else { false } }
+        "dealer.horn_chirp_on_lock"          => { if let Some(b) = value.as_bool() { dealer.horn_chirp_on_lock = b;                true } else { false } }
+        "dealer.two_stage_unlock"            => { if let Some(b) = value.as_bool() { dealer.two_stage_unlock = b;                  true } else { false } }
+        "dealer.courtesy_light_timeout_secs" => { if let Some(n) = value.as_u64()  { dealer.courtesy_light_timeout_secs = n;       true } else { false } }
+        "dealer.remote_start_max_minutes"    => { if let Some(n) = value.as_u64()  { dealer.remote_start_max_minutes = n;          true } else { false } }
+        "dealer.driver_door_side" => {
+            dealer.driver_door_side = match value.as_str() {
+                Some("Right") => DriverDoorSide::Right,
+                _             => DriverDoorSide::Left,
+            }; true
+        }
+        _ => false,
+    };
+    if dealer_changed { cfg.update_dealer_config(dealer); return true; }
+
+    // ── Variant config ────────────────────────────────────────────────────
+    let mut variant = cfg.variant_cal();
+    let variant_changed = match key {
+        "variant.double_lock_enabled"  => { if let Some(b) = value.as_bool() { variant.double_lock_enabled = b;  true } else { false } }
+        "variant.nfc_enabled"          => { if let Some(b) = value.as_bool() { variant.nfc_enabled = b;          true } else { false } }
+        "variant.ble_key_enabled"      => { if let Some(b) = value.as_bool() { variant.ble_key_enabled = b;      true } else { false } }
+        "variant.remote_lock_enabled"  => { if let Some(b) = value.as_bool() { variant.remote_lock_enabled = b;  true } else { false } }
+        "variant.auto_lock_speed_kmh"  => { if let Some(n) = value.as_u64()  { variant.auto_lock_speed_kmh = n as u16; true } else { false } }
+        "variant.doors_row2_left"      => { if let Some(b) = value.as_bool() { variant.doors.row2_left = b;      true } else { false } }
+        "variant.doors_row2_right"     => { if let Some(b) = value.as_bool() { variant.doors.row2_right = b;     true } else { false } }
+        "variant.doors_removable"      => { if let Some(b) = value.as_bool() { variant.doors.removable = b;      true } else { false } }
+        "variant.welcome_light_pattern" => {
+            use crate::config::WelcomeLightPattern;
+            variant.welcome_light_pattern = match value.as_str() {
+                Some("Sequential") => WelcomeLightPattern::Sequential,
+                Some("Disabled")   => WelcomeLightPattern::Disabled,
+                _                  => WelcomeLightPattern::Simple,
+            }; true
+        }
+        _ => false,
+    };
+    if variant_changed { cfg.update_variant_cal(variant); return true; }
+
+    tracing::warn!(key, "config_set: unknown key");
+    false
 }
 
 /// Parse an HMI sensor message and inject into the SignalBus.

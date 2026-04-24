@@ -156,10 +156,10 @@ const INIT_STATE={
   'Body.Doors.Row1.Right.IsOpen':false,
   'Body.Doors.Row2.Left.IsOpen':false,
   'Body.Doors.Row2.Right.IsOpen':false,
-  'Body.Doors.Row1.Left.IsLocked':true,
-  'Body.Doors.Row1.Right.IsLocked':true,
-  'Body.Doors.Row2.Left.IsLocked':true,
-  'Body.Doors.Row2.Right.IsLocked':true,
+  'Body.Doors.Row1.Left.Soldier.IsUnlocked':false,
+  'Body.Doors.Row1.Right.Soldier.IsUnlocked':false,
+  'Body.Doors.Row2.Left.Soldier.IsUnlocked':false,
+  'Body.Doors.Row2.Right.Soldier.IsUnlocked':false,
   'Body.Doors.Row1.Left.LatchStatus':'FULL_LATCHED',
   'Body.Doors.Row1.Right.LatchStatus':'FULL_LATCHED',
   'Body.Doors.Row2.Left.LatchStatus':'FULL_LATCHED',
@@ -179,7 +179,7 @@ function App(){
   const wsRef=useRef(null);
 
   useEffect(()=>{
-    const url=`ws://${window.location.hostname}:8080`;
+    const url=`ws://${window.location.hostname||'localhost'}:8080`;
     const ws=new WebSocket(url);
     ws.onopen=()=>{
       console.log('✓ WebSocket connected');
@@ -579,9 +579,9 @@ function App(){
                 <div className="control-label">{d.name} Locked</div>
                 <div style={{flex:1}}/>
                 <div className="tog"
-                  onClick={()=>set(`${d.key}.IsLocked`,!state[`${d.key}.IsLocked`])}
-                  style={state[`${d.key}.IsLocked`]?{borderColor:'#F59E0B',background:'rgba(245,158,11,.15)'}:{}}>
-                  <div className="knob" style={state[`${d.key}.IsLocked`]?{transform:'translateX(20px)',background:'#F59E0B'}:{}}/>
+                  onClick={()=>set(`${d.key}.Soldier.IsUnlocked`,!state[`${d.key}.Soldier.IsUnlocked`])}
+                  style={!state[`${d.key}.Soldier.IsUnlocked`]?{borderColor:'#F59E0B',background:'rgba(245,158,11,.15)'}:{}}>
+                  <div className="knob" style={!state[`${d.key}.Soldier.IsUnlocked`]?{transform:'translateX(20px)',background:'#F59E0B'}:{}}/>
                 </div>
               </div>
               <div className="control" style={{marginBottom:'12px'}}>

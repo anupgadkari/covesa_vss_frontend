@@ -338,11 +338,20 @@ pub fn lighting_arbiter<B: SignalBus>(
 // ---------------------------------------------------------------------------
 
 /// Lock command type — what the feature is requesting.
+///
+/// These map directly to the four high-level intents sent to the
+/// Classic AUTOSAR Locking SWC (M7).  The plant model / SWC owns all
+/// per-door actuator logic from here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LockCommand {
-    Unlock,
-    Lock,
-    DoubleLock,
+    /// Unlock the driver door only (two-stage unlock, stage 1).
+    UnlockDriver,
+    /// Unlock all doors (normal unlock or two-stage stage 2).
+    UnlockAll,
+    /// Lock all doors.
+    LockAll,
+    /// Superlock (double-lock) all doors.
+    DoubleLockAll,
 }
 
 /// A door-lock request submitted by a feature module.
@@ -557,53 +566,24 @@ async fn door_lock_loop<B: SignalBus>(
     tracing::info!("DoorLock arbiter loop ended");
 }
 
-/// Lock command signals written by the arbiter (intent / command to M7 actuator SWC).
+/// Single command signal written by the arbiter to the M7 Locking SWC.
 ///
-/// These are analogous to `Body.Lights.*.IsSignaling` in the lighting domain:
-/// the arbiter publishes what it *wants* the actuator to do; the
-/// `DoorLockPlantModel` (M7 actuator simulator) reads these and publishes
-/// the confirmed `IsLocked` / `IsDoubleLocked` state back.
-pub const DOOR_LOCK_CMD_SIGNALS: [VssPath; 4] = [
-    "Body.Doors.Row1.Left.LockCmd",
-    "Body.Doors.Row1.Right.LockCmd",
-    "Body.Doors.Row2.Left.LockCmd",
-    "Body.Doors.Row2.Right.LockCmd",
-];
+/// The value is one of: `"unlock_driver"`, `"unlock_all"`, `"lock_all"`, `"lock_double"`.
+/// The `DoorLockPlantModel` (M7 actuator simulator) subscribes to this signal
+/// and handles all per-door state updates — `IsLocked`, `IsDoubleLocked`,
+/// `Soldier.IsUnlocked` — from here.
+pub const CENTRAL_LOCK_CMD: VssPath = "Body.Doors.CentralLock.Command";
 
-/// Double-lock command signals (superlock engaged).
-pub const DOOR_DOUBLE_LOCK_CMD_SIGNALS: [VssPath; 4] = [
-    "Body.Doors.Row1.Left.DoubleLockCmd",
-    "Body.Doors.Row1.Right.DoubleLockCmd",
-    "Body.Doors.Row2.Left.DoubleLockCmd",
-    "Body.Doors.Row2.Right.DoubleLockCmd",
-];
-
-/// Dispatch a lock command to the SignalBus.
-///
-/// Writes to the `LockCmd` / `DoubleLockCmd` intent signals.
-/// The `DoorLockPlantModel` subscribes to these and publishes confirmed
-/// `IsLocked` / `IsDoubleLocked` state (simulating M7 actuator feedback).
+/// Dispatch a lock command to the SignalBus as a single high-level token.
 async fn dispatch_lock_command<B: SignalBus>(req: &DoorLockRequest, bus: &Arc<B>) {
-    let lock_value = match req.command {
-        LockCommand::Unlock => SignalValue::Bool(false),
-        LockCommand::Lock => SignalValue::Bool(true),
-        LockCommand::DoubleLock => SignalValue::Bool(true),
+    let token = match req.command {
+        LockCommand::UnlockDriver => "unlock_driver",
+        LockCommand::UnlockAll   => "unlock_all",
+        LockCommand::LockAll     => "lock_all",
+        LockCommand::DoubleLockAll => "lock_double",
     };
-
-    let signals: &[VssPath] = if req.command == LockCommand::DoubleLock {
-        &DOOR_DOUBLE_LOCK_CMD_SIGNALS
-    } else {
-        &DOOR_LOCK_CMD_SIGNALS
-    };
-
-    for &signal in signals {
-        if let Err(e) = bus.publish(signal, lock_value.clone()).await {
-            tracing::error!(
-                signal,
-                error = %e,
-                "DoorLock: failed to dispatch command"
-            );
-        }
+    if let Err(e) = bus.publish(CENTRAL_LOCK_CMD, SignalValue::String(token.into())).await {
+        tracing::error!(token, error = %e, "DoorLock: failed to dispatch command");
     }
 }
 
@@ -1093,7 +1073,7 @@ mod tests {
 
         arbiter
             .request(DoorLockRequest {
-                command: LockCommand::Unlock,
+                command: LockCommand::UnlockAll,
                 feature_id: FeatureId::KeyfobPeps,
             })
             .await
@@ -1101,10 +1081,10 @@ mod tests {
         tokio::task::yield_now().await;
 
         let history = bus.history();
-        // 4 door signals dispatched
-        assert_eq!(history.len(), 4);
-        assert_eq!(history[0].0, "Body.Doors.Row1.Left.LockCmd");
-        assert_eq!(history[0].1, SignalValue::Bool(false)); // unlock
+        // Single command signal dispatched
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].0, CENTRAL_LOCK_CMD);
+        assert_eq!(history[0].1, SignalValue::String("unlock_all".into()));
     }
 
     #[tokio::test]
@@ -1114,7 +1094,7 @@ mod tests {
         // PEPS unlock → active
         arbiter
             .request(DoorLockRequest {
-                command: LockCommand::Unlock,
+                command: LockCommand::UnlockAll,
                 feature_id: FeatureId::KeyfobPeps,
             })
             .await
@@ -1124,15 +1104,15 @@ mod tests {
         // AutoLock lock → pending (should NOT dispatch yet)
         arbiter
             .request(DoorLockRequest {
-                command: LockCommand::Lock,
+                command: LockCommand::LockAll,
                 feature_id: FeatureId::AutoLock,
             })
             .await
             .unwrap();
         tokio::task::yield_now().await;
 
-        // Only the first 4 signals (PEPS unlock) should be dispatched
-        assert_eq!(bus.history().len(), 4);
+        // Only the first command (PEPS unlock) should be dispatched
+        assert_eq!(bus.history().len(), 1);
 
         // ACK the first operation → pending promotes to active
         ack_tx
@@ -1144,10 +1124,10 @@ mod tests {
             .unwrap();
         tokio::task::yield_now().await;
 
-        // Now 8 signals: 4 unlock + 4 lock
+        // Now 2 commands: unlock_all + lock_all
         let history = bus.history();
-        assert_eq!(history.len(), 8);
-        assert_eq!(history[4].1, SignalValue::Bool(true)); // lock
+        assert_eq!(history.len(), 2);
+        assert_eq!(history[1].1, SignalValue::String("lock_all".into()));
     }
 
     #[tokio::test]
@@ -1157,7 +1137,7 @@ mod tests {
         // PEPS unlock → active
         arbiter
             .request(DoorLockRequest {
-                command: LockCommand::Unlock,
+                command: LockCommand::UnlockAll,
                 feature_id: FeatureId::KeyfobPeps,
             })
             .await
@@ -1167,7 +1147,7 @@ mod tests {
         // AutoLock lock → pending
         arbiter
             .request(DoorLockRequest {
-                command: LockCommand::Lock,
+                command: LockCommand::LockAll,
                 feature_id: FeatureId::AutoLock,
             })
             .await
@@ -1177,7 +1157,7 @@ mod tests {
         // KeyfobRke double-lock → replaces AutoLock in pending
         arbiter
             .request(DoorLockRequest {
-                command: LockCommand::DoubleLock,
+                command: LockCommand::DoubleLockAll,
                 feature_id: FeatureId::KeyfobRke,
             })
             .await
@@ -1195,10 +1175,11 @@ mod tests {
         tokio::task::yield_now().await;
 
         let history = bus.history();
-        // 4 unlock + 4 double-lock
-        assert_eq!(history.len(), 8);
-        // Double-lock uses DoubleLockCmd path
-        assert_eq!(history[4].0, "Body.Doors.Row1.Left.DoubleLockCmd");
+        // 1 unlock + 1 double-lock
+        assert_eq!(history.len(), 2);
+        // Double-lock token
+        assert_eq!(history[1].0, CENTRAL_LOCK_CMD);
+        assert_eq!(history[1].1, SignalValue::String("lock_double".into()));
     }
 
     #[tokio::test]
@@ -1208,7 +1189,7 @@ mod tests {
         // PEPS lock → active
         arbiter
             .request(DoorLockRequest {
-                command: LockCommand::Lock,
+                command: LockCommand::LockAll,
                 feature_id: FeatureId::KeyfobPeps,
             })
             .await
@@ -1218,7 +1199,7 @@ mod tests {
         // CrashUnlock → pending
         arbiter
             .request(DoorLockRequest {
-                command: LockCommand::Unlock,
+                command: LockCommand::UnlockAll,
                 feature_id: FeatureId::CrashUnlock,
             })
             .await
@@ -1228,15 +1209,15 @@ mod tests {
         // AutoLock tries to replace → should be rejected
         arbiter
             .request(DoorLockRequest {
-                command: LockCommand::Lock,
+                command: LockCommand::LockAll,
                 feature_id: FeatureId::AutoLock,
             })
             .await
             .unwrap();
         tokio::task::yield_now().await;
 
-        // Only 4 signals (PEPS lock). CrashUnlock is pending, AutoLock was rejected.
-        assert_eq!(bus.history().len(), 4);
+        // Only 1 command (PEPS lock). CrashUnlock is pending, AutoLock was rejected.
+        assert_eq!(bus.history().len(), 1);
     }
 
     #[tokio::test]
@@ -1246,28 +1227,28 @@ mod tests {
         // CrashUnlock dispatches immediately (idle)
         arbiter
             .request(DoorLockRequest {
-                command: LockCommand::Unlock,
+                command: LockCommand::UnlockAll,
                 feature_id: FeatureId::CrashUnlock,
             })
             .await
             .unwrap();
         tokio::task::yield_now().await;
 
-        // 4 signals dispatched (crash unlock)
-        assert_eq!(bus.history().len(), 4);
+        // 1 command dispatched (crash unlock)
+        assert_eq!(bus.history().len(), 1);
 
         // KeyfobRke tries to lock → rejected (crash lockout)
         arbiter
             .request(DoorLockRequest {
-                command: LockCommand::Lock,
+                command: LockCommand::LockAll,
                 feature_id: FeatureId::KeyfobRke,
             })
             .await
             .unwrap();
         tokio::task::yield_now().await;
 
-        // Still 4 — KeyfobRke was rejected
-        assert_eq!(bus.history().len(), 4);
+        // Still 1 — KeyfobRke was rejected
+        assert_eq!(bus.history().len(), 1);
     }
 
     #[tokio::test]
@@ -1277,7 +1258,7 @@ mod tests {
         // DRL tries to lock doors — not in allow-list
         arbiter
             .request(DoorLockRequest {
-                command: LockCommand::Lock,
+                command: LockCommand::LockAll,
                 feature_id: FeatureId::Drl,
             })
             .await

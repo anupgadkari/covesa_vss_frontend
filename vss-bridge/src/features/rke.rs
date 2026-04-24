@@ -67,6 +67,10 @@ const TWO_STAGE_WINDOW_SECS: u64 = 3;
 /// must arrive to trigger double-lock.
 const DOUBLE_LOCK_WINDOW_SECS: u64 = 3;
 
+/// How long (seconds) after the first TRUNK_RELEASE press the second press
+/// must arrive to open the trunk.
+const TRUNK_RELEASE_WINDOW_SECS: u64 = 3;
+
 /// FeatureId registered with the DoorLockArbiter.
 const FEATURE_ID: FeatureId = FeatureId::KeyfobRke;
 
@@ -205,6 +209,13 @@ struct PendingDoubleLock {
     fob_id: u32,
 }
 
+/// Pending trunk release — waiting for a second TRUNK_RELEASE press.
+#[derive(Debug)]
+struct PendingTrunkRelease {
+    started: Instant,
+    fob_id: u32,
+}
+
 /// Tracks the first half of a potential LOCK+UNLOCK combo.
 /// If the complementary action arrives within COMBO_WINDOW_MS, the combo
 /// fires (toggle two_stage_unlock) instead of the normal action.
@@ -236,6 +247,8 @@ pub struct RkeFeature<B: SignalBus> {
     pending_unlock: Option<PendingUnlock>,
     /// Double-lock state.
     pending_double_lock: Option<PendingDoubleLock>,
+    /// Trunk double-press state.
+    pending_trunk_release: Option<PendingTrunkRelease>,
     /// Pending first half of a LOCK+UNLOCK combo for toggle detection.
     pending_combo: Option<PendingCombo>,
 }
@@ -264,6 +277,7 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
             fobs,
             pending_unlock: None,
             pending_double_lock: None,
+            pending_trunk_release: None,
             pending_combo: None,
         }
     }
@@ -377,7 +391,7 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
 
         // ── Normal action dispatch ──────────────────────────────────────────
         let dealer = self.dealer_rx.borrow().clone();
-        let variant = &self.config.variant;
+        let variant = self.config.variant_cal();
 
         match action {
             FobButton::Unlock => {
@@ -387,7 +401,7 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
                 self.handle_lock(fob_id, &dealer, variant.double_lock_enabled).await;
             }
             FobButton::TrunkRelease => {
-                self.handle_trunk_release().await;
+                self.handle_trunk_release(fob_id).await;
             }
             FobButton::RemoteStart => {
                 tracing::info!(fob_id, "RKE: RemoteStart — not implemented in this module");
@@ -432,26 +446,25 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
         };
 
         if stage_two || !dealer.two_stage_unlock {
-            // Unlock all doors
+            // Unlock all doors (stage 2 or two-stage disabled).
             self.pending_unlock = None;
             tracing::info!(fob_id, "RKE: UNLOCK all doors");
             let req = DoorLockRequest {
-                command: LockCommand::Unlock,
+                command: LockCommand::UnlockAll,
                 feature_id: FEATURE_ID,
             };
             if let Err(e) = self.arbiter.request(req).await {
-                tracing::error!(error = %e, "RKE: arbiter rejected UNLOCK");
+                tracing::error!(error = %e, "RKE: arbiter rejected UNLOCK ALL");
             }
         } else {
-            // First press — unlock driver door only
-            let driver_door = driver_door_signal(dealer.driver_door_side);
-            tracing::info!(fob_id, door = driver_door, "RKE: UNLOCK driver door (stage 1)");
+            // First press — driver door only (stage 1).
+            tracing::info!(fob_id, "RKE: UNLOCK driver door (stage 1)");
             let req = DoorLockRequest {
-                command: LockCommand::Unlock,
+                command: LockCommand::UnlockDriver,
                 feature_id: FEATURE_ID,
             };
             if let Err(e) = self.arbiter.request(req).await {
-                tracing::error!(error = %e, "RKE: arbiter rejected stage-1 UNLOCK");
+                tracing::error!(error = %e, "RKE: arbiter rejected UNLOCK DRIVER");
             }
             self.pending_unlock = Some(PendingUnlock { started: now, fob_id });
         }
@@ -478,7 +491,7 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
             self.pending_double_lock = None;
             tracing::info!(fob_id, "RKE: DOUBLE LOCK (superlock)");
             let req = DoorLockRequest {
-                command: LockCommand::DoubleLock,
+                command: LockCommand::DoubleLockAll,
                 feature_id: FEATURE_ID,
             };
             if let Err(e) = self.arbiter.request(req).await {
@@ -487,7 +500,7 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
         } else {
             tracing::info!(fob_id, "RKE: LOCK all doors");
             let req = DoorLockRequest {
-                command: LockCommand::Lock,
+                command: LockCommand::LockAll,
                 feature_id: FEATURE_ID,
             };
             if let Err(e) = self.arbiter.request(req).await {
@@ -502,10 +515,31 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
     }
 
     /// Handle a TRUNK_RELEASE press.
-    async fn handle_trunk_release(&mut self) {
-        tracing::info!("RKE: TRUNK_RELEASE");
-        // Trunk latch is not routed through DoorLockArbiter — it's a separate
-        // actuator domain. For now, log only. Phase 8 will wire the signal.
+    ///
+    /// Requires a double-press within [`TRUNK_RELEASE_WINDOW_SECS`] from the
+    /// same fob to open the trunk.  A single press arms the window; the second
+    /// press publishes `Body.Trunk.OpenCmd`.  This does not affect cabin door
+    /// lock state.
+    async fn handle_trunk_release(&mut self, fob_id: u32) {
+        let now = Instant::now();
+        let window = Duration::from_secs(TRUNK_RELEASE_WINDOW_SECS);
+
+        let second_press = match &self.pending_trunk_release {
+            Some(p) if p.fob_id == fob_id && now.duration_since(p.started) < window => true,
+            _ => false,
+        };
+
+        if second_press {
+            self.pending_trunk_release = None;
+            tracing::info!(fob_id, "RKE: TRUNK_RELEASE double-press — opening trunk");
+            let _ = self
+                .bus
+                .publish("Body.Trunk.OpenCmd", crate::ipc_message::SignalValue::Bool(true))
+                .await;
+        } else {
+            tracing::info!(fob_id, "RKE: TRUNK_RELEASE first press — waiting for second");
+            self.pending_trunk_release = Some(PendingTrunkRelease { started: now, fob_id });
+        }
     }
 
     /// Parse an RF message hex string from the bus.
@@ -534,12 +568,15 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
             let double_lock_deadline = self.pending_double_lock.as_ref().map(|p| {
                 Duration::from_secs(DOUBLE_LOCK_WINDOW_SECS).saturating_sub(p.started.elapsed())
             });
+            let trunk_deadline = self.pending_trunk_release.as_ref().map(|p| {
+                Duration::from_secs(TRUNK_RELEASE_WINDOW_SECS).saturating_sub(p.started.elapsed())
+            });
             let combo_deadline = self.pending_combo.as_ref().map(|p| {
                 Duration::from_millis(COMBO_WINDOW_MS).saturating_sub(p.started.elapsed())
             });
 
             // Sleep until the earliest pending window expires.
-            let next_expiry = [unlock_deadline, double_lock_deadline, combo_deadline]
+            let next_expiry = [unlock_deadline, double_lock_deadline, trunk_deadline, combo_deadline]
                 .into_iter()
                 .flatten()
                 .min()

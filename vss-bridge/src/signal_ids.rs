@@ -117,6 +117,8 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Body.Trunk.IsOpen" => Some(0x0006_0002),
         "Body.Trunk.IsLocked" => Some(0x0006_0003),
         "Body.Horn.IsActive" => Some(0x0006_0004),
+        "Body.Trunk.OpenCmd" => Some(0x0006_0007),
+        "Body.Trunk.CloseCmd" => Some(0x0006_0008),
         "Body.FuelLid.IsOpen" => Some(0x0006_0005),
         "Body.ChargeLid.IsOpen" => Some(0x0006_0006),
 
@@ -388,6 +390,8 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Body.Trunk.IsOpen", 0x0006_0002),
     ("Body.Trunk.IsLocked", 0x0006_0003),
     ("Body.Horn.IsActive", 0x0006_0004),
+    ("Body.Trunk.OpenCmd", 0x0006_0007),
+    ("Body.Trunk.CloseCmd", 0x0006_0008),
     ("Body.FuelLid.IsOpen", 0x0006_0005),
     ("Body.ChargeLid.IsOpen", 0x0006_0006),
     ("Body.Sunroof.Position", 0x0007_0001),

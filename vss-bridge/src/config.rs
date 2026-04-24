@@ -400,11 +400,6 @@ pub struct DealerConfig {
     /// DID 0xF193. Engine/climate pre-conditioning duration limit.
     pub remote_start_max_minutes: u64,
 
-    /// Approach unlock mode.
-    /// DID 0xF194. DRIVER_ONLY = unlock driver door on first PEPS
-    /// approach, ALL = unlock all doors.
-    pub approach_unlock_mode: ApproachUnlockMode,
-
     /// RKE two-stage unlock enable.
     /// DID 0xF195. When true, first RKE UNLOCK press unlocks driver door
     /// only; a second press within 3 s unlocks all doors.
@@ -415,16 +410,6 @@ pub struct DealerConfig {
     /// DID 0xF196. Determines which door is unlocked on first press of
     /// RKE UNLOCK in two-stage mode.
     pub driver_door_side: DriverDoorSide,
-}
-
-/// PEPS approach unlock behavior.
-#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
-pub enum ApproachUnlockMode {
-    /// Unlock driver door only on first approach; second pull unlocks all.
-    #[default]
-    DriverOnly,
-    /// Unlock all doors on approach.
-    All,
 }
 
 /// Which side of the vehicle has the driver door.
@@ -445,7 +430,6 @@ impl Default for DealerConfig {
             horn_chirp_on_lock: true,
             courtesy_light_timeout_secs: 30,
             remote_start_max_minutes: 10,
-            approach_unlock_mode: ApproachUnlockMode::DriverOnly,
             two_stage_unlock: true,
             driver_door_side: DriverDoorSide::Left,
         }
@@ -463,7 +447,9 @@ impl Default for DealerConfig {
 /// can change at runtime via the `dealer_config_rx` watch channel.
 pub struct PlatformConfig {
     pub vehicle_line: VehicleLineCal,
-    pub variant: VariantCal,
+    /// Variant calibration — mutable at runtime via `update_variant_cal()`.
+    /// Read via `variant_cal()`.
+    variant: std::sync::RwLock<VariantCal>,
     dealer_config_tx: watch::Sender<DealerConfig>,
     dealer_config_rx: watch::Receiver<DealerConfig>,
 }
@@ -492,7 +478,7 @@ impl PlatformConfig {
 
         Arc::new(Self {
             vehicle_line,
-            variant,
+            variant: std::sync::RwLock::new(variant),
             dealer_config_tx,
             dealer_config_rx,
         })
@@ -512,7 +498,7 @@ impl PlatformConfig {
 
         Arc::new(Self {
             vehicle_line,
-            variant,
+            variant: std::sync::RwLock::new(variant),
             dealer_config_tx,
             dealer_config_rx,
         })
@@ -523,7 +509,7 @@ impl PlatformConfig {
         let (dealer_config_tx, dealer_config_rx) = watch::channel(DealerConfig::default());
         Arc::new(Self {
             vehicle_line: VehicleLineCal::default(),
-            variant: VariantCal::default(),
+            variant: std::sync::RwLock::new(VariantCal::default()),
             dealer_config_tx,
             dealer_config_rx,
         })
@@ -538,7 +524,7 @@ impl PlatformConfig {
         let (dealer_config_tx, dealer_config_rx) = watch::channel(DealerConfig::default());
         Arc::new(Self {
             vehicle_line: vl,
-            variant: VariantCal::default(),
+            variant: std::sync::RwLock::new(VariantCal::default()),
             dealer_config_tx,
             dealer_config_rx,
         })
@@ -568,20 +554,37 @@ impl PlatformConfig {
 
     // ── Tier 3 convenience accessors ────────────────────────────────
 
+    /// Read the current variant calibration (cloned snapshot).
+    pub fn variant_cal(&self) -> VariantCal {
+        self.variant.read().unwrap().clone()
+    }
+
+    /// Update the variant calibration at runtime (config HMI / OTA).
+    pub fn update_variant_cal(&self, new_variant: VariantCal) {
+        tracing::info!(
+            double_lock = new_variant.double_lock_enabled,
+            nfc = new_variant.nfc_enabled,
+            ble = new_variant.ble_key_enabled,
+            "variant config updated"
+        );
+        *self.variant.write().unwrap() = new_variant;
+    }
+
     /// Whether a given feature is enabled for this variant.
     pub fn is_feature_enabled(&self, feature: &str) -> bool {
+        let v = self.variant.read().unwrap();
         match feature {
-            "double_lock" => self.variant.double_lock_enabled,
-            "nfc" => self.variant.nfc_enabled,
-            "ble_key" => self.variant.ble_key_enabled,
-            "remote_lock" => self.variant.remote_lock_enabled,
-            _ => true, // unknown features default to enabled
+            "double_lock" => v.double_lock_enabled,
+            "nfc"         => v.nfc_enabled,
+            "ble_key"     => v.ble_key_enabled,
+            "remote_lock" => v.remote_lock_enabled,
+            _ => true,
         }
     }
 
     /// Door configuration for this variant.
-    pub fn doors(&self) -> &DoorConfig {
-        &self.variant.doors
+    pub fn doors(&self) -> DoorConfig {
+        self.variant.read().unwrap().doors.clone()
     }
 
     // ── Tier 4 — dealer config (runtime-updatable) ──────────────────
@@ -605,7 +608,7 @@ impl PlatformConfig {
         tracing::info!(
             auto_relock = new_config.auto_relock_enabled,
             horn_chirp = new_config.horn_chirp_on_lock,
-            approach_mode = ?new_config.approach_unlock_mode,
+            two_stage_unlock = new_config.two_stage_unlock,
             "dealer config updated via M7"
         );
         let _ = self.dealer_config_tx.send(new_config);
@@ -635,15 +638,6 @@ impl PlatformConfig {
             0xF193 => {
                 if let Some(&v) = value.first() {
                     config.remote_start_max_minutes = v as u64;
-                }
-            }
-            0xF194 => {
-                if let Some(&v) = value.first() {
-                    config.approach_unlock_mode = if v == 0 {
-                        ApproachUnlockMode::DriverOnly
-                    } else {
-                        ApproachUnlockMode::All
-                    };
                 }
             }
             _ => {
@@ -707,7 +701,7 @@ mod tests {
         let dc = DealerConfig::default();
         assert!(dc.auto_relock_enabled);
         assert!(dc.horn_chirp_on_lock);
-        assert_eq!(dc.approach_unlock_mode, ApproachUnlockMode::DriverOnly);
+        assert!(dc.two_stage_unlock);
     }
 
     #[test]
@@ -846,13 +840,6 @@ mod tests {
         // Re-enable
         cfg.update_dealer_did(0xF190, &[0x01]);
         assert!(cfg.dealer_config().auto_relock_enabled);
-
-        // Set approach unlock to ALL via DID 0xF194
-        cfg.update_dealer_did(0xF194, &[0x01]);
-        assert_eq!(
-            cfg.dealer_config().approach_unlock_mode,
-            ApproachUnlockMode::All
-        );
 
         // Unknown DID — should not panic
         cfg.update_dealer_did(0xFFFF, &[0x42]);

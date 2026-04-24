@@ -211,7 +211,7 @@ impl<B: SignalBus> AutoRelock<B> {
                     if let Err(e) = self
                         .arbiter
                         .request(DoorLockRequest {
-                            command: LockCommand::Lock,
+                            command: LockCommand::LockAll,
                             feature_id: FeatureId::AutoRelock,
                         })
                         .await
@@ -357,7 +357,7 @@ mod tests {
         let history = bus.history();
         assert!(
             history.iter().any(|(sig, val)| {
-                *sig == "Body.Doors.Row1.Left.LockCmd" && *val == SignalValue::Bool(true)
+                *sig == "Body.Doors.CentralLock.Command" && *val == SignalValue::String("lock_all".into())
             }),
             "expected AutoRelock to dispatch LOCK, history: {:?}",
             history
@@ -381,7 +381,7 @@ mod tests {
         let history = bus.history();
         assert!(
             !history.iter().any(|(sig, val)| {
-                *sig == "Body.Doors.Row1.Left.LockCmd" && *val == SignalValue::Bool(true)
+                *sig == "Body.Doors.CentralLock.Command" && *val == SignalValue::String("lock_all".into())
             }),
             "AutoRelock should NOT have dispatched LOCK after door opened, history: {:?}",
             history
@@ -406,7 +406,7 @@ mod tests {
         let lock_count = history
             .iter()
             .filter(|(sig, val)| {
-                *sig == "Body.Doors.Row1.Left.LockCmd" && *val == SignalValue::Bool(true)
+                *sig == "Body.Doors.CentralLock.Command" && *val == SignalValue::String("lock_all".into())
             })
             .count();
         assert_eq!(
@@ -436,7 +436,7 @@ mod tests {
         let history = bus.history();
         assert!(
             !history.iter().any(|(sig, val)| {
-                *sig == "Body.Doors.Row1.Left.LockCmd" && *val == SignalValue::Bool(true)
+                *sig == "Body.Doors.CentralLock.Command" && *val == SignalValue::String("lock_all".into())
             }),
             "AutoRelock should NOT dispatch LOCK after crash, history: {:?}",
             history
@@ -474,7 +474,7 @@ mod tests {
         let history = bus.history();
         assert!(
             history.iter().any(|(sig, val)| {
-                *sig == "Body.Doors.Row1.Left.LockCmd" && *val == SignalValue::Bool(true)
+                *sig == "Body.Doors.CentralLock.Command" && *val == SignalValue::String("lock_all".into())
             }),
             "AutoRelock should work again after power cycle, history: {:?}",
             history
@@ -505,7 +505,7 @@ mod tests {
         let history = bus.history();
         assert!(
             !history.iter().any(|(sig, val)| {
-                *sig == "Body.Doors.Row1.Left.LockCmd" && *val == SignalValue::Bool(true)
+                *sig == "Body.Doors.CentralLock.Command" && *val == SignalValue::String("lock_all".into())
             }),
             "disabled AutoRelock should NOT dispatch LOCK, history: {:?}",
             history
@@ -550,7 +550,7 @@ mod tests {
         let history = bus.history();
         assert!(
             history.iter().any(|(sig, val)| {
-                *sig == "Body.Doors.Row1.Left.LockCmd" && *val == SignalValue::Bool(true)
+                *sig == "Body.Doors.CentralLock.Command" && *val == SignalValue::String("lock_all".into())
             }),
             "AutoRelock should work after OFF → ACC → ON cycle, history: {:?}",
             history
