@@ -355,6 +355,15 @@ function App(){
               </button>
             </div>
           </div>
+          <div className="control">
+            <div className="control-label">High Beam Stalk</div>
+            <div style={{flex:1}}/>
+            <div className="tog"
+              onClick={()=>set('Body.Switches.HighBeam.IsEngaged',!state['Body.Switches.HighBeam.IsEngaged'])}
+              style={state['Body.Switches.HighBeam.IsEngaged']?{borderColor:'#4A9EF5',background:'rgba(74,158,245,.12)'}:{}}>
+              <div className="knob" style={state['Body.Switches.HighBeam.IsEngaged']?{transform:'translateX(20px)',background:'#4A9EF5'}:{}}/>
+            </div>
+          </div>
         </div>
 
         {/* ADAS CAMERA */}
@@ -517,15 +526,6 @@ function App(){
               ))}
             </div>
             <div className="control-value">{state['Body.Switches.TurnIndicator.Direction']}</div>
-          </div>
-          <div className="control">
-            <div className="control-label">High Beam Stalk</div>
-            <div style={{flex:1}}/>
-            <div className="tog"
-              onClick={()=>set('Body.Switches.HighBeam.IsEngaged',!state['Body.Switches.HighBeam.IsEngaged'])}
-              style={state['Body.Switches.HighBeam.IsEngaged']?{borderColor:'#4A9EF5',background:'rgba(74,158,245,.12)'}:{}}>
-              <div className="knob" style={state['Body.Switches.HighBeam.IsEngaged']?{transform:'translateX(20px)',background:'#4A9EF5'}:{}}/>
-            </div>
           </div>
           <div className="control">
             <div className="control-label">Parking Brake</div>
