@@ -324,10 +324,58 @@ function DeviceChip({device, pos, dimmed, onPointerDown}){
   </g>;
 }
 
+/* ── Fob button popup (rendered inside the SVG) ─────────────────── */
+function FobPopup({fobIndex, zone, px, py, set, onClose}){
+  // 5 buttons: LOCK UNLOCK TRUNK START PANIC
+  const btns=[
+    {val:'LOCK',         label:'LOCK',   c:'#1E4A6A'},
+    {val:'UNLOCK',       label:'UNLOCK', c:'#1A5A3A'},
+    {val:'TRUNK_RELEASE',label:'TRUNK',  c:'#5A4010'},
+    {val:'REMOTE_START', label:'START',  c:'#1A3A6A'},
+    {val:'PANIC_ALARM',  label:'PANIC',  c:'#6A1A1A'},
+  ];
+  const bw=23, bh=14, gap=2;
+  const w=bw*5+gap*4+16, h=54;
+  // Clamp so popup stays inside the "-200 -60 760 840" viewBox
+  const x=Math.max(-195, Math.min(px-w/2, 555-w));
+  const y=py+14; // just below the chip; if near bottom it overlaps anyway
+  function pressBtn(val){
+    const pfx=`Body.PEPS.Plant.KeyFob.${fobIndex}`;
+    set(`${pfx}.ButtonPress`, val);
+    setTimeout(()=>set(`${pfx}.ButtonPress`,'NONE'), 500);
+    onClose();
+  }
+  return <g style={{filter:'drop-shadow(0 3px 10px rgba(0,0,0,0.8))'}}>
+    {/* Card background */}
+    <rect x={x} y={y} width={w} height={h} rx={5} fill="#08111E" stroke="#1E3A5A" strokeWidth={1.2}/>
+    {/* Header strip */}
+    <rect x={x} y={y} width={w} height={17} rx={5} fill="#0D1E32"/>
+    <rect x={x} y={y+12} width={w} height={5} fill="#0D1E32"/>
+    <text x={x+8} y={y+12} fill="#F59E0B" fontSize="9" fontFamily="Share Tech Mono" fontWeight="700">FOB {fobIndex}</text>
+    <text x={x+50} y={y+12} fill="#3A5070" fontSize="8" fontFamily="Share Tech Mono">{zone}</text>
+    {/* Close × */}
+    <text x={x+w-10} y={y+12} fill="#506070" fontSize="11" fontFamily="Share Tech Mono" fontWeight="700"
+      style={{cursor:'pointer'}} onClick={onClose}>×</text>
+    {/* Buttons */}
+    {btns.map((b,i)=>(
+      <g key={b.val} style={{cursor:'pointer'}} onClick={()=>pressBtn(b.val)}>
+        <rect x={x+8+(bw+gap)*i} y={y+21} width={bw} height={bh} rx={2}
+          fill={b.c} stroke="#304060" strokeWidth={0.5} opacity={0.85}/>
+        <text x={x+8+(bw+gap)*i+bw/2} y={y+30} textAnchor="middle"
+          fill="#BCD" fontSize="6.5" fontFamily="Share Tech Mono" fontWeight="700">{b.label}</text>
+      </g>
+    ))}
+    {/* Tip: press resets automatically */}
+    <text x={x+w/2} y={y+h-5} textAnchor="middle" fill="#2A3A50" fontSize="7" fontFamily="Share Tech Mono">press → auto-reset 500 ms</text>
+  </g>;
+}
+
 function CombinedView({s,set}){
   const svgRef=useRef(null);
   const [drag,setDrag]=useState(null);
+  const [popup,setPopup]=useState(null);
   // drag={key,type,label,color,paired,isNfc,x,y,ox,oy}
+  // popup={fobIndex,zone,x,y}
 
   // Build device list
   const allDevices=[];
@@ -367,6 +415,7 @@ function CombinedView({s,set}){
 
   function startDrag(e,device){
     e.preventDefault();
+    if(popup) setPopup(null);
     const {x,y}=svgCoords(e);
     setDrag({...device,x,y,ox:x,oy:y});
   }
@@ -380,6 +429,14 @@ function CombinedView({s,set}){
   function onDrop(e){
     if(!drag)return;
     const {x,y}=svgCoords(e);
+    const dist=Math.hypot(x-drag.ox, y-drag.oy);
+    // Tap (< 8 SVG units) on a paired fob → open button popup instead of dropping
+    if(dist<8 && drag.type==='fob' && drag.paired){
+      const m=drag.key.match(/KeyFob\.(\d+)/);
+      if(m) setPopup({fobIndex:parseInt(m[1]), zone:drag.zone, x:drag.ox, y:drag.oy});
+      setDrag(null);
+      return;
+    }
     const zone=hitTestZone(x,y);
     if(drag.isNfc){
       const nfcPos=zone==='DriverDoor'?'DriverHandle':zone==='Cabin'?'PushButton':'NotPresent';
@@ -644,6 +701,18 @@ function CombinedView({s,set}){
 
     {/* Drag ghost follows pointer */}
     {drag&&<DeviceChip device={drag} pos={{x:drag.x,y:drag.y}} dimmed={false}/>}
+
+    {/* Fob popup — transparent backdrop closes on outside click, then the card */}
+    {popup&&<>
+      <rect x="-200" y="-60" width="760" height="840" fill="transparent"
+        style={{cursor:'default'}} onClick={()=>setPopup(null)}/>
+      <FobPopup
+        fobIndex={popup.fobIndex}
+        zone={popup.zone}
+        px={popup.x} py={popup.y}
+        set={set}
+        onClose={()=>setPopup(null)}/>
+    </>}
 
     {/* Legend */}
     <g transform="translate(-175,760)">
