@@ -254,6 +254,9 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // Thumb-pad lock triggers — Row1 outside handle lock area (no Row2 pads).
         "Body.Doors.Row1.Left.Handle.Outside.LockPad.IsPressed" => Some(0x0014_0002),
         "Body.Doors.Row1.Right.Handle.Outside.LockPad.IsPressed" => Some(0x0014_0003),
+        // Central lock command — published by arbiter; HMI diagnostic override also
+        // uses this path to send lock_double / release_double directly to plant model.
+        "Body.Doors.CentralLock.Command" => Some(0x0014_0004),
 
         // Ambient light sensor (OEM custom — not in standard VSS v4.x).
         // Used by ManualLighting AUTO mode to gate low-beam activation.
@@ -529,6 +532,7 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
         "Body.Doors.Row1.Right.Handle.Outside.LockPad.IsPressed",
         0x0014_0003,
     ),
+    ("Body.Doors.CentralLock.Command", 0x0014_0004),
     ("Body.Lights.AmbientLightSensor.Illuminance", 0x0015_0001),
     ("Vehicle.ADAS.HighBeam.OncomingVehicleDetected", 0x0016_0001),
 ];

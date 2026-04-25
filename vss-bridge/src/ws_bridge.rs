@@ -101,10 +101,11 @@ const INPUT_SIGNALS: &[VssPath] = &[
     "Body.Doors.Row2.Right.IsOpen",
     // Direct trunk open/close override (control panel and sensor page).
     "Body.Trunk.IsOpen",
-    "Body.Doors.Row1.Left.IsDoubleLocked",
-    "Body.Doors.Row1.Right.IsDoubleLocked",
-    "Body.Doors.Row2.Left.IsDoubleLocked",
-    "Body.Doors.Row2.Right.IsDoubleLocked",
+    // Central lock command — HMI DblLock toggle sends "lock_double"/"release_double"
+    // so the plant model's internal double_locked[] state stays in sync.
+    // IsDoubleLocked is an *output* (plant model owns it) and must NOT be in
+    // INPUT_SIGNALS — direct writes bypass the plant model and break DoubleLockRelease.
+    "Body.Doors.CentralLock.Command",
     // Thumb-pad lock inputs — Row 1 outside handle lock areas (HMI top-view).
     "Body.Doors.Row1.Left.Handle.Outside.LockPad.IsPressed",
     "Body.Doors.Row1.Right.Handle.Outside.LockPad.IsPressed",

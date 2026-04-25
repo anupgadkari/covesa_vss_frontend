@@ -327,7 +327,7 @@ function DoorCard({label,pfx,s,set}){
     <div className="dcr"><span className="dcl">Soldier</span>
       <Tog val={s[`${p}.IsLocked`]} on={()=>set(`${p}.Soldier.IsUnlocked`,s[`${p}.IsLocked`])} c="r"/></div>
     <div className="dcr"><span className="dcl">DblLock</span>
-      <Tog val={s[`${p}.IsDoubleLocked`]} on={()=>set(`${p}.IsDoubleLocked`,!s[`${p}.IsDoubleLocked`])} c="r"/></div>
+      <Tog val={s[`${p}.IsDoubleLocked`]} on={()=>set('Body.Doors.CentralLock.Command',s[`${p}.IsDoubleLocked`]?'release_double':'lock_double')} c="r"/></div>
     <div className="dcr"><span className="dcl">Latched</span>
       <Tog val={s[`${p}.Latch.IsLatched`]} c="v"/></div>
     <div className="dcr"><span className="dcl">ChildLk</span>
