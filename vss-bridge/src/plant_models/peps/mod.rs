@@ -442,6 +442,11 @@ mod tests {
     use super::*;
     use crate::adapters::mock::MockBus;
 
+    /// Fixed test vector for BLE/LF challenge injection tests.
+    /// Deterministic by design — the test verifies the response matches
+    /// AES-128(shared_secret, nonce) for a known input.
+    const TEST_NONCE_2: [u8; 16] = [0xCCu8; 16];
+
     #[test]
     fn default_inventory() {
         let bus = Arc::new(MockBus::new());
@@ -1766,7 +1771,7 @@ mod tests {
         tokio::task::yield_now().await;
 
         bus.clear_history();
-        let nonce2 = [0xCCu8; 16];
+        let nonce2 = TEST_NONCE_2;
         bus.inject(
             signals::PEPS_BLE_CHALLENGE,
             SignalValue::String(bytes_to_hex(&nonce2)),

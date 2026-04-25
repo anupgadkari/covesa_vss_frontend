@@ -402,6 +402,11 @@ fn aes_cmac_full(key: &SharedSecret, message: &[u8]) -> [u8; 16] {
 mod tests {
     use super::*;
 
+    /// Fixed nonces for determinism tests — these must be stable constants,
+    /// not random, so that AES output can be compared across runs.
+    const NONCE_DETERMINISM: Challenge = [0x55; 16];
+    const NONCE_KEY_SENSITIVITY: Challenge = [0x42; 16];
+
     /// NIST FIPS-197 Appendix B test vector.
     #[test]
     fn aes128_nist_test_vector() {
@@ -424,7 +429,7 @@ mod tests {
     #[test]
     fn challenge_response_deterministic() {
         let key: SharedSecret = [0xAA; 16];
-        let nonce: Challenge = [0x55; 16];
+        let nonce = NONCE_DETERMINISM;
         let r1 = compute_challenge_response(&key, &nonce);
         let r2 = compute_challenge_response(&key, &nonce);
         assert_eq!(r1, r2, "same key + nonce must produce same response");
@@ -432,7 +437,7 @@ mod tests {
 
     #[test]
     fn different_keys_produce_different_responses() {
-        let nonce: Challenge = [0x42; 16];
+        let nonce = NONCE_KEY_SENSITIVITY;
         let key_a: SharedSecret = [0x01; 16];
         let key_b: SharedSecret = [0x02; 16];
         let ra = compute_challenge_response(&key_a, &nonce);

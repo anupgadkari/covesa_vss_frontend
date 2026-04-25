@@ -405,6 +405,10 @@ impl NfcCard {
 mod tests {
     use super::*;
 
+    /// Placeholder nonce for tests that only check zone gating — the crypto
+    /// result is asserted as `None` so the nonce value is irrelevant.
+    const ZONE_GATE_NONCE: Challenge = [0xBE; 16];
+
     fn test_secret(seed: u8) -> SharedSecret {
         [seed; 16]
     }
@@ -434,7 +438,7 @@ mod tests {
         let mut fob = KeyFob::new(1, true, test_secret(0xAA));
         fob.zone = Zone::Approach;
         assert!(
-            fob.respond_to_challenge(&[0; 16]).is_none(),
+            fob.respond_to_challenge(&ZONE_GATE_NONCE).is_none(),
             "approach zone should not support challenge-response"
         );
     }
@@ -548,7 +552,7 @@ mod tests {
         // the physical device behavior.
         let mut fob = KeyFob::new(5, false, test_secret(0xFF));
         fob.zone = Zone::DriverDoor;
-        assert!(fob.respond_to_challenge(&[0x42; 16]).is_some());
+        assert!(fob.respond_to_challenge(&ZONE_GATE_NONCE).is_some());
     }
 
     // ── BlePhone tests ─────────────────────────────────────────────
@@ -571,7 +575,7 @@ mod tests {
         let mut phone = BlePhone::new(1, test_secret(0xDD));
         phone.zone = Zone::Approach;
         assert!(phone.rssi_response().is_some());
-        assert!(phone.respond_to_challenge(&[0; 16]).is_none());
+        assert!(phone.respond_to_challenge(&ZONE_GATE_NONCE).is_none());
     }
 
     // ── NfcCard tests ──────────────────────────────────────────────
@@ -589,7 +593,7 @@ mod tests {
     #[test]
     fn nfc_no_response_when_not_present() {
         let card = NfcCard::new(1, test_secret(0xEE));
-        assert!(card.respond_to_challenge(&[0; 16]).is_none());
+        assert!(card.respond_to_challenge(&ZONE_GATE_NONCE).is_none());
     }
 
     // ── FobButton tests ────────────────────────────────────────────
