@@ -164,6 +164,8 @@ const INIT_STATE={
   'Body.Lights.Brake.IsActive':false,
   'Body.Lights.Backup.IsActive':false,
   'Body.Lights.LicensePlate.IsOn':false,
+  'Body.Lights.LightSwitch':'OFF',
+  'Body.Switches.HighBeam.IsEngaged':false,
   'Body.Lights.DirectionIndicator.Left.IsSignaling':false,
   'Body.Lights.DirectionIndicator.Right.IsSignaling':false,
   'Body.Lights.Hazard.IsSignaling':false,
@@ -1206,8 +1208,20 @@ function ControlPanel({s,set}){
     <div className="cpscroll">
 
       <SG title="Exterior Lighting" vss="Body.Lights" def={true} lit={anyLight}>
-        <BR label="Low beam" k="Body.Lights.Beam.Low.IsOn" s={s} set={set}/>
-        <BR label="High beam" k="Body.Lights.Beam.High.IsOn" s={s} set={set} c="b"/>
+        {/* Light switch — drives ManualLighting feature */}
+        <div style={{display:'flex',alignItems:'center',gap:'6px',padding:'4px 0'}}>
+          <div style={{fontSize:'10px',color:'var(--dim)',minWidth:'90px'}}>Light switch</div>
+          {['OFF','POSITION','DRL','AUTO','BEAM'].map(m=>(
+            <button key={m} onClick={()=>set('Body.Lights.LightSwitch',m)}
+              style={{padding:'2px 6px',fontSize:'9px',borderRadius:'3px',border:'1px solid var(--bdr2)',
+                background:s['Body.Lights.LightSwitch']===m?'rgba(252,211,77,.15)':'var(--s3)',
+                color:s['Body.Lights.LightSwitch']===m?'var(--amber)':'var(--dim)',cursor:'pointer'}}>
+              {m}
+            </button>
+          ))}
+        </div>
+        {/* High beam stalk — only effective when light switch is BEAM or AUTO */}
+        <BR label="High beam stalk" k="Body.Switches.HighBeam.IsEngaged" s={s} set={set} c="b"/>
         <BR label="DRL (running lights)" k="Body.Lights.Running.IsOn" s={s} set={set}/>
         <BR label="Parking lights" k="Body.Lights.Parking.IsOn" s={s} set={set} c="a"/>
         <BR label="Front fog" k="Body.Lights.Fog.Front.IsOn" s={s} set={set} c="a"/>

@@ -13,6 +13,7 @@ use vss_bridge::config;
 use vss_bridge::features::double_lock_release::DoubleLockRelease;
 use vss_bridge::features::hazard_lighting::HazardLighting;
 use vss_bridge::features::lock_feedback::LockFeedback;
+use vss_bridge::features::manual_lighting::ManualLighting;
 use vss_bridge::features::rke::{PairedFob, RkeFeature};
 use vss_bridge::features::thumb_pad_lock::ThumbPadLock;
 use vss_bridge::features::turn_indicator::TurnIndicator;
@@ -70,6 +71,9 @@ async fn main() -> anyhow::Result<()> {
     let door_lock_arb = Arc::new(door_lock_arb);
 
     // ── Feature Business Logic ──────────────────────────────────────
+    // ManualLighting — low beam and high beam stalk control, ignition-gated.
+    tokio::spawn(ManualLighting::new(Arc::clone(&bus)).run());
+
     // HazardLighting — no ignition gate, works in any power state
     tokio::spawn(HazardLighting::new(Arc::clone(&lighting_arb), Arc::clone(&bus)).run());
 
@@ -128,7 +132,7 @@ async fn main() -> anyhow::Result<()> {
     // TODO: remaining features
     // tokio::spawn(AutoRelock::from_config(Arc::clone(&door_lock_arb), Arc::clone(&bus), &_platform_config).run());
 
-    tracing::info!("features spawned: HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock");
+    tracing::info!("features spawned: ManualLighting, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock");
 
     // ── Plant Models ────────────────────────────────────────────────
     // Simulate physical lamp behavior the M7 / smart actuator firmware
