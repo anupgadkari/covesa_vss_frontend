@@ -234,8 +234,7 @@ async fn main() -> anyhow::Result<()> {
     });
 
     tracing::info!("vss-bridge ready");
-    tracing::info!("  HMI (sensors):   http://localhost:{http_port}/vss-hmi-body-sensors.html");
-    tracing::info!("  HMI (actuators): http://localhost:{http_port}/vss-hmi-body-actuators.html");
+    tracing::info!("  HMI:             http://localhost:{http_port}/vss-hmi.html");
     tracing::info!("  WebSocket:       ws://localhost:8080");
     tracing::info!("  Press Ctrl+C to stop");
 
