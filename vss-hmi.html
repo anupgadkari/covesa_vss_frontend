@@ -595,7 +595,9 @@ function CombinedView({s,set,onDeviceSelect}){
           onClick={open?()=>set(pfx+'.CloseCmd',true):undefined}
           onMouseDown={open||dblLock||locked?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',true)}
           onMouseUp={open||dblLock||locked?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',false)}
-          onMouseLeave={open||dblLock||locked?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',false)}/>
+          onMouseLeave={open||dblLock||locked?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',false)}>
+          <title>{open?'Outside handle — click to close door':dblLock?'Outside handle — double-locked, cannot pull':locked?'Outside handle — locked, cannot pull':'Outside handle — hold to pull open'}</title>
+        </rect>
         {/* Inner handle — when door open: click to close; when closed: drag to pull */}
         <rect x={hInX} y={hY-4} width="6" height="8" rx="1"
           fill={open?'#0DC8C8':inPulled?'#34D399':dblLock?'#4B2020':'#1E3A28'}
@@ -604,12 +606,16 @@ function CombinedView({s,set,onDeviceSelect}){
           onClick={open?()=>set(pfx+'.CloseCmd',true):undefined}
           onMouseDown={open||dblLock?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',true)}
           onMouseUp={open||dblLock?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',false)}
-          onMouseLeave={open||dblLock?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',false)}/>
+          onMouseLeave={open||dblLock?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',false)}>
+          <title>{open?'Inside handle — click to close door':dblLock?'Inside handle — double-locked, cannot pull':'Inside handle — hold to pull open'}</title>
+        </rect>
         {/* Soldier sill-pin — vertical rect, inner window-sill edge */}
         <rect x={soldX} y={soldY} width={soldW} height={soldH} rx="1"
           fill={lockFill} stroke={lockStroke} strokeWidth="0.8"
           style={{cursor:dblLock?'not-allowed':'pointer'}}
-          onClick={dblLock?undefined:()=>set(pfx+'.Soldier.IsUnlocked',locked)}/>
+          onClick={dblLock?undefined:()=>set(pfx+'.Soldier.IsUnlocked',locked)}>
+          <title>{dblLock?'Sill pin — double-locked, release via RKE first':locked?'Sill pin — locked · click to unlock':'Sill pin — unlocked · click to lock'}</title>
+        </rect>
         {/* Latch indicator — leading edge of door */}
         <rect x={isLeft?rx:rx+rw-3} y={ry+Math.floor(rh*0.6)} width="3" height="6" rx="1"
           fill={latched?'#22C55E':'#F59E0B'} opacity="0.8"/>
