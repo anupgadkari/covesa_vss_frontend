@@ -154,6 +154,8 @@ const INIT_STATE={
   // Vehicle power state (powertrain-agnostic — standard VSS v4.0)
   'Vehicle.LowVoltageSystemState':'OFF',
   'Vehicle.Powertrain.Type':'COMBUSTION',
+  // Ambient light sensor — drives ManualLighting AUTO mode and Follow-Me-Home
+  'Body.Lights.AmbientLightSensor.Illuminance':10000,
   // Lights
   'Body.Lights.Beam.Low.IsOn':false,
   'Body.Lights.Beam.High.IsOn':false,
@@ -1217,6 +1219,25 @@ function ControlPanel({s,set}){
                 background:s['Body.Lights.LightSwitch']===m?'rgba(252,211,77,.15)':'var(--s3)',
                 color:s['Body.Lights.LightSwitch']===m?'var(--amber)':'var(--dim)',cursor:'pointer'}}>
               {m}
+            </button>
+          ))}
+        </div>
+        {/* Ambient lux — gates AUTO mode and Follow-Me-Home (threshold 200 lux) */}
+        <div style={{display:'flex',alignItems:'center',gap:'6px',padding:'4px 0',flexWrap:'wrap'}}>
+          <div style={{fontSize:'10px',color:'var(--dim)',minWidth:'90px'}}>
+            Ambient lux
+            <span style={{marginLeft:'6px',fontWeight:600,color:
+              s['Body.Lights.AmbientLightSensor.Illuminance']<200?'var(--amber)':'var(--muted)'}}>
+              {(s['Body.Lights.AmbientLightSensor.Illuminance']||0).toLocaleString()}
+              {s['Body.Lights.AmbientLightSensor.Illuminance']<200?' ↓dark':''}
+            </span>
+          </div>
+          {[{l:'Night',v:5},{l:'Tunnel',v:50},{l:'Dusk',v:100},{l:'Day',v:25000}].map(p=>(
+            <button key={p.l} onClick={()=>set('Body.Lights.AmbientLightSensor.Illuminance',p.v)}
+              style={{padding:'2px 6px',fontSize:'9px',borderRadius:'3px',border:'1px solid var(--bdr2)',
+                background:s['Body.Lights.AmbientLightSensor.Illuminance']===p.v?'rgba(252,211,77,.15)':'var(--s3)',
+                color:s['Body.Lights.AmbientLightSensor.Illuminance']===p.v?'var(--amber)':'var(--dim)',cursor:'pointer'}}>
+              {p.l}
             </button>
           ))}
         </div>
