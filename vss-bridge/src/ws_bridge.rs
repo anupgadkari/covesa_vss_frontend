@@ -45,6 +45,7 @@ const INPUT_SIGNALS: &[VssPath] = &[
     "Body.Connectivity.NfcCardPresent",
     "Body.Connectivity.NfcPhonePresent",
     "Vehicle.Safety.CrashDetected",
+    "Body.Lights.AmbientLightSensor.Illuminance",
     // Bulb defect fault-injection (HMI toggles to simulate failed lamp).
     // Three physical lamps per side: Front, Side (mirror repeater), Rear.
     "Body.Lights.DirectionIndicator.Left.Lamp.Front.IsDefect",
@@ -629,8 +630,10 @@ fn json_to_signal_value(val: &serde_json::Value) -> SignalValue {
             if let Some(f) = n.as_f64() {
                 if f.fract() == 0.0 && (0.0..=255.0).contains(&f) {
                     SignalValue::Uint8(f as u8)
+                } else if f.fract() == 0.0 && (256.0..=65535.0).contains(&f) {
+                    SignalValue::Uint16(f as u16)
                 } else if f.fract() == 0.0 {
-                    SignalValue::Int16(f as i16)
+                    SignalValue::Int16(f.clamp(-32768.0, 32767.0) as i16)
                 } else {
                     SignalValue::Float(f as f32)
                 }

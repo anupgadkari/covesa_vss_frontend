@@ -72,7 +72,13 @@ async fn main() -> anyhow::Result<()> {
 
     // ── Feature Business Logic ──────────────────────────────────────
     // ManualLighting — low beam and high beam stalk control, ignition-gated.
-    tokio::spawn(ManualLighting::new(Arc::clone(&bus)).run());
+    tokio::spawn(
+        ManualLighting::new(
+            Arc::clone(&bus),
+            _platform_config.vehicle_line.auto_headlamp_lux_threshold,
+        )
+        .run(),
+    );
 
     // HazardLighting — no ignition gate, works in any power state
     tokio::spawn(HazardLighting::new(Arc::clone(&lighting_arb), Arc::clone(&bus)).run());

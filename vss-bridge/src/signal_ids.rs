@@ -255,6 +255,10 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Body.Doors.Row1.Left.Handle.Outside.LockPad.IsPressed" => Some(0x0014_0002),
         "Body.Doors.Row1.Right.Handle.Outside.LockPad.IsPressed" => Some(0x0014_0003),
 
+        // Ambient light sensor (OEM custom — not in standard VSS v4.x).
+        // Used by ManualLighting AUTO mode to gate low-beam activation.
+        "Body.Lights.AmbientLightSensor.Illuminance" => Some(0x0015_0001),
+
         _ => None,
     }
 }
@@ -521,6 +525,7 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
         "Body.Doors.Row1.Right.Handle.Outside.LockPad.IsPressed",
         0x0014_0003,
     ),
+    ("Body.Lights.AmbientLightSensor.Illuminance", 0x0015_0001),
 ];
 
 #[cfg(test)]

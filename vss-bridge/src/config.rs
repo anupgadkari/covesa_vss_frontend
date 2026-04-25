@@ -160,6 +160,11 @@ pub struct VehicleLineCal {
     /// continues for this many complete flash cycles (on + off = one flash)
     /// before releasing. Set to 0 to disable comfort blink.
     pub lane_change_flash_count: u8,
+
+    /// Ambient illuminance threshold for AUTO headlamp mode (lux).
+    /// Low beam activates when the ambient light sensor reads below this value.
+    /// Typical dusk/dawn threshold: 200 lux (aligned with ECE R48 §6.1).
+    pub auto_headlamp_lux_threshold: u16,
 }
 
 impl Default for VehicleLineCal {
@@ -173,6 +178,7 @@ impl Default for VehicleLineCal {
             lock_feedback_blink_period_ms: 400,
             shutdown_grace_secs: 30,
             lane_change_flash_count: 3,
+            auto_headlamp_lux_threshold: 200,
         }
     }
 }
