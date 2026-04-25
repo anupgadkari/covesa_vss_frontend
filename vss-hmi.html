@@ -668,14 +668,13 @@ function CombinedView({s,set,onDeviceSelect}){
     <rect x="255" y="568" width="35" height="10" rx="2" fill={tlc} opacity={tlo}>
       <title>{brake?'Right taillight — brake active':lo||hi||park?'Right taillight — tail on':'Right taillight — off'}</title>
     </rect>
-    {back&&<>
-      <rect x="70"  y="555" width="35" height="8" rx="2" fill="#FFF" opacity="0.8">
-        <title>Left backup / reverse light — active</title>
-      </rect>
-      <rect x="255" y="555" width="35" height="8" rx="2" fill="#FFF" opacity="0.8">
-        <title>Right backup / reverse light — active</title>
-      </rect>
-    </>}
+    {/* Backup / reverse lights — always visible; y=561 puts them in the bumper strip above taillights */}
+    <rect x="73" y="561" width="28" height="7" rx="2" fill={back?'#FFFFFF':'#131A28'} opacity={back?0.88:.45}>
+      <title>{back?'Left backup / reverse light — active':'Left backup / reverse light — off'}</title>
+    </rect>
+    <rect x="259" y="561" width="28" height="7" rx="2" fill={back?'#FFFFFF':'#131A28'} opacity={back?0.88:.45}>
+      <title>{back?'Right backup / reverse light — active':'Right backup / reverse light — off'}</title>
+    </rect>
 
     {/* Rear turn */}
     <rect x="65"  y="580" width="32" height="8" rx="2" fill={li?'#F59E0B':'#1A1208'} opacity={li?1:.25}>
@@ -828,9 +827,9 @@ function SideView({s}){
     {rfog&&<rect x="862" y="260" width="28" height="12" rx="2" fill="#EF2020" opacity=".88">
       <title>Rear fog lamp — on</title>
     </rect>}
-    {back&&<rect x="862" y="280" width="28" height="10" rx="2" fill="#FFFFFF" opacity=".82">
-      <title>Backup / reverse light — active</title>
-    </rect>}
+    <rect x="862" y="280" width="28" height="10" rx="2" fill={back?'#FFFFFF':'#131A28'} opacity={back?.88:.45}>
+      <title>{back?'Backup / reverse light — active':'Backup / reverse light — off'}</title>
+    </rect>
     {lp&&<rect x="862" y="298" width="28" height="8" rx="2" fill="#FFF8DC" opacity=".85">
       <title>License plate lamp — on</title>
     </rect>}
