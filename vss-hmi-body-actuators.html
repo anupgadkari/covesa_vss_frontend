@@ -363,8 +363,14 @@ function TopView({s, set}){
   const ffog=s['Body.Lights.Fog.Front.IsOn'],rfog=s['Body.Lights.Fog.Rear.IsOn'];
   const brake=s['Body.Lights.Brake.IsActive'],back=s['Body.Lights.Backup.IsActive'];
   const lp=s['Body.Lights.LicensePlate.IsOn'];
-  const li=s['Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn'];
-  const ri=s['Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn'];
+  const lLamp=s['Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn'];
+  const rLamp=s['Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn'];
+  // When both sides are commanded together (hazard or lock feedback) drive both
+  // rects from the same lamp signal so they always flip in the same React render,
+  // eliminating the split-frame flicker from two separate WebSocket messages.
+  const bothCmded=s['Body.Lights.Hazard.IsSignaling']||(s['Body.Lights.DirectionIndicator.Left.IsSignaling']&&s['Body.Lights.DirectionIndicator.Right.IsSignaling']);
+  const li=lLamp;
+  const ri=bothCmded?lLamp:rLamp;
   const hlc=hi?'#FFFFFF':lo?'#FCD34D':drl?'#C0C8D0':park?'#FEF3C7':'#0A1420';
   const hlo=hi?.95:lo?.85:drl?.45:park?.2:.04;
   const tlc=brake?'#FF2222':lo||hi||park?'#EF4444':'#1A0808';
@@ -777,8 +783,11 @@ function SideView({s}){
 /* ═══════════════ COCKPIT VIEW ═══════════════ */
 function CockpitView({s,set}){
   const lo=s['Body.Lights.Beam.Low.IsOn'],hi=s['Body.Lights.Beam.High.IsOn'];
-  const li=s['Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn'];
-  const ri=s['Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn'];
+  const lLamp=s['Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn'];
+  const rLamp=s['Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn'];
+  const bothCmded=s['Body.Lights.Hazard.IsSignaling']||(s['Body.Lights.DirectionIndicator.Left.IsSignaling']&&s['Body.Lights.DirectionIndicator.Right.IsSignaling']);
+  const li=lLamp;
+  const ri=bothCmded?lLamp:rLamp;
   const doorAjar=['Body.Doors.Row1.Left.IsOpen','Body.Doors.Row1.Right.IsOpen','Body.Doors.Row2.Left.IsOpen','Body.Doors.Row2.Right.IsOpen'].some(k=>s[k]);
   const ac=s['Cabin.HVAC.IsAirConditioningActive'];
   const defF=s['Cabin.HVAC.IsFrontDefrosterActive'],defR=s['Cabin.HVAC.IsRearDefrosterActive'];
