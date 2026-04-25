@@ -368,9 +368,9 @@ impl Default for VariantCal {
         Self {
             auto_lock_speed_kmh: 20,
             double_lock_enabled: false,
-            nfc_enabled: false,
-            ble_key_enabled: false,
-            remote_lock_enabled: false,
+            nfc_enabled: true,
+            ble_key_enabled: true,
+            remote_lock_enabled: true,
             welcome_light_pattern: WelcomeLightPattern::Simple,
             doors: DoorConfig::default(),
         }
@@ -700,7 +700,9 @@ mod tests {
         let vc = VariantCal::default();
         assert_eq!(vc.auto_lock_speed_kmh, 20);
         assert!(!vc.double_lock_enabled);
-        assert!(!vc.nfc_enabled);
+        assert!(vc.nfc_enabled);
+        assert!(vc.ble_key_enabled);
+        assert!(vc.remote_lock_enabled);
         assert!(vc.doors.row2_left); // 4-door by default
         assert!(!vc.doors.removable); // not removable by default
 
