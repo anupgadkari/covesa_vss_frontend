@@ -606,7 +606,7 @@ mod tests {
         model.set_fob_zone(1, Zone::Approach).await;
 
         bus.clear_history(); // clear RSSI publishes from zone changes
-        let nonce = [0x42u8; 16];
+        let nonce = crypto::random_nonce();
         model.handle_lf_challenge(&nonce).await;
 
         let history = bus.history();
@@ -915,7 +915,7 @@ mod tests {
         bus.clear_history();
 
         // Send LF challenge with a known nonce
-        let nonce = [0x42u8; 16];
+        let nonce = crypto::random_nonce();
         bus.inject(
             signals::PEPS_LF_CHALLENGE,
             SignalValue::String(bytes_to_hex(&nonce)),
@@ -967,7 +967,7 @@ mod tests {
 
         bus.clear_history();
 
-        let nonce = [0x77u8; 16];
+        let nonce = crypto::random_nonce();
         bus.inject(
             signals::PEPS_LF_CHALLENGE,
             SignalValue::String(bytes_to_hex(&nonce)),
@@ -1008,7 +1008,7 @@ mod tests {
 
         bus.clear_history();
 
-        let nonce = [0xABu8; 16];
+        let nonce = crypto::random_nonce();
         bus.inject(
             signals::PEPS_LF_CHALLENGE,
             SignalValue::String(bytes_to_hex(&nonce)),
@@ -1071,7 +1071,7 @@ mod tests {
 
         bus.clear_history();
 
-        let nonce = [0x33u8; 16];
+        let nonce = crypto::random_nonce();
         bus.inject(
             signals::PEPS_LF_CHALLENGE,
             SignalValue::String(bytes_to_hex(&nonce)),
@@ -1127,7 +1127,7 @@ mod tests {
 
         bus.clear_history();
 
-        let nonce = [0xEEu8; 16];
+        let nonce = crypto::random_nonce();
         bus.inject(
             signals::PEPS_BLE_CHALLENGE,
             SignalValue::String(bytes_to_hex(&nonce)),
@@ -1172,7 +1172,7 @@ mod tests {
 
         bus.clear_history();
 
-        let nonce = [0xDDu8; 16];
+        let nonce = crypto::random_nonce();
         bus.inject(
             signals::PEPS_BLE_CHALLENGE,
             SignalValue::String(bytes_to_hex(&nonce)),
@@ -1214,7 +1214,7 @@ mod tests {
 
         bus.clear_history();
 
-        let nonce = [0x99u8; 16];
+        let nonce = crypto::random_nonce();
         bus.inject(
             signals::PEPS_NFC_CHALLENGE,
             SignalValue::String(bytes_to_hex(&nonce)),
@@ -1249,7 +1249,7 @@ mod tests {
         // NFC card 1 defaults to NotPresent — don't move it
         bus.clear_history();
 
-        let nonce = [0x11u8; 16];
+        let nonce = crypto::random_nonce();
         bus.inject(
             signals::PEPS_NFC_CHALLENGE,
             SignalValue::String(bytes_to_hex(&nonce)),
@@ -1728,7 +1728,7 @@ mod tests {
 
         bus.clear_history();
 
-        let nonce = [0xBBu8; 16];
+        let nonce = crypto::random_nonce();
         bus.inject(
             signals::PEPS_BLE_CHALLENGE,
             SignalValue::String(bytes_to_hex(&nonce)),
@@ -1849,7 +1849,7 @@ mod tests {
         bus.clear_history();
 
         // Send NFC challenge
-        let nonce = [0xAAu8; 16];
+        let nonce = crypto::random_nonce();
         bus.inject(
             signals::PEPS_NFC_CHALLENGE,
             SignalValue::String(bytes_to_hex(&nonce)),
@@ -1891,7 +1891,7 @@ mod tests {
 
         bus.clear_history();
 
-        let nonce = [0x55u8; 16];
+        let nonce = crypto::random_nonce();
         bus.inject(
             signals::PEPS_NFC_CHALLENGE,
             SignalValue::String(bytes_to_hex(&nonce)),
@@ -1940,7 +1940,7 @@ mod tests {
 
         bus.clear_history();
 
-        let nonce = [0x77u8; 16];
+        let nonce = crypto::random_nonce();
         bus.inject(
             signals::PEPS_NFC_CHALLENGE,
             SignalValue::String(bytes_to_hex(&nonce)),
@@ -1994,7 +1994,7 @@ mod tests {
 
         bus.clear_history();
 
-        let nonce = [0xEEu8; 16];
+        let nonce = crypto::random_nonce();
         bus.inject(
             signals::PEPS_LF_CHALLENGE,
             SignalValue::String(bytes_to_hex(&nonce)),
@@ -2059,7 +2059,7 @@ mod tests {
 
         bus.clear_history();
 
-        let nonce = [0xABu8; 16];
+        let nonce = crypto::random_nonce();
         bus.inject(
             signals::PEPS_LF_CHALLENGE,
             SignalValue::String(bytes_to_hex(&nonce)),
@@ -2199,7 +2199,7 @@ mod tests {
 
         bus.clear_history();
 
-        let nonce = [0x12u8; 16];
+        let nonce = crypto::random_nonce();
         bus.inject(
             signals::PEPS_NFC_CHALLENGE,
             SignalValue::String(bytes_to_hex(&nonce)),

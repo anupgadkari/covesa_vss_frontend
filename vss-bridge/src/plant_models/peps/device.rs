@@ -417,7 +417,7 @@ mod tests {
         let mut fob = fob;
         fob.zone = Zone::DriverDoor;
 
-        let nonce: Challenge = [0x55; 16];
+        let nonce = crate::plant_models::peps::crypto::random_nonce();
         let resp = fob.respond_to_challenge(&nonce);
         assert!(
             resp.is_some(),
@@ -558,7 +558,7 @@ mod tests {
         let mut phone = BlePhone::new(1, test_secret(0xDD));
         phone.zone = Zone::DriverDoor;
 
-        let nonce: Challenge = [0x11; 16];
+        let nonce = crate::plant_models::peps::crypto::random_nonce();
         let resp = phone.respond_to_challenge(&nonce);
         assert!(resp.is_some());
 
@@ -581,7 +581,7 @@ mod tests {
         let mut card = NfcCard::new(1, test_secret(0xEE));
         card.position = NfcPosition::DriverHandle;
 
-        let nonce: Challenge = [0x22; 16];
+        let nonce = crate::plant_models::peps::crypto::random_nonce();
         let resp = card.respond_to_challenge(&nonce);
         assert!(resp.is_some());
     }
