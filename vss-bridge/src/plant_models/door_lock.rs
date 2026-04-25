@@ -302,7 +302,7 @@ mod tests {
     use super::*;
     use crate::adapters::mock::MockBus;
 
-    async fn run_one_tick(bus: &Arc<MockBus>, model: DoorLockPlantModel<MockBus>) {
+    async fn run_one_tick(_bus: &Arc<MockBus>, model: DoorLockPlantModel<MockBus>) {
         let handle = tokio::spawn(model.run());
         tokio::task::yield_now().await;
         tokio::task::yield_now().await;

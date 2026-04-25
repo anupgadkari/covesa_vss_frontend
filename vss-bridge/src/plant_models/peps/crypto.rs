@@ -343,6 +343,57 @@ fn mix_columns(state: &mut [u8; 16]) {
     }
 }
 
+// Helper exposed only for tests: full 16-byte AES-CMAC (no truncation).
+#[cfg(test)]
+fn aes_cmac_full(key: &SharedSecret, message: &[u8]) -> [u8; 16] {
+    let (k1, k2) = cmac_generate_subkeys(key);
+
+    let msg_len = message.len();
+    let (n, last_complete) = if msg_len == 0 {
+        (1usize, false)
+    } else {
+        let n = msg_len.div_ceil(16);
+        let last_complete = msg_len.is_multiple_of(16);
+        (n, last_complete)
+    };
+
+    let mut last_block = [0u8; 16];
+    if msg_len == 0 {
+        last_block[0] = 0x80;
+    } else {
+        let last_start = (n - 1) * 16;
+        let last_bytes = &message[last_start..];
+        last_block[..last_bytes.len()].copy_from_slice(last_bytes);
+        if !last_complete {
+            last_block[last_bytes.len()] = 0x80;
+        }
+    }
+
+    let subkey = if last_complete { &k1 } else { &k2 };
+    for i in 0..16 {
+        last_block[i] ^= subkey[i];
+    }
+
+    let round_keys = aes128_key_expansion(key);
+    let mut x = [0u8; 16];
+
+    for block_idx in 0..n.saturating_sub(1) {
+        let start = block_idx * 16;
+        let end = start + 16;
+        let block = &message[start..end];
+        for i in 0..16 {
+            x[i] ^= block[i];
+        }
+        aes128_encrypt_state(&mut x, &round_keys);
+    }
+
+    for i in 0..16 {
+        x[i] ^= last_block[i];
+    }
+    aes128_encrypt_state(&mut x, &round_keys);
+    x
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -566,55 +617,4 @@ mod tests {
             "different messages must produce different MACs"
         );
     }
-}
-
-// Helper exposed only for tests: full 16-byte AES-CMAC (no truncation).
-#[cfg(test)]
-fn aes_cmac_full(key: &SharedSecret, message: &[u8]) -> [u8; 16] {
-    let (k1, k2) = cmac_generate_subkeys(key);
-
-    let msg_len = message.len();
-    let (n, last_complete) = if msg_len == 0 {
-        (1usize, false)
-    } else {
-        let n = msg_len.div_ceil(16);
-        let last_complete = msg_len.is_multiple_of(16);
-        (n, last_complete)
-    };
-
-    let mut last_block = [0u8; 16];
-    if msg_len == 0 {
-        last_block[0] = 0x80;
-    } else {
-        let last_start = (n - 1) * 16;
-        let last_bytes = &message[last_start..];
-        last_block[..last_bytes.len()].copy_from_slice(last_bytes);
-        if !last_complete {
-            last_block[last_bytes.len()] = 0x80;
-        }
-    }
-
-    let subkey = if last_complete { &k1 } else { &k2 };
-    for i in 0..16 {
-        last_block[i] ^= subkey[i];
-    }
-
-    let round_keys = aes128_key_expansion(key);
-    let mut x = [0u8; 16];
-
-    for block_idx in 0..n.saturating_sub(1) {
-        let start = block_idx * 16;
-        let end = start + 16;
-        let block = &message[start..end];
-        for i in 0..16 {
-            x[i] ^= block[i];
-        }
-        aes128_encrypt_state(&mut x, &round_keys);
-    }
-
-    for i in 0..16 {
-        x[i] ^= last_block[i];
-    }
-    aes128_encrypt_state(&mut x, &round_keys);
-    x
 }

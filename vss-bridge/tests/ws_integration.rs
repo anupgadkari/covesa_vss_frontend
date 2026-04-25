@@ -17,12 +17,18 @@ use std::time::Duration;
 
 use futures::{SinkExt, StreamExt};
 use serde_json::{json, Value};
+use tokio::sync::Mutex;
 use tokio::time::{sleep, timeout, Instant};
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
 
 /// Port the bridge listens on (must match vss-bridge main.rs).
 const WS_URL: &str = "ws://127.0.0.1:8080";
+
+/// All ws_integration tests bind port 8080 via a subprocess — they must
+/// not run concurrently. `tokio::sync::Mutex` is used so the guard can
+/// be held across await points without triggering `clippy::await_holding_lock`.
+static BRIDGE_LOCK: Mutex<()> = Mutex::const_new(());
 
 // ---------------------------------------------------------------------------
 // Test fixture: launch & teardown the bridge process
@@ -162,6 +168,7 @@ async fn count_transitions(
 
 #[tokio::test]
 async fn hazard_switch_activates_both_indicators_via_ws() {
+    let _guard = BRIDGE_LOCK.lock().await;
     let _bridge = BridgeProcess::start();
     let (mut tx, mut rx) = connect_ws().await;
 
@@ -179,6 +186,7 @@ async fn hazard_switch_activates_both_indicators_via_ws() {
 
 #[tokio::test]
 async fn turn_stalk_requires_ignition_on() {
+    let _guard = BRIDGE_LOCK.lock().await;
     let _bridge = BridgeProcess::start();
     let (mut tx, mut rx) = connect_ws().await;
 
@@ -203,6 +211,7 @@ async fn turn_stalk_requires_ignition_on() {
 
 #[tokio::test]
 async fn hazard_engaged_then_disengaged_with_turn_resuming() {
+    let _guard = BRIDGE_LOCK.lock().await;
     let _bridge = BridgeProcess::start();
     let (mut tx, mut rx) = connect_ws().await;
 
@@ -260,6 +269,7 @@ async fn hazard_engaged_then_disengaged_with_turn_resuming() {
 
 #[tokio::test]
 async fn plant_model_blinks_at_expected_rate() {
+    let _guard = BRIDGE_LOCK.lock().await;
     let _bridge = BridgeProcess::start();
     let (mut tx, mut rx) = connect_ws().await;
 
