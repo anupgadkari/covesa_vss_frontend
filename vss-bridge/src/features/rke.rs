@@ -38,7 +38,7 @@ use tokio::select;
 use tokio::sync::watch;
 use tokio::time::sleep;
 
-use crate::arbiter::{DoorLockArbiter, DoorLockRequest, LockCommand};
+use crate::arbiter::{DoorLockArbiter, DoorLockRequest, LockCommand, FEEDBACK_REQUEST};
 use crate::config::PlatformConfig;
 use crate::ipc_message::{FeatureId, SignalValue};
 use crate::plant_models::peps::crypto::{aes_cmac_verify, SharedSecret};
@@ -446,6 +446,10 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
             if let Err(e) = self.arbiter.request(req).await {
                 tracing::error!(error = %e, "RKE: arbiter rejected UNLOCK ALL");
             }
+            let _ = self
+                .bus
+                .publish(FEEDBACK_REQUEST, SignalValue::String("unlock".into()))
+                .await;
         } else {
             // First press — driver door only (stage 1).
             tracing::info!(fob_id, "RKE: UNLOCK driver door (stage 1)");
@@ -456,6 +460,10 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
             if let Err(e) = self.arbiter.request(req).await {
                 tracing::error!(error = %e, "RKE: arbiter rejected UNLOCK DRIVER");
             }
+            let _ = self
+                .bus
+                .publish(FEEDBACK_REQUEST, SignalValue::String("unlock".into()))
+                .await;
             self.pending_unlock = Some(PendingUnlock {
                 started: now,
                 fob_id,
@@ -490,6 +498,10 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
             if let Err(e) = self.arbiter.request(req).await {
                 tracing::error!(error = %e, "RKE: arbiter rejected DOUBLE LOCK");
             }
+            let _ = self
+                .bus
+                .publish(FEEDBACK_REQUEST, SignalValue::String("lock".into()))
+                .await;
         } else {
             tracing::info!(fob_id, "RKE: LOCK all doors");
             let req = DoorLockRequest {
@@ -499,6 +511,10 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
             if let Err(e) = self.arbiter.request(req).await {
                 tracing::error!(error = %e, "RKE: arbiter rejected LOCK");
             }
+            let _ = self
+                .bus
+                .publish(FEEDBACK_REQUEST, SignalValue::String("lock".into()))
+                .await;
             if double_lock_available {
                 self.pending_double_lock = Some(PendingDoubleLock {
                     started: now,
@@ -531,6 +547,12 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
                     "Body.Trunk.OpenCmd",
                     crate::ipc_message::SignalValue::Bool(true),
                 )
+                .await;
+            // Trunk open is an external unlock — play unlock feedback and arm
+            // the trunk-close lock feedback (handled by LockFeedback feature).
+            let _ = self
+                .bus
+                .publish(FEEDBACK_REQUEST, SignalValue::String("trunk_unlock".into()))
                 .await;
         } else {
             tracing::info!(

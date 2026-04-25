@@ -1,144 +1,124 @@
-Feature: Lock Feedback Flash
+Feature: Lock / Unlock Feedback Flash
   As the body controller platform
-  I must flash both direction indicators in a distinct pattern
-  when the door lock state changes
-  so that the driver receives clear visual confirmation of whether
-  the vehicle has locked or unlocked — even when hazard or turn
-  indicators are already active.
+  I must flash both direction indicators in a distinct timed pattern
+  when an external-origin lock or unlock event occurs
+  so that the driver receives clear visual confirmation of the vehicle
+  state — even when hazard or turn indicators are already active.
+
+  # -------------------------------------------------------------------------
+  # Implementation model
+  # -------------------------------------------------------------------------
+  # This feature subscribes to Body.Doors.CentralLock.FeedbackRequest
+  # (published by RKE, WalkAwayLock, ThumbPadLock, AutoRelock) and plays
+  # timed flash patterns on both direction indicators via the Lighting domain
+  # arbiter at priority HIGH.
+  #
+  # Flash unit = 100 ms OFF lead-in → 900 ms ON.
+  # Gap between unlock flash units = 300 ms OFF.
+  # -------------------------------------------------------------------------
 
   # -------------------------------------------------------------------------
   # Requirements
   # -------------------------------------------------------------------------
-  # REQ-LKF-001: When any Body.Doors.*.IsLocked signal transitions from
-  #              FALSE to TRUE (unlock → lock), the feature SHALL play the
-  #              LOCK pattern: one long flash (~600 ms ON) on both direction
-  #              indicators, then release.
+  # REQ-LKF-001: When FeedbackRequest = "lock" is received, the feature SHALL
+  #              play the LOCK pattern: [100 ms OFF] [900 ms ON] → release.
   #
-  # REQ-LKF-002: When any Body.Doors.*.IsLocked signal transitions from
-  #              TRUE to FALSE (lock → unlock), the feature SHALL play the
-  #              UNLOCK pattern: two quick flashes (~150 ms ON, 100 ms OFF,
-  #              150 ms ON) on both direction indicators, then release.
+  # REQ-LKF-002: When FeedbackRequest = "unlock" is received, the feature SHALL
+  #              play the UNLOCK pattern:
+  #              [100 ms OFF] [900 ms ON] [300 ms OFF] [100 ms OFF] [900 ms ON]
+  #              → release.
   #
-  # REQ-LKF-003: Lock feedback SHALL OVERLAY on any active hazard or turn
-  #              indicator signaling. While the lock/unlock pattern is
-  #              playing, it temporarily takes control of both indicators.
-  #              After the pattern completes, the underlying hazard or turn
-  #              signal resumes without interruption.
+  # REQ-LKF-003: When FeedbackRequest = "trunk_unlock" is received, the feature
+  #              SHALL play the UNLOCK pattern and additionally arm a trunk-close
+  #              latch: when Body.Trunk.IsOpen subsequently transitions to false,
+  #              a LOCK pattern SHALL be played automatically.
   #
-  # REQ-LKF-004: To achieve overlay behavior, lock feedback requests SHALL
-  #              use priority HIGH (3) — the same as Hazard. This ensures
-  #              the pattern is never suppressed by an active turn or
-  #              hazard signal. The feature self-limits by releasing
-  #              priority after the pattern completes.
+  # REQ-LKF-004: Lock feedback SHALL overlay on any active hazard or turn
+  #              indicator signaling. Both indicators are claimed at priority HIGH.
+  #              After the pattern completes the claims are released, allowing the
+  #              underlying hazard or turn signal to resume uninterrupted.
   #
-  # REQ-LKF-005: After the lock/unlock pattern completes, the feature
-  #              SHALL release arbiter ownership by publishing both
-  #              indicators = FALSE at priority HIGH. The arbiter then
-  #              falls back to the next-highest pending request (hazard
-  #              or turn), restoring the underlying signal.
+  # REQ-LKF-005: If a new FeedbackRequest arrives while a pattern is playing,
+  #              the current task SHALL be aborted, all arbiter claims released,
+  #              and the new pattern SHALL start immediately from the beginning.
   #
-  # REQ-LKF-006: The lock feedback feature SHALL subscribe to door lock
-  #              state change events (Body.Doors.*.IsLocked), which are
-  #              STATE_UPDATE signals from the Safety Monitor — not switch
-  #              inputs.
+  # REQ-LKF-006: Unknown FeedbackRequest values SHALL be silently ignored
+  #              with a warning log.
   #
-  # REQ-LKF-007: If a second lock state change occurs during an active
-  #              pattern, the current pattern SHALL be interrupted and
-  #              the new pattern (lock or unlock) SHALL start immediately.
-  #
-  # REQ-LKF-008: The lock feedback feature SHALL have no dependency on any
-  #              other feature module.
-  #
-  # REQ-LKF-009: The lock feedback feature owns the blink PATTERN (on/off
-  #              durations for the feedback sequence) but does NOT own the
-  #              underlying LED blink cadence for hazard/turn signaling.
-  #              The lock feedback pattern is a deliberate timed sequence
-  #              distinct from the 1-2 Hz regulatory cadence.
+  # REQ-LKF-007: The lead-in OFF pulse ensures the flash has a visible start
+  #              edge even when the indicators are already illuminated.
   # -------------------------------------------------------------------------
 
   Background:
-    Given the vehicle low-voltage system is in state "ON"
-    And the Lighting domain arbiter is running
+    Given the Lighting domain arbiter is running
     And the Lock Feedback feature is running
+    And no hazard or turn signal is active
 
   # --- REQ-LKF-001 ---
-  Scenario: Door locked — one long flash
-    Given all doors are unlocked
-    When the driver door transitions to locked
-    Then the Lock Feedback feature plays the LOCK pattern:
-      | Step | Indicators | Duration |
-      | 1    | ON         | 600 ms   |
-      | 2    | OFF        | release  |
-    And both indicators are requested at priority HIGH during the pattern
+  Scenario: Lock feedback — single flash unit
+    When FeedbackRequest "lock" is published
+    Then the Lock Feedback feature plays the LOCK pattern on both indicators:
+      | Phase       | Indicators | Duration |
+      | Lead-in OFF | OFF        | 100 ms   |
+      | Flash ON    | ON         | 900 ms   |
+      | Release     | released   | —        |
+    And both indicators are claimed at priority HIGH during the pattern
 
   # --- REQ-LKF-002 ---
-  Scenario: Door unlocked — two quick flashes
-    Given the driver door is locked
-    When the driver door transitions to unlocked
-    Then the Lock Feedback feature plays the UNLOCK pattern:
-      | Step | Indicators | Duration |
-      | 1    | ON         | 150 ms   |
-      | 2    | OFF        | 100 ms   |
-      | 3    | ON         | 150 ms   |
-      | 4    | OFF        | release  |
-    And both indicators are requested at priority HIGH during the pattern
+  Scenario: Unlock feedback — two flash units with gap
+    When FeedbackRequest "unlock" is published
+    Then the Lock Feedback feature plays the UNLOCK pattern on both indicators:
+      | Phase         | Indicators | Duration |
+      | Lead-in OFF   | OFF        | 100 ms   |
+      | Flash 1 ON    | ON         | 900 ms   |
+      | Gap OFF       | OFF        | 300 ms   |
+      | Lead-in 2 OFF | OFF        | 100 ms   |
+      | Flash 2 ON    | ON         | 900 ms   |
+      | Release       | released   | —        |
+    And both indicators are claimed at priority HIGH during the pattern
 
-  # --- REQ-LKF-003, REQ-LKF-004 ---
+  # --- REQ-LKF-003 ---
+  Scenario: Trunk unlock — unlock pattern then arm trunk-close latch
+    When FeedbackRequest "trunk_unlock" is published
+    Then the UNLOCK pattern plays (same as REQ-LKF-002)
+    And the feature arms an internal trunk-close flag
+    When Body.Trunk.IsOpen transitions to false
+    Then the LOCK pattern plays automatically
+    And the trunk-close flag is cleared
+
+  # --- REQ-LKF-003 ---
+  Scenario: Trunk closes without prior trunk_unlock — no feedback
+    Given no FeedbackRequest "trunk_unlock" has been received
+    When Body.Trunk.IsOpen transitions to false
+    Then no flash pattern is played
+
+  # --- REQ-LKF-004 ---
   Scenario: Lock flash overlays on active hazard signaling
-    Given the hazard switch is engaged
-    And both indicators are signaling due to hazard at priority HIGH
-    When a door lock state change occurs (lock event)
-    Then the Lock Feedback feature temporarily takes both indicators at priority HIGH
-    And the LOCK pattern (one long flash) plays over the hazard signaling
-    And after the pattern completes, hazard signaling resumes
-
-  # --- REQ-LKF-003, REQ-LKF-004 ---
-  Scenario: Unlock flash overlays on active left turn signal
-    Given the turn stalk is in position LEFT
-    And the left indicator is signaling at priority MEDIUM
-    When a door unlock state change occurs
-    Then the Lock Feedback feature takes both indicators at priority HIGH
-    And the UNLOCK pattern (two quick flashes) plays on both indicators
-    And after the pattern completes, the left turn signal resumes at priority MEDIUM
+    Given the hazard switch is engaged and both indicators are at priority HIGH
+    When FeedbackRequest "lock" is published
+    Then the Lock Feedback feature claims both indicators at priority HIGH
+    And the LOCK pattern plays over the existing hazard signaling
+    And after the pattern completes and claims are released, hazard signaling resumes
 
   # --- REQ-LKF-005 ---
-  Scenario: Underlying signal resumes after lock feedback releases
-    Given the hazard switch is engaged
-    And hazard is actively signaling both indicators
-    When a lock event triggers the LOCK feedback pattern
-    And the pattern completes (600 ms)
-    Then the Lock Feedback feature publishes both indicators = FALSE at priority HIGH
-    And the Lighting arbiter falls back to Hazard's pending HIGH request
-    And both indicators resume hazard signaling
+  Scenario: New request preempts in-progress pattern
+    Given FeedbackRequest "unlock" was published and the pattern is mid-sequence
+    When FeedbackRequest "lock" is published before the unlock pattern finishes
+    Then the unlock pattern is aborted immediately
+    And all arbiter claims are released
+    And the LOCK pattern starts from the beginning
+    And only one ON event occurs (the single lock flash)
 
-  # --- REQ-LKF-005 ---
-  Scenario: No underlying signal — indicators turn off after pattern
-    Given no hazard or turn signal is active
-    And all indicators are off
-    When a lock event triggers the LOCK feedback pattern
-    And the pattern completes
-    Then the Lock Feedback feature releases at priority HIGH
-    And both indicators turn off (no pending request to fall back to)
+  # --- REQ-LKF-006 ---
+  Scenario: Unknown FeedbackRequest value is ignored
+    When FeedbackRequest "activate_missiles" is published
+    Then no flash pattern is played
+    And a warning is logged
 
   # --- REQ-LKF-007 ---
-  Scenario: Lock during active unlock pattern — pattern restarts
-    Given a door unlock event triggered the UNLOCK pattern
-    And the UNLOCK pattern is mid-sequence (first flash ON)
-    When a second event occurs (door transitions to locked)
-    Then the UNLOCK pattern is interrupted
-    And the LOCK pattern (one long flash) starts immediately
-
-  # --- REQ-LKF-007 ---
-  Scenario: Rapid lock-lock does not stack patterns
-    Given a door lock event triggered the LOCK pattern
-    When a second door lock event occurs during the pattern
-    Then the LOCK pattern restarts from the beginning
-    And only one pattern plays at a time
-
-  # --- REQ-LKF-001, REQ-LKF-002 ---
-  Scenario: Multiple doors change state simultaneously
-    Given all four doors are unlocked
-    When all four doors transition to locked simultaneously (KeyfobPeps lock-all)
-    Then only one LOCK pattern plays (not four stacked patterns)
-    And the first lock event triggers the pattern; subsequent events within
-    the pattern window are absorbed
+  Scenario: Lead-in OFF creates visible start edge when indicators already lit
+    Given both indicators are currently ON due to hazard
+    When FeedbackRequest "lock" is published
+    Then the indicators first go OFF for 100 ms (the lead-in)
+    And then go ON for 900 ms (the flash)
+    And the start edge is visible even though indicators were already lit

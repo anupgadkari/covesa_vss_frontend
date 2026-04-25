@@ -352,6 +352,10 @@ pub enum LockCommand {
     LockAll,
     /// Superlock (double-lock) all doors.
     DoubleLockAll,
+    /// Clear double-lock on all doors without changing IsLocked.
+    /// Dispatched by DoubleLockRelease when ignition turns ON while double-locked.
+    /// Does NOT produce a FeedbackRequest (internal trigger).
+    ReleaseDouble,
 }
 
 /// A door-lock request submitted by a feature module.
@@ -568,11 +572,24 @@ async fn door_lock_loop<B: SignalBus>(
 
 /// Single command signal written by the arbiter to the M7 Locking SWC.
 ///
-/// The value is one of: `"unlock_driver"`, `"unlock_all"`, `"lock_all"`, `"lock_double"`.
+/// The value is one of: `"unlock_driver"`, `"unlock_all"`, `"lock_all"`,
+/// `"lock_double"`, `"release_double"`.
 /// The `DoorLockPlantModel` (M7 actuator simulator) subscribes to this signal
 /// and handles all per-door state updates — `IsLocked`, `IsDoubleLocked`,
 /// `Soldier.IsUnlocked` — from here.
 pub const CENTRAL_LOCK_CMD: VssPath = "Body.Doors.CentralLock.Command";
+
+/// Signal published by external-origin features to request a visual lock/unlock
+/// confirmation flash on both direction indicators.
+///
+/// Published by: RKE, WalkAwayLock, ThumbPadLock, AutoRelock.
+/// Subscribed by: LockFeedback.
+///
+/// Values:
+/// - `"lock"` — one flash unit (100 ms OFF lead-in + 900 ms ON)
+/// - `"unlock"` — two flash units with a 300 ms gap
+/// - `"trunk_unlock"` — two flash units + arms trunk-close lock feedback
+pub const FEEDBACK_REQUEST: VssPath = "Body.Doors.CentralLock.FeedbackRequest";
 
 /// Dispatch a lock command to the SignalBus as a single high-level token.
 async fn dispatch_lock_command<B: SignalBus>(req: &DoorLockRequest, bus: &Arc<B>) {
@@ -581,6 +598,7 @@ async fn dispatch_lock_command<B: SignalBus>(req: &DoorLockRequest, bus: &Arc<B>
         LockCommand::UnlockAll => "unlock_all",
         LockCommand::LockAll => "lock_all",
         LockCommand::DoubleLockAll => "lock_double",
+        LockCommand::ReleaseDouble => "release_double",
     };
     if let Err(e) = bus
         .publish(CENTRAL_LOCK_CMD, SignalValue::String(token.into()))
@@ -628,6 +646,15 @@ pub fn door_lock_arbiter<B: SignalBus>(
         },
         DoorLockAllowEntry {
             feature_id: FeatureId::CrashUnlock,
+        },
+        DoorLockAllowEntry {
+            feature_id: FeatureId::WalkAwayLock,
+        },
+        DoorLockAllowEntry {
+            feature_id: FeatureId::ThumbPadLock,
+        },
+        DoorLockAllowEntry {
+            feature_id: FeatureId::DoubleLockRelease,
         },
     ];
 

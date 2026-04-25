@@ -246,6 +246,15 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Body.PEPS.NfcChallenge" => Some(0x0013_0003),
         "Body.PEPS.ApproachPoll" => Some(0x0013_0004),
 
+        // Lock feedback request — published by external-origin features
+        // (RKE, walk-away, thumb-pad, auto-relock). LockFeedback subscribes.
+        // Values: "lock" | "unlock" | "trunk_unlock"
+        "Body.Doors.CentralLock.FeedbackRequest" => Some(0x0014_0001),
+
+        // Thumb-pad lock triggers — Row1 outside handle lock area (no Row2 pads).
+        "Body.Doors.Row1.Left.Handle.Outside.LockPad.IsPressed" => Some(0x0014_0002),
+        "Body.Doors.Row1.Right.Handle.Outside.LockPad.IsPressed" => Some(0x0014_0003),
+
         _ => None,
     }
 }
@@ -502,6 +511,16 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Body.PEPS.BleChallenge", 0x0013_0002),
     ("Body.PEPS.NfcChallenge", 0x0013_0003),
     ("Body.PEPS.ApproachPoll", 0x0013_0004),
+    // Lock feedback request and thumb-pad signals
+    ("Body.Doors.CentralLock.FeedbackRequest", 0x0014_0001),
+    (
+        "Body.Doors.Row1.Left.Handle.Outside.LockPad.IsPressed",
+        0x0014_0002,
+    ),
+    (
+        "Body.Doors.Row1.Right.Handle.Outside.LockPad.IsPressed",
+        0x0014_0003,
+    ),
 ];
 
 #[cfg(test)]

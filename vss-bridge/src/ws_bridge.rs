@@ -100,6 +100,9 @@ const INPUT_SIGNALS: &[VssPath] = &[
     "Body.Doors.Row1.Right.IsDoubleLocked",
     "Body.Doors.Row2.Left.IsDoubleLocked",
     "Body.Doors.Row2.Right.IsDoubleLocked",
+    // Thumb-pad lock inputs — Row 1 outside handle lock areas (HMI top-view).
+    "Body.Doors.Row1.Left.Handle.Outside.LockPad.IsPressed",
+    "Body.Doors.Row1.Right.Handle.Outside.LockPad.IsPressed",
 ];
 
 /// Signals the bridge pushes back to the HMI (actuator outputs from arbiters).

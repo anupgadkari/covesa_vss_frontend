@@ -285,6 +285,15 @@ impl<B: SignalBus + Send + Sync + 'static> DoorLockPlantModel<B> {
                             tracing::info!("DoorLock plant: lock_double (superlock)");
                             self.send_ack().await;
                         }
+                        "release_double" => {
+                            // Ignition-ON downgrade: clear superlock on all doors
+                            // while preserving IsLocked. No feedback flash.
+                            for door in ALL_DOORS {
+                                self.apply_double_lock_cmd(door, false).await;
+                            }
+                            tracing::info!("DoorLock plant: release_double (ignition ON, superlock cleared)");
+                            self.send_ack().await;
+                        }
                         other => {
                             tracing::warn!(cmd = other, "DoorLock plant: unknown command — ignored");
                         }

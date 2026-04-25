@@ -10,9 +10,13 @@ use tracing_subscriber::EnvFilter;
 use vss_bridge::adapters::mock::MockBus;
 use vss_bridge::arbiter;
 use vss_bridge::config;
+use vss_bridge::features::double_lock_release::DoubleLockRelease;
 use vss_bridge::features::hazard_lighting::HazardLighting;
+use vss_bridge::features::lock_feedback::LockFeedback;
 use vss_bridge::features::rke::{PairedFob, RkeFeature};
+use vss_bridge::features::thumb_pad_lock::ThumbPadLock;
 use vss_bridge::features::turn_indicator::TurnIndicator;
+use vss_bridge::features::walk_away_lock::WalkAwayLock;
 use vss_bridge::ipc_message::SignalValue;
 use vss_bridge::kuksa_sync;
 use vss_bridge::plant_models::blink_relay::BlinkRelay;
@@ -109,10 +113,22 @@ async fn main() -> anyhow::Result<()> {
         .run(),
     );
 
+    // LockFeedback — plays direction-indicator flash patterns for external lock/unlock events.
+    tokio::spawn(LockFeedback::new(Arc::clone(&bus), Arc::clone(&lighting_arb)).run());
+
+    // DoubleLockRelease — clears superlock on ignition ON (no feedback, internal trigger).
+    tokio::spawn(DoubleLockRelease::new(Arc::clone(&bus), Arc::clone(&door_lock_arb)).run());
+
+    // WalkAwayLock — locks when all PEPS devices leave the approach zone.
+    tokio::spawn(WalkAwayLock::new(Arc::clone(&bus), Arc::clone(&door_lock_arb)).run());
+
+    // ThumbPadLock — Row 1 outside handle thumb pad, 500 ms debounce.
+    tokio::spawn(ThumbPadLock::new(Arc::clone(&bus), Arc::clone(&door_lock_arb)).run());
+
     // TODO: remaining features
     // tokio::spawn(AutoRelock::from_config(Arc::clone(&door_lock_arb), Arc::clone(&bus), &_platform_config).run());
 
-    tracing::info!("features spawned: HazardLighting, TurnIndicator, RKE");
+    tracing::info!("features spawned: HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock");
 
     // ── Plant Models ────────────────────────────────────────────────
     // Simulate physical lamp behavior the M7 / smart actuator firmware

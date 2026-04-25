@@ -24,7 +24,7 @@ use futures::StreamExt;
 use tokio::select;
 use tokio::time::sleep;
 
-use crate::arbiter::{DoorLockArbiter, DoorLockRequest, LockCommand};
+use crate::arbiter::{DoorLockArbiter, DoorLockRequest, LockCommand, FEEDBACK_REQUEST};
 use crate::config::PlatformConfig;
 use crate::ipc_message::{FeatureId, SignalValue};
 use crate::signal_bus::{SignalBus, VssPath};
@@ -218,6 +218,11 @@ impl<B: SignalBus> AutoRelock<B> {
                     {
                         tracing::error!(error = %e, "AutoRelock: failed to submit LOCK");
                     }
+                    // Auto-relock follows an external unlock — provide lock feedback.
+                    let _ = self
+                        .bus
+                        .publish(FEEDBACK_REQUEST, SignalValue::String("lock".into()))
+                        .await;
                 }
                 TimerOutcome::DoorOpened | TimerOutcome::AlreadyLocked => {
                     // Back to phase 1
