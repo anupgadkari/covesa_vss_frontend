@@ -111,6 +111,26 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--white);fo
 .peps-btn{padding:3px 7px;border-radius:3px;font-family:var(--fm);font-size:8px;border:1px solid var(--bdr2);background:var(--s3);color:var(--dim);cursor:pointer;transition:all .13s;font-weight:600}
 .peps-btn:hover{color:var(--white);border-color:var(--white)}
 .peps-section{font-family:var(--fd);font-size:9px;letter-spacing:.14em;color:var(--dim);padding:8px 12px 4px;font-weight:500}
+/* ── Device panel ── */
+.devpanel{width:180px;flex-shrink:0;background:var(--s1);border-left:1px solid var(--bdr);display:flex;flex-direction:column;overflow:hidden}
+.devpanel-inner{flex:1;overflow-y:auto;padding:10px 8px;display:flex;flex-direction:column;gap:8px;scrollbar-width:thin;scrollbar-color:var(--bdr2) transparent}
+.devpanel-inner::-webkit-scrollbar{width:3px}
+.devpanel-inner::-webkit-scrollbar-thumb{background:var(--bdr2);border-radius:2px}
+.devpanel-hdr{height:32px;background:var(--s1);border-bottom:1px solid var(--bdr);display:flex;align-items:center;padding:0 10px;gap:6px;flex-shrink:0}
+.devpanel-title{font-family:var(--fm);font-size:9px;color:var(--amber);font-weight:700;letter-spacing:.12em}
+.devchip{font-family:var(--fm);font-size:8px;padding:3px 7px;border-radius:3px;border:1px solid var(--bdr2);color:var(--dim);cursor:pointer;transition:all .15s;font-weight:600;text-align:center}
+.devchip.active{font-weight:800}
+.devchip.inrange{box-shadow:0 0 5px currentColor}
+.devpanel-section{font-family:var(--fm);font-size:8px;color:var(--muted);font-weight:600;letter-spacing:.08em;padding:2px 0;border-top:1px solid var(--bdr);margin-top:2px}
+.devpanel-zone{display:flex;flex-direction:column;gap:3px}
+.devpanel-zoneval{font-family:var(--fm);font-size:12px;font-weight:700;line-height:1}
+.devpanel-prox{display:flex;gap:2px;margin-top:2px}
+.devpanel-proxseg{flex:1;height:5px;border-radius:2px;transition:all .3s}
+.devpanel-rssi{font-family:var(--fm);font-size:7px;color:var(--muted);word-break:break-all;line-height:1.4}
+.devpanel-btns{display:flex;flex-direction:column;gap:4px}
+.devpanel-btn{padding:6px 4px;border-radius:3px;font-family:var(--fm);font-size:8px;border:1px solid var(--bdr2);background:var(--s3);color:var(--dim);cursor:pointer;font-weight:600;transition:all .13s;text-align:center}
+.devpanel-btn:hover{color:var(--white);border-color:rgba(255,255,255,.4)}
+.devpanel-btn.fired{background:var(--amber2);border-color:rgba(245,158,11,.6);color:var(--amber)}
 </style>
 </head>
 <body>
@@ -324,58 +344,10 @@ function DeviceChip({device, pos, dimmed, onPointerDown}){
   </g>;
 }
 
-/* ── Fob button popup (rendered inside the SVG) ─────────────────── */
-function FobPopup({fobIndex, zone, px, py, set, onClose}){
-  // 5 buttons: LOCK UNLOCK TRUNK START PANIC
-  const btns=[
-    {val:'LOCK',         label:'LOCK',   c:'#1E4A6A'},
-    {val:'UNLOCK',       label:'UNLOCK', c:'#1A5A3A'},
-    {val:'TRUNK_RELEASE',label:'TRUNK',  c:'#5A4010'},
-    {val:'REMOTE_START', label:'START',  c:'#1A3A6A'},
-    {val:'PANIC_ALARM',  label:'PANIC',  c:'#6A1A1A'},
-  ];
-  const bw=23, bh=14, gap=2;
-  const w=bw*5+gap*4+16, h=54;
-  // Clamp so popup stays inside the "-200 -60 760 840" viewBox
-  const x=Math.max(-195, Math.min(px-w/2, 555-w));
-  const y=py+14; // just below the chip; if near bottom it overlaps anyway
-  function pressBtn(val){
-    const pfx=`Body.PEPS.Plant.KeyFob.${fobIndex}`;
-    set(`${pfx}.ButtonPress`, val);
-    setTimeout(()=>set(`${pfx}.ButtonPress`,'NONE'), 500);
-    onClose();
-  }
-  return <g style={{filter:'drop-shadow(0 3px 10px rgba(0,0,0,0.8))'}}>
-    {/* Card background */}
-    <rect x={x} y={y} width={w} height={h} rx={5} fill="#08111E" stroke="#1E3A5A" strokeWidth={1.2}/>
-    {/* Header strip */}
-    <rect x={x} y={y} width={w} height={17} rx={5} fill="#0D1E32"/>
-    <rect x={x} y={y+12} width={w} height={5} fill="#0D1E32"/>
-    <text x={x+8} y={y+12} fill="#F59E0B" fontSize="9" fontFamily="Share Tech Mono" fontWeight="700">FOB {fobIndex}</text>
-    <text x={x+50} y={y+12} fill="#3A5070" fontSize="8" fontFamily="Share Tech Mono">{zone}</text>
-    {/* Close × */}
-    <text x={x+w-10} y={y+12} fill="#506070" fontSize="11" fontFamily="Share Tech Mono" fontWeight="700"
-      style={{cursor:'pointer'}} onClick={onClose}>×</text>
-    {/* Buttons */}
-    {btns.map((b,i)=>(
-      <g key={b.val} style={{cursor:'pointer'}} onClick={()=>pressBtn(b.val)}>
-        <rect x={x+8+(bw+gap)*i} y={y+21} width={bw} height={bh} rx={2}
-          fill={b.c} stroke="#304060" strokeWidth={0.5} opacity={0.85}/>
-        <text x={x+8+(bw+gap)*i+bw/2} y={y+30} textAnchor="middle"
-          fill="#BCD" fontSize="6.5" fontFamily="Share Tech Mono" fontWeight="700">{b.label}</text>
-      </g>
-    ))}
-    {/* Tip: press resets automatically */}
-    <text x={x+w/2} y={y+h-5} textAnchor="middle" fill="#2A3A50" fontSize="7" fontFamily="Share Tech Mono">press → auto-reset 500 ms</text>
-  </g>;
-}
-
-function CombinedView({s,set}){
+function CombinedView({s,set,onDeviceSelect}){
   const svgRef=useRef(null);
   const [drag,setDrag]=useState(null);
-  const [popup,setPopup]=useState(null);
   // drag={key,type,label,color,paired,isNfc,x,y,ox,oy}
-  // popup={fobIndex,zone,x,y}
 
   // Build device list
   const allDevices=[];
@@ -415,7 +387,6 @@ function CombinedView({s,set}){
 
   function startDrag(e,device){
     e.preventDefault();
-    if(popup) setPopup(null);
     const {x,y}=svgCoords(e);
     setDrag({...device,x,y,ox:x,oy:y});
   }
@@ -430,10 +401,12 @@ function CombinedView({s,set}){
     if(!drag)return;
     const {x,y}=svgCoords(e);
     const dist=Math.hypot(x-drag.ox, y-drag.oy);
-    // Tap (< 8 SVG units) on a paired fob → open button popup instead of dropping
-    if(dist<8 && drag.type==='fob' && drag.paired){
-      const m=drag.key.match(/KeyFob\.(\d+)/);
-      if(m) setPopup({fobIndex:parseInt(m[1]), zone:drag.zone, x:drag.ox, y:drag.oy});
+    // Tap (< 8 SVG units) on a fob or phone → select it in the device panel
+    if(dist<8 && (drag.type==='fob'||drag.type==='phone') && drag.paired){
+      const mFob=drag.key.match(/KeyFob\.(\d+)/);
+      const mPh=drag.key.match(/BlePhone\.(\d+)/);
+      if(mFob) onDeviceSelect({type:'fob',  index:parseInt(mFob[1])});
+      if(mPh)  onDeviceSelect({type:'phone',index:parseInt(mPh[1])});
       setDrag(null);
       return;
     }
@@ -702,18 +675,6 @@ function CombinedView({s,set}){
     {/* Drag ghost follows pointer */}
     {drag&&<DeviceChip device={drag} pos={{x:drag.x,y:drag.y}} dimmed={false}/>}
 
-    {/* Fob popup — transparent backdrop closes on outside click, then the card */}
-    {popup&&<>
-      <rect x="-200" y="-60" width="760" height="840" fill="transparent"
-        style={{cursor:'default'}} onClick={()=>setPopup(null)}/>
-      <FobPopup
-        fobIndex={popup.fobIndex}
-        zone={popup.zone}
-        px={popup.x} py={popup.y}
-        set={set}
-        onClose={()=>setPopup(null)}/>
-    </>}
-
     {/* Legend */}
     <g transform="translate(-175,760)">
       <rect x={0} y={-4} width={18} height={11} rx={3} fill="#F59E0B" opacity={.85}/>
@@ -899,6 +860,125 @@ const PEPS_BTN_OPTS=[
   {val:'LOCK',label:'LOCK'},{val:'UNLOCK',label:'UNLOCK'},
   {val:'TRUNK_RELEASE',label:'TRUNK'},{val:'REMOTE_START',label:'START'},{val:'PANIC_ALARM',label:'PANIC'},
 ];
+
+/* ── Zone proximity bar ────────────────────────────────────────── */
+const ZONE_PROX=[
+  {key:'OutOfRange', label:'OUT',      c:'#1E2C3C'},
+  {key:'RfRange',    label:'RF',       c:'#4A9EF5'},
+  {key:'Approach',   label:'APPR',     c:'#F59E0B'},
+  {key:'Interior',   label:'INT',      c:'#10D98A'},
+];
+const INTERIOR_ZONES=new Set(['Hood','Trunk','TrunkInside','DriverDoor','PassengerDoor','Cabin']);
+
+/* ── Dedicated Auth Device Panel ──────────────────────────────── */
+function DevicePanel({s, set, sel, setSel}){
+  const [firedBtn, setFiredBtn]=useState(null);
+
+  // Device selector list: fobs 1-4 (paired) + phones 1-2
+  const devices=[
+    ...[1,2,3,4].map(i=>({type:'fob',  index:i, label:`F${i}`, color:'#F59E0B', pfx:`Body.PEPS.Plant.KeyFob.${i}`})),
+    ...[1,2]    .map(i=>({type:'phone',index:i, label:`P${i}`, color:'#4A9EF5', pfx:`Body.PEPS.Plant.BlePhone.${i}`})),
+  ];
+
+  const dev=devices.find(d=>d.type===sel.type&&d.index===sel.index)||devices[0];
+  const zone=s[`${dev.pfx}.Zone`]||'OutOfRange';
+  const rssi=s[`${dev.pfx}.RssiResponse`]||'';
+  const rfMsg=dev.type==='fob'?(s[`${dev.pfx}.RfMessage`]||''):'';
+  const btnPress=dev.type==='fob'?(s[`${dev.pfx}.ButtonPress`]||'NONE'):null;
+
+  // Zone colour
+  const zoneColor=INTERIOR_ZONES.has(zone)?'#10D98A':
+    zone==='Approach'?'#F59E0B':zone==='RfRange'?'#4A9EF5':'#2A3A50';
+
+  // Proximity bar active segment
+  const proxActive=INTERIOR_ZONES.has(zone)?'Interior':zone;
+
+  function pressBtn(val){
+    setFiredBtn(val);
+    set(`${dev.pfx}.ButtonPress`, val);
+    setTimeout(()=>{set(`${dev.pfx}.ButtonPress`,'NONE');setFiredBtn(null);}, 600);
+  }
+
+  return <div className="devpanel">
+    <div className="devpanel-hdr">
+      <div style={{width:6,height:6,borderRadius:2,background:'var(--teal)',opacity:.6}}/>
+      <span className="devpanel-title">AUTH DEVICE</span>
+    </div>
+    <div className="devpanel-inner">
+
+      {/* Device chips — tap to select */}
+      <div style={{display:'flex',flexWrap:'wrap',gap:4}}>
+        {devices.map(d=>{
+          const dZone=s[`${d.pfx}.Zone`]||'OutOfRange';
+          const inRange=dZone!=='OutOfRange';
+          const isSel=d.type===sel.type&&d.index===sel.index;
+          return <div key={d.type+d.index}
+            className={`devchip${isSel?' active':''}${inRange?' inrange':''}`}
+            style={{color:isSel||inRange?d.color:'',
+                    borderColor:isSel?d.color:inRange?`${d.color}60`:'',
+                    background:isSel?`${d.color}18`:''}}
+            onClick={()=>setSel({type:d.type,index:d.index})}>
+            {d.label}
+          </div>;
+        })}
+      </div>
+
+      {/* Zone display */}
+      <div className="devpanel-zone">
+        <div className="devpanel-section">ZONE</div>
+        <div className="devpanel-zoneval" style={{color:zoneColor}}>{zone}</div>
+        {/* Proximity bar */}
+        <div className="devpanel-prox">
+          {ZONE_PROX.map(seg=>{
+            const isActive=seg.key===proxActive;
+            return <div key={seg.key} className="devpanel-proxseg"
+              style={{background:isActive?seg.c:'var(--bdr)',
+                      flex:seg.key==='Interior'?1.5:1,
+                      opacity:isActive?1:.4,
+                      boxShadow:isActive?`0 0 6px ${seg.c}`:''}}
+              title={seg.label}/>;
+          })}
+        </div>
+        <div style={{display:'flex',gap:2,marginTop:1}}>
+          {ZONE_PROX.map(seg=><span key={seg.key}
+            style={{flex:seg.key==='Interior'?1.5:1,fontFamily:'var(--fm)',fontSize:'6px',
+                    color:seg.key===proxActive?seg.c:'var(--muted)',textAlign:'center'}}>
+            {seg.label}</span>)}
+        </div>
+      </div>
+
+      {/* RSSI / RF payload */}
+      {(rssi||rfMsg)&&<div>
+        <div className="devpanel-section">SIGNAL</div>
+        {rssi&&<div className="devpanel-rssi">{rssi.slice(0,60)}</div>}
+        {rfMsg&&<div className="devpanel-rssi">{rfMsg.slice(0,60)}</div>}
+      </div>}
+
+      {/* Fob buttons */}
+      {dev.type==='fob'&&<div>
+        <div className="devpanel-section">RKE BUTTONS</div>
+        <div className="devpanel-btns">
+          {PEPS_BTN_OPTS.map(b=>(
+            <button key={b.val}
+              className={`devpanel-btn${firedBtn===b.val||btnPress===b.val?' fired':''}`}
+              onClick={()=>pressBtn(b.val)}>
+              {b.label}
+            </button>
+          ))}
+        </div>
+        <div style={{marginTop:6,fontFamily:'var(--fm)',fontSize:'7px',color:'var(--muted)'}}>
+          press → auto-reset 600 ms
+        </div>
+      </div>}
+
+      {/* Phone — no buttons, just zone state */}
+      {dev.type==='phone'&&<div style={{fontFamily:'var(--fm)',fontSize:'8px',color:'var(--muted)',lineHeight:1.5}}>
+        BLE phone device.<br/>Zone is set by drag in top view.
+      </div>}
+
+    </div>
+  </div>;
+}
 
 function ControlPanel({s,set}){
   const anyDoor=['Row1.Left','Row1.Right','Row2.Left','Row2.Right'].some(d=>s[`Body.Doors.${d}.IsOpen`]);
@@ -1135,6 +1215,7 @@ function App(){
   const [view,setView]=useState('top');
   const [time,setTime]=useState(new Date());
   const [wsConnected,setWsConnected]=useState(false);
+  const [selDev,setSelDev]=useState({type:'fob',index:1}); // selected auth device
   const wsRef=useRef(null);
   const reconnRef=useRef(null);
   const attemptsRef=useRef(0);
@@ -1229,7 +1310,7 @@ function App(){
           <span className="ctright">NXP S32G2 · BODY DOMAIN · QM+ASIL-B</span>
         </div>
         <div className="svgwrap">
-          {view==='top'     &&<CombinedView s={s} set={set}/>}
+          {view==='top'     &&<CombinedView s={s} set={set} onDeviceSelect={setSelDev}/>}
           {view==='side'    &&<SideView s={s}/>}
           {view==='cockpit' &&<CockpitView s={s} set={set}/>}
         </div>
@@ -1253,6 +1334,7 @@ function App(){
         </div>
       </div>
 
+      <DevicePanel s={s} set={set} sel={selDev} setSel={setSelDev}/>
       <ControlPanel s={s} set={set}/>
     </div>
   </div>;
