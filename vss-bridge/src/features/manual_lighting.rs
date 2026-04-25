@@ -28,16 +28,27 @@
 //! `Body.Switches.HighBeam.IsEngaged` (Bool) — latched stalk toggle.
 //! High beam only activates when low beam is currently on.
 //!
+//! # Follow-Me-Home (`FMH`)
+//!
+//! When the driver door (`Body.Doors.Row1.Left.IsOpen`) transitions from
+//! closed to ajar **after** ignition goes `OFF` or `ACC`, and the ambient
+//! illuminance is currently below `auto_headlamp_lux_threshold` (i.e. it is
+//! dark), the low beam (plus all derived outputs) is activated for
+//! `FMH_DURATION_SECS` (45 s) regardless of the light switch position.
+//!
+//! The timer is cancelled early if ignition returns to `ON` or `START`.
+//! FMH does not trigger in daylight (lux ≥ threshold).
+//!
 //! # Ignition gate
 //!
-//! Both modes require ignition `ON` or `START`.
-//! On ignition `OFF` or `ACC` both beams are forced off regardless of switch
-//! position.
+//! Normal switch-driven modes require ignition `ON` or `START`.
+//! On ignition `OFF` or `ACC` all outputs are forced off unless FMH is active.
 
 use std::sync::Arc;
 
 use futures::StreamExt;
 use tokio::select;
+use tokio::time::{sleep_until, Duration, Instant};
 
 use crate::ipc_message::SignalValue;
 use crate::signal_bus::SignalBus;
@@ -48,6 +59,10 @@ const LIGHT_SWITCH: &str = "Body.Lights.LightSwitch";
 const HIGH_BEAM_SWITCH: &str = "Body.Switches.HighBeam.IsEngaged";
 const POWER_STATE: &str = "Vehicle.LowVoltageSystemState";
 const ILLUMINANCE: &str = "Body.Lights.AmbientLightSensor.Illuminance";
+/// Driver door (LHD Row1.Left) — FMH trigger source.
+const DRIVER_DOOR: &str = "Body.Doors.Row1.Left.IsOpen";
+/// Follow-Me-Home active duration (seconds).
+const FMH_DURATION_SECS: u64 = 45;
 const DRL_OUT: &str = "Body.Lights.Running.IsOn";
 const PARKING_OUT: &str = "Body.Lights.Parking.IsOn";
 const LOW_BEAM_OUT: &str = "Body.Lights.Beam.Low.IsOn";
@@ -108,12 +123,17 @@ impl<B: SignalBus + Send + Sync + 'static> ManualLighting<B> {
         let mut switch_rx = self.bus.subscribe(LIGHT_SWITCH).await;
         let mut hb_rx = self.bus.subscribe(HIGH_BEAM_SWITCH).await;
         let mut lux_rx = self.bus.subscribe(ILLUMINANCE).await;
+        let mut door_rx = self.bus.subscribe(DRIVER_DOOR).await;
 
         let mut ignition_on = false;
         let mut switch_pos = SwitchPos::Off;
         let mut high_beam_engaged = false;
         // Start at maximum lux — no headlamps at boot before first sensor reading.
         let mut ambient_lux: u16 = u16::MAX;
+        // FMH state
+        let mut fmh_armed = false; // true once ignition goes off
+        let mut door_ajar = false;
+        let mut fmh_deadline: Option<Instant> = None;
 
         tracing::info!(
             threshold_lux = self.auto_lux_threshold,
@@ -121,25 +141,60 @@ impl<B: SignalBus + Send + Sync + 'static> ManualLighting<B> {
         );
 
         loop {
+            // Resolve to a future that fires at the FMH deadline, or parks
+            // forever when no timer is active.
+            let fmh_expiry = async {
+                match fmh_deadline {
+                    Some(dl) => sleep_until(dl).await,
+                    None => std::future::pending().await,
+                }
+            };
+
             select! {
                 Some(val) = power_rx.next() => {
                     ignition_on = is_power_on(&val);
-                    self.apply(ignition_on, switch_pos, high_beam_engaged, ambient_lux).await;
+                    if ignition_on {
+                        // Ignition ON: disarm FMH and cancel any running timer.
+                        fmh_armed = false;
+                        if fmh_deadline.take().is_some() {
+                            tracing::debug!("FMH cancelled — ignition ON");
+                        }
+                    } else {
+                        // Ignition OFF/ACC: arm FMH for next door-open event.
+                        fmh_armed = true;
+                    }
+                    self.apply(ignition_on, switch_pos, high_beam_engaged, ambient_lux, fmh_deadline.is_some()).await;
                 }
                 Some(val) = switch_rx.next() => {
                     switch_pos = SwitchPos::from_signal(&val);
-                    self.apply(ignition_on, switch_pos, high_beam_engaged, ambient_lux).await;
+                    self.apply(ignition_on, switch_pos, high_beam_engaged, ambient_lux, fmh_deadline.is_some()).await;
                 }
                 Some(val) = hb_rx.next() => {
                     high_beam_engaged = val == SignalValue::Bool(true);
-                    self.apply(ignition_on, switch_pos, high_beam_engaged, ambient_lux).await;
+                    self.apply(ignition_on, switch_pos, high_beam_engaged, ambient_lux, fmh_deadline.is_some()).await;
                 }
                 Some(val) = lux_rx.next() => {
                     if let SignalValue::Uint16(lux) = val {
                         ambient_lux = lux;
                         tracing::debug!(lux, threshold = self.auto_lux_threshold, "ambient illuminance update");
-                        self.apply(ignition_on, switch_pos, high_beam_engaged, ambient_lux).await;
+                        self.apply(ignition_on, switch_pos, high_beam_engaged, ambient_lux, fmh_deadline.is_some()).await;
                     }
+                }
+                Some(val) = door_rx.next() => {
+                    let was_ajar = door_ajar;
+                    door_ajar = matches!(val, SignalValue::Bool(true));
+                    // Trigger FMH on rising edge (closed → ajar) while armed and dark.
+                    if !was_ajar && door_ajar && fmh_armed && ambient_lux < self.auto_lux_threshold {
+                        let deadline = Instant::now() + Duration::from_secs(FMH_DURATION_SECS);
+                        fmh_deadline = Some(deadline);
+                        tracing::info!(duration_s = FMH_DURATION_SECS, "Follow-Me-Home activated");
+                        self.apply(ignition_on, switch_pos, high_beam_engaged, ambient_lux, true).await;
+                    }
+                }
+                _ = fmh_expiry => {
+                    fmh_deadline = None;
+                    tracing::info!("Follow-Me-Home timer expired — low beam off");
+                    self.apply(ignition_on, switch_pos, high_beam_engaged, ambient_lux, false).await;
                 }
                 else => break,
             }
@@ -154,13 +209,16 @@ impl<B: SignalBus + Send + Sync + 'static> ManualLighting<B> {
         switch_pos: SwitchPos,
         high_beam_engaged: bool,
         ambient_lux: u16,
+        fmh_active: bool,
     ) {
-        let low_on = ignition_on
-            && match switch_pos {
-                SwitchPos::Beam => true,
-                SwitchPos::Auto => ambient_lux < self.auto_lux_threshold,
-                _ => false,
-            };
+        // FMH overrides the light switch — low beam on regardless of switch position.
+        let low_on = fmh_active
+            || (ignition_on
+                && match switch_pos {
+                    SwitchPos::Beam => true,
+                    SwitchPos::Auto => ambient_lux < self.auto_lux_threshold,
+                    _ => false,
+                });
         // DRL: on at DRL position and whenever low beam is on.
         let drl_on = low_on || (ignition_on && switch_pos == SwitchPos::Drl);
         // Parking lights: on at POSITION (sidelights only) and whenever low beam is on.
@@ -211,6 +269,14 @@ mod tests {
         tokio::task::yield_now().await;
         sleep(Duration::from_millis(5)).await;
         tokio::task::yield_now().await;
+    }
+
+    /// Drain without sleeping — safe inside `#[tokio::test(start_paused = true)]`
+    /// where `sleep` requires explicit `advance()` to complete.
+    async fn drain_yields() {
+        for _ in 0..8 {
+            tokio::task::yield_now().await;
+        }
     }
 
     #[tokio::test]
@@ -591,6 +657,137 @@ mod tests {
             h.iter()
                 .any(|(s, v)| *s == DRL_OUT && *v == SignalValue::Bool(false)),
             "ignition OFF should force DRL off, got: {:?}",
+            h
+        );
+    }
+
+    // ── Follow-Me-Home ────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn fmh_triggers_when_door_opens_after_ignition_off_in_dark() {
+        let bus = setup().await;
+        // Ignition on then off — arms FMH.
+        bus.inject(POWER_STATE, SignalValue::String("ON".into()));
+        bus.inject(POWER_STATE, SignalValue::String("OFF".into()));
+        // Dark environment (below threshold).
+        bus.inject(ILLUMINANCE, SignalValue::Uint16(THRESHOLD - 1));
+        drain().await;
+        bus.clear_history();
+        // Driver door opens → FMH triggers.
+        bus.inject(DRIVER_DOOR, SignalValue::Bool(true));
+        drain().await;
+        let h = bus.history();
+        assert!(
+            h.iter()
+                .any(|(s, v)| *s == LOW_BEAM_OUT && *v == SignalValue::Bool(true)),
+            "FMH should activate low beam when dark and door opens after ignition off, got: {:?}",
+            h
+        );
+    }
+
+    #[tokio::test]
+    async fn fmh_does_not_trigger_in_daylight() {
+        let bus = setup().await;
+        bus.inject(POWER_STATE, SignalValue::String("ON".into()));
+        bus.inject(POWER_STATE, SignalValue::String("OFF".into()));
+        // Bright environment (above threshold) — default u16::MAX also qualifies.
+        bus.inject(ILLUMINANCE, SignalValue::Uint16(THRESHOLD + 1));
+        drain().await;
+        bus.clear_history();
+        bus.inject(DRIVER_DOOR, SignalValue::Bool(true));
+        drain().await;
+        let h = bus.history();
+        assert!(
+            !h.iter()
+                .any(|(s, v)| *s == LOW_BEAM_OUT && *v == SignalValue::Bool(true)),
+            "FMH should NOT trigger in daylight, got: {:?}",
+            h
+        );
+    }
+
+    #[tokio::test]
+    async fn fmh_does_not_trigger_with_ignition_on() {
+        let bus = setup().await;
+        // Ignition stays ON — FMH never arms.
+        bus.inject(POWER_STATE, SignalValue::String("ON".into()));
+        bus.inject(ILLUMINANCE, SignalValue::Uint16(THRESHOLD - 1));
+        bus.inject(DRIVER_DOOR, SignalValue::Bool(true));
+        drain().await;
+        let h = bus.history();
+        // Light switch is OFF so low beam must stay off.
+        assert!(
+            !h.iter()
+                .any(|(s, v)| *s == LOW_BEAM_OUT && *v == SignalValue::Bool(true)),
+            "FMH should not trigger while ignition is ON, got: {:?}",
+            h
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn fmh_turns_off_after_45_seconds() {
+        let bus = setup().await;
+        bus.inject(POWER_STATE, SignalValue::String("OFF".into()));
+        bus.inject(ILLUMINANCE, SignalValue::Uint16(50)); // dark
+        drain_yields().await;
+        bus.inject(DRIVER_DOOR, SignalValue::Bool(true));
+        drain_yields().await;
+        bus.clear_history();
+
+        // Advance past the 45-second FMH timer.
+        tokio::time::advance(Duration::from_secs(FMH_DURATION_SECS + 1)).await;
+        drain_yields().await;
+
+        let h = bus.history();
+        assert!(
+            h.iter()
+                .any(|(s, v)| *s == LOW_BEAM_OUT && *v == SignalValue::Bool(false)),
+            "FMH should turn low beam off after 45 s, got: {:?}",
+            h
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn ignition_on_cancels_fmh_early() {
+        let bus = setup().await;
+        bus.inject(POWER_STATE, SignalValue::String("OFF".into()));
+        bus.inject(ILLUMINANCE, SignalValue::Uint16(50)); // dark
+        drain_yields().await;
+        bus.inject(DRIVER_DOOR, SignalValue::Bool(true));
+        drain_yields().await;
+        // FMH is now active — only 5 s have passed.
+        tokio::time::advance(Duration::from_secs(5)).await;
+        drain_yields().await;
+        bus.clear_history();
+
+        // Driver gets back in and starts the car.
+        bus.inject(POWER_STATE, SignalValue::String("ON".into()));
+        drain_yields().await;
+
+        let h = bus.history();
+        assert!(
+            h.iter()
+                .any(|(s, v)| *s == LOW_BEAM_OUT && *v == SignalValue::Bool(false)),
+            "Ignition ON should cancel FMH immediately, got: {:?}",
+            h
+        );
+    }
+
+    #[tokio::test]
+    async fn fmh_does_not_trigger_on_door_close() {
+        let bus = setup().await;
+        bus.inject(POWER_STATE, SignalValue::String("OFF".into()));
+        bus.inject(ILLUMINANCE, SignalValue::Uint16(50)); // dark
+                                                          // Start with door open, then close it — FMH must not fire on falling edge.
+        bus.inject(DRIVER_DOOR, SignalValue::Bool(true));
+        drain().await;
+        bus.clear_history();
+        bus.inject(DRIVER_DOOR, SignalValue::Bool(false));
+        drain().await;
+        let h = bus.history();
+        assert!(
+            !h.iter()
+                .any(|(s, v)| *s == LOW_BEAM_OUT && *v == SignalValue::Bool(true)),
+            "FMH must not trigger on door close (falling edge), got: {:?}",
             h
         );
     }
