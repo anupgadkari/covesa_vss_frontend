@@ -12,39 +12,50 @@
 //!
 //! Run:  cargo test --test ws_integration
 
+use std::net::TcpListener as StdTcpListener;
 use std::process::{Child, Command};
 use std::time::Duration;
 
 use futures::{SinkExt, StreamExt};
 use serde_json::{json, Value};
-use tokio::sync::Mutex;
 use tokio::time::{sleep, timeout, Instant};
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
-
-/// Port the bridge listens on (must match vss-bridge main.rs).
-const WS_URL: &str = "ws://127.0.0.1:8080";
-
-/// All ws_integration tests bind port 8080 via a subprocess — they must
-/// not run concurrently. `tokio::sync::Mutex` is used so the guard can
-/// be held across await points without triggering `clippy::await_holding_lock`.
-static BRIDGE_LOCK: Mutex<()> = Mutex::const_new(());
 
 // ---------------------------------------------------------------------------
 // Test fixture: launch & teardown the bridge process
 // ---------------------------------------------------------------------------
 
+/// Ask the OS for a free port by binding :0 and immediately releasing.
+/// The bridge is started on this port via VSS_BRIDGE_WS_PORT, so each
+/// test uses its own port and is fully isolated from any bridge a developer
+/// may be running manually on the default :8080.
+fn free_port() -> u16 {
+    StdTcpListener::bind("127.0.0.1:0")
+        .expect("failed to bind ephemeral port")
+        .local_addr()
+        .unwrap()
+        .port()
+}
+
 struct BridgeProcess {
     child: Child,
+    port: u16,
 }
 
 impl BridgeProcess {
     fn start() -> Self {
+        let port = free_port();
         let child = Command::new(env!("CARGO_BIN_EXE_vss-bridge"))
             .env("RUST_LOG", "warn")
+            .env("VSS_BRIDGE_WS_PORT", port.to_string())
             .spawn()
             .expect("failed to start vss-bridge");
-        Self { child }
+        Self { child, port }
+    }
+
+    fn ws_url(&self) -> String {
+        format!("ws://127.0.0.1:{}", self.port)
     }
 }
 
@@ -55,8 +66,10 @@ impl Drop for BridgeProcess {
     }
 }
 
-/// Connect to the bridge WS, retrying for up to 3 seconds.
-async fn connect_ws() -> (
+/// Connect to the bridge WS at `url`, retrying for up to 3 seconds.
+async fn connect_ws(
+    url: &str,
+) -> (
     futures::stream::SplitSink<
         tokio_tungstenite::WebSocketStream<
             tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
@@ -71,12 +84,12 @@ async fn connect_ws() -> (
 ) {
     let deadline = Instant::now() + Duration::from_secs(3);
     loop {
-        match connect_async(WS_URL).await {
+        match connect_async(url).await {
             Ok((stream, _)) => return stream.split(),
             Err(_) if Instant::now() < deadline => {
                 sleep(Duration::from_millis(50)).await;
             }
-            Err(e) => panic!("failed to connect to bridge at {WS_URL}: {e}"),
+            Err(e) => panic!("failed to connect to bridge at {url}: {e}"),
         }
     }
 }
@@ -168,9 +181,8 @@ async fn count_transitions(
 
 #[tokio::test]
 async fn hazard_switch_activates_both_indicators_via_ws() {
-    let _guard = BRIDGE_LOCK.lock().await;
-    let _bridge = BridgeProcess::start();
-    let (mut tx, mut rx) = connect_ws().await;
+    let bridge = BridgeProcess::start();
+    let (mut tx, mut rx) = connect_ws(&bridge.ws_url()).await;
 
     send_sensor(&mut tx, "Body.Switches.Hazard.IsEngaged", json!(true)).await;
 
@@ -186,9 +198,8 @@ async fn hazard_switch_activates_both_indicators_via_ws() {
 
 #[tokio::test]
 async fn turn_stalk_requires_ignition_on() {
-    let _guard = BRIDGE_LOCK.lock().await;
-    let _bridge = BridgeProcess::start();
-    let (mut tx, mut rx) = connect_ws().await;
+    let bridge = BridgeProcess::start();
+    let (mut tx, mut rx) = connect_ws(&bridge.ws_url()).await;
 
     // Ignition defaults to OFF — stalk should have no effect.
     send_sensor(
@@ -211,9 +222,8 @@ async fn turn_stalk_requires_ignition_on() {
 
 #[tokio::test]
 async fn hazard_engaged_then_disengaged_with_turn_resuming() {
-    let _guard = BRIDGE_LOCK.lock().await;
-    let _bridge = BridgeProcess::start();
-    let (mut tx, mut rx) = connect_ws().await;
+    let bridge = BridgeProcess::start();
+    let (mut tx, mut rx) = connect_ws(&bridge.ws_url()).await;
 
     // Ignition ON + stalk RIGHT
     send_sensor(&mut tx, "Vehicle.LowVoltageSystemState", json!("ON")).await;
@@ -269,9 +279,8 @@ async fn hazard_engaged_then_disengaged_with_turn_resuming() {
 
 #[tokio::test]
 async fn plant_model_blinks_at_expected_rate() {
-    let _guard = BRIDGE_LOCK.lock().await;
-    let _bridge = BridgeProcess::start();
-    let (mut tx, mut rx) = connect_ws().await;
+    let bridge = BridgeProcess::start();
+    let (mut tx, mut rx) = connect_ws(&bridge.ws_url()).await;
 
     // Engage hazard (ignition-independent).
     send_sensor(&mut tx, "Body.Switches.Hazard.IsEngaged", json!(true)).await;

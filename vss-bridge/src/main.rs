@@ -126,7 +126,14 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("plant models spawned: BlinkRelay, DoorLockPlantModel, DoorHandlePlantModel, TrunkPlantModel, PepsPlantModel");
 
     // ── WebSocket bridge for L6 HMI ─────────────────────────────────
-    let ws_addr = "0.0.0.0:8080".parse()?;
+    // Port is overridable via VSS_BRIDGE_WS_PORT for integration tests
+    // (each test picks a free ephemeral port so it never collides with a
+    // developer's running bridge on the default 8080).
+    let ws_port: u16 = std::env::var("VSS_BRIDGE_WS_PORT")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(8080);
+    let ws_addr = format!("0.0.0.0:{ws_port}").parse()?;
     let ws_bridge = WsBridge::new(ws_addr, Arc::clone(&bus), Arc::clone(&_platform_config));
     tokio::spawn(async move {
         if let Err(e) = ws_bridge.run().await {
