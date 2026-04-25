@@ -16,6 +16,7 @@ use vss_bridge::arbiter;
 use vss_bridge::config;
 use vss_bridge::features::auto_high_beam::AutoHighBeam;
 use vss_bridge::features::brake_reverse_lamps::BrakeReverseLamps;
+use vss_bridge::features::fog_lamps::FogLamps;
 use vss_bridge::features::double_lock_release::DoubleLockRelease;
 use vss_bridge::features::follow_me_home::FollowMeHome;
 use vss_bridge::features::hazard_lighting::HazardLighting;
@@ -156,10 +157,13 @@ async fn main() -> anyhow::Result<()> {
     // BrakeReverseLamps — pedal-driven stop lights, gear-driven backup lights.
     tokio::spawn(BrakeReverseLamps::new(Arc::clone(&bus)).run());
 
+    // FogLamps — front and rear fog lamps, ignition-gated switch pass-through.
+    tokio::spawn(FogLamps::new(Arc::clone(&bus)).run());
+
     // TODO: remaining features
     // tokio::spawn(AutoRelock::from_config(Arc::clone(&door_lock_arb), Arc::clone(&bus), &_platform_config).run());
 
-    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock");
+    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock");
 
     // ── Plant Models ────────────────────────────────────────────────
     // Simulate physical lamp behavior the M7 / smart actuator firmware

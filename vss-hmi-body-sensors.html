@@ -124,6 +124,8 @@ const INIT_STATE={
   'Body.Switches.Hazard.IsEngaged':false,
   'Body.Switches.TurnIndicator.Direction':'OFF',
   'Body.Switches.HighBeam.IsEngaged':false,
+  'Body.Switches.Fog.Front.IsEngaged':false,
+  'Body.Switches.Fog.Rear.IsEngaged':false,
   'Chassis.ParkingBrake.IsEngaged':true,
   // PEPS (Passive Entry / Passive Start)
   'Body.PEPS.KeyPresent':false,
@@ -331,6 +333,26 @@ function App(){
                   {p.label} ({p.lux})
                 </button>
               ))}
+            </div>
+          </div>
+          <div className="control" style={{marginTop:'8px'}}>
+            <div className="control-label">Front Fog</div>
+            <div className="button-group">
+              <button className={`btn ${state['Body.Switches.Fog.Front.IsEngaged']?'active':''}`}
+                style={state['Body.Switches.Fog.Front.IsEngaged']?{background:'#BAD6FE',borderColor:'#BAD6FE',color:'#06101C'}:{}}
+                onClick={()=>set('Body.Switches.Fog.Front.IsEngaged',!state['Body.Switches.Fog.Front.IsEngaged'])}>
+                {state['Body.Switches.Fog.Front.IsEngaged']?'ON':'OFF'}
+              </button>
+            </div>
+          </div>
+          <div className="control">
+            <div className="control-label">Rear Fog</div>
+            <div className="button-group">
+              <button className={`btn ${state['Body.Switches.Fog.Rear.IsEngaged']?'active':''}`}
+                style={state['Body.Switches.Fog.Rear.IsEngaged']?{background:'#EF4444',borderColor:'#EF4444',color:'#fff'}:{}}
+                onClick={()=>set('Body.Switches.Fog.Rear.IsEngaged',!state['Body.Switches.Fog.Rear.IsEngaged'])}>
+                {state['Body.Switches.Fog.Rear.IsEngaged']?'ON':'OFF'}
+              </button>
             </div>
           </div>
         </div>

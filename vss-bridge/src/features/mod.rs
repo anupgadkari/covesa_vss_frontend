@@ -3,6 +3,7 @@ pub mod auto_high_beam;
 pub mod auto_relock;
 pub mod brake_reverse_lamps;
 pub mod double_lock_release;
+pub mod fog_lamps;
 pub mod follow_me_home;
 pub mod hazard_lighting;
 pub mod lock_feedback;

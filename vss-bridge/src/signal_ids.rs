@@ -160,6 +160,8 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Body.Switches.TurnIndicator.Direction" => Some(0x000D_0002),
         "Body.Switches.HighBeam.IsEngaged" => Some(0x000D_0003),
         "Chassis.ParkingBrake.IsEngaged" => Some(0x000D_0004),
+        "Body.Switches.Fog.Front.IsEngaged" => Some(0x000D_0005),
+        "Body.Switches.Fog.Rear.IsEngaged" => Some(0x000D_0006),
 
         // Chassis / Powertrain (sensor inputs)
         "Chassis.Brake.PedalPosition" => Some(0x000C_0001),
@@ -442,6 +444,8 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Body.Switches.TurnIndicator.Direction", 0x000D_0002),
     ("Body.Switches.HighBeam.IsEngaged", 0x000D_0003),
     ("Chassis.ParkingBrake.IsEngaged", 0x000D_0004),
+    ("Body.Switches.Fog.Front.IsEngaged", 0x000D_0005),
+    ("Body.Switches.Fog.Rear.IsEngaged", 0x000D_0006),
     // Chassis / Powertrain
     ("Chassis.Brake.PedalPosition", 0x000C_0001),
     ("Powertrain.Transmission.CurrentGear", 0x000C_0002),

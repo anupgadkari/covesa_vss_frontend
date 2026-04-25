@@ -131,6 +131,7 @@ pub enum FeatureId {
     ThumbPadLock = 0x14,
     FollowMeHome = 0x15,
     AutoHighBeam = 0x16,
+    FogLamps = 0x17,
 }
 
 impl FeatureId {
@@ -158,6 +159,7 @@ impl FeatureId {
             0x14 => Some(Self::ThumbPadLock),
             0x15 => Some(Self::FollowMeHome),
             0x16 => Some(Self::AutoHighBeam),
+            0x17 => Some(Self::FogLamps),
             _ => None,
         }
     }
