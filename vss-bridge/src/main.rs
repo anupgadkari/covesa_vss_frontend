@@ -12,6 +12,7 @@ use vss_bridge::arbiter;
 use vss_bridge::config;
 use vss_bridge::features::brake_reverse_lamps::BrakeReverseLamps;
 use vss_bridge::features::double_lock_release::DoubleLockRelease;
+use vss_bridge::features::follow_me_home::FollowMeHome;
 use vss_bridge::features::hazard_lighting::HazardLighting;
 use vss_bridge::features::lock_feedback::LockFeedback;
 use vss_bridge::features::manual_lighting::ManualLighting;
@@ -58,27 +59,33 @@ async fn main() -> anyhow::Result<()> {
 
     // ── Domain Arbiters ─────────────────────────────────────────────
     let (lighting_arb, lighting_fut) = arbiter::lighting_arbiter(Arc::clone(&bus));
+    let (low_beam_arb, low_beam_fut) = arbiter::low_beam_arbiter(Arc::clone(&bus));
     let (door_lock_arb, door_lock_ack_tx, door_lock_fut) =
         arbiter::door_lock_arbiter(Arc::clone(&bus));
     let (_horn_arb, horn_fut) = arbiter::horn_arbiter(Arc::clone(&bus));
     let (_comfort_arb, comfort_fut) = arbiter::comfort_arbiter(Arc::clone(&bus));
 
     tokio::spawn(lighting_fut);
+    tokio::spawn(low_beam_fut);
     tokio::spawn(door_lock_fut);
     tokio::spawn(horn_fut);
     tokio::spawn(comfort_fut);
 
     let lighting_arb = Arc::new(lighting_arb);
+    let low_beam_arb = Arc::new(low_beam_arb);
     let door_lock_arb = Arc::new(door_lock_arb);
 
     // ── Feature Business Logic ──────────────────────────────────────
-    // ManualLighting — low beam and high beam stalk control, ignition-gated.
+    let lux_threshold = _platform_config.vehicle_line.auto_headlamp_lux_threshold;
+
+    // ManualLighting — switch-driven low/high/DRL/parking/license outputs via LowBeam arbiter.
     tokio::spawn(
-        ManualLighting::new(
-            Arc::clone(&bus),
-            _platform_config.vehicle_line.auto_headlamp_lux_threshold,
-        )
-        .run(),
+        ManualLighting::new(Arc::clone(&low_beam_arb), Arc::clone(&bus), lux_threshold).run(),
+    );
+
+    // FollowMeHome — activates low beam 45 s after ignition-off door open (dark only).
+    tokio::spawn(
+        FollowMeHome::new(Arc::clone(&low_beam_arb), Arc::clone(&bus), lux_threshold).run(),
     );
 
     // HazardLighting — no ignition gate, works in any power state
@@ -142,7 +149,7 @@ async fn main() -> anyhow::Result<()> {
     // TODO: remaining features
     // tokio::spawn(AutoRelock::from_config(Arc::clone(&door_lock_arb), Arc::clone(&bus), &_platform_config).run());
 
-    tracing::info!("features spawned: ManualLighting, BrakeReverseLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock");
+    tracing::info!("features spawned: ManualLighting, FollowMeHome, BrakeReverseLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock");
 
     // ── Plant Models ────────────────────────────────────────────────
     // Simulate physical lamp behavior the M7 / smart actuator firmware

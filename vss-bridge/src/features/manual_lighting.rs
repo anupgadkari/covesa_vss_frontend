@@ -28,30 +28,21 @@
 //! `Body.Switches.HighBeam.IsEngaged` (Bool) — latched stalk toggle.
 //! High beam only activates when low beam is currently on.
 //!
-//! # Follow-Me-Home (`FMH`)
-//!
-//! When the driver door (`Body.Doors.Row1.Left.IsOpen`) transitions from
-//! closed to ajar **after** ignition goes `OFF` or `ACC`, and the ambient
-//! illuminance is currently below `auto_headlamp_lux_threshold` (i.e. it is
-//! dark), the low beam (plus all derived outputs) is activated for
-//! `FMH_DURATION_SECS` (45 s) regardless of the light switch position.
-//!
-//! The timer is cancelled early if ignition returns to `ON` or `START`.
-//! FMH does not trigger in daylight (lux ≥ threshold).
-//!
 //! # Ignition gate
 //!
-//! Normal switch-driven modes require ignition `ON` or `START`.
-//! On ignition `OFF` or `ACC` all outputs are forced off unless FMH is active.
+//! All switch-driven modes require ignition `ON` or `START`.
+//! On ignition `OFF` or `ACC` all claims are released, reverting outputs
+//! to off (unless a higher-priority feature such as FollowMeHome holds a
+//! claim via the LowBeam arbiter).
 
 use std::sync::Arc;
 
 use futures::StreamExt;
 use tokio::select;
-use tokio::time::{sleep_until, Duration, Instant};
 
-use crate::ipc_message::SignalValue;
-use crate::signal_bus::SignalBus;
+use crate::arbiter::{ActuatorRequest, DomainArbiter};
+use crate::ipc_message::{FeatureId, Priority, SignalValue};
+use crate::signal_bus::{SignalBus, VssPath};
 
 // ── Signal constants ───────────────────────────────────────────────────────
 
@@ -59,15 +50,12 @@ const LIGHT_SWITCH: &str = "Body.Lights.LightSwitch";
 const HIGH_BEAM_SWITCH: &str = "Body.Switches.HighBeam.IsEngaged";
 const POWER_STATE: &str = "Vehicle.LowVoltageSystemState";
 const ILLUMINANCE: &str = "Body.Lights.AmbientLightSensor.Illuminance";
-/// Driver door (LHD Row1.Left) — FMH trigger source.
-const DRIVER_DOOR: &str = "Body.Doors.Row1.Left.IsOpen";
-/// Follow-Me-Home active duration (seconds).
-const FMH_DURATION_SECS: u64 = 45;
-const DRL_OUT: &str = "Body.Lights.Running.IsOn";
-const PARKING_OUT: &str = "Body.Lights.Parking.IsOn";
-const LOW_BEAM_OUT: &str = "Body.Lights.Beam.Low.IsOn";
-const HIGH_BEAM_OUT: &str = "Body.Lights.Beam.High.IsOn";
-const LICENSE_PLATE_OUT: &str = "Body.Lights.LicensePlate.IsOn";
+
+const DRL_OUT: VssPath = "Body.Lights.Running.IsOn";
+const PARKING_OUT: VssPath = "Body.Lights.Parking.IsOn";
+const LOW_BEAM_OUT: VssPath = "Body.Lights.Beam.Low.IsOn";
+const HIGH_BEAM_OUT: VssPath = "Body.Lights.Beam.High.IsOn";
+const LICENSE_PLATE_OUT: VssPath = "Body.Lights.LicensePlate.IsOn";
 
 // ── Switch position ────────────────────────────────────────────────────────
 
@@ -105,14 +93,16 @@ fn is_power_on(val: &SignalValue) -> bool {
 // ── Feature struct ─────────────────────────────────────────────────────────
 
 pub struct ManualLighting<B: SignalBus> {
+    arbiter: Arc<DomainArbiter>,
     bus: Arc<B>,
     /// Illuminance threshold (lux) below which AUTO mode activates low beam.
     auto_lux_threshold: u16,
 }
 
 impl<B: SignalBus + Send + Sync + 'static> ManualLighting<B> {
-    pub fn new(bus: Arc<B>, auto_lux_threshold: u16) -> Self {
+    pub fn new(arbiter: Arc<DomainArbiter>, bus: Arc<B>, auto_lux_threshold: u16) -> Self {
         Self {
+            arbiter,
             bus,
             auto_lux_threshold,
         }
@@ -123,17 +113,12 @@ impl<B: SignalBus + Send + Sync + 'static> ManualLighting<B> {
         let mut switch_rx = self.bus.subscribe(LIGHT_SWITCH).await;
         let mut hb_rx = self.bus.subscribe(HIGH_BEAM_SWITCH).await;
         let mut lux_rx = self.bus.subscribe(ILLUMINANCE).await;
-        let mut door_rx = self.bus.subscribe(DRIVER_DOOR).await;
 
         let mut ignition_on = false;
         let mut switch_pos = SwitchPos::Off;
         let mut high_beam_engaged = false;
         // Start at maximum lux — no headlamps at boot before first sensor reading.
         let mut ambient_lux: u16 = u16::MAX;
-        // FMH state
-        let mut fmh_armed = false; // true once ignition goes off
-        let mut door_ajar = false;
-        let mut fmh_deadline: Option<Instant> = None;
 
         tracing::info!(
             threshold_lux = self.auto_lux_threshold,
@@ -141,60 +126,25 @@ impl<B: SignalBus + Send + Sync + 'static> ManualLighting<B> {
         );
 
         loop {
-            // Resolve to a future that fires at the FMH deadline, or parks
-            // forever when no timer is active.
-            let fmh_expiry = async {
-                match fmh_deadline {
-                    Some(dl) => sleep_until(dl).await,
-                    None => std::future::pending().await,
-                }
-            };
-
             select! {
                 Some(val) = power_rx.next() => {
                     ignition_on = is_power_on(&val);
-                    if ignition_on {
-                        // Ignition ON: disarm FMH and cancel any running timer.
-                        fmh_armed = false;
-                        if fmh_deadline.take().is_some() {
-                            tracing::debug!("FMH cancelled — ignition ON");
-                        }
-                    } else {
-                        // Ignition OFF/ACC: arm FMH for next door-open event.
-                        fmh_armed = true;
-                    }
-                    self.apply(ignition_on, switch_pos, high_beam_engaged, ambient_lux, fmh_deadline.is_some()).await;
+                    self.apply(ignition_on, switch_pos, high_beam_engaged, ambient_lux).await;
                 }
                 Some(val) = switch_rx.next() => {
                     switch_pos = SwitchPos::from_signal(&val);
-                    self.apply(ignition_on, switch_pos, high_beam_engaged, ambient_lux, fmh_deadline.is_some()).await;
+                    self.apply(ignition_on, switch_pos, high_beam_engaged, ambient_lux).await;
                 }
                 Some(val) = hb_rx.next() => {
                     high_beam_engaged = val == SignalValue::Bool(true);
-                    self.apply(ignition_on, switch_pos, high_beam_engaged, ambient_lux, fmh_deadline.is_some()).await;
+                    self.apply(ignition_on, switch_pos, high_beam_engaged, ambient_lux).await;
                 }
                 Some(val) = lux_rx.next() => {
                     if let SignalValue::Uint16(lux) = val {
                         ambient_lux = lux;
                         tracing::debug!(lux, threshold = self.auto_lux_threshold, "ambient illuminance update");
-                        self.apply(ignition_on, switch_pos, high_beam_engaged, ambient_lux, fmh_deadline.is_some()).await;
+                        self.apply(ignition_on, switch_pos, high_beam_engaged, ambient_lux).await;
                     }
-                }
-                Some(val) = door_rx.next() => {
-                    let was_ajar = door_ajar;
-                    door_ajar = matches!(val, SignalValue::Bool(true));
-                    // Trigger FMH on rising edge (closed → ajar) while armed and dark.
-                    if !was_ajar && door_ajar && fmh_armed && ambient_lux < self.auto_lux_threshold {
-                        let deadline = Instant::now() + Duration::from_secs(FMH_DURATION_SECS);
-                        fmh_deadline = Some(deadline);
-                        tracing::info!(duration_s = FMH_DURATION_SECS, "Follow-Me-Home activated");
-                        self.apply(ignition_on, switch_pos, high_beam_engaged, ambient_lux, true).await;
-                    }
-                }
-                _ = fmh_expiry => {
-                    fmh_deadline = None;
-                    tracing::info!("Follow-Me-Home timer expired — low beam off");
-                    self.apply(ignition_on, switch_pos, high_beam_engaged, ambient_lux, false).await;
                 }
                 else => break,
             }
@@ -209,16 +159,13 @@ impl<B: SignalBus + Send + Sync + 'static> ManualLighting<B> {
         switch_pos: SwitchPos,
         high_beam_engaged: bool,
         ambient_lux: u16,
-        fmh_active: bool,
     ) {
-        // FMH overrides the light switch — low beam on regardless of switch position.
-        let low_on = fmh_active
-            || (ignition_on
-                && match switch_pos {
-                    SwitchPos::Beam => true,
-                    SwitchPos::Auto => ambient_lux < self.auto_lux_threshold,
-                    _ => false,
-                });
+        let low_on = ignition_on
+            && match switch_pos {
+                SwitchPos::Beam => true,
+                SwitchPos::Auto => ambient_lux < self.auto_lux_threshold,
+                _ => false,
+            };
         // DRL: on at DRL position and whenever low beam is on.
         let drl_on = low_on || (ignition_on && switch_pos == SwitchPos::Drl);
         // Parking lights: on at POSITION (sidelights only) and whenever low beam is on.
@@ -227,23 +174,51 @@ impl<B: SignalBus + Send + Sync + 'static> ManualLighting<B> {
         let license_on = low_on;
         // High beam interlock: only active when low beam is on.
         let high_on = low_on && high_beam_engaged;
-        let _ = self.bus.publish(DRL_OUT, SignalValue::Bool(drl_on)).await;
-        let _ = self
-            .bus
-            .publish(PARKING_OUT, SignalValue::Bool(parking_on))
+
+        self.claim(LOW_BEAM_OUT, low_on, FeatureId::LowBeam, Priority::Medium)
             .await;
-        let _ = self
-            .bus
-            .publish(LOW_BEAM_OUT, SignalValue::Bool(low_on))
+        self.claim(
+            PARKING_OUT,
+            parking_on,
+            FeatureId::LowBeam,
+            Priority::Medium,
+        )
+        .await;
+        self.claim(
+            LICENSE_PLATE_OUT,
+            license_on,
+            FeatureId::LowBeam,
+            Priority::Medium,
+        )
+        .await;
+        self.claim(
+            HIGH_BEAM_OUT,
+            high_on,
+            FeatureId::HighBeam,
+            Priority::Medium,
+        )
+        .await;
+        self.claim(DRL_OUT, drl_on, FeatureId::Drl, Priority::Medium)
             .await;
-        let _ = self
-            .bus
-            .publish(LICENSE_PLATE_OUT, SignalValue::Bool(license_on))
-            .await;
-        let _ = self
-            .bus
-            .publish(HIGH_BEAM_OUT, SignalValue::Bool(high_on))
-            .await;
+    }
+
+    /// Submit a claim (on=true) or release (on=false) to the LowBeam arbiter.
+    async fn claim(&self, signal: VssPath, on: bool, feature_id: FeatureId, priority: Priority) {
+        let result = if on {
+            self.arbiter
+                .request(ActuatorRequest {
+                    signal,
+                    value: SignalValue::Bool(true),
+                    priority,
+                    feature_id,
+                })
+                .await
+        } else {
+            self.arbiter.release(signal, feature_id).await
+        };
+        if let Err(e) = result {
+            tracing::error!(signal, error = %e, "ManualLighting: arbiter op failed");
+        }
     }
 }
 
@@ -253,16 +228,20 @@ impl<B: SignalBus + Send + Sync + 'static> ManualLighting<B> {
 mod tests {
     use super::*;
     use crate::adapters::mock::MockBus;
+    use crate::arbiter::low_beam_arbiter;
     use tokio::time::{sleep, Duration};
 
     const THRESHOLD: u16 = 200;
 
-    async fn setup() -> Arc<MockBus> {
+    async fn setup() -> (Arc<MockBus>, Arc<DomainArbiter>) {
         let bus = Arc::new(MockBus::new());
-        let feature = ManualLighting::new(Arc::clone(&bus), THRESHOLD);
+        let (arb, loop_fut) = low_beam_arbiter(Arc::clone(&bus));
+        tokio::spawn(loop_fut);
+        let arb = Arc::new(arb);
+        let feature = ManualLighting::new(Arc::clone(&arb), Arc::clone(&bus), THRESHOLD);
         tokio::spawn(feature.run());
         tokio::task::yield_now().await;
-        bus
+        (bus, arb)
     }
 
     async fn drain() {
@@ -271,17 +250,9 @@ mod tests {
         tokio::task::yield_now().await;
     }
 
-    /// Drain without sleeping — safe inside `#[tokio::test(start_paused = true)]`
-    /// where `sleep` requires explicit `advance()` to complete.
-    async fn drain_yields() {
-        for _ in 0..8 {
-            tokio::task::yield_now().await;
-        }
-    }
-
     #[tokio::test]
     async fn beam_switch_with_ignition_on_enables_low_beam() {
-        let bus = setup().await;
+        let (bus, _arb) = setup().await;
         bus.inject(POWER_STATE, SignalValue::String("ON".into()));
         bus.inject(LIGHT_SWITCH, SignalValue::String("BEAM".into()));
         drain().await;
@@ -296,7 +267,7 @@ mod tests {
 
     #[tokio::test]
     async fn beam_switch_off_no_low_beam() {
-        let bus = setup().await;
+        let (bus, _arb) = setup().await;
         bus.inject(POWER_STATE, SignalValue::String("ON".into()));
         bus.inject(LIGHT_SWITCH, SignalValue::String("OFF".into()));
         drain().await;
@@ -311,7 +282,7 @@ mod tests {
 
     #[tokio::test]
     async fn ignition_off_forces_both_beams_off() {
-        let bus = setup().await;
+        let (bus, _arb) = setup().await;
         bus.inject(POWER_STATE, SignalValue::String("ON".into()));
         bus.inject(LIGHT_SWITCH, SignalValue::String("BEAM".into()));
         bus.inject(HIGH_BEAM_SWITCH, SignalValue::Bool(true));
@@ -338,7 +309,7 @@ mod tests {
 
     #[tokio::test]
     async fn high_beam_requires_low_beam_on() {
-        let bus = setup().await;
+        let (bus, _arb) = setup().await;
         bus.inject(POWER_STATE, SignalValue::String("ON".into()));
         bus.inject(LIGHT_SWITCH, SignalValue::String("OFF".into()));
         bus.inject(HIGH_BEAM_SWITCH, SignalValue::Bool(true));
@@ -354,7 +325,7 @@ mod tests {
 
     #[tokio::test]
     async fn high_beam_active_when_low_beam_on() {
-        let bus = setup().await;
+        let (bus, _arb) = setup().await;
         bus.inject(POWER_STATE, SignalValue::String("ON".into()));
         bus.inject(LIGHT_SWITCH, SignalValue::String("BEAM".into()));
         bus.inject(HIGH_BEAM_SWITCH, SignalValue::Bool(true));
@@ -370,10 +341,9 @@ mod tests {
 
     #[tokio::test]
     async fn auto_mode_below_threshold_enables_low_beam() {
-        let bus = setup().await;
+        let (bus, _arb) = setup().await;
         bus.inject(POWER_STATE, SignalValue::String("ON".into()));
         bus.inject(LIGHT_SWITCH, SignalValue::String("AUTO".into()));
-        // Inject lux below threshold (THRESHOLD - 1 = 199)
         bus.inject(ILLUMINANCE, SignalValue::Uint16(THRESHOLD - 1));
         drain().await;
         let h = bus.history();
@@ -387,10 +357,9 @@ mod tests {
 
     #[tokio::test]
     async fn auto_mode_above_threshold_no_low_beam() {
-        let bus = setup().await;
+        let (bus, _arb) = setup().await;
         bus.inject(POWER_STATE, SignalValue::String("ON".into()));
         bus.inject(LIGHT_SWITCH, SignalValue::String("AUTO".into()));
-        // Inject lux above threshold (THRESHOLD + 1 = 201)
         bus.inject(ILLUMINANCE, SignalValue::Uint16(THRESHOLD + 1));
         drain().await;
         let h = bus.history();
@@ -404,10 +373,9 @@ mod tests {
 
     #[tokio::test]
     async fn auto_mode_no_sensor_reading_no_low_beam() {
-        let bus = setup().await;
+        let (bus, _arb) = setup().await;
         bus.inject(POWER_STATE, SignalValue::String("ON".into()));
         bus.inject(LIGHT_SWITCH, SignalValue::String("AUTO".into()));
-        // No illuminance injected — should default to max lux (daylight, no beam)
         drain().await;
         let h = bus.history();
         assert!(
@@ -420,14 +388,13 @@ mod tests {
 
     #[tokio::test]
     async fn auto_mode_lux_rises_above_threshold_turns_beam_off() {
-        let bus = setup().await;
+        let (bus, _arb) = setup().await;
         bus.inject(POWER_STATE, SignalValue::String("ON".into()));
         bus.inject(LIGHT_SWITCH, SignalValue::String("AUTO".into()));
-        bus.inject(ILLUMINANCE, SignalValue::Uint16(50)); // dark
+        bus.inject(ILLUMINANCE, SignalValue::Uint16(50));
         drain().await;
         bus.clear_history();
 
-        // Sun comes up
         bus.inject(ILLUMINANCE, SignalValue::Uint16(5000));
         drain().await;
 
@@ -442,7 +409,7 @@ mod tests {
 
     #[tokio::test]
     async fn position_mode_does_not_enable_beams() {
-        let bus = setup().await;
+        let (bus, _arb) = setup().await;
         bus.inject(POWER_STATE, SignalValue::String("ON".into()));
         bus.inject(LIGHT_SWITCH, SignalValue::String("POSITION".into()));
         drain().await;
@@ -457,7 +424,7 @@ mod tests {
 
     #[tokio::test]
     async fn position_mode_enables_parking_lights() {
-        let bus = setup().await;
+        let (bus, _arb) = setup().await;
         bus.inject(POWER_STATE, SignalValue::String("ON".into()));
         bus.inject(LIGHT_SWITCH, SignalValue::String("POSITION".into()));
         drain().await;
@@ -478,7 +445,7 @@ mod tests {
 
     #[tokio::test]
     async fn beam_mode_enables_parking_and_low_beam() {
-        let bus = setup().await;
+        let (bus, _arb) = setup().await;
         bus.inject(POWER_STATE, SignalValue::String("ON".into()));
         bus.inject(LIGHT_SWITCH, SignalValue::String("BEAM".into()));
         drain().await;
@@ -499,7 +466,7 @@ mod tests {
 
     #[tokio::test]
     async fn auto_mode_dark_enables_parking_and_low_beam() {
-        let bus = setup().await;
+        let (bus, _arb) = setup().await;
         bus.inject(POWER_STATE, SignalValue::String("ON".into()));
         bus.inject(LIGHT_SWITCH, SignalValue::String("AUTO".into()));
         bus.inject(ILLUMINANCE, SignalValue::Uint16(THRESHOLD - 1));
@@ -515,7 +482,7 @@ mod tests {
 
     #[tokio::test]
     async fn ignition_off_forces_parking_off() {
-        let bus = setup().await;
+        let (bus, _arb) = setup().await;
         bus.inject(POWER_STATE, SignalValue::String("ON".into()));
         bus.inject(LIGHT_SWITCH, SignalValue::String("POSITION".into()));
         drain().await;
@@ -535,7 +502,7 @@ mod tests {
 
     #[tokio::test]
     async fn low_beam_on_enables_license_plate_lamp() {
-        let bus = setup().await;
+        let (bus, _arb) = setup().await;
         bus.inject(POWER_STATE, SignalValue::String("ON".into()));
         bus.inject(LIGHT_SWITCH, SignalValue::String("BEAM".into()));
         drain().await;
@@ -550,7 +517,7 @@ mod tests {
 
     #[tokio::test]
     async fn no_low_beam_no_license_plate_lamp() {
-        let bus = setup().await;
+        let (bus, _arb) = setup().await;
         bus.inject(POWER_STATE, SignalValue::String("ON".into()));
         bus.inject(LIGHT_SWITCH, SignalValue::String("POSITION".into()));
         drain().await;
@@ -565,7 +532,7 @@ mod tests {
 
     #[tokio::test]
     async fn ignition_off_extinguishes_license_plate_lamp() {
-        let bus = setup().await;
+        let (bus, _arb) = setup().await;
         bus.inject(POWER_STATE, SignalValue::String("ON".into()));
         bus.inject(LIGHT_SWITCH, SignalValue::String("BEAM".into()));
         drain().await;
@@ -585,7 +552,7 @@ mod tests {
 
     #[tokio::test]
     async fn drl_mode_enables_drl_only() {
-        let bus = setup().await;
+        let (bus, _arb) = setup().await;
         bus.inject(POWER_STATE, SignalValue::String("ON".into()));
         bus.inject(LIGHT_SWITCH, SignalValue::String("DRL".into()));
         drain().await;
@@ -612,7 +579,7 @@ mod tests {
 
     #[tokio::test]
     async fn beam_mode_also_enables_drl() {
-        let bus = setup().await;
+        let (bus, _arb) = setup().await;
         bus.inject(POWER_STATE, SignalValue::String("ON".into()));
         bus.inject(LIGHT_SWITCH, SignalValue::String("BEAM".into()));
         drain().await;
@@ -627,7 +594,7 @@ mod tests {
 
     #[tokio::test]
     async fn auto_mode_dark_enables_drl() {
-        let bus = setup().await;
+        let (bus, _arb) = setup().await;
         bus.inject(POWER_STATE, SignalValue::String("ON".into()));
         bus.inject(LIGHT_SWITCH, SignalValue::String("AUTO".into()));
         bus.inject(ILLUMINANCE, SignalValue::Uint16(THRESHOLD - 1));
@@ -643,7 +610,7 @@ mod tests {
 
     #[tokio::test]
     async fn ignition_off_forces_drl_off() {
-        let bus = setup().await;
+        let (bus, _arb) = setup().await;
         bus.inject(POWER_STATE, SignalValue::String("ON".into()));
         bus.inject(LIGHT_SWITCH, SignalValue::String("DRL".into()));
         drain().await;
@@ -661,140 +628,9 @@ mod tests {
         );
     }
 
-    // ── Follow-Me-Home ────────────────────────────────────────────────
-
-    #[tokio::test]
-    async fn fmh_triggers_when_door_opens_after_ignition_off_in_dark() {
-        let bus = setup().await;
-        // Ignition on then off — arms FMH.
-        bus.inject(POWER_STATE, SignalValue::String("ON".into()));
-        bus.inject(POWER_STATE, SignalValue::String("OFF".into()));
-        // Dark environment (below threshold).
-        bus.inject(ILLUMINANCE, SignalValue::Uint16(THRESHOLD - 1));
-        drain().await;
-        bus.clear_history();
-        // Driver door opens → FMH triggers.
-        bus.inject(DRIVER_DOOR, SignalValue::Bool(true));
-        drain().await;
-        let h = bus.history();
-        assert!(
-            h.iter()
-                .any(|(s, v)| *s == LOW_BEAM_OUT && *v == SignalValue::Bool(true)),
-            "FMH should activate low beam when dark and door opens after ignition off, got: {:?}",
-            h
-        );
-    }
-
-    #[tokio::test]
-    async fn fmh_does_not_trigger_in_daylight() {
-        let bus = setup().await;
-        bus.inject(POWER_STATE, SignalValue::String("ON".into()));
-        bus.inject(POWER_STATE, SignalValue::String("OFF".into()));
-        // Bright environment (above threshold) — default u16::MAX also qualifies.
-        bus.inject(ILLUMINANCE, SignalValue::Uint16(THRESHOLD + 1));
-        drain().await;
-        bus.clear_history();
-        bus.inject(DRIVER_DOOR, SignalValue::Bool(true));
-        drain().await;
-        let h = bus.history();
-        assert!(
-            !h.iter()
-                .any(|(s, v)| *s == LOW_BEAM_OUT && *v == SignalValue::Bool(true)),
-            "FMH should NOT trigger in daylight, got: {:?}",
-            h
-        );
-    }
-
-    #[tokio::test]
-    async fn fmh_does_not_trigger_with_ignition_on() {
-        let bus = setup().await;
-        // Ignition stays ON — FMH never arms.
-        bus.inject(POWER_STATE, SignalValue::String("ON".into()));
-        bus.inject(ILLUMINANCE, SignalValue::Uint16(THRESHOLD - 1));
-        bus.inject(DRIVER_DOOR, SignalValue::Bool(true));
-        drain().await;
-        let h = bus.history();
-        // Light switch is OFF so low beam must stay off.
-        assert!(
-            !h.iter()
-                .any(|(s, v)| *s == LOW_BEAM_OUT && *v == SignalValue::Bool(true)),
-            "FMH should not trigger while ignition is ON, got: {:?}",
-            h
-        );
-    }
-
-    #[tokio::test(start_paused = true)]
-    async fn fmh_turns_off_after_45_seconds() {
-        let bus = setup().await;
-        bus.inject(POWER_STATE, SignalValue::String("OFF".into()));
-        bus.inject(ILLUMINANCE, SignalValue::Uint16(50)); // dark
-        drain_yields().await;
-        bus.inject(DRIVER_DOOR, SignalValue::Bool(true));
-        drain_yields().await;
-        bus.clear_history();
-
-        // Advance past the 45-second FMH timer.
-        tokio::time::advance(Duration::from_secs(FMH_DURATION_SECS + 1)).await;
-        drain_yields().await;
-
-        let h = bus.history();
-        assert!(
-            h.iter()
-                .any(|(s, v)| *s == LOW_BEAM_OUT && *v == SignalValue::Bool(false)),
-            "FMH should turn low beam off after 45 s, got: {:?}",
-            h
-        );
-    }
-
-    #[tokio::test(start_paused = true)]
-    async fn ignition_on_cancels_fmh_early() {
-        let bus = setup().await;
-        bus.inject(POWER_STATE, SignalValue::String("OFF".into()));
-        bus.inject(ILLUMINANCE, SignalValue::Uint16(50)); // dark
-        drain_yields().await;
-        bus.inject(DRIVER_DOOR, SignalValue::Bool(true));
-        drain_yields().await;
-        // FMH is now active — only 5 s have passed.
-        tokio::time::advance(Duration::from_secs(5)).await;
-        drain_yields().await;
-        bus.clear_history();
-
-        // Driver gets back in and starts the car.
-        bus.inject(POWER_STATE, SignalValue::String("ON".into()));
-        drain_yields().await;
-
-        let h = bus.history();
-        assert!(
-            h.iter()
-                .any(|(s, v)| *s == LOW_BEAM_OUT && *v == SignalValue::Bool(false)),
-            "Ignition ON should cancel FMH immediately, got: {:?}",
-            h
-        );
-    }
-
-    #[tokio::test]
-    async fn fmh_does_not_trigger_on_door_close() {
-        let bus = setup().await;
-        bus.inject(POWER_STATE, SignalValue::String("OFF".into()));
-        bus.inject(ILLUMINANCE, SignalValue::Uint16(50)); // dark
-                                                          // Start with door open, then close it — FMH must not fire on falling edge.
-        bus.inject(DRIVER_DOOR, SignalValue::Bool(true));
-        drain().await;
-        bus.clear_history();
-        bus.inject(DRIVER_DOOR, SignalValue::Bool(false));
-        drain().await;
-        let h = bus.history();
-        assert!(
-            !h.iter()
-                .any(|(s, v)| *s == LOW_BEAM_OUT && *v == SignalValue::Bool(true)),
-            "FMH must not trigger on door close (falling edge), got: {:?}",
-            h
-        );
-    }
-
     #[tokio::test]
     async fn acc_state_forces_beams_off() {
-        let bus = setup().await;
+        let (bus, _arb) = setup().await;
         bus.inject(POWER_STATE, SignalValue::String("ON".into()));
         bus.inject(LIGHT_SWITCH, SignalValue::String("BEAM".into()));
         drain().await;

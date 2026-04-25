@@ -2,6 +2,7 @@
 pub mod auto_relock;
 pub mod brake_reverse_lamps;
 pub mod double_lock_release;
+pub mod follow_me_home;
 pub mod hazard_lighting;
 pub mod lock_feedback;
 pub mod manual_lighting;

@@ -333,6 +333,63 @@ pub fn lighting_arbiter<B: SignalBus>(
     DomainArbiter::new("Lighting", allow_list, bus)
 }
 
+/// Create the Low-Beam domain arbiter.
+///
+/// Covers: low beam, high beam, DRL, parking lights, license plate lamp.
+/// Contention: FollowMeHome (HIGH) overrides ManualLighting (MEDIUM) on
+/// low-beam-derived signals during the 45 s post-ignition-off window.
+pub fn low_beam_arbiter<B: SignalBus>(
+    bus: Arc<B>,
+) -> (DomainArbiter, impl std::future::Future<Output = ()>) {
+    let allow_list = vec![
+        // ManualLighting — switch-driven outputs at medium priority.
+        AllowEntry {
+            feature_id: FeatureId::LowBeam,
+            signal: "Body.Lights.Beam.Low.IsOn",
+            priority: Priority::Medium,
+        },
+        AllowEntry {
+            feature_id: FeatureId::LowBeam,
+            signal: "Body.Lights.Parking.IsOn",
+            priority: Priority::Medium,
+        },
+        AllowEntry {
+            feature_id: FeatureId::LowBeam,
+            signal: "Body.Lights.LicensePlate.IsOn",
+            priority: Priority::Medium,
+        },
+        AllowEntry {
+            feature_id: FeatureId::HighBeam,
+            signal: "Body.Lights.Beam.High.IsOn",
+            priority: Priority::Medium,
+        },
+        AllowEntry {
+            feature_id: FeatureId::Drl,
+            signal: "Body.Lights.Running.IsOn",
+            priority: Priority::Medium,
+        },
+        // FollowMeHome — high priority so FMH wins even if ManualLighting
+        // has a residual claim (e.g. driver switches to BEAM with ignition off).
+        AllowEntry {
+            feature_id: FeatureId::FollowMeHome,
+            signal: "Body.Lights.Beam.Low.IsOn",
+            priority: Priority::High,
+        },
+        AllowEntry {
+            feature_id: FeatureId::FollowMeHome,
+            signal: "Body.Lights.Parking.IsOn",
+            priority: Priority::High,
+        },
+        AllowEntry {
+            feature_id: FeatureId::FollowMeHome,
+            signal: "Body.Lights.LicensePlate.IsOn",
+            priority: Priority::High,
+        },
+    ];
+
+    DomainArbiter::new("LowBeam", allow_list, bus)
+}
+
 // ---------------------------------------------------------------------------
 // DoorLockArbiter — serialized command queue with ACK handshake
 // ---------------------------------------------------------------------------
