@@ -514,22 +514,38 @@ function CombinedView({s,set,onDeviceSelect}){
     <rect x="70" y="40" width="220" height="40" fill="#09111E" stroke="#182030" strokeWidth="0.5"/>
 
     {/* Headlights */}
-    <rect x="70" y="45" width="30" height="28" rx="3" fill={hlc} opacity={hlo/1.5}/>
-    <text x="85" y="65" textAnchor="middle" fill={hlc} fontSize="10" fontWeight="bold" opacity={hlo}>{lo?'●':'○'}</text>
-    <rect x="260" y="45" width="30" height="28" rx="3" fill={hlc} opacity={hlo/1.5}/>
-    <text x="275" y="65" textAnchor="middle" fill={hlc} fontSize="10" fontWeight="bold" opacity={hlo}>{lo?'●':'○'}</text>
+    <g><title>{`Left headlight — ${hi?'HIGH BEAM':lo?'LOW BEAM':drl?'DRL':park?'PARKING':'off'}`}</title>
+      <rect x="70" y="45" width="30" height="28" rx="3" fill={hlc} opacity={hlo/1.5}/>
+      <text x="85" y="65" textAnchor="middle" fill={hlc} fontSize="10" fontWeight="bold" opacity={hlo}>{lo?'●':'○'}</text>
+    </g>
+    <g><title>{`Right headlight — ${hi?'HIGH BEAM':lo?'LOW BEAM':drl?'DRL':park?'PARKING':'off'}`}</title>
+      <rect x="260" y="45" width="30" height="28" rx="3" fill={hlc} opacity={hlo/1.5}/>
+      <text x="275" y="65" textAnchor="middle" fill={hlc} fontSize="10" fontWeight="bold" opacity={hlo}>{lo?'●':'○'}</text>
+    </g>
 
     {/* Turn indicators front */}
-    <rect x="65" y="75" width="32" height="10" rx="2" fill={li?'#F59E0B':'#1A1208'} opacity={li?1:.25}/>
-    <rect x="263" y="75" width="32" height="10" rx="2" fill={ri?'#F59E0B':'#1A1208'} opacity={ri?1:.25}/>
+    <rect x="65" y="75" width="32" height="10" rx="2" fill={li?'#F59E0B':'#1A1208'} opacity={li?1:.25}>
+      <title>{li?'Left front turn indicator — signaling':'Left front turn indicator — off'}</title>
+    </rect>
+    <rect x="263" y="75" width="32" height="10" rx="2" fill={ri?'#F59E0B':'#1A1208'} opacity={ri?1:.25}>
+      <title>{ri?'Right front turn indicator — signaling':'Right front turn indicator — off'}</title>
+    </rect>
 
     {/* Front fog */}
-    <rect x="75" y="88" width="20" height="8" rx="2" fill={ffog?'#BAD6FE':'#0A1420'} opacity={ffog?0.85:.25}/>
-    <rect x="265" y="88" width="20" height="8" rx="2" fill={ffog?'#BAD6FE':'#0A1420'} opacity={ffog?0.85:.25}/>
+    <rect x="75" y="88" width="20" height="8" rx="2" fill={ffog?'#BAD6FE':'#0A1420'} opacity={ffog?0.85:.25}>
+      <title>{ffog?'Left front fog lamp — on':'Left front fog lamp — off'}</title>
+    </rect>
+    <rect x="265" y="88" width="20" height="8" rx="2" fill={ffog?'#BAD6FE':'#0A1420'} opacity={ffog?0.85:.25}>
+      <title>{ffog?'Right front fog lamp — on':'Right front fog lamp — off'}</title>
+    </rect>
 
     {/* Parking corners front */}
-    <circle cx="65" cy="35" r="4" fill={park?'#F59E0B':'#1A1208'} opacity={park?0.9:.3}/>
-    <circle cx="295" cy="35" r="4" fill={park?'#F59E0B':'#1A1208'} opacity={park?0.9:.3}/>
+    <circle cx="65" cy="35" r="4" fill={park?'#F59E0B':'#1A1208'} opacity={park?0.9:.3}>
+      <title>{park?'Left front parking light — on':'Left front parking light — off'}</title>
+    </circle>
+    <circle cx="295" cy="35" r="4" fill={park?'#F59E0B':'#1A1208'} opacity={park?0.9:.3}>
+      <title>{park?'Right front parking light — on':'Right front parking light — off'}</title>
+    </circle>
 
     {/* Windshield */}
     <rect x="70" y="78" width="220" height="45" rx="3" fill="#152840" stroke="#1E3650" strokeWidth="0.5" opacity=".85"/>
@@ -641,25 +657,49 @@ function CombinedView({s,set,onDeviceSelect}){
     {trunk&&<text x="180" y="625" textAnchor="middle" fill="#F59E0B" fontSize="6" fontWeight="bold">▣ TAP TRUNK</text>}
 
     {/* License plate */}
-    <rect x="160" y="575" width="40" height="8" rx="2" fill={lp?'#FFF8DC':'#0A0F18'} opacity={lp?0.85:.25}/>
+    <rect x="160" y="575" width="40" height="8" rx="2" fill={lp?'#FFF8DC':'#0A0F18'} opacity={lp?0.85:.25}>
+      <title>{lp?'License plate lamp — on':'License plate lamp — off'}</title>
+    </rect>
 
     {/* Taillights */}
-    <rect x="70"  y="568" width="35" height="10" rx="2" fill={tlc} opacity={tlo}/>
-    <rect x="255" y="568" width="35" height="10" rx="2" fill={tlc} opacity={tlo}/>
-    {back&&<><rect x="70"  y="555" width="35" height="8" rx="2" fill="#FFF" opacity="0.8"/>
-             <rect x="255" y="555" width="35" height="8" rx="2" fill="#FFF" opacity="0.8"/></>}
+    <rect x="70"  y="568" width="35" height="10" rx="2" fill={tlc} opacity={tlo}>
+      <title>{brake?'Left taillight — brake active':lo||hi||park?'Left taillight — tail on':'Left taillight — off'}</title>
+    </rect>
+    <rect x="255" y="568" width="35" height="10" rx="2" fill={tlc} opacity={tlo}>
+      <title>{brake?'Right taillight — brake active':lo||hi||park?'Right taillight — tail on':'Right taillight — off'}</title>
+    </rect>
+    {back&&<>
+      <rect x="70"  y="555" width="35" height="8" rx="2" fill="#FFF" opacity="0.8">
+        <title>Left backup / reverse light — active</title>
+      </rect>
+      <rect x="255" y="555" width="35" height="8" rx="2" fill="#FFF" opacity="0.8">
+        <title>Right backup / reverse light — active</title>
+      </rect>
+    </>}
 
     {/* Rear turn */}
-    <rect x="65"  y="580" width="32" height="8" rx="2" fill={li?'#F59E0B':'#1A1208'} opacity={li?1:.25}/>
-    <rect x="263" y="580" width="32" height="8" rx="2" fill={ri?'#F59E0B':'#1A1208'} opacity={ri?1:.25}/>
+    <rect x="65"  y="580" width="32" height="8" rx="2" fill={li?'#F59E0B':'#1A1208'} opacity={li?1:.25}>
+      <title>{li?'Left rear turn indicator — signaling':'Left rear turn indicator — off'}</title>
+    </rect>
+    <rect x="263" y="580" width="32" height="8" rx="2" fill={ri?'#F59E0B':'#1A1208'} opacity={ri?1:.25}>
+      <title>{ri?'Right rear turn indicator — signaling':'Right rear turn indicator — off'}</title>
+    </rect>
 
     {/* Rear fog */}
-    <rect x="120" y="568" width="20" height="10" rx="2" fill={rfog?'#CC0000':'#1A0808'} opacity={rfog?0.9:.25}/>
-    <rect x="220" y="568" width="20" height="10" rx="2" fill={rfog?'#CC0000':'#1A0808'} opacity={rfog?0.9:.25}/>
+    <rect x="120" y="568" width="20" height="10" rx="2" fill={rfog?'#CC0000':'#1A0808'} opacity={rfog?0.9:.25}>
+      <title>{rfog?'Left rear fog lamp — on':'Left rear fog lamp — off'}</title>
+    </rect>
+    <rect x="220" y="568" width="20" height="10" rx="2" fill={rfog?'#CC0000':'#1A0808'} opacity={rfog?0.9:.25}>
+      <title>{rfog?'Right rear fog lamp — on':'Right rear fog lamp — off'}</title>
+    </rect>
 
     {/* Parking corners rear */}
-    <circle cx="65"  cy="595" r="4" fill={park?'#F59E0B':'#1A1208'} opacity={park?0.9:.3}/>
-    <circle cx="295" cy="595" r="4" fill={park?'#F59E0B':'#1A1208'} opacity={park?0.9:.3}/>
+    <circle cx="65"  cy="595" r="4" fill={park?'#F59E0B':'#1A1208'} opacity={park?0.9:.3}>
+      <title>{park?'Left rear parking light — on':'Left rear parking light — off'}</title>
+    </circle>
+    <circle cx="295" cy="595" r="4" fill={park?'#F59E0B':'#1A1208'} opacity={park?0.9:.3}>
+      <title>{park?'Right rear parking light — on':'Right rear parking light — off'}</title>
+    </circle>
 
     {/* Wheels */}
     <circle cx="95"  cy="630" r="35" fill="#07101A" stroke="#1a2838" strokeWidth="1.5"/>
@@ -672,18 +712,24 @@ function CombinedView({s,set,onDeviceSelect}){
     {/* Mirrors — top view (elongated housing + trailing-edge turn indicator) */}
     {!mlf
       ?<g>
+        <title>Left side mirror</title>
         <rect x="38" y="194" width="16" height="12" rx="2" fill="#0F1A28" stroke="#1A2838" strokeWidth="0.5"/>
-        <rect x="38" y="198" width="5" height="6" rx="1" fill={li?'#F59E0B':'#1A1208'} opacity={li?0.95:.28}/>
+        <rect x="38" y="198" width="5" height="6" rx="1" fill={li?'#F59E0B':'#1A1208'} opacity={li?0.95:.28}>
+          <title>{li?'Left mirror turn indicator — signaling':'Left mirror turn indicator — off'}</title>
+        </rect>
       </g>
-      :<rect x="49" y="198" width="5" height="4" rx="1" fill="#0D1320"/>}
+      :<rect x="49" y="198" width="5" height="4" rx="1" fill="#0D1320"><title>Left mirror — folded</title></rect>}
     {!mrf
       ?<g>
+        <title>Right side mirror</title>
         <rect x="306" y="194" width="16" height="12" rx="2" fill="#0F1A28" stroke="#1A2838" strokeWidth="0.5"/>
-        <rect x="317" y="198" width="5" height="6" rx="1" fill={ri?'#F59E0B':'#1A1208'} opacity={ri?0.95:.28}/>
+        <rect x="317" y="198" width="5" height="6" rx="1" fill={ri?'#F59E0B':'#1A1208'} opacity={ri?0.95:.28}>
+          <title>{ri?'Right mirror turn indicator — signaling':'Right mirror turn indicator — off'}</title>
+        </rect>
       </g>
-      :<rect x="306" y="198" width="5" height="4" rx="1" fill="#0D1320"/>}
-    {s['Body.Mirrors.Left.IsHeatingOn']&&<circle cx="46" cy="200" r="10" fill="none" stroke="#FF4040" strokeWidth="1" opacity=".6" className="pulse"/>}
-    {s['Body.Mirrors.Right.IsHeatingOn']&&<circle cx="314" cy="200" r="10" fill="none" stroke="#FF4040" strokeWidth="1" opacity=".6" className="pulse"/>}
+      :<rect x="306" y="198" width="5" height="4" rx="1" fill="#0D1320"><title>Right mirror — folded</title></rect>}
+    {s['Body.Mirrors.Left.IsHeatingOn']&&<circle cx="46" cy="200" r="10" fill="none" stroke="#FF4040" strokeWidth="1" opacity=".6" className="pulse"><title>Left mirror heating — active</title></circle>}
+    {s['Body.Mirrors.Right.IsHeatingOn']&&<circle cx="314" cy="200" r="10" fill="none" stroke="#FF4040" strokeWidth="1" opacity=".6" className="pulse"><title>Right mirror heating — active</title></circle>}
 
     <text x="180" y="22"  textAnchor="middle" fill="#1E2C3C" fontSize="8" fontFamily="Share Tech Mono" fontWeight="bold">▲ FRONT</text>
     <text x="180" y="755" textAnchor="middle" fill="#1E2C3C" fontSize="8" fontFamily="Share Tech Mono" fontWeight="bold">REAR ▼</text>
