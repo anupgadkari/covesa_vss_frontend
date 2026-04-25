@@ -302,29 +302,28 @@ function App(){
             </div>
             <div className="control-value">{state['Body.Lights.LightSwitch']}</div>
           </div>
-          <div className="control" style={{flexDirection:'column',alignItems:'stretch',gap:'8px'}}>
-            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-              <div className="control-label" style={{minWidth:'unset'}}>Ambient Illuminance</div>
-              <div className="control-value" style={{minWidth:'unset'}}>
-                {state['Body.Lights.AmbientLightSensor.Illuminance'].toLocaleString()} lux
-                <span style={{marginLeft:'8px',fontSize:'9px',fontWeight:600,color:
-                  state['Body.Lights.AmbientLightSensor.Illuminance'] < 200 ? '#F59E0B' : '#6B7E99'}}>
-                  {state['Body.Lights.AmbientLightSensor.Illuminance'] < 50   ? '🌙 Night'
-                   :state['Body.Lights.AmbientLightSensor.Illuminance'] < 200 ? '🌆 Dusk — beam ON'
-                   :state['Body.Lights.AmbientLightSensor.Illuminance'] < 500 ? '🌇 Twilight'
-                   :state['Body.Lights.AmbientLightSensor.Illuminance'] < 10000 ? '☁ Overcast'
+          <div style={{marginTop:'8px',padding:'10px',background:'var(--s3)',border:'1px solid var(--bdr)',borderRadius:'6px'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:'8px'}}>
+              <span style={{fontFamily:'var(--fm)',fontSize:'10px',color:'var(--white)',fontWeight:500}}>Ambient Illuminance</span>
+              <span style={{fontFamily:'var(--fm)',fontSize:'11px',color:'#F59E0B',fontWeight:700}}>
+                {state['Body.Lights.AmbientLightSensor.Illuminance']} lux &nbsp;
+                <span style={{fontSize:'9px',color:state['Body.Lights.AmbientLightSensor.Illuminance']<200?'#F59E0B':'#6B7E99'}}>
+                  {state['Body.Lights.AmbientLightSensor.Illuminance']<50?'🌙 Night'
+                   :state['Body.Lights.AmbientLightSensor.Illuminance']<200?'🌆 Dusk — beam ON'
+                   :state['Body.Lights.AmbientLightSensor.Illuminance']<500?'🌇 Twilight'
+                   :state['Body.Lights.AmbientLightSensor.Illuminance']<10000?'☁ Overcast'
                    :'☀ Daylight'}
                 </span>
-              </div>
+              </span>
             </div>
-            <input type="range" className="slr" min="0" max="100000" step="500"
-              style={{width:'100%'}}
+            <input type="range" min="0" max="100000" step="500"
+              style={{width:'100%',display:'block',marginBottom:'10px',height:'6px',WebkitAppearance:'none',
+                background:'var(--s4)',borderRadius:'4px',outline:'none',cursor:'pointer'}}
               value={state['Body.Lights.AmbientLightSensor.Illuminance']}
               onChange={(e)=>set('Body.Lights.AmbientLightSensor.Illuminance',parseInt(e.target.value))}/>
             <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
-              {[
-                {label:'Night',lux:5},{label:'Tunnel',lux:50},{label:'Dusk',lux:100},
-                {label:'Twilight',lux:300},{label:'Overcast',lux:2000},{label:'Daylight',lux:25000},
+              {[{label:'Night',lux:5},{label:'Tunnel',lux:50},{label:'Dusk',lux:100},
+                {label:'Twilight',lux:300},{label:'Overcast',lux:2000},{label:'Daylight',lux:25000}
               ].map(p=>(
                 <button key={p.label}
                   className={`btn ${state['Body.Lights.AmbientLightSensor.Illuminance']===p.lux?'active':''}`}
