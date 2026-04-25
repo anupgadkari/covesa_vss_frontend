@@ -140,7 +140,15 @@ impl<B: SignalBus + Send + Sync + 'static> ManualLighting<B> {
                     self.apply(ignition_on, switch_pos, high_beam_engaged, ambient_lux).await;
                 }
                 Some(val) = lux_rx.next() => {
-                    if let SignalValue::Uint16(lux) = val {
+                    // Illuminance arrives as Uint8 for 0-255 and Uint16 for 256-65535
+                    // (json_to_signal_value range heuristic). Accept both so low-lux
+                    // presets (Night=5, Tunnel=50, Dusk=100) update the reading.
+                    let new_lux = match val {
+                        SignalValue::Uint16(v) => Some(v),
+                        SignalValue::Uint8(v) => Some(v as u16),
+                        _ => None,
+                    };
+                    if let Some(lux) = new_lux {
                         ambient_lux = lux;
                         tracing::debug!(lux, threshold = self.auto_lux_threshold, "ambient illuminance update");
                         self.apply(ignition_on, switch_pos, high_beam_engaged, ambient_lux).await;

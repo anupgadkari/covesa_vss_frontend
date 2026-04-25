@@ -133,8 +133,13 @@ impl<B: SignalBus + Send + Sync + 'static> FollowMeHome<B> {
                     }
                 }
                 Some(val) = lux_rx.next() => {
-                    if let SignalValue::Uint16(lux) = val {
-                        ambient_lux = lux;
+                    // Illuminance arrives as Uint8 for 0-255 and Uint16 for 256-65535
+                    // (json_to_signal_value range heuristic). Accept both so low-lux
+                    // presets (Night=5, Tunnel=50, Dusk=100) arm the dark check.
+                    match val {
+                        SignalValue::Uint16(v) => ambient_lux = v,
+                        SignalValue::Uint8(v) => ambient_lux = v as u16,
+                        _ => {}
                     }
                 }
                 _ = fmh_expiry => {
