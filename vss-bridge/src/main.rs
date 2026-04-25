@@ -7,6 +7,10 @@
 use std::sync::Arc;
 use tracing_subscriber::EnvFilter;
 
+use axum::Router;
+use tower_http::services::ServeDir;
+use tower_http::set_header::SetResponseHeaderLayer;
+
 use vss_bridge::adapters::mock::MockBus;
 use vss_bridge::arbiter;
 use vss_bridge::config;
@@ -198,8 +202,37 @@ async fn main() -> anyhow::Result<()> {
     let kuksa = kuksa_sync::KuksaSync::new(&kuksa_endpoint, Arc::clone(&bus));
     tokio::spawn(async move { kuksa.run().await });
 
-    tracing::info!("vss-bridge ready — open vss-hmi-body-sensors.html in a browser");
-    tracing::info!("  WebSocket: ws://localhost:8080");
+    // ── Static HTTP server for HMI files ───────────────────────────
+    // Serves the repo root (HTML files) on port 3000 so the browser
+    // can open http://localhost:3000/vss-hmi-body-sensors.html instead
+    // of a file:// URL (which has CORS and caching quirks).
+    // Port is overridable via VSS_BRIDGE_HTTP_PORT.
+    let http_port: u16 = std::env::var("VSS_BRIDGE_HTTP_PORT")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(3000);
+    // Serve the directory one level above the vss-bridge crate (the repo root).
+    let hmi_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("repo root")
+        .to_path_buf();
+    let http_app = Router::new()
+        .nest_service("/", ServeDir::new(hmi_root))
+        .layer(SetResponseHeaderLayer::overriding(
+            axum::http::header::CACHE_CONTROL,
+            axum::http::HeaderValue::from_static("no-store"),
+        ));
+    let http_listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{http_port}")).await?;
+    tokio::spawn(async move {
+        if let Err(e) = axum::serve(http_listener, http_app).await {
+            tracing::error!(error = %e, "HTTP file server failed");
+        }
+    });
+
+    tracing::info!("vss-bridge ready");
+    tracing::info!("  HMI (sensors):   http://localhost:{http_port}/vss-hmi-body-sensors.html");
+    tracing::info!("  HMI (actuators): http://localhost:{http_port}/vss-hmi-body-actuators.html");
+    tracing::info!("  WebSocket:       ws://localhost:8080");
     tracing::info!("  Press Ctrl+C to stop");
 
     tokio::signal::ctrl_c().await?;
