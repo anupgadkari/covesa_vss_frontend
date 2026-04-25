@@ -48,6 +48,8 @@ const INPUT_SIGNALS: &[VssPath] = &[
     "Body.Connectivity.NfcPhonePresent",
     "Vehicle.Safety.CrashDetected",
     "Body.Lights.AmbientLightSensor.Illuminance",
+    // ADAS camera input — HMI toggle simulates oncoming vehicle detection.
+    "Vehicle.ADAS.HighBeam.OncomingVehicleDetected",
     // Bulb defect fault-injection (HMI toggles to simulate failed lamp).
     // Three physical lamps per side: Front, Side (mirror repeater), Rear.
     "Body.Lights.DirectionIndicator.Left.Lamp.Front.IsDefect",

@@ -259,6 +259,10 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // Used by ManualLighting AUTO mode to gate low-beam activation.
         "Body.Lights.AmbientLightSensor.Illuminance" => Some(0x0015_0001),
 
+        // ADAS camera signals (OEM custom — block 0x0016).
+        // OncomingVehicleDetected: true when forward camera sees oncoming headlights.
+        "Vehicle.ADAS.HighBeam.OncomingVehicleDetected" => Some(0x0016_0001),
+
         _ => None,
     }
 }
@@ -526,6 +530,7 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
         0x0014_0003,
     ),
     ("Body.Lights.AmbientLightSensor.Illuminance", 0x0015_0001),
+    ("Vehicle.ADAS.HighBeam.OncomingVehicleDetected", 0x0016_0001),
 ];
 
 #[cfg(test)]

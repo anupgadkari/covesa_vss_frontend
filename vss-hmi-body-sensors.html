@@ -118,6 +118,8 @@ const INIT_STATE={
   // Ambient light sensor — OEM overlay (Uint16, lux). Default 10000 = daylight.
   // AUTO headlamp mode activates low beam below 200 lux (ECE R48 §6.1 threshold).
   'Body.Lights.AmbientLightSensor.Illuminance':10000,
+  // ADAS camera — oncoming vehicle detection for Auto High Beam suppression.
+  'Vehicle.ADAS.HighBeam.OncomingVehicleDetected':false,
   // Switch / Stalk inputs (overlay — physical driver controls)
   'Body.Switches.Hazard.IsEngaged':false,
   'Body.Switches.TurnIndicator.Direction':'OFF',
@@ -322,6 +324,7 @@ function App(){
             <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
               {[
                 {label:'Night',lux:5},
+                {label:'Tunnel',lux:50},
                 {label:'Dusk',lux:100},
                 {label:'Twilight',lux:300},
                 {label:'Overcast',lux:2000},
@@ -334,6 +337,43 @@ function App(){
                 </button>
               ))}
             </div>
+          </div>
+        </div>
+
+        {/* ADAS CAMERA */}
+        <div className="section" style={{borderColor:'#60A5FA',borderWidth:'2px'}}>
+          <div className="section-title" style={{color:'#60A5FA'}}>ADAS Camera</div>
+          <div className="section-info">
+            Simulates the forward mono-camera that drives Auto High Beam (AHB).
+            When <b>Oncoming Vehicle Detected</b> is ON the bridge claims{' '}
+            <code>Beam.High.IsOn = false</code> at HIGH priority — overriding any
+            manual high-beam stalk request until the path is clear.
+          </div>
+          <div style={{display:'flex',alignItems:'center',gap:'12px',marginTop:'8px'}}>
+            <div className="control-label" style={{minWidth:'unset'}}>Oncoming Vehicle Detected</div>
+            <button
+              className={`btn ${state['Vehicle.ADAS.HighBeam.OncomingVehicleDetected'] ? 'active' : ''}`}
+              style={{
+                background: state['Vehicle.ADAS.HighBeam.OncomingVehicleDetected'] ? '#EF4444' : undefined,
+                borderColor: state['Vehicle.ADAS.HighBeam.OncomingVehicleDetected'] ? '#EF4444' : undefined,
+                color: state['Vehicle.ADAS.HighBeam.OncomingVehicleDetected'] ? '#fff' : undefined,
+                minWidth: '120px',
+              }}
+              onClick={() => set(
+                'Vehicle.ADAS.HighBeam.OncomingVehicleDetected',
+                !state['Vehicle.ADAS.HighBeam.OncomingVehicleDetected']
+              )}>
+              {state['Vehicle.ADAS.HighBeam.OncomingVehicleDetected'] ? '🚗 ONCOMING — HIGH BEAM OFF' : '✅ Path clear'}
+            </button>
+            <span style={{
+              fontSize:'12px',
+              color: state['Vehicle.ADAS.HighBeam.OncomingVehicleDetected'] ? '#EF4444' : '#6B7E99',
+              fontWeight: state['Vehicle.ADAS.HighBeam.OncomingVehicleDetected'] ? 700 : 400,
+            }}>
+              {state['Vehicle.ADAS.HighBeam.OncomingVehicleDetected']
+                ? 'AHB suppressing high beam'
+                : 'Manual high beam available'}
+            </span>
           </div>
         </div>
 

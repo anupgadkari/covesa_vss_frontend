@@ -10,6 +10,7 @@ use tracing_subscriber::EnvFilter;
 use vss_bridge::adapters::mock::MockBus;
 use vss_bridge::arbiter;
 use vss_bridge::config;
+use vss_bridge::features::auto_high_beam::AutoHighBeam;
 use vss_bridge::features::brake_reverse_lamps::BrakeReverseLamps;
 use vss_bridge::features::double_lock_release::DoubleLockRelease;
 use vss_bridge::features::follow_me_home::FollowMeHome;
@@ -143,13 +144,18 @@ async fn main() -> anyhow::Result<()> {
     // ThumbPadLock — Row 1 outside handle thumb pad, 500 ms debounce.
     tokio::spawn(ThumbPadLock::new(Arc::clone(&bus), Arc::clone(&door_lock_arb)).run());
 
+    // AutoHighBeam — ADAS camera suppresses high beam when oncoming vehicle detected.
+    // Claims Beam.High.IsOn at High priority with Bool(false), overriding ManualLighting's
+    // Medium-priority claim. Releases when path is clear so manual high beam resumes.
+    tokio::spawn(AutoHighBeam::new(Arc::clone(&low_beam_arb), Arc::clone(&bus)).run());
+
     // BrakeReverseLamps — pedal-driven stop lights, gear-driven backup lights.
     tokio::spawn(BrakeReverseLamps::new(Arc::clone(&bus)).run());
 
     // TODO: remaining features
     // tokio::spawn(AutoRelock::from_config(Arc::clone(&door_lock_arb), Arc::clone(&bus), &_platform_config).run());
 
-    tracing::info!("features spawned: ManualLighting, FollowMeHome, BrakeReverseLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock");
+    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock");
 
     // ── Plant Models ────────────────────────────────────────────────
     // Simulate physical lamp behavior the M7 / smart actuator firmware

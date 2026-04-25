@@ -385,6 +385,14 @@ pub fn low_beam_arbiter<B: SignalBus>(
             signal: "Body.Lights.LicensePlate.IsOn",
             priority: Priority::High,
         },
+        // AutoHighBeam — ADAS camera suppresses high beam at high priority.
+        // Bool(false) at High overrides ManualLighting's Bool(true) at Medium,
+        // ensuring oncoming vehicles are not blinded regardless of stalk position.
+        AllowEntry {
+            feature_id: FeatureId::AutoHighBeam,
+            signal: "Body.Lights.Beam.High.IsOn",
+            priority: Priority::High,
+        },
     ];
 
     DomainArbiter::new("LowBeam", allow_list, bus)

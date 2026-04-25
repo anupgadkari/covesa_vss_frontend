@@ -1,4 +1,5 @@
 // Feature Business Logic modules — each will be added as implemented.
+pub mod auto_high_beam;
 pub mod auto_relock;
 pub mod brake_reverse_lamps;
 pub mod double_lock_release;
