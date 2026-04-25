@@ -610,13 +610,21 @@ function CombinedView({s,set}){
     <circle cx="265" cy="630" r="28" fill="#0D1520"/><circle cx="265" cy="630" r="18" fill="#111820" stroke="#202C3C" strokeWidth="0.5"/>
     <circle cx="265" cy="630" r="6"  fill="#08101A"/>{spokes(265,630,7,14)}
 
-    {/* Mirrors */}
-    {!mlf?<circle cx="50" cy="200" r="6" fill="#0F1A28" stroke="#1A2838" strokeWidth="0.5" opacity=".8"/>
-         :<circle cx="50" cy="200" r="3" fill="#0F1A28"/>}
-    {!mrf?<circle cx="310" cy="200" r="6" fill="#0F1A28" stroke="#1A2838" strokeWidth="0.5" opacity=".8"/>
-         :<circle cx="310" cy="200" r="3" fill="#0F1A28"/>}
-    {s['Body.Mirrors.Left.IsHeatingOn']&&<circle cx="50" cy="200" r="7" fill="none" stroke="#FF4040" strokeWidth="1" opacity=".6" className="pulse"/>}
-    {s['Body.Mirrors.Right.IsHeatingOn']&&<circle cx="310" cy="200" r="7" fill="none" stroke="#FF4040" strokeWidth="1" opacity=".6" className="pulse"/>}
+    {/* Mirrors — top view (elongated housing + trailing-edge turn indicator) */}
+    {!mlf
+      ?<g>
+        <rect x="38" y="194" width="16" height="12" rx="2" fill="#0F1A28" stroke="#1A2838" strokeWidth="0.5"/>
+        <rect x="38" y="198" width="5" height="6" rx="1" fill={li?'#F59E0B':'#1A1208'} opacity={li?0.95:.28}/>
+      </g>
+      :<rect x="49" y="198" width="5" height="4" rx="1" fill="#0D1320"/>}
+    {!mrf
+      ?<g>
+        <rect x="306" y="194" width="16" height="12" rx="2" fill="#0F1A28" stroke="#1A2838" strokeWidth="0.5"/>
+        <rect x="317" y="198" width="5" height="6" rx="1" fill={ri?'#F59E0B':'#1A1208'} opacity={ri?0.95:.28}/>
+      </g>
+      :<rect x="306" y="198" width="5" height="4" rx="1" fill="#0D1320"/>}
+    {s['Body.Mirrors.Left.IsHeatingOn']&&<circle cx="46" cy="200" r="10" fill="none" stroke="#FF4040" strokeWidth="1" opacity=".6" className="pulse"/>}
+    {s['Body.Mirrors.Right.IsHeatingOn']&&<circle cx="314" cy="200" r="10" fill="none" stroke="#FF4040" strokeWidth="1" opacity=".6" className="pulse"/>}
 
     <text x="180" y="22"  textAnchor="middle" fill="#1E2C3C" fontSize="8" fontFamily="Share Tech Mono" fontWeight="bold">▲ FRONT</text>
     <text x="180" y="755" textAnchor="middle" fill="#1E2C3C" fontSize="8" fontFamily="Share Tech Mono" fontWeight="bold">REAR ▼</text>
@@ -696,7 +704,13 @@ function SideView({s}){
     {rfog&&<rect x="862" y="260" width="28" height="12" rx="2" fill="#EF2020" opacity=".88"/>}
     {back&&<rect x="862" y="280" width="28" height="10" rx="2" fill="#FFFFFF" opacity=".82"/>}
     {lp&&<rect x="862" y="298" width="28" height="8" rx="2" fill="#FFF8DC" opacity=".85"/>}
-    {!mlf?<ellipse cx="75" cy="210" rx="12" ry="18" fill="#0F1A28" stroke="#1A2838" strokeWidth="1"/>:<circle cx="78" cy="210" r="5" fill="#0F1A28"/>}
+    {!mlf
+      ?<g>
+        <ellipse cx="75" cy="210" rx="12" ry="18" fill="#0F1A28" stroke="#1A2838" strokeWidth="1"/>
+        {/* Mirror turn indicator — bottom strip visible from the side */}
+        <rect x="65" y="224" width="20" height="5" rx="2" fill={li?'#F59E0B':'#1A1208'} opacity={li?.95:.25}/>
+      </g>
+      :<circle cx="78" cy="210" r="5" fill="#0F1A28"/>}
     {s['Body.Mirrors.Left.IsHeatingOn']&&<circle cx="75" cy="210" r="16" fill="none" stroke="#FF4040" strokeWidth="1.2" opacity=".7" className="pulse"/>}
     <circle cx="180" cy="400" r="55" fill="#07101A" stroke="#161E2C" strokeWidth="2.2"/>
     <circle cx="180" cy="400" r="42" fill="#0D1520"/><circle cx="180" cy="400" r="28" fill="#111820" stroke="#202C3C" strokeWidth="1"/>
