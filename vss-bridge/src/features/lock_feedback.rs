@@ -51,7 +51,12 @@ const TRUNK_OPEN_SIG: VssPath = "Body.Trunk.IsOpen";
 const LEAD_IN_MS: u64 = 100;
 
 /// Duration of the ON phase of each flash unit (ms).
-const FLASH_ON_MS: u64 = 900;
+///
+/// Must be less than two BlinkRelay half-periods (2 × 333 ms = 666 ms) so that
+/// only one 333 ms ON pulse fires per flash unit. At 500 ms the lamp is ON for
+/// 333 ms, naturally goes OFF via the blink tick, then the claim is released
+/// before the second ON fires — producing exactly 1 lamp flash per flash unit.
+const FLASH_ON_MS: u64 = 500;
 
 /// Gap between the two unlock flash units (ms).
 const GAP_MS: u64 = 300;
@@ -349,15 +354,17 @@ mod tests {
         // Start unlock sequence
         send_feedback(&bus, "unlock").await;
 
-        // Interrupt mid-way through — send lock feedback during first flash ON
-        advance(Duration::from_millis(600)).await;
+        // Interrupt mid-way through — send lock feedback during first flash ON.
+        // With LEAD_IN_MS=100 + FLASH_ON_MS=500, flash 1 ends at 600 ms.
+        // Interrupt at 300 ms (200 ms into the ON phase).
+        advance(Duration::from_millis(300)).await;
         drain().await;
         bus.clear_history();
 
         send_feedback(&bus, "lock").await;
 
-        // Advance past the lock sequence only (1100 ms)
-        advance(Duration::from_millis(1200)).await;
+        // Advance past the full lock sequence (LEAD_IN_MS + FLASH_ON_MS = 600 ms).
+        advance(Duration::from_millis(700)).await;
         drain().await;
 
         // Should see exactly 1 ON event (the lock flash), not the continuation of unlock

@@ -167,6 +167,8 @@ const INIT_STATE={
   'Body.Lights.DirectionIndicator.Left.IsSignaling':false,
   'Body.Lights.DirectionIndicator.Right.IsSignaling':false,
   'Body.Lights.Hazard.IsSignaling':false,
+  'Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn':false,
+  'Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn':false,
   // Wipers
   'Body.Windshield.Front.Wiping.Mode':'OFF',
   'Body.Windshield.Front.Wiping.Intensity':0,
@@ -361,8 +363,8 @@ function TopView({s, set}){
   const ffog=s['Body.Lights.Fog.Front.IsOn'],rfog=s['Body.Lights.Fog.Rear.IsOn'];
   const brake=s['Body.Lights.Brake.IsActive'],back=s['Body.Lights.Backup.IsActive'];
   const lp=s['Body.Lights.LicensePlate.IsOn'];
-  const li=s['Body.Lights.DirectionIndicator.Left.IsSignaling']||s['Body.Lights.Hazard.IsSignaling'];
-  const ri=s['Body.Lights.DirectionIndicator.Right.IsSignaling']||s['Body.Lights.Hazard.IsSignaling'];
+  const li=s['Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn'];
+  const ri=s['Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn'];
   const hlc=hi?'#FFFFFF':lo?'#FCD34D':drl?'#C0C8D0':park?'#FEF3C7':'#0A1420';
   const hlo=hi?.95:lo?.85:drl?.45:park?.2:.04;
   const tlc=brake?'#FF2222':lo||hi||park?'#EF4444':'#1A0808';
@@ -434,10 +436,10 @@ function TopView({s, set}){
     <text x="275" y="65" textAnchor="middle" fill={hlc} fontSize="10" fontWeight="bold" opacity={hlo}>{lo?'●':'○'}</text>
 
     {/* Turn indicators - left */}
-    <rect x="65" y="75" width="32" height="10" rx="2" fill={li?'#F59E0B':'#1A1208'} opacity={li?1:.25} className={li?'blink':''}/>
+    <rect x="65" y="75" width="32" height="10" rx="2" fill={li?'#F59E0B':'#1A1208'} opacity={li?1:.25}/>
 
     {/* Turn indicators - right */}
-    <rect x="263" y="75" width="32" height="10" rx="2" fill={ri?'#F59E0B':'#1A1208'} opacity={ri?1:.25} className={ri?'blink':''}/>
+    <rect x="263" y="75" width="32" height="10" rx="2" fill={ri?'#F59E0B':'#1A1208'} opacity={ri?1:.25}/>
 
     {/* Front fog lights - left */}
     <rect x="75" y="88" width="20" height="8" rx="2" fill={ffog?'#BAD6FE':'#0A1420'} opacity={ffog?0.85:.25}/>
@@ -562,8 +564,8 @@ function TopView({s, set}){
     {back&&<text x="272" y="562" textAnchor="middle" fill="#FFFFFF" fontSize="9" fontWeight="bold">●</text>}
 
     {/* Rear turn indicators */}
-    <rect x="65" y="580" width="32" height="8" rx="2" fill={li?'#F59E0B':'#1A1208'} opacity={li?1:.25} className={li?'blink':''}/>
-    <rect x="263" y="580" width="32" height="8" rx="2" fill={ri?'#F59E0B':'#1A1208'} opacity={ri?1:.25} className={ri?'blink':''}/>
+    <rect x="65" y="580" width="32" height="8" rx="2" fill={li?'#F59E0B':'#1A1208'} opacity={li?1:.25}/>
+    <rect x="263" y="580" width="32" height="8" rx="2" fill={ri?'#F59E0B':'#1A1208'} opacity={ri?1:.25}/>
 
     {/* Rear fog lights (red) - left */}
     <rect x="120" y="568" width="20" height="10" rx="2" fill={rfog?'#CC0000':'#1A0808'} opacity={rfog?0.9:.25}/>
@@ -609,7 +611,7 @@ function TopView({s, set}){
 function SideView({s}){
   const lo=s['Body.Lights.Beam.Low.IsOn'],hi=s['Body.Lights.Beam.High.IsOn'];
   const drl=s['Body.Lights.Running.IsOn'],park=s['Body.Lights.Parking.IsOn'];
-  const li=s['Body.Lights.DirectionIndicator.Left.IsSignaling']||s['Body.Lights.Hazard.IsSignaling'];
+  const li=s['Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn'];
   const ffog=s['Body.Lights.Fog.Front.IsOn'],rfog=s['Body.Lights.Fog.Rear.IsOn'];
   const brake=s['Body.Lights.Brake.IsActive'],back=s['Body.Lights.Backup.IsActive'];
   const lp=s['Body.Lights.LicensePlate.IsOn'];
@@ -698,7 +700,7 @@ function SideView({s}){
     <text x="130" y="214" textAnchor="middle" fill="#fff" fontSize="8" fontWeight="bold" opacity={hlo}>{lo?'●':'○'}</text>
 
     {/* Front indicators/turn signal */}
-    <rect x="110" y="240" width="28" height="14" rx="2" fill={li?'#F59E0B':'#1A1208'} opacity={li?0.95:.25} className={li?'blink':''}/>
+    <rect x="110" y="240" width="28" height="14" rx="2" fill={li?'#F59E0B':'#1A1208'} opacity={li?0.95:.25}/>
 
     {/* Front fog */}
     {ffog&&<rect x="110" y="260" width="28" height="12" rx="2" fill="#BAD6FE" opacity=".88"/>}
@@ -709,7 +711,7 @@ function SideView({s}){
     <text x="870" y="214" textAnchor="middle" fill="#fff" fontSize="8" fontWeight="bold" opacity={tlo}>{brake?'●':'○'}</text>
 
     {/* Rear turn indicator */}
-    <rect x="862" y="240" width="28" height="14" rx="2" fill={li?'#F59E0B':'#1A1208'} className={li?'blink':''} opacity={li?0.95:.25}/>
+    <rect x="862" y="240" width="28" height="14" rx="2" fill={li?'#F59E0B':'#1A1208'} opacity={li?0.95:.25}/>
 
     {/* Rear fog */}
     {rfog&&<rect x="862" y="260" width="28" height="12" rx="2" fill="#EF2020" opacity=".88"/>}
@@ -775,8 +777,8 @@ function SideView({s}){
 /* ═══════════════ COCKPIT VIEW ═══════════════ */
 function CockpitView({s,set}){
   const lo=s['Body.Lights.Beam.Low.IsOn'],hi=s['Body.Lights.Beam.High.IsOn'];
-  const li=s['Body.Lights.DirectionIndicator.Left.IsSignaling']||s['Body.Lights.Hazard.IsSignaling'];
-  const ri=s['Body.Lights.DirectionIndicator.Right.IsSignaling']||s['Body.Lights.Hazard.IsSignaling'];
+  const li=s['Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn'];
+  const ri=s['Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn'];
   const doorAjar=['Body.Doors.Row1.Left.IsOpen','Body.Doors.Row1.Right.IsOpen','Body.Doors.Row2.Left.IsOpen','Body.Doors.Row2.Right.IsOpen'].some(k=>s[k]);
   const ac=s['Cabin.HVAC.IsAirConditioningActive'];
   const defF=s['Cabin.HVAC.IsFrontDefrosterActive'],defR=s['Cabin.HVAC.IsRearDefrosterActive'];
