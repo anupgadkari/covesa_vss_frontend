@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VSS Body Controller Config · HMI</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;900&family=Share+Tech+Mono&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0A0F14;--s1:#111820;--s2:#151D26;--s3:#1A2535;--s4:#1E2D40;
+  --bdr:rgba(255,255,255,.07);--bdr2:rgba(255,255,255,.14);
+  --white:#E8EEF4;--dim:#5A7080;--muted:#3A4F60;
+  --green:#10D98A;--green2:rgba(16,217,138,.1);
+  --amber:#F59E0B;--amber2:rgba(245,158,11,.1);--amber3:rgba(245,158,11,.18);
+  --red:#F04040;--red2:rgba(240,64,64,.08);--red3:rgba(240,64,64,.14);
+  --blue:#38BDF8;--blue2:rgba(56,189,248,.1);
+  --fm:'Share Tech Mono',monospace;--fd:'Orbitron',monospace;
+  --r6:6px;--r4:4px;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--white);font-family:var(--fm)}
+
+/* HEADER */
+.hdr{height:44px;background:var(--s1);border-bottom:1px solid var(--bdr);display:flex;align-items:center;padding:0 16px;gap:12px;flex-shrink:0;position:relative;z-index:10}
+.logo{font-family:var(--fd);font-size:13px;font-weight:900;letter-spacing:.18em;color:var(--amber);white-space:nowrap}
+.logo span{color:var(--muted);font-weight:400}
+.hdiv{width:1px;height:22px;background:var(--bdr2);flex-shrink:0}
+.hchip{display:flex;align-items:center;gap:5px;font-family:var(--fm);font-size:10px;padding:4px 10px;border-radius:4px;border:1px solid var(--bdr2);background:var(--s2);color:var(--dim);white-space:nowrap}
+.hchip .dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.dot-mock{background:var(--amber);box-shadow:0 0 8px var(--amber)}
+.dot-live{background:var(--green);box-shadow:0 0 6px var(--green)}
+.hright{margin-left:auto;display:flex;align-items:center;gap:8px}
+.sigcount{font-family:var(--fm);font-size:10px;color:var(--blue);padding:3px 8px;border:1px solid var(--blue2);border-radius:3px;background:var(--blue2);white-space:nowrap}
+.navchip{font-family:var(--fm);font-size:10px;color:var(--dim);padding:3px 8px;border:1px solid var(--bdr2);border-radius:3px;background:var(--s2);text-decoration:none;transition:color .12s,border-color .12s}
+.navchip:hover{color:var(--white);border-color:var(--bdr2)}
+
+/* LAYOUT */
+.layout{display:flex;flex-direction:column;height:calc(100vh - 44px)}
+.container{flex:1;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--bdr2) transparent;padding:16px;max-width:640px;margin:0 auto;width:100%}
+.container::-webkit-scrollbar{width:4px}
+.container::-webkit-scrollbar-track{background:transparent}
+.container::-webkit-scrollbar-thumb{background:var(--bdr2);border-radius:2px}
+
+/* SECTION CARD */
+.section-card{background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r6);padding:14px 16px;margin-bottom:14px}
+.section-card.variant-card{background:color-mix(in srgb,var(--s2) 85%,var(--amber) 6%);border-color:rgba(245,158,11,.22)}
+.section-card.readonly-card{background:color-mix(in srgb,var(--s2) 90%,var(--red) 4%);border-color:rgba(240,64,64,.18)}
+
+.section-hdr{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.section-title{font-family:var(--fd);font-size:11px;letter-spacing:.14em;color:var(--amber);text-transform:uppercase;font-weight:600}
+.section-card.readonly-card .section-title{color:var(--red)}
+.badge{font-family:var(--fm);font-size:9px;padding:2px 7px;border-radius:3px;letter-spacing:.06em;white-space:nowrap}
+.badge-amber{background:var(--amber3);color:var(--amber);border:1px solid rgba(245,158,11,.35)}
+.badge-red{background:var(--red3);color:var(--red);border:1px solid rgba(240,64,64,.3)}
+
+/* CONTROL ROW */
+.ctrl{display:flex;align-items:center;gap:10px;margin-bottom:8px;padding:7px 10px;background:var(--s3);border-radius:var(--r4);border:1px solid var(--bdr)}
+.ctrl:last-child{margin-bottom:0}
+.ctrl-label{font-family:var(--fm);font-size:10px;color:var(--white);flex:1;min-width:0}
+.ctrl-value{font-family:var(--fm);font-size:10px;color:var(--amber);white-space:nowrap;margin-left:4px}
+
+/* TOGGLE */
+.tog{width:42px;height:22px;border-radius:11px;border:1.5px solid var(--bdr2);background:var(--s4);cursor:pointer;position:relative;transition:border-color .15s,background .15s;flex-shrink:0}
+.tog.on{border-color:var(--green);background:var(--green2)}
+.knob{position:absolute;width:14px;height:14px;border-radius:50%;background:var(--dim);top:3px;left:3px;transition:transform .15s,background .15s}
+.tog.on .knob{transform:translateX(20px);background:var(--green)}
+
+/* SELECT */
+.sel{background:var(--s4);border:1px solid var(--bdr2);border-radius:var(--r4);color:var(--white);font-family:var(--fm);font-size:10px;padding:5px 8px;outline:none;cursor:pointer;min-width:120px}
+.sel:focus{border-color:var(--amber)}
+.sel option{background:var(--s3)}
+
+/* NUMBER INPUT */
+.num-inp{background:var(--s4);border:1px solid var(--bdr2);border-radius:var(--r4);color:var(--amber);font-family:var(--fm);font-size:10px;padding:5px 8px;outline:none;width:72px;text-align:right}
+.num-inp:focus{border-color:var(--amber)}
+.num-inp::-webkit-inner-spin-button,.num-inp::-webkit-outer-spin-button{opacity:.4}
+
+/* READ-ONLY VALUE CHIP */
+.val-chip{font-family:var(--fm);font-size:10px;color:var(--dim);background:var(--s4);border:1px solid var(--bdr);border-radius:3px;padding:3px 8px;white-space:nowrap}
+
+/* STATUS BAR */
+.stbar{height:24px;background:var(--s1);border-top:1px solid var(--bdr);display:flex;align-items:center;padding:0 12px;gap:8px;flex-shrink:0;font-family:var(--fm);font-size:9px;color:var(--dim)}
+</style>
+</head>
+<body>
+<div id="root"><p style="color:white;padding:20px;font-family:monospace">Loading…</p></div>
+<script>
+window.addEventListener('DOMContentLoaded', function() {
+  var missing = [];
+  if (typeof React === 'undefined') missing.push('React');
+  if (typeof ReactDOM === 'undefined') missing.push('ReactDOM');
+  if (missing.length) {
+    document.getElementById('root').innerHTML =
+      '<pre style="color:#F04040;padding:20px;font-family:monospace">Failed to load: ' + missing.join(', ') +
+      '\nThis page requires internet access to load React from CDN.\nServe via HTTP (not file://).</pre>';
+  }
+});
+</script>
+<script type="text/babel">
+const {useState, useEffect, useRef, useCallback} = React;
+
+/* ══════ DEFAULT CONFIG ══════ */
+const DEFAULT_CONFIG = {
+  dealer: {
+    two_stage_unlock: false,
+    auto_relock_enabled: true,
+    horn_chirp_on_lock: true,
+    driver_door_side: 'Left',
+    courtesy_light_timeout_secs: 30,
+    remote_start_max_minutes: 10,
+  },
+  variant: {
+    double_lock_enabled: false,
+    nfc_enabled: false,
+    ble_key_enabled: false,
+    remote_lock_enabled: true,
+    auto_lock_speed_kmh: 0,
+    welcome_light_pattern: 'Simple',
+    doors_row2_left: true,
+    doors_row2_right: true,
+    doors_removable: false,
+  },
+  vehicle_line: {
+    auto_relock_timeout_secs: 30,
+    lock_feedback_blink_count: 1,
+    lock_feedback_blink_period_ms: 400,
+    welcome_light_duration_secs: 10,
+    lane_change_flash_count: 3,
+    shutdown_grace_secs: 5,
+  },
+};
+
+/* count all leaf keys across all sections */
+function countKeys(cfg) {
+  return Object.values(cfg).reduce((sum, section) => sum + Object.keys(section).length, 0);
+}
+
+/* ══════ TOGGLE SWITCH ══════ */
+function Toggle({on, onChange}) {
+  return (
+    <div className={`tog ${on ? 'on' : ''}`} onClick={() => onChange(!on)}>
+      <div className="knob"/>
+    </div>
+  );
+}
+
+/* ══════ NUMBER FIELD ══════ */
+function NumField({value, min, max, onChange}) {
+  const [local, setLocal] = useState(String(value));
+  useEffect(() => { setLocal(String(value)); }, [value]);
+
+  const commit = () => {
+    const n = parseFloat(local);
+    if (!isNaN(n)) {
+      const clamped = max !== undefined ? Math.min(max, Math.max(min ?? 0, n)) : Math.max(min ?? 0, n);
+      onChange(clamped);
+      setLocal(String(clamped));
+    } else {
+      setLocal(String(value));
+    }
+  };
+
+  return (
+    <input
+      type="number"
+      className="num-inp"
+      value={local}
+      min={min}
+      max={max}
+      onChange={e => setLocal(e.target.value)}
+      onBlur={commit}
+      onKeyDown={e => { if (e.key === 'Enter') { e.target.blur(); } }}
+    />
+  );
+}
+
+/* ══════ MAIN APP ══════ */
+function App() {
+  const [config, setConfig] = useState(DEFAULT_CONFIG);
+  const [connected, setConnected] = useState(false);
+  const wsRef = useRef(null);
+
+  /* WebSocket connect */
+  useEffect(() => {
+    const url = `ws://${window.location.hostname || 'localhost'}:8080`;
+    let ws;
+    let dead = false;
+
+    const connect = () => {
+      ws = new WebSocket(url);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        if (dead) { ws.close(); return; }
+        console.log('✓ WebSocket connected');
+        setConnected(true);
+      };
+
+      ws.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          if (msg.config) {
+            setConfig(prev => ({
+              dealer:       {...prev.dealer,       ...(msg.config.dealer       || {})},
+              variant:      {...prev.variant,      ...(msg.config.variant      || {})},
+              vehicle_line: {...prev.vehicle_line, ...(msg.config.vehicle_line || {})},
+            }));
+          }
+        } catch (err) { console.error('Parse error:', err); }
+      };
+
+      ws.onerror = () => {};
+      ws.onclose = () => { setConnected(false); };
+    };
+
+    connect();
+    return () => { dead = true; ws && ws.close(); };
+  }, []);
+
+  /* Send config_set to bridge */
+  const sendSet = useCallback((key, value) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({type: 'config_set', key, value}));
+    }
+  }, []);
+
+  /* Update dealer field */
+  const setDealer = useCallback((field, value) => {
+    setConfig(prev => ({...prev, dealer: {...prev.dealer, [field]: value}}));
+    sendSet(`dealer.${field}`, value);
+  }, [sendSet]);
+
+  /* Update variant field */
+  const setVariant = useCallback((field, value) => {
+    setConfig(prev => ({...prev, variant: {...prev.variant, [field]: value}}));
+    sendSet(`variant.${field}`, value);
+  }, [sendSet]);
+
+  const totalKeys = countKeys(config);
+
+  return (
+    <div style={{display:'flex', flexDirection:'column', height:'100vh'}}>
+
+      {/* ── HEADER ── */}
+      <header className="hdr">
+        <div className="logo">CONFIG<span>·HMI</span></div>
+        <div className="hdiv"/>
+        <div className="hchip">
+          <div className={`dot ${connected ? 'dot-live' : 'dot-mock'}`}/>
+          <span>{connected ? 'LIVE' : 'MOCK'}</span>
+        </div>
+        <div className="hright">
+          <span className="sigcount">{totalKeys} config keys</span>
+          <div className="hdiv"/>
+          <a className="navchip" href="vss-hmi-body-sensors.html">[SENSORS]</a>
+          <a className="navchip" href="vss-hmi-body-actuators.html">[ACTUATORS]</a>
+        </div>
+      </header>
+
+      {/* ── CONTENT ── */}
+      <div className="layout">
+        <div className="container">
+
+          {/* ════ DEALER CONFIG ════ */}
+          <div className="section-card">
+            <div className="section-hdr">
+              <div className="section-title">Dealer Config</div>
+            </div>
+
+            {/* two_stage_unlock */}
+            <div className="ctrl">
+              <div className="ctrl-label">Two-Stage Unlock</div>
+              <Toggle on={config.dealer.two_stage_unlock} onChange={v => setDealer('two_stage_unlock', v)}/>
+            </div>
+
+            {/* auto_relock_enabled */}
+            <div className="ctrl">
+              <div className="ctrl-label">Auto-Relock</div>
+              <Toggle on={config.dealer.auto_relock_enabled} onChange={v => setDealer('auto_relock_enabled', v)}/>
+            </div>
+
+            {/* horn_chirp_on_lock */}
+            <div className="ctrl">
+              <div className="ctrl-label">Horn Chirp on Lock</div>
+              <Toggle on={config.dealer.horn_chirp_on_lock} onChange={v => setDealer('horn_chirp_on_lock', v)}/>
+            </div>
+
+            {/* driver_door_side */}
+            <div className="ctrl">
+              <div className="ctrl-label">Driver Door Side</div>
+              <select className="sel" value={config.dealer.driver_door_side}
+                onChange={e => setDealer('driver_door_side', e.target.value)}>
+                <option value="Left">Left</option>
+                <option value="Right">Right</option>
+              </select>
+            </div>
+
+            {/* courtesy_light_timeout_secs */}
+            <div className="ctrl">
+              <div className="ctrl-label">Courtesy Light Timeout (s)</div>
+              <NumField
+                value={config.dealer.courtesy_light_timeout_secs}
+                min={0} max={120}
+                onChange={v => setDealer('courtesy_light_timeout_secs', v)}
+              />
+            </div>
+
+            {/* remote_start_max_minutes */}
+            <div className="ctrl">
+              <div className="ctrl-label">Remote Start Max (min)</div>
+              <NumField
+                value={config.dealer.remote_start_max_minutes}
+                min={0} max={60}
+                onChange={v => setDealer('remote_start_max_minutes', v)}
+              />
+            </div>
+          </div>
+
+          {/* ════ VARIANT CONFIG ════ */}
+          <div className="section-card variant-card">
+            <div className="section-hdr">
+              <div className="section-title">Variant Config</div>
+              <span className="badge badge-amber">VARIANT — FACTORY SET</span>
+            </div>
+
+            {/* double_lock_enabled */}
+            <div className="ctrl">
+              <div className="ctrl-label">Double Lock (Superlock)</div>
+              <Toggle on={config.variant.double_lock_enabled} onChange={v => setVariant('double_lock_enabled', v)}/>
+            </div>
+
+            {/* nfc_enabled */}
+            <div className="ctrl">
+              <div className="ctrl-label">NFC Card/Phone</div>
+              <Toggle on={config.variant.nfc_enabled} onChange={v => setVariant('nfc_enabled', v)}/>
+            </div>
+
+            {/* ble_key_enabled */}
+            <div className="ctrl">
+              <div className="ctrl-label">BLE Digital Key</div>
+              <Toggle on={config.variant.ble_key_enabled} onChange={v => setVariant('ble_key_enabled', v)}/>
+            </div>
+
+            {/* remote_lock_enabled */}
+            <div className="ctrl">
+              <div className="ctrl-label">Remote Lock (TCU)</div>
+              <Toggle on={config.variant.remote_lock_enabled} onChange={v => setVariant('remote_lock_enabled', v)}/>
+            </div>
+
+            {/* auto_lock_speed_kmh */}
+            <div className="ctrl">
+              <div className="ctrl-label">Auto-Lock Speed (km/h) — 0=disabled</div>
+              <NumField
+                value={config.variant.auto_lock_speed_kmh}
+                min={0} max={250}
+                onChange={v => setVariant('auto_lock_speed_kmh', v)}
+              />
+            </div>
+
+            {/* welcome_light_pattern */}
+            <div className="ctrl">
+              <div className="ctrl-label">Welcome Light Pattern</div>
+              <select className="sel" value={config.variant.welcome_light_pattern}
+                onChange={e => setVariant('welcome_light_pattern', e.target.value)}>
+                <option value="Simple">Simple</option>
+                <option value="Sequential">Sequential</option>
+                <option value="Disabled">Disabled</option>
+              </select>
+            </div>
+
+            {/* doors_row2_left */}
+            <div className="ctrl">
+              <div className="ctrl-label">Rear-Left Door Present</div>
+              <Toggle on={config.variant.doors_row2_left} onChange={v => setVariant('doors_row2_left', v)}/>
+            </div>
+
+            {/* doors_row2_right */}
+            <div className="ctrl">
+              <div className="ctrl-label">Rear-Right Door Present</div>
+              <Toggle on={config.variant.doors_row2_right} onChange={v => setVariant('doors_row2_right', v)}/>
+            </div>
+
+            {/* doors_removable */}
+            <div className="ctrl">
+              <div className="ctrl-label">Doors Removable</div>
+              <Toggle on={config.variant.doors_removable} onChange={v => setVariant('doors_removable', v)}/>
+            </div>
+          </div>
+
+          {/* ════ VEHICLE LINE (read-only) ════ */}
+          <div className="section-card readonly-card">
+            <div className="section-hdr">
+              <div className="section-title">Vehicle Line</div>
+              <span className="badge badge-red">VEHICLE LINE — READ ONLY</span>
+            </div>
+
+            {[
+              {key:'auto_relock_timeout_secs',    label:'Auto-Relock Timeout (s)'},
+              {key:'lock_feedback_blink_count',   label:'Lock Feedback Blinks'},
+              {key:'lock_feedback_blink_period_ms',label:'Blink Period (ms)'},
+              {key:'welcome_light_duration_secs', label:'Welcome Light Duration (s)'},
+              {key:'lane_change_flash_count',     label:'Lane-Change Comfort Flashes'},
+              {key:'shutdown_grace_secs',         label:'Shutdown Grace (s)'},
+            ].map(({key, label}) => (
+              <div key={key} className="ctrl">
+                <div className="ctrl-label">{label}</div>
+                <span className="val-chip">{String(config.vehicle_line[key] ?? '—')}</span>
+              </div>
+            ))}
+          </div>
+
+        </div>
+      </div>
+
+      {/* ── STATUS BAR ── */}
+      <div className="stbar">
+        <span>vss-bridge: {connected ? '✓ LIVE' : '✗ MOCK (local state only)'}</span>
+      </div>
+
+    </div>
+  );
+}
+
+/* ══════ RENDER ══════ */
+ReactDOM.render(<App/>, document.getElementById('root'));
+</script>
+</body>
+</html>

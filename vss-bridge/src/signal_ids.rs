@@ -67,6 +67,11 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Body.Doors.Row1.Left.IsChildLockActive" => Some(0x0005_0004),
         "Body.Doors.Row1.Left.Window.Position" => Some(0x0005_0005),
         "Body.Doors.Row1.Left.IsDoubleLocked" => Some(0x0005_0006),
+        "Body.Doors.Row1.Left.Latch.IsLatched" => Some(0x0005_0007),
+        "Body.Doors.Row1.Left.Handle.Inside.IsPulled" => Some(0x0005_0008),
+        "Body.Doors.Row1.Left.Handle.Outside.IsPulled" => Some(0x0005_0009),
+        "Body.Doors.Row1.Left.Soldier.IsUnlocked" => Some(0x0005_000A),
+        "Body.Doors.Row1.Left.CloseCmd" => Some(0x0005_000B),
 
         // Doors Row1 Right
         "Body.Doors.Row1.Right.IsOpen" => Some(0x0005_0011),
@@ -75,6 +80,11 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Body.Doors.Row1.Right.IsChildLockActive" => Some(0x0005_0014),
         "Body.Doors.Row1.Right.Window.Position" => Some(0x0005_0015),
         "Body.Doors.Row1.Right.IsDoubleLocked" => Some(0x0005_0016),
+        "Body.Doors.Row1.Right.Latch.IsLatched" => Some(0x0005_0017),
+        "Body.Doors.Row1.Right.Handle.Inside.IsPulled" => Some(0x0005_0018),
+        "Body.Doors.Row1.Right.Handle.Outside.IsPulled" => Some(0x0005_0019),
+        "Body.Doors.Row1.Right.Soldier.IsUnlocked" => Some(0x0005_001A),
+        "Body.Doors.Row1.Right.CloseCmd" => Some(0x0005_001B),
 
         // Doors Row2 Left
         "Body.Doors.Row2.Left.IsOpen" => Some(0x0005_0021),
@@ -83,6 +93,11 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Body.Doors.Row2.Left.IsChildLockActive" => Some(0x0005_0024),
         "Body.Doors.Row2.Left.Window.Position" => Some(0x0005_0025),
         "Body.Doors.Row2.Left.IsDoubleLocked" => Some(0x0005_0026),
+        "Body.Doors.Row2.Left.Latch.IsLatched" => Some(0x0005_0027),
+        "Body.Doors.Row2.Left.Handle.Inside.IsPulled" => Some(0x0005_0028),
+        "Body.Doors.Row2.Left.Handle.Outside.IsPulled" => Some(0x0005_0029),
+        "Body.Doors.Row2.Left.Soldier.IsUnlocked" => Some(0x0005_002A),
+        "Body.Doors.Row2.Left.CloseCmd" => Some(0x0005_002B),
 
         // Doors Row2 Right
         "Body.Doors.Row2.Right.IsOpen" => Some(0x0005_0031),
@@ -91,12 +106,19 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Body.Doors.Row2.Right.IsChildLockActive" => Some(0x0005_0034),
         "Body.Doors.Row2.Right.Window.Position" => Some(0x0005_0035),
         "Body.Doors.Row2.Right.IsDoubleLocked" => Some(0x0005_0036),
+        "Body.Doors.Row2.Right.Latch.IsLatched" => Some(0x0005_0037),
+        "Body.Doors.Row2.Right.Handle.Inside.IsPulled" => Some(0x0005_0038),
+        "Body.Doors.Row2.Right.Handle.Outside.IsPulled" => Some(0x0005_0039),
+        "Body.Doors.Row2.Right.Soldier.IsUnlocked" => Some(0x0005_003A),
+        "Body.Doors.Row2.Right.CloseCmd" => Some(0x0005_003B),
 
         // Body misc
         "Body.Hood.IsOpen" => Some(0x0006_0001),
         "Body.Trunk.IsOpen" => Some(0x0006_0002),
         "Body.Trunk.IsLocked" => Some(0x0006_0003),
         "Body.Horn.IsActive" => Some(0x0006_0004),
+        "Body.Trunk.OpenCmd" => Some(0x0006_0007),
+        "Body.Trunk.CloseCmd" => Some(0x0006_0008),
         "Body.FuelLid.IsOpen" => Some(0x0006_0005),
         "Body.ChargeLid.IsOpen" => Some(0x0006_0006),
 
@@ -164,6 +186,74 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
 
         // Safety signals
         "Vehicle.Safety.CrashDetected" => Some(0x000F_0001),
+
+        // PEPS plant model — key fob zones
+        "Body.PEPS.Plant.KeyFob.1.Zone" => Some(0x0010_0001),
+        "Body.PEPS.Plant.KeyFob.2.Zone" => Some(0x0010_0002),
+        "Body.PEPS.Plant.KeyFob.3.Zone" => Some(0x0010_0003),
+        "Body.PEPS.Plant.KeyFob.4.Zone" => Some(0x0010_0004),
+        "Body.PEPS.Plant.KeyFob.5.Zone" => Some(0x0010_0005),
+        "Body.PEPS.Plant.KeyFob.6.Zone" => Some(0x0010_0006),
+        // PEPS plant model — key fob button presses
+        "Body.PEPS.Plant.KeyFob.1.ButtonPress" => Some(0x0010_0011),
+        "Body.PEPS.Plant.KeyFob.2.ButtonPress" => Some(0x0010_0012),
+        "Body.PEPS.Plant.KeyFob.3.ButtonPress" => Some(0x0010_0013),
+        "Body.PEPS.Plant.KeyFob.4.ButtonPress" => Some(0x0010_0014),
+        // PEPS plant model — key fob pairing
+        "Body.PEPS.Plant.KeyFob.1.Paired" => Some(0x0010_0021),
+        "Body.PEPS.Plant.KeyFob.2.Paired" => Some(0x0010_0022),
+        "Body.PEPS.Plant.KeyFob.3.Paired" => Some(0x0010_0023),
+        "Body.PEPS.Plant.KeyFob.4.Paired" => Some(0x0010_0024),
+        "Body.PEPS.Plant.KeyFob.5.Paired" => Some(0x0010_0025),
+        "Body.PEPS.Plant.KeyFob.6.Paired" => Some(0x0010_0026),
+        // PEPS plant model — key fob challenge responses
+        "Body.PEPS.Plant.KeyFob.1.ChallengeResponse" => Some(0x0010_0031),
+        "Body.PEPS.Plant.KeyFob.2.ChallengeResponse" => Some(0x0010_0032),
+        "Body.PEPS.Plant.KeyFob.3.ChallengeResponse" => Some(0x0010_0033),
+        "Body.PEPS.Plant.KeyFob.4.ChallengeResponse" => Some(0x0010_0034),
+        "Body.PEPS.Plant.KeyFob.5.ChallengeResponse" => Some(0x0010_0035),
+        "Body.PEPS.Plant.KeyFob.6.ChallengeResponse" => Some(0x0010_0036),
+        // PEPS plant model — key fob RSSI responses
+        "Body.PEPS.Plant.KeyFob.1.RssiResponse" => Some(0x0010_0041),
+        "Body.PEPS.Plant.KeyFob.2.RssiResponse" => Some(0x0010_0042),
+        "Body.PEPS.Plant.KeyFob.3.RssiResponse" => Some(0x0010_0043),
+        "Body.PEPS.Plant.KeyFob.4.RssiResponse" => Some(0x0010_0044),
+        "Body.PEPS.Plant.KeyFob.5.RssiResponse" => Some(0x0010_0045),
+        "Body.PEPS.Plant.KeyFob.6.RssiResponse" => Some(0x0010_0046),
+        // PEPS plant model — key fob RF messages
+        "Body.PEPS.Plant.KeyFob.1.RfMessage" => Some(0x0010_0051),
+        "Body.PEPS.Plant.KeyFob.2.RfMessage" => Some(0x0010_0052),
+        "Body.PEPS.Plant.KeyFob.3.RfMessage" => Some(0x0010_0053),
+        "Body.PEPS.Plant.KeyFob.4.RfMessage" => Some(0x0010_0054),
+        // PEPS plant model — BLE phone zones
+        "Body.PEPS.Plant.BlePhone.1.Zone" => Some(0x0011_0001),
+        "Body.PEPS.Plant.BlePhone.2.Zone" => Some(0x0011_0002),
+        // PEPS plant model — BLE phone challenge responses
+        "Body.PEPS.Plant.BlePhone.1.ChallengeResponse" => Some(0x0011_0011),
+        "Body.PEPS.Plant.BlePhone.2.ChallengeResponse" => Some(0x0011_0012),
+        // PEPS plant model — BLE phone RSSI responses
+        "Body.PEPS.Plant.BlePhone.1.RssiResponse" => Some(0x0011_0021),
+        "Body.PEPS.Plant.BlePhone.2.RssiResponse" => Some(0x0011_0022),
+        // PEPS plant model — NFC card positions
+        "Body.PEPS.Plant.NfcCard.1.Position" => Some(0x0012_0001),
+        "Body.PEPS.Plant.NfcCard.2.Position" => Some(0x0012_0002),
+        // PEPS plant model — NFC card challenge responses
+        "Body.PEPS.Plant.NfcCard.1.ChallengeResponse" => Some(0x0012_0011),
+        "Body.PEPS.Plant.NfcCard.2.ChallengeResponse" => Some(0x0012_0012),
+        // PEPS vehicle-side challenge/poll signals
+        "Body.PEPS.LfChallenge" => Some(0x0013_0001),
+        "Body.PEPS.BleChallenge" => Some(0x0013_0002),
+        "Body.PEPS.NfcChallenge" => Some(0x0013_0003),
+        "Body.PEPS.ApproachPoll" => Some(0x0013_0004),
+
+        // Lock feedback request — published by external-origin features
+        // (RKE, walk-away, thumb-pad, auto-relock). LockFeedback subscribes.
+        // Values: "lock" | "unlock" | "trunk_unlock"
+        "Body.Doors.CentralLock.FeedbackRequest" => Some(0x0014_0001),
+
+        // Thumb-pad lock triggers — Row1 outside handle lock area (no Row2 pads).
+        "Body.Doors.Row1.Left.Handle.Outside.LockPad.IsPressed" => Some(0x0014_0002),
+        "Body.Doors.Row1.Right.Handle.Outside.LockPad.IsPressed" => Some(0x0014_0003),
 
         _ => None,
     }
@@ -267,28 +357,50 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Body.Doors.Row1.Left.IsChildLockActive", 0x0005_0004),
     ("Body.Doors.Row1.Left.Window.Position", 0x0005_0005),
     ("Body.Doors.Row1.Left.IsDoubleLocked", 0x0005_0006),
+    ("Body.Doors.Row1.Left.Latch.IsLatched", 0x0005_0007),
+    ("Body.Doors.Row1.Left.Handle.Inside.IsPulled", 0x0005_0008),
+    ("Body.Doors.Row1.Left.Handle.Outside.IsPulled", 0x0005_0009),
+    ("Body.Doors.Row1.Left.Soldier.IsUnlocked", 0x0005_000A),
+    ("Body.Doors.Row1.Left.CloseCmd", 0x0005_000B),
     ("Body.Doors.Row1.Right.IsOpen", 0x0005_0011),
     ("Body.Doors.Row1.Right.IsLocked", 0x0005_0012),
     ("Body.Doors.Row1.Right.LatchStatus", 0x0005_0013),
     ("Body.Doors.Row1.Right.IsChildLockActive", 0x0005_0014),
     ("Body.Doors.Row1.Right.Window.Position", 0x0005_0015),
     ("Body.Doors.Row1.Right.IsDoubleLocked", 0x0005_0016),
+    ("Body.Doors.Row1.Right.Latch.IsLatched", 0x0005_0017),
+    ("Body.Doors.Row1.Right.Handle.Inside.IsPulled", 0x0005_0018),
+    ("Body.Doors.Row1.Right.Handle.Outside.IsPulled", 0x0005_0019),
+    ("Body.Doors.Row1.Right.Soldier.IsUnlocked", 0x0005_001A),
+    ("Body.Doors.Row1.Right.CloseCmd", 0x0005_001B),
     ("Body.Doors.Row2.Left.IsOpen", 0x0005_0021),
     ("Body.Doors.Row2.Left.IsLocked", 0x0005_0022),
     ("Body.Doors.Row2.Left.LatchStatus", 0x0005_0023),
     ("Body.Doors.Row2.Left.IsChildLockActive", 0x0005_0024),
     ("Body.Doors.Row2.Left.Window.Position", 0x0005_0025),
     ("Body.Doors.Row2.Left.IsDoubleLocked", 0x0005_0026),
+    ("Body.Doors.Row2.Left.Latch.IsLatched", 0x0005_0027),
+    ("Body.Doors.Row2.Left.Handle.Inside.IsPulled", 0x0005_0028),
+    ("Body.Doors.Row2.Left.Handle.Outside.IsPulled", 0x0005_0029),
+    ("Body.Doors.Row2.Left.Soldier.IsUnlocked", 0x0005_002A),
+    ("Body.Doors.Row2.Left.CloseCmd", 0x0005_002B),
     ("Body.Doors.Row2.Right.IsOpen", 0x0005_0031),
     ("Body.Doors.Row2.Right.IsLocked", 0x0005_0032),
     ("Body.Doors.Row2.Right.LatchStatus", 0x0005_0033),
     ("Body.Doors.Row2.Right.IsChildLockActive", 0x0005_0034),
     ("Body.Doors.Row2.Right.Window.Position", 0x0005_0035),
     ("Body.Doors.Row2.Right.IsDoubleLocked", 0x0005_0036),
+    ("Body.Doors.Row2.Right.Latch.IsLatched", 0x0005_0037),
+    ("Body.Doors.Row2.Right.Handle.Inside.IsPulled", 0x0005_0038),
+    ("Body.Doors.Row2.Right.Handle.Outside.IsPulled", 0x0005_0039),
+    ("Body.Doors.Row2.Right.Soldier.IsUnlocked", 0x0005_003A),
+    ("Body.Doors.Row2.Right.CloseCmd", 0x0005_003B),
     ("Body.Hood.IsOpen", 0x0006_0001),
     ("Body.Trunk.IsOpen", 0x0006_0002),
     ("Body.Trunk.IsLocked", 0x0006_0003),
     ("Body.Horn.IsActive", 0x0006_0004),
+    ("Body.Trunk.OpenCmd", 0x0006_0007),
+    ("Body.Trunk.CloseCmd", 0x0006_0008),
     ("Body.FuelLid.IsOpen", 0x0006_0005),
     ("Body.ChargeLid.IsOpen", 0x0006_0006),
     ("Body.Sunroof.Position", 0x0007_0001),
@@ -341,6 +453,74 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Body.Doors.Row2.Right.IsRemoved", 0x000E_0043),
     // Safety signals
     ("Vehicle.Safety.CrashDetected", 0x000F_0001),
+    // PEPS plant model — key fob zones
+    ("Body.PEPS.Plant.KeyFob.1.Zone", 0x0010_0001),
+    ("Body.PEPS.Plant.KeyFob.2.Zone", 0x0010_0002),
+    ("Body.PEPS.Plant.KeyFob.3.Zone", 0x0010_0003),
+    ("Body.PEPS.Plant.KeyFob.4.Zone", 0x0010_0004),
+    ("Body.PEPS.Plant.KeyFob.5.Zone", 0x0010_0005),
+    ("Body.PEPS.Plant.KeyFob.6.Zone", 0x0010_0006),
+    // PEPS plant model — key fob button presses
+    ("Body.PEPS.Plant.KeyFob.1.ButtonPress", 0x0010_0011),
+    ("Body.PEPS.Plant.KeyFob.2.ButtonPress", 0x0010_0012),
+    ("Body.PEPS.Plant.KeyFob.3.ButtonPress", 0x0010_0013),
+    ("Body.PEPS.Plant.KeyFob.4.ButtonPress", 0x0010_0014),
+    // PEPS plant model — key fob pairing
+    ("Body.PEPS.Plant.KeyFob.1.Paired", 0x0010_0021),
+    ("Body.PEPS.Plant.KeyFob.2.Paired", 0x0010_0022),
+    ("Body.PEPS.Plant.KeyFob.3.Paired", 0x0010_0023),
+    ("Body.PEPS.Plant.KeyFob.4.Paired", 0x0010_0024),
+    ("Body.PEPS.Plant.KeyFob.5.Paired", 0x0010_0025),
+    ("Body.PEPS.Plant.KeyFob.6.Paired", 0x0010_0026),
+    // PEPS plant model — key fob challenge responses
+    ("Body.PEPS.Plant.KeyFob.1.ChallengeResponse", 0x0010_0031),
+    ("Body.PEPS.Plant.KeyFob.2.ChallengeResponse", 0x0010_0032),
+    ("Body.PEPS.Plant.KeyFob.3.ChallengeResponse", 0x0010_0033),
+    ("Body.PEPS.Plant.KeyFob.4.ChallengeResponse", 0x0010_0034),
+    ("Body.PEPS.Plant.KeyFob.5.ChallengeResponse", 0x0010_0035),
+    ("Body.PEPS.Plant.KeyFob.6.ChallengeResponse", 0x0010_0036),
+    // PEPS plant model — key fob RSSI responses
+    ("Body.PEPS.Plant.KeyFob.1.RssiResponse", 0x0010_0041),
+    ("Body.PEPS.Plant.KeyFob.2.RssiResponse", 0x0010_0042),
+    ("Body.PEPS.Plant.KeyFob.3.RssiResponse", 0x0010_0043),
+    ("Body.PEPS.Plant.KeyFob.4.RssiResponse", 0x0010_0044),
+    ("Body.PEPS.Plant.KeyFob.5.RssiResponse", 0x0010_0045),
+    ("Body.PEPS.Plant.KeyFob.6.RssiResponse", 0x0010_0046),
+    // PEPS plant model — key fob RF messages
+    ("Body.PEPS.Plant.KeyFob.1.RfMessage", 0x0010_0051),
+    ("Body.PEPS.Plant.KeyFob.2.RfMessage", 0x0010_0052),
+    ("Body.PEPS.Plant.KeyFob.3.RfMessage", 0x0010_0053),
+    ("Body.PEPS.Plant.KeyFob.4.RfMessage", 0x0010_0054),
+    // PEPS plant model — BLE phone zones
+    ("Body.PEPS.Plant.BlePhone.1.Zone", 0x0011_0001),
+    ("Body.PEPS.Plant.BlePhone.2.Zone", 0x0011_0002),
+    // PEPS plant model — BLE phone challenge responses
+    ("Body.PEPS.Plant.BlePhone.1.ChallengeResponse", 0x0011_0011),
+    ("Body.PEPS.Plant.BlePhone.2.ChallengeResponse", 0x0011_0012),
+    // PEPS plant model — BLE phone RSSI responses
+    ("Body.PEPS.Plant.BlePhone.1.RssiResponse", 0x0011_0021),
+    ("Body.PEPS.Plant.BlePhone.2.RssiResponse", 0x0011_0022),
+    // PEPS plant model — NFC card positions
+    ("Body.PEPS.Plant.NfcCard.1.Position", 0x0012_0001),
+    ("Body.PEPS.Plant.NfcCard.2.Position", 0x0012_0002),
+    // PEPS plant model — NFC card challenge responses
+    ("Body.PEPS.Plant.NfcCard.1.ChallengeResponse", 0x0012_0011),
+    ("Body.PEPS.Plant.NfcCard.2.ChallengeResponse", 0x0012_0012),
+    // PEPS vehicle-side challenge/poll signals
+    ("Body.PEPS.LfChallenge", 0x0013_0001),
+    ("Body.PEPS.BleChallenge", 0x0013_0002),
+    ("Body.PEPS.NfcChallenge", 0x0013_0003),
+    ("Body.PEPS.ApproachPoll", 0x0013_0004),
+    // Lock feedback request and thumb-pad signals
+    ("Body.Doors.CentralLock.FeedbackRequest", 0x0014_0001),
+    (
+        "Body.Doors.Row1.Left.Handle.Outside.LockPad.IsPressed",
+        0x0014_0002,
+    ),
+    (
+        "Body.Doors.Row1.Right.Handle.Outside.LockPad.IsPressed",
+        0x0014_0003,
+    ),
 ];
 
 #[cfg(test)]

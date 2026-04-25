@@ -126,6 +126,9 @@ pub enum FeatureId {
     NfcCard = 0x0F,
     NfcPhone = 0x10,
     AutoRelock = 0x11,
+    WalkAwayLock = 0x12,
+    DoubleLockRelease = 0x13,
+    ThumbPadLock = 0x14,
 }
 
 impl FeatureId {
@@ -148,6 +151,9 @@ impl FeatureId {
             0x0F => Some(Self::NfcCard),
             0x10 => Some(Self::NfcPhone),
             0x11 => Some(Self::AutoRelock),
+            0x12 => Some(Self::WalkAwayLock),
+            0x13 => Some(Self::DoubleLockRelease),
+            0x14 => Some(Self::ThumbPadLock),
             _ => None,
         }
     }

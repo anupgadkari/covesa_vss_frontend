@@ -8,7 +8,7 @@ use std::sync::Mutex;
 
 use async_trait::async_trait;
 use futures::stream::BoxStream;
-use futures::StreamExt;
+use futures::{stream, StreamExt};
 use tokio::sync::broadcast;
 
 use crate::ipc_message::SignalValue;
@@ -94,9 +94,16 @@ impl SignalBus for MockBus {
     async fn subscribe(&self, signal: VssPath) -> BoxStream<'static, SignalValue> {
         let tx = self.get_or_create_channel(signal);
         let rx = tx.subscribe();
-        let stream = tokio_stream::wrappers::BroadcastStream::new(rx)
+        // Replay the last published value so late subscribers (e.g. WsBridge
+        // tasks that start after the plant model's initial publish_all()) get
+        // the current state immediately rather than waiting for the next change.
+        let cached = self.latest.lock().unwrap().get(signal).cloned();
+        let live = tokio_stream::wrappers::BroadcastStream::new(rx)
             .filter_map(|r: Result<SignalValue, _>| async move { r.ok() });
-        Box::pin(stream)
+        match cached {
+            Some(initial) => Box::pin(stream::once(async move { initial }).chain(live)),
+            None => Box::pin(live),
+        }
     }
 
     async fn publish_await_ack(
