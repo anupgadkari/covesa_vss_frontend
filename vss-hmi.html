@@ -587,22 +587,24 @@ function CombinedView({s,set,onDeviceSelect}){
           <path d={`M ${cx+dx*0.2},${cy} L ${cx+dx},${cy}`} stroke="#F59E0B" strokeWidth="2" opacity=".6" strokeDasharray="3,2"/>
           <text x={cx} y={ry+rh+12} textAnchor="middle" fill="#F59E0B" fontSize="6" fontWeight="bold">▣ TAP</text>
         </>}
-        {/* Outer handle */}
+        {/* Outer handle — when door open: click to close; when closed: drag to pull */}
         <rect x={hOutX} y={hY-4} width="6" height="8" rx="1"
-          fill={outPulled?'#38BDF8':dblLock?'#4B2020':locked?'#3A2A0A':'#1E4060'}
-          stroke={outPulled?'#7DD3FC':'#2A5070'} strokeWidth="0.5"
-          style={{cursor:dblLock||locked?'not-allowed':'pointer'}}
-          onMouseDown={dblLock||locked?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',true)}
-          onMouseUp={dblLock||locked?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',false)}
-          onMouseLeave={dblLock||locked?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',false)}/>
-        {/* Inner handle */}
+          fill={open?'#0DC8C8':outPulled?'#38BDF8':dblLock?'#4B2020':locked?'#3A2A0A':'#1E4060'}
+          stroke={open?'#5EEAD4':outPulled?'#7DD3FC':'#2A5070'} strokeWidth="0.5"
+          style={{cursor:open?'pointer':dblLock||locked?'not-allowed':'pointer'}}
+          onClick={open?()=>set(pfx+'.CloseCmd',true):undefined}
+          onMouseDown={open||dblLock||locked?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',true)}
+          onMouseUp={open||dblLock||locked?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',false)}
+          onMouseLeave={open||dblLock||locked?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',false)}/>
+        {/* Inner handle — when door open: click to close; when closed: drag to pull */}
         <rect x={hInX} y={hY-4} width="6" height="8" rx="1"
-          fill={inPulled?'#34D399':dblLock?'#4B2020':'#1E3A28'}
-          stroke={inPulled?'#6EE7B7':'#2A5040'} strokeWidth="0.5"
-          style={{cursor:dblLock?'not-allowed':'pointer'}}
-          onMouseDown={dblLock?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',true)}
-          onMouseUp={dblLock?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',false)}
-          onMouseLeave={dblLock?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',false)}/>
+          fill={open?'#0DC8C8':inPulled?'#34D399':dblLock?'#4B2020':'#1E3A28'}
+          stroke={open?'#5EEAD4':inPulled?'#6EE7B7':'#2A5040'} strokeWidth="0.5"
+          style={{cursor:open?'pointer':dblLock?'not-allowed':'pointer'}}
+          onClick={open?()=>set(pfx+'.CloseCmd',true):undefined}
+          onMouseDown={open||dblLock?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',true)}
+          onMouseUp={open||dblLock?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',false)}
+          onMouseLeave={open||dblLock?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',false)}/>
         {/* Soldier sill-pin — vertical rect, inner window-sill edge */}
         <rect x={soldX} y={soldY} width={soldW} height={soldH} rx="1"
           fill={lockFill} stroke={lockStroke} strokeWidth="0.8"
