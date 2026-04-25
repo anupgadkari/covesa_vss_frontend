@@ -558,15 +558,28 @@ function CombinedView({s,set,onDeviceSelect}){
       const latched=s[pfx+'.Latch.IsLatched'];
       const inPulled=s[pfx+'.Handle.Inside.IsPulled'];
       const outPulled=s[pfx+'.Handle.Outside.IsPulled'];
+      const childLock=s[pfx+'.IsChildLockActive'];
       const isLeft=handleSide==='left';
+      const isRow2=pfx.includes('Row2');
       const hInX=isLeft?rx+rw-10:rx+4;
       const hOutX=isLeft?rx+4:rx+rw-10;
       const hY=ry+Math.floor(rh*0.45);
-      const soldX=isLeft?rx+rw-8:rx+8;
-      const soldY=ry+Math.floor(rh*0.22);
+      // Soldier sill-pin: narrow vertical rect on inner window-sill edge
+      // dblLock takes priority over locked in colour
+      const soldW=4, soldH=16;
+      const soldX=isLeft?rx+rw-soldW-1:rx+1;
+      const soldY=ry+Math.floor(rh*0.18);
+      const lockFill=dblLock?'#581C87':locked?'#7F1D1D':'#1A3A28';
+      const lockStroke=dblLock?'#A855F7':locked?'#EF4444':'#22C55E';
+      // Child-lock indicator position (inner-edge, bottom quarter of door)
+      const clX=isLeft?rx+rw-7:rx+7;
+      const clY=ry+Math.floor(rh*0.82);
       return <g key={pfx}>
+        {/* Door body — subtle red tint on border when locked */}
         <rect x={rx} y={ry} width={rw} height={rh}
-          fill="#0E1825" stroke={open?'#F59E0B':'#1A2838'} strokeWidth={open?2:1} rx="2"
+          fill="#0E1825"
+          stroke={open?'#F59E0B':dblLock?'rgba(168,85,247,0.5)':locked?'rgba(239,68,68,0.4)':'#1A2838'}
+          strokeWidth={open?2:locked||dblLock?1.5:1} rx="2"
           style={{cursor:open?'pointer':'default'}}
           onClick={open?()=>set(pfx+'.CloseCmd',true):undefined}/>
         <rect x={rx+2} y={ry+2} width={rw-4} height={rh-4} fill="#08111f"/>
@@ -574,6 +587,7 @@ function CombinedView({s,set,onDeviceSelect}){
           <path d={`M ${cx+dx*0.2},${cy} L ${cx+dx},${cy}`} stroke="#F59E0B" strokeWidth="2" opacity=".6" strokeDasharray="3,2"/>
           <text x={cx} y={ry+rh+12} textAnchor="middle" fill="#F59E0B" fontSize="6" fontWeight="bold">▣ TAP</text>
         </>}
+        {/* Outer handle */}
         <rect x={hOutX} y={hY-4} width="6" height="8" rx="1"
           fill={outPulled?'#38BDF8':dblLock?'#4B2020':locked?'#3A2A0A':'#1E4060'}
           stroke={outPulled?'#7DD3FC':'#2A5070'} strokeWidth="0.5"
@@ -581,6 +595,7 @@ function CombinedView({s,set,onDeviceSelect}){
           onMouseDown={dblLock||locked?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',true)}
           onMouseUp={dblLock||locked?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',false)}
           onMouseLeave={dblLock||locked?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',false)}/>
+        {/* Inner handle */}
         <rect x={hInX} y={hY-4} width="6" height="8" rx="1"
           fill={inPulled?'#34D399':dblLock?'#4B2020':'#1E3A28'}
           stroke={inPulled?'#6EE7B7':'#2A5040'} strokeWidth="0.5"
@@ -588,13 +603,19 @@ function CombinedView({s,set,onDeviceSelect}){
           onMouseDown={dblLock?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',true)}
           onMouseUp={dblLock?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',false)}
           onMouseLeave={dblLock?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',false)}/>
-        <circle cx={soldX} cy={soldY} r="3.5"
-          fill={locked?'#7F1D1D':dblLock?'#581C87':'#1A3A28'}
-          stroke={locked?'#EF4444':dblLock?'#A855F7':'#22C55E'} strokeWidth="0.8"
+        {/* Soldier sill-pin — vertical rect, inner window-sill edge */}
+        <rect x={soldX} y={soldY} width={soldW} height={soldH} rx="1"
+          fill={lockFill} stroke={lockStroke} strokeWidth="0.8"
           style={{cursor:dblLock?'not-allowed':'pointer'}}
           onClick={dblLock?undefined:()=>set(pfx+'.Soldier.IsUnlocked',locked)}/>
+        {/* Latch indicator — leading edge of door */}
         <rect x={isLeft?rx:rx+rw-3} y={ry+Math.floor(rh*0.6)} width="3" height="6" rx="1"
           fill={latched?'#22C55E':'#F59E0B'} opacity="0.8"/>
+        {/* Child lock indicator — inner edge, lower portion, Row 2 + when active */}
+        {childLock&&<g style={{cursor:'default'}}>
+          <circle cx={clX} cy={clY} r="4.5" fill="rgba(168,85,247,0.18)" stroke="#A855F7" strokeWidth="0.8"/>
+          <text x={clX} y={clY+3.5} textAnchor="middle" fill="#A855F7" fontSize="6" fontWeight="bold">C</text>
+        </g>}
       </g>;
     })}
 
