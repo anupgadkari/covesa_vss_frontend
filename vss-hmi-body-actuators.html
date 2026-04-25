@@ -154,8 +154,6 @@ const INIT_STATE={
   // Vehicle power state (powertrain-agnostic — standard VSS v4.0)
   'Vehicle.LowVoltageSystemState':'OFF',
   'Vehicle.Powertrain.Type':'COMBUSTION',
-  // Ambient light sensor — drives ManualLighting AUTO mode and Follow-Me-Home
-  'Body.Lights.AmbientLightSensor.Illuminance':10000,
   // Lights
   'Body.Lights.Beam.Low.IsOn':false,
   'Body.Lights.Beam.High.IsOn':false,
@@ -1199,7 +1197,6 @@ function PepsPanel({s,set}){
 
 /* ═══════════════ CONTROL PANEL ═══════════════ */
 function ControlPanel({s,set}){
-  const anyLight=Object.keys(s).some(k=>k.startsWith('Body.Lights')&&s[k]===true);
   const anyDoor=['Row1.Left','Row1.Right','Row2.Left','Row2.Right'].some(d=>s[`Body.Doors.${d}.IsOpen`]);
 
   return <div className="cp">
@@ -1208,53 +1205,6 @@ function ControlPanel({s,set}){
       <span className="cptitle">VSS SIGNAL CONTROL</span>
     </div>
     <div className="cpscroll">
-
-      <SG title="Exterior Lighting" vss="Body.Lights" def={true} lit={anyLight}>
-        {/* Light switch — drives ManualLighting feature */}
-        <div style={{display:'flex',alignItems:'center',gap:'6px',padding:'4px 0'}}>
-          <div style={{fontSize:'10px',color:'var(--dim)',minWidth:'90px'}}>Light switch</div>
-          {['OFF','POSITION','DRL','AUTO','BEAM'].map(m=>(
-            <button key={m} onClick={()=>set('Body.Lights.LightSwitch',m)}
-              style={{padding:'2px 6px',fontSize:'9px',borderRadius:'3px',border:'1px solid var(--bdr2)',
-                background:s['Body.Lights.LightSwitch']===m?'rgba(252,211,77,.15)':'var(--s3)',
-                color:s['Body.Lights.LightSwitch']===m?'var(--amber)':'var(--dim)',cursor:'pointer'}}>
-              {m}
-            </button>
-          ))}
-        </div>
-        {/* Ambient lux — gates AUTO mode and Follow-Me-Home (threshold 200 lux) */}
-        <div style={{display:'flex',alignItems:'center',gap:'6px',padding:'4px 0',flexWrap:'wrap'}}>
-          <div style={{fontSize:'10px',color:'var(--dim)',minWidth:'90px'}}>
-            Ambient lux
-            <span style={{marginLeft:'6px',fontWeight:600,color:
-              s['Body.Lights.AmbientLightSensor.Illuminance']<200?'var(--amber)':'var(--muted)'}}>
-              {(s['Body.Lights.AmbientLightSensor.Illuminance']||0).toLocaleString()}
-              {s['Body.Lights.AmbientLightSensor.Illuminance']<200?' ↓dark':''}
-            </span>
-          </div>
-          {[{l:'Night',v:5},{l:'Tunnel',v:50},{l:'Dusk',v:100},{l:'Day',v:25000}].map(p=>(
-            <button key={p.l} onClick={()=>set('Body.Lights.AmbientLightSensor.Illuminance',p.v)}
-              style={{padding:'2px 6px',fontSize:'9px',borderRadius:'3px',border:'1px solid var(--bdr2)',
-                background:s['Body.Lights.AmbientLightSensor.Illuminance']===p.v?'rgba(252,211,77,.15)':'var(--s3)',
-                color:s['Body.Lights.AmbientLightSensor.Illuminance']===p.v?'var(--amber)':'var(--dim)',cursor:'pointer'}}>
-              {p.l}
-            </button>
-          ))}
-        </div>
-        {/* High beam stalk — only effective when light switch is BEAM or AUTO */}
-        <BR label="High beam stalk" k="Body.Switches.HighBeam.IsEngaged" s={s} set={set} c="b"/>
-        <BR label="DRL (running lights)" k="Body.Lights.Running.IsOn" s={s} set={set}/>
-        <BR label="Parking lights" k="Body.Lights.Parking.IsOn" s={s} set={set} c="a"/>
-        <BR label="Front fog" k="Body.Lights.Fog.Front.IsOn" s={s} set={set} c="a"/>
-        <BR label="Rear fog" k="Body.Lights.Fog.Rear.IsOn" s={s} set={set} c="r"/>
-        <BR label="Brake lights" k="Body.Lights.Brake.IsActive" s={s} set={set} c="r"/>
-        <BR label="Reverse / backup" k="Body.Lights.Backup.IsActive" s={s} set={set}/>
-        <BR label="License plate" k="Body.Lights.LicensePlate.IsOn" s={s} set={set}/>
-        <div className="hdiv2"/>
-        <BR label="Left indicator" k="Body.Lights.DirectionIndicator.Left.IsSignaling" s={s} set={set} c="a"/>
-        <BR label="Right indicator" k="Body.Lights.DirectionIndicator.Right.IsSignaling" s={s} set={set} c="a"/>
-        <BR label="Hazard (all)" k="Body.Lights.Hazard.IsSignaling" s={s} set={set} c="a"/>
-      </SG>
 
       <SG title="Wipers & Washers" vss="Body.Windshield">
         <EnumR label="Front mode" k="Body.Windshield.Front.Wiping.Mode" s={s} set={set}
