@@ -113,6 +113,7 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     "Body.Lights.Hazard.IsSignaling",
     "Body.Lights.Beam.Low.IsOn",
     "Body.Lights.Beam.High.IsOn",
+    "Body.Lights.Parking.IsOn",
     "Body.Lights.Running.IsOn",
     "Body.Doors.Row1.Left.IsLocked",
     "Body.Doors.Row1.Right.IsLocked",
