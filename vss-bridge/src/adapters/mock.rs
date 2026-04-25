@@ -8,7 +8,7 @@ use std::sync::Mutex;
 
 use async_trait::async_trait;
 use futures::stream::BoxStream;
-use futures::{StreamExt, stream};
+use futures::{stream, StreamExt};
 use tokio::sync::broadcast;
 
 use crate::ipc_message::SignalValue;

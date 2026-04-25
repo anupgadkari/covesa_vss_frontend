@@ -112,7 +112,12 @@ impl RfMessage {
         let rolling_code = u32::from_le_bytes(buf[5..9].try_into().unwrap());
         let mut mac = [0u8; RF_MAC_LEN];
         mac.copy_from_slice(&buf[9..16]);
-        Some(RfMessage { fob_id, action, rolling_code, mac })
+        Some(RfMessage {
+            fob_id,
+            action,
+            rolling_code,
+            mac,
+        })
     }
 
     /// Encode as a 32-character lowercase hex string for VSS signal transport.
@@ -502,7 +507,10 @@ mod tests {
         // Verify MAC independently using the public helper
         let payload = build_mac_payload(msg.fob_id, msg.action, msg.rolling_code);
         let expected_mac = super::super::crypto::aes_cmac_truncated(&secret, &payload);
-        assert_eq!(msg.mac, expected_mac, "MAC must match independent computation");
+        assert_eq!(
+            msg.mac, expected_mac,
+            "MAC must match independent computation"
+        );
     }
 
     #[test]

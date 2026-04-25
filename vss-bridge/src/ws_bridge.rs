@@ -168,7 +168,11 @@ pub struct WsBridge<B: SignalBus> {
 
 impl<B: SignalBus> WsBridge<B> {
     pub fn new(addr: SocketAddr, bus: Arc<B>, platform_config: Arc<PlatformConfig>) -> Self {
-        Self { bus, addr, platform_config }
+        Self {
+            bus,
+            addr,
+            platform_config,
+        }
     }
 
     /// Run the WebSocket server. Spawns a background task that listens
@@ -249,9 +253,17 @@ impl<B: SignalBus> WsBridge<B> {
 
             tokio::spawn(async move {
                 if let Err(e) = handle_connection(
-                    stream, bus, output_state, update_rx,
-                    config_rx, config_tx2, platform_config, peer,
-                ).await {
+                    stream,
+                    bus,
+                    output_state,
+                    update_rx,
+                    config_rx,
+                    config_tx2,
+                    platform_config,
+                    peer,
+                )
+                .await
+                {
                     tracing::warn!(%peer, error = %e, "HMI client disconnected");
                 }
             });
@@ -259,6 +271,7 @@ impl<B: SignalBus> WsBridge<B> {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn handle_connection<B: SignalBus>(
     stream: TcpStream,
     bus: Arc<B>,
@@ -386,51 +399,153 @@ fn build_config_msg(cfg: &PlatformConfig) -> String {
 fn handle_config_set(msg: &serde_json::Value, cfg: &PlatformConfig) -> bool {
     use crate::config::DriverDoorSide;
 
-    let key   = msg.get("key").and_then(|v| v.as_str()).unwrap_or("");
-    let value = match msg.get("value") { Some(v) => v, None => return false };
+    let key = msg.get("key").and_then(|v| v.as_str()).unwrap_or("");
+    let value = match msg.get("value") {
+        Some(v) => v,
+        None => return false,
+    };
 
     tracing::debug!(key, "config_set received");
 
     // ── Dealer config ─────────────────────────────────────────────────────
     let mut dealer = cfg.dealer_config();
     let dealer_changed = match key {
-        "dealer.auto_relock_enabled"         => { if let Some(b) = value.as_bool() { dealer.auto_relock_enabled = b;               true } else { false } }
-        "dealer.horn_chirp_on_lock"          => { if let Some(b) = value.as_bool() { dealer.horn_chirp_on_lock = b;                true } else { false } }
-        "dealer.two_stage_unlock"            => { if let Some(b) = value.as_bool() { dealer.two_stage_unlock = b;                  true } else { false } }
-        "dealer.courtesy_light_timeout_secs" => { if let Some(n) = value.as_u64()  { dealer.courtesy_light_timeout_secs = n;       true } else { false } }
-        "dealer.remote_start_max_minutes"    => { if let Some(n) = value.as_u64()  { dealer.remote_start_max_minutes = n;          true } else { false } }
+        "dealer.auto_relock_enabled" => {
+            if let Some(b) = value.as_bool() {
+                dealer.auto_relock_enabled = b;
+                true
+            } else {
+                false
+            }
+        }
+        "dealer.horn_chirp_on_lock" => {
+            if let Some(b) = value.as_bool() {
+                dealer.horn_chirp_on_lock = b;
+                true
+            } else {
+                false
+            }
+        }
+        "dealer.two_stage_unlock" => {
+            if let Some(b) = value.as_bool() {
+                dealer.two_stage_unlock = b;
+                true
+            } else {
+                false
+            }
+        }
+        "dealer.courtesy_light_timeout_secs" => {
+            if let Some(n) = value.as_u64() {
+                dealer.courtesy_light_timeout_secs = n;
+                true
+            } else {
+                false
+            }
+        }
+        "dealer.remote_start_max_minutes" => {
+            if let Some(n) = value.as_u64() {
+                dealer.remote_start_max_minutes = n;
+                true
+            } else {
+                false
+            }
+        }
         "dealer.driver_door_side" => {
             dealer.driver_door_side = match value.as_str() {
                 Some("Right") => DriverDoorSide::Right,
-                _             => DriverDoorSide::Left,
-            }; true
+                _ => DriverDoorSide::Left,
+            };
+            true
         }
         _ => false,
     };
-    if dealer_changed { cfg.update_dealer_config(dealer); return true; }
+    if dealer_changed {
+        cfg.update_dealer_config(dealer);
+        return true;
+    }
 
     // ── Variant config ────────────────────────────────────────────────────
     let mut variant = cfg.variant_cal();
     let variant_changed = match key {
-        "variant.double_lock_enabled"  => { if let Some(b) = value.as_bool() { variant.double_lock_enabled = b;  true } else { false } }
-        "variant.nfc_enabled"          => { if let Some(b) = value.as_bool() { variant.nfc_enabled = b;          true } else { false } }
-        "variant.ble_key_enabled"      => { if let Some(b) = value.as_bool() { variant.ble_key_enabled = b;      true } else { false } }
-        "variant.remote_lock_enabled"  => { if let Some(b) = value.as_bool() { variant.remote_lock_enabled = b;  true } else { false } }
-        "variant.auto_lock_speed_kmh"  => { if let Some(n) = value.as_u64()  { variant.auto_lock_speed_kmh = n as u16; true } else { false } }
-        "variant.doors_row2_left"      => { if let Some(b) = value.as_bool() { variant.doors.row2_left = b;      true } else { false } }
-        "variant.doors_row2_right"     => { if let Some(b) = value.as_bool() { variant.doors.row2_right = b;     true } else { false } }
-        "variant.doors_removable"      => { if let Some(b) = value.as_bool() { variant.doors.removable = b;      true } else { false } }
+        "variant.double_lock_enabled" => {
+            if let Some(b) = value.as_bool() {
+                variant.double_lock_enabled = b;
+                true
+            } else {
+                false
+            }
+        }
+        "variant.nfc_enabled" => {
+            if let Some(b) = value.as_bool() {
+                variant.nfc_enabled = b;
+                true
+            } else {
+                false
+            }
+        }
+        "variant.ble_key_enabled" => {
+            if let Some(b) = value.as_bool() {
+                variant.ble_key_enabled = b;
+                true
+            } else {
+                false
+            }
+        }
+        "variant.remote_lock_enabled" => {
+            if let Some(b) = value.as_bool() {
+                variant.remote_lock_enabled = b;
+                true
+            } else {
+                false
+            }
+        }
+        "variant.auto_lock_speed_kmh" => {
+            if let Some(n) = value.as_u64() {
+                variant.auto_lock_speed_kmh = n as u16;
+                true
+            } else {
+                false
+            }
+        }
+        "variant.doors_row2_left" => {
+            if let Some(b) = value.as_bool() {
+                variant.doors.row2_left = b;
+                true
+            } else {
+                false
+            }
+        }
+        "variant.doors_row2_right" => {
+            if let Some(b) = value.as_bool() {
+                variant.doors.row2_right = b;
+                true
+            } else {
+                false
+            }
+        }
+        "variant.doors_removable" => {
+            if let Some(b) = value.as_bool() {
+                variant.doors.removable = b;
+                true
+            } else {
+                false
+            }
+        }
         "variant.welcome_light_pattern" => {
             use crate::config::WelcomeLightPattern;
             variant.welcome_light_pattern = match value.as_str() {
                 Some("Sequential") => WelcomeLightPattern::Sequential,
-                Some("Disabled")   => WelcomeLightPattern::Disabled,
-                _                  => WelcomeLightPattern::Simple,
-            }; true
+                Some("Disabled") => WelcomeLightPattern::Disabled,
+                _ => WelcomeLightPattern::Simple,
+            };
+            true
         }
         _ => false,
     };
-    if variant_changed { cfg.update_variant_cal(variant); return true; }
+    if variant_changed {
+        cfg.update_variant_cal(variant);
+        return true;
+    }
 
     tracing::warn!(key, "config_set: unknown key");
     false

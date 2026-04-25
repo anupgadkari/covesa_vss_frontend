@@ -578,11 +578,14 @@ pub const CENTRAL_LOCK_CMD: VssPath = "Body.Doors.CentralLock.Command";
 async fn dispatch_lock_command<B: SignalBus>(req: &DoorLockRequest, bus: &Arc<B>) {
     let token = match req.command {
         LockCommand::UnlockDriver => "unlock_driver",
-        LockCommand::UnlockAll   => "unlock_all",
-        LockCommand::LockAll     => "lock_all",
+        LockCommand::UnlockAll => "unlock_all",
+        LockCommand::LockAll => "lock_all",
         LockCommand::DoubleLockAll => "lock_double",
     };
-    if let Err(e) = bus.publish(CENTRAL_LOCK_CMD, SignalValue::String(token.into())).await {
+    if let Err(e) = bus
+        .publish(CENTRAL_LOCK_CMD, SignalValue::String(token.into()))
+        .await
+    {
         tracing::error!(token, error = %e, "DoorLock: failed to dispatch command");
     }
 }

@@ -39,12 +39,12 @@ use tokio::sync::watch;
 use tokio::time::sleep;
 
 use crate::arbiter::{DoorLockArbiter, DoorLockRequest, LockCommand};
-use crate::config::{DriverDoorSide, PlatformConfig};
+use crate::config::PlatformConfig;
 use crate::ipc_message::{FeatureId, SignalValue};
 use crate::plant_models::peps::crypto::{aes_cmac_verify, SharedSecret};
 use crate::plant_models::peps::device::{build_mac_payload, FobButton, RfMessage};
 use crate::plant_models::peps::signals::KEYFOB_RF_MSGS;
-use crate::signal_bus::{SignalBus, VssPath};
+use crate::signal_bus::SignalBus;
 
 // ── Tier-1 constants ───────────────────────────────────────────────────────
 
@@ -265,10 +265,7 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
         paired_fobs: Vec<PairedFob>,
     ) -> Self {
         let dealer_rx = config.dealer_config_watch();
-        let fobs = paired_fobs
-            .into_iter()
-            .map(|f| (f.fob_id, f))
-            .collect();
+        let fobs = paired_fobs.into_iter().map(|f| (f.fob_id, f)).collect();
         Self {
             bus,
             arbiter,
@@ -345,11 +342,7 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
     }
 
     /// Process a validated RF message: dispatch the appropriate action.
-    async fn handle_authenticated(
-        &mut self,
-        fob_id: u32,
-        action: FobButton,
-    ) {
+    async fn handle_authenticated(&mut self, fob_id: u32, action: FobButton) {
         // ── Combo detection (LOCK + UNLOCK toggle) ──────────────────────────
         // A LOCK+UNLOCK combo (either order, within COMBO_WINDOW_MS from the
         // same fob) toggles the two_stage_unlock dealer config. Neither action
@@ -398,7 +391,8 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
                 self.handle_unlock(fob_id, &dealer).await;
             }
             FobButton::Lock => {
-                self.handle_lock(fob_id, &dealer, variant.double_lock_enabled).await;
+                self.handle_lock(fob_id, &dealer, variant.double_lock_enabled)
+                    .await;
             }
             FobButton::TrunkRelease => {
                 self.handle_trunk_release(fob_id).await;
@@ -424,11 +418,7 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
     }
 
     /// Handle an UNLOCK press with two-stage logic.
-    async fn handle_unlock(
-        &mut self,
-        fob_id: u32,
-        dealer: &crate::config::DealerConfig,
-    ) {
+    async fn handle_unlock(&mut self, fob_id: u32, dealer: &crate::config::DealerConfig) {
         let now = Instant::now();
         let window = Duration::from_secs(TWO_STAGE_WINDOW_SECS);
 
@@ -466,7 +456,10 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
             if let Err(e) = self.arbiter.request(req).await {
                 tracing::error!(error = %e, "RKE: arbiter rejected UNLOCK DRIVER");
             }
-            self.pending_unlock = Some(PendingUnlock { started: now, fob_id });
+            self.pending_unlock = Some(PendingUnlock {
+                started: now,
+                fob_id,
+            });
         }
     }
 
@@ -507,7 +500,10 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
                 tracing::error!(error = %e, "RKE: arbiter rejected LOCK");
             }
             if double_lock_available {
-                self.pending_double_lock = Some(PendingDoubleLock { started: now, fob_id });
+                self.pending_double_lock = Some(PendingDoubleLock {
+                    started: now,
+                    fob_id,
+                });
             }
         }
 
@@ -524,21 +520,27 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
         let now = Instant::now();
         let window = Duration::from_secs(TRUNK_RELEASE_WINDOW_SECS);
 
-        let second_press = match &self.pending_trunk_release {
-            Some(p) if p.fob_id == fob_id && now.duration_since(p.started) < window => true,
-            _ => false,
-        };
+        let second_press = matches!(&self.pending_trunk_release, Some(p) if p.fob_id == fob_id && now.duration_since(p.started) < window);
 
         if second_press {
             self.pending_trunk_release = None;
             tracing::info!(fob_id, "RKE: TRUNK_RELEASE double-press — opening trunk");
             let _ = self
                 .bus
-                .publish("Body.Trunk.OpenCmd", crate::ipc_message::SignalValue::Bool(true))
+                .publish(
+                    "Body.Trunk.OpenCmd",
+                    crate::ipc_message::SignalValue::Bool(true),
+                )
                 .await;
         } else {
-            tracing::info!(fob_id, "RKE: TRUNK_RELEASE first press — waiting for second");
-            self.pending_trunk_release = Some(PendingTrunkRelease { started: now, fob_id });
+            tracing::info!(
+                fob_id,
+                "RKE: TRUNK_RELEASE first press — waiting for second"
+            );
+            self.pending_trunk_release = Some(PendingTrunkRelease {
+                started: now,
+                fob_id,
+            });
         }
     }
 
@@ -576,11 +578,16 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
             });
 
             // Sleep until the earliest pending window expires.
-            let next_expiry = [unlock_deadline, double_lock_deadline, trunk_deadline, combo_deadline]
-                .into_iter()
-                .flatten()
-                .min()
-                .unwrap_or(Duration::from_secs(3600));
+            let next_expiry = [
+                unlock_deadline,
+                double_lock_deadline,
+                trunk_deadline,
+                combo_deadline,
+            ]
+            .into_iter()
+            .flatten()
+            .min()
+            .unwrap_or(Duration::from_secs(3600));
             // Add a small floor so we don't spin on zero-duration sleeps.
             let sleep_dur = next_expiry.max(Duration::from_millis(10));
 
@@ -652,14 +659,6 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
     }
 }
 
-/// VSS signal path for the driver-side door IsLocked signal.
-fn driver_door_signal(side: DriverDoorSide) -> VssPath {
-    match side {
-        DriverDoorSide::Left => "Body.Doors.Row1.Left.IsLocked",
-        DriverDoorSide::Right => "Body.Doors.Row1.Right.IsLocked",
-    }
-}
-
 // ── Tests ──────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -678,7 +677,12 @@ mod tests {
     ) -> RfMessage {
         let mac_payload = build_mac_payload(fob_id, action, rolling_code);
         let mac = crate::plant_models::peps::crypto::aes_cmac_truncated(secret, &mac_payload);
-        RfMessage { fob_id, action, rolling_code, mac }
+        RfMessage {
+            fob_id,
+            action,
+            rolling_code,
+            mac,
+        }
     }
 
     // ── Rolling code state tests ───────────────────────────────────────────
@@ -705,7 +709,10 @@ mod tests {
         assert_eq!(state.validate(100), RollingCodeResult::Rejected);
         // Earlier code is also replay
         assert_eq!(state.validate(50), RollingCodeResult::Rejected);
-        assert_eq!(state.last_accepted, 100, "last_accepted unchanged on replay");
+        assert_eq!(
+            state.last_accepted, 100,
+            "last_accepted unchanged on replay"
+        );
     }
 
     #[test]
@@ -751,8 +758,8 @@ mod tests {
         let mut state2 = RollingCodeState::default();
         assert_eq!(state2.validate(1025), RollingCodeResult::ResyncPending);
         assert_eq!(state2.validate(16384), RollingCodeResult::ResyncPending); // last resync code
-        // 16385 is beyond resync window → restart; but state2.last is still 0
-        // so code 16385 has delta 16385 > 16384 → rejected
+                                                                              // 16385 is beyond resync window → restart; but state2.last is still 0
+                                                                              // so code 16385 has delta 16385 > 16384 → rejected
         let mut state3 = RollingCodeState::default();
         assert_eq!(state3.validate(16384), RollingCodeResult::ResyncPending);
     }
@@ -766,7 +773,9 @@ mod tests {
         let mut fobs: HashMap<u32, PairedFob> = [(1, fob)].into();
         let msg = make_message(1, FobButton::Lock, 1, &secret);
 
-        assert!(RkeFeature::<crate::adapters::mock::MockBus>::authenticate(&mut fobs, &msg).is_some());
+        assert!(
+            RkeFeature::<crate::adapters::mock::MockBus>::authenticate(&mut fobs, &msg).is_some()
+        );
     }
 
     #[test]
@@ -776,7 +785,9 @@ mod tests {
         let mut fobs: HashMap<u32, PairedFob> = [(1, fob)].into();
         // fob_id=99 is not paired
         let msg = make_message(99, FobButton::Lock, 1, &secret);
-        assert!(RkeFeature::<crate::adapters::mock::MockBus>::authenticate(&mut fobs, &msg).is_none());
+        assert!(
+            RkeFeature::<crate::adapters::mock::MockBus>::authenticate(&mut fobs, &msg).is_none()
+        );
     }
 
     #[test]
@@ -788,7 +799,9 @@ mod tests {
         let mut msg = make_message(1, FobButton::Lock, 1, &secret);
         msg.mac[0] ^= 0xFF; // corrupt MAC
 
-        assert!(RkeFeature::<crate::adapters::mock::MockBus>::authenticate(&mut fobs, &msg).is_none());
+        assert!(
+            RkeFeature::<crate::adapters::mock::MockBus>::authenticate(&mut fobs, &msg).is_none()
+        );
     }
 
     #[test]
@@ -798,11 +811,15 @@ mod tests {
         let mut fobs: HashMap<u32, PairedFob> = [(2, fob)].into();
 
         let msg1 = make_message(2, FobButton::Unlock, 1, &secret);
-        assert!(RkeFeature::<crate::adapters::mock::MockBus>::authenticate(&mut fobs, &msg1).is_some());
+        assert!(
+            RkeFeature::<crate::adapters::mock::MockBus>::authenticate(&mut fobs, &msg1).is_some()
+        );
 
         // Same rolling code again — replay
         let msg2 = make_message(2, FobButton::Unlock, 1, &secret);
-        assert!(RkeFeature::<crate::adapters::mock::MockBus>::authenticate(&mut fobs, &msg2).is_none());
+        assert!(
+            RkeFeature::<crate::adapters::mock::MockBus>::authenticate(&mut fobs, &msg2).is_none()
+        );
     }
 
     #[test]
@@ -815,15 +832,23 @@ mod tests {
 
         // Advance fob_a to counter 100
         let msg_a = make_message(1, FobButton::Lock, 100, &secret_a);
-        assert!(RkeFeature::<crate::adapters::mock::MockBus>::authenticate(&mut fobs, &msg_a).is_some());
+        assert!(
+            RkeFeature::<crate::adapters::mock::MockBus>::authenticate(&mut fobs, &msg_a).is_some()
+        );
 
         // Fob_b starts at counter 1 — should still be accepted
         let msg_b = make_message(2, FobButton::Lock, 1, &secret_b);
-        assert!(RkeFeature::<crate::adapters::mock::MockBus>::authenticate(&mut fobs, &msg_b).is_some());
+        assert!(
+            RkeFeature::<crate::adapters::mock::MockBus>::authenticate(&mut fobs, &msg_b).is_some()
+        );
 
         // Fob_a with counter 50 should be rejected (replay — last was 100)
         let msg_a_replay = make_message(1, FobButton::Unlock, 50, &secret_a);
-        assert!(RkeFeature::<crate::adapters::mock::MockBus>::authenticate(&mut fobs, &msg_a_replay).is_none());
+        assert!(RkeFeature::<crate::adapters::mock::MockBus>::authenticate(
+            &mut fobs,
+            &msg_a_replay
+        )
+        .is_none());
     }
 
     #[test]
@@ -835,7 +860,9 @@ mod tests {
 
         // Message signed with wrong secret
         let msg = make_message(3, FobButton::Unlock, 1, &wrong_secret);
-        assert!(RkeFeature::<crate::adapters::mock::MockBus>::authenticate(&mut fobs, &msg).is_none());
+        assert!(
+            RkeFeature::<crate::adapters::mock::MockBus>::authenticate(&mut fobs, &msg).is_none()
+        );
     }
 
     #[test]
@@ -916,7 +943,8 @@ mod tests {
         let secret_b: SharedSecret = [0xBB; 16];
         let fob_a = make_fob(1, secret_a);
         let fob_b = make_fob(2, secret_b);
-        let mut feature = make_rke_feature(Arc::clone(&bus), Arc::clone(&arbiter), vec![fob_a, fob_b]);
+        let mut feature =
+            make_rke_feature(Arc::clone(&bus), Arc::clone(&arbiter), vec![fob_a, fob_b]);
 
         assert!(feature.dealer_rx.borrow().two_stage_unlock);
 

@@ -233,14 +233,6 @@ impl<B: SignalBus + Send + Sync + 'static> DoorLockPlantModel<B> {
         }
     }
 
-    /// Extract a `bool` from a `SignalValue::Bool`, ignoring other types.
-    fn to_bool(val: &SignalValue) -> Option<bool> {
-        match val {
-            SignalValue::Bool(b) => Some(*b),
-            _ => None,
-        }
-    }
-
     pub async fn run(mut self) {
         // Single command subscription — arbiter writes one high-level token.
         let mut cmd_rx = self.bus.subscribe(CENTRAL_LOCK_CMD).await;
@@ -336,7 +328,11 @@ mod tests {
             .collect();
         assert_eq!(locked_signals.len(), 4, "should publish 4 IsLocked signals");
         for (_, val) in &locked_signals {
-            assert_eq!(*val, SignalValue::Bool(false), "initial state should be unlocked");
+            assert_eq!(
+                *val,
+                SignalValue::Bool(false),
+                "initial state should be unlocked"
+            );
         }
     }
 
@@ -356,9 +352,15 @@ mod tests {
         let history = bus.history();
         let locked_true: Vec<_> = history
             .iter()
-            .filter(|(p, v)| p.contains("IsLocked") && !p.contains("Double") && *v == SignalValue::Bool(true))
+            .filter(|(p, v)| {
+                p.contains("IsLocked") && !p.contains("Double") && *v == SignalValue::Bool(true)
+            })
             .collect();
-        assert_eq!(locked_true.len(), 4, "all 4 doors should report IsLocked=true");
+        assert_eq!(
+            locked_true.len(),
+            4,
+            "all 4 doors should report IsLocked=true"
+        );
 
         handle.abort();
         let _ = handle.await;
@@ -384,9 +386,15 @@ mod tests {
         let history = bus.history();
         let unlocked: Vec<_> = history
             .iter()
-            .filter(|(p, v)| p.contains("IsLocked") && !p.contains("Double") && *v == SignalValue::Bool(false))
+            .filter(|(p, v)| {
+                p.contains("IsLocked") && !p.contains("Double") && *v == SignalValue::Bool(false)
+            })
             .collect();
-        assert_eq!(unlocked.len(), 4, "all 4 doors should report IsLocked=false");
+        assert_eq!(
+            unlocked.len(),
+            4,
+            "all 4 doors should report IsLocked=false"
+        );
 
         handle.abort();
         let _ = handle.await;
@@ -413,10 +421,15 @@ mod tests {
         // Only driver door (Row1.Left) should be unlocked
         let unlocked: Vec<_> = history
             .iter()
-            .filter(|(p, v)| p.contains("IsLocked") && !p.contains("Double") && *v == SignalValue::Bool(false))
+            .filter(|(p, v)| {
+                p.contains("IsLocked") && !p.contains("Double") && *v == SignalValue::Bool(false)
+            })
             .collect();
         assert_eq!(unlocked.len(), 1, "only driver door should be unlocked");
-        assert!(unlocked[0].0.contains("Row1.Left"), "driver door is Row1.Left");
+        assert!(
+            unlocked[0].0.contains("Row1.Left"),
+            "driver door is Row1.Left"
+        );
 
         handle.abort();
         let _ = handle.await;
@@ -441,13 +454,23 @@ mod tests {
             .iter()
             .filter(|(p, v)| p.contains("IsDoubleLocked") && *v == SignalValue::Bool(true))
             .collect();
-        assert_eq!(dl_true.len(), 4, "double-lock should set all 4 IsDoubleLocked=true");
+        assert_eq!(
+            dl_true.len(),
+            4,
+            "double-lock should set all 4 IsDoubleLocked=true"
+        );
 
         let locked_true: Vec<_> = history
             .iter()
-            .filter(|(p, v)| p.contains("IsLocked") && !p.contains("Double") && *v == SignalValue::Bool(true))
+            .filter(|(p, v)| {
+                p.contains("IsLocked") && !p.contains("Double") && *v == SignalValue::Bool(true)
+            })
             .collect();
-        assert_eq!(locked_true.len(), 4, "double-lock should also set IsLocked=true");
+        assert_eq!(
+            locked_true.len(),
+            4,
+            "double-lock should also set IsLocked=true"
+        );
 
         handle.abort();
         let _ = handle.await;
@@ -475,7 +498,11 @@ mod tests {
             .iter()
             .filter(|(p, v)| p.contains("IsDoubleLocked") && *v == SignalValue::Bool(false))
             .collect();
-        assert_eq!(dl_cleared.len(), 4, "unlock should clear all IsDoubleLocked");
+        assert_eq!(
+            dl_cleared.len(),
+            4,
+            "unlock should clear all IsDoubleLocked"
+        );
 
         handle.abort();
         let _ = handle.await;
@@ -505,17 +532,26 @@ mod tests {
         let history = bus.history();
 
         // Driver door (Row1.Left) must be unlocked
-        let driver_unlocked = history
-            .iter()
-            .any(|(p, v)| p.contains("Row1.Left") && p.contains("IsLocked") && !p.contains("Double") && *v == SignalValue::Bool(false));
+        let driver_unlocked = history.iter().any(|(p, v)| {
+            p.contains("Row1.Left")
+                && p.contains("IsLocked")
+                && !p.contains("Double")
+                && *v == SignalValue::Bool(false)
+        });
         assert!(driver_unlocked, "driver door (Row1.Left) must be unlocked");
 
         // Passenger doors must remain locked
         for path in &["Row1.Right", "Row2.Left", "Row2.Right"] {
-            let still_locked = !history
-                .iter()
-                .any(|(p, v)| p.contains(path) && p.contains("IsLocked") && !p.contains("Double") && *v == SignalValue::Bool(false));
-            assert!(still_locked, "{path} must stay locked (IsLocked must not become false)");
+            let still_locked = !history.iter().any(|(p, v)| {
+                p.contains(path)
+                    && p.contains("IsLocked")
+                    && !p.contains("Double")
+                    && *v == SignalValue::Bool(false)
+            });
+            assert!(
+                still_locked,
+                "{path} must stay locked (IsLocked must not become false)"
+            );
         }
 
         // All 4 IsDoubleLocked must be cleared
@@ -523,7 +559,11 @@ mod tests {
             .iter()
             .filter(|(p, v)| p.contains("IsDoubleLocked") && *v == SignalValue::Bool(false))
             .collect();
-        assert_eq!(dl_cleared.len(), 4, "all 4 doors should have IsDoubleLocked cleared");
+        assert_eq!(
+            dl_cleared.len(),
+            4,
+            "all 4 doors should have IsDoubleLocked cleared"
+        );
 
         handle.abort();
         let _ = handle.await;

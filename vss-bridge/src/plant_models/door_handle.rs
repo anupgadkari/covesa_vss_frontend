@@ -325,7 +325,9 @@ mod tests {
         let model = DoorHandlePlantModel::new(Arc::clone(&bus));
         let handle = tokio::spawn(model.run());
         // Yield enough for all 4 per-door tasks to start and publish initial state.
-        for _ in 0..8 { tokio::task::yield_now().await; }
+        for _ in 0..8 {
+            tokio::task::yield_now().await;
+        }
         (bus, handle)
     }
 
@@ -333,7 +335,8 @@ mod tests {
     async fn initial_state_latched_and_closed() {
         let (bus, handle) = setup().await;
         let h = bus.history();
-        let latched: Vec<_> = h.iter()
+        let latched: Vec<_> = h
+            .iter()
             .filter(|(p, v)| p.contains("Latch.IsLatched") && *v == SignalValue::Bool(true))
             .collect();
         assert_eq!(latched.len(), 4, "all 4 doors should start latched");
@@ -351,10 +354,16 @@ mod tests {
         tokio::task::yield_now().await;
 
         let h = bus.history();
-        assert!(h.iter().any(|(p, v)| *p == AJAR_SIGNALS[0] && *v == SignalValue::Bool(true)),
-            "door should be ajar after inside handle on unlocked door");
-        assert!(h.iter().any(|(p, v)| *p == LATCH_SIGNALS[0] && *v == SignalValue::Bool(false)),
-            "latch should be unlatched");
+        assert!(
+            h.iter()
+                .any(|(p, v)| *p == AJAR_SIGNALS[0] && *v == SignalValue::Bool(true)),
+            "door should be ajar after inside handle on unlocked door"
+        );
+        assert!(
+            h.iter()
+                .any(|(p, v)| *p == LATCH_SIGNALS[0] && *v == SignalValue::Bool(false)),
+            "latch should be unlatched"
+        );
 
         handle.abort();
         let _ = handle.await;
@@ -370,8 +379,11 @@ mod tests {
         tokio::task::yield_now().await;
 
         let h = bus.history();
-        assert!(h.iter().any(|(p, v)| *p == AJAR_SIGNALS[2] && *v == SignalValue::Bool(true)),
-            "RL door should be ajar");
+        assert!(
+            h.iter()
+                .any(|(p, v)| *p == AJAR_SIGNALS[2] && *v == SignalValue::Bool(true)),
+            "RL door should be ajar"
+        );
 
         handle.abort();
         let _ = handle.await;
@@ -391,8 +403,11 @@ mod tests {
         tokio::task::yield_now().await;
 
         let h = bus.history();
-        assert!(!h.iter().any(|(p, v)| *p == AJAR_SIGNALS[1] && *v == SignalValue::Bool(true)),
-            "outside handle should be blocked on locked door");
+        assert!(
+            !h.iter()
+                .any(|(p, v)| *p == AJAR_SIGNALS[1] && *v == SignalValue::Bool(true)),
+            "outside handle should be blocked on locked door"
+        );
 
         handle.abort();
         let _ = handle.await;
@@ -413,10 +428,16 @@ mod tests {
         tokio::task::yield_now().await;
 
         let h = bus.history();
-        assert!(h.iter().any(|(p, v)| *p == LATCH_SIGNALS[0] && *v == SignalValue::Bool(false)),
-            "latch should unlatch briefly on locked door");
-        assert!(!h.iter().any(|(p, v)| *p == AJAR_SIGNALS[0] && *v == SignalValue::Bool(true)),
-            "door should NOT open on locked door");
+        assert!(
+            h.iter()
+                .any(|(p, v)| *p == LATCH_SIGNALS[0] && *v == SignalValue::Bool(false)),
+            "latch should unlatch briefly on locked door"
+        );
+        assert!(
+            !h.iter()
+                .any(|(p, v)| *p == AJAR_SIGNALS[0] && *v == SignalValue::Bool(true)),
+            "door should NOT open on locked door"
+        );
 
         bus.clear_history();
 
@@ -426,8 +447,11 @@ mod tests {
         tokio::task::yield_now().await;
 
         let h = bus.history();
-        assert!(h.iter().any(|(p, v)| *p == LATCH_SIGNALS[0] && *v == SignalValue::Bool(true)),
-            "latch should re-engage after handle released on locked door");
+        assert!(
+            h.iter()
+                .any(|(p, v)| *p == LATCH_SIGNALS[0] && *v == SignalValue::Bool(true)),
+            "latch should re-engage after handle released on locked door"
+        );
 
         handle.abort();
         let _ = handle.await;
@@ -448,8 +472,11 @@ mod tests {
         tokio::task::yield_now().await;
 
         let h = bus.history();
-        assert!(!h.iter().any(|(p, _)| p.contains("Latch") || p.contains("IsOpen")),
-            "double-locked door: inside handle must be completely blocked");
+        assert!(
+            !h.iter()
+                .any(|(p, _)| p.contains("Latch") || p.contains("IsOpen")),
+            "double-locked door: inside handle must be completely blocked"
+        );
 
         handle.abort();
         let _ = handle.await;
@@ -471,8 +498,11 @@ mod tests {
         tokio::task::yield_now().await;
 
         let h = bus.history();
-        assert!(h.iter().any(|(p, v)| *p == IS_LOCKED_SIGNALS[3] && *v == SignalValue::Bool(false)),
-            "soldier unlock should publish IsLocked=false");
+        assert!(
+            h.iter()
+                .any(|(p, v)| *p == IS_LOCKED_SIGNALS[3] && *v == SignalValue::Bool(false)),
+            "soldier unlock should publish IsLocked=false"
+        );
 
         handle.abort();
         let _ = handle.await;
@@ -493,8 +523,11 @@ mod tests {
         tokio::task::yield_now().await;
 
         let h = bus.history();
-        assert!(!h.iter().any(|(p, v)| *p == IS_LOCKED_SIGNALS[0] && *v == SignalValue::Bool(false)),
-            "soldier should be blocked when double-locked");
+        assert!(
+            !h.iter()
+                .any(|(p, v)| *p == IS_LOCKED_SIGNALS[0] && *v == SignalValue::Bool(false)),
+            "soldier should be blocked when double-locked"
+        );
 
         handle.abort();
         let _ = handle.await;
@@ -522,12 +555,21 @@ mod tests {
         tokio::task::yield_now().await;
 
         let h = bus.history();
-        assert!(h.iter().any(|(p, v)| *p == AJAR_SIGNALS[1] && *v == SignalValue::Bool(false)),
-            "door should close");
-        assert!(h.iter().any(|(p, v)| *p == LATCH_SIGNALS[1] && *v == SignalValue::Bool(true)),
-            "latch should re-engage on close");
-        assert!(h.iter().any(|(p, v)| *p == IS_LOCKED_SIGNALS[1] && *v == SignalValue::Bool(true)),
-            "IsLocked should be refreshed to reflect soldier position (locked)");
+        assert!(
+            h.iter()
+                .any(|(p, v)| *p == AJAR_SIGNALS[1] && *v == SignalValue::Bool(false)),
+            "door should close"
+        );
+        assert!(
+            h.iter()
+                .any(|(p, v)| *p == LATCH_SIGNALS[1] && *v == SignalValue::Bool(true)),
+            "latch should re-engage on close"
+        );
+        assert!(
+            h.iter()
+                .any(|(p, v)| *p == IS_LOCKED_SIGNALS[1] && *v == SignalValue::Bool(true)),
+            "IsLocked should be refreshed to reflect soldier position (locked)"
+        );
 
         handle.abort();
         let _ = handle.await;
@@ -545,11 +587,17 @@ mod tests {
 
         let h = bus.history();
         // Row1.Right open
-        assert!(h.iter().any(|(p, v)| *p == AJAR_SIGNALS[1] && *v == SignalValue::Bool(true)));
+        assert!(h
+            .iter()
+            .any(|(p, v)| *p == AJAR_SIGNALS[1] && *v == SignalValue::Bool(true)));
         // Other doors not open
         for &i in &[0usize, 2, 3] {
-            assert!(!h.iter().any(|(p, v)| *p == AJAR_SIGNALS[i] && *v == SignalValue::Bool(true)),
-                "door {} should not be ajar", i);
+            assert!(
+                !h.iter()
+                    .any(|(p, v)| *p == AJAR_SIGNALS[i] && *v == SignalValue::Bool(true)),
+                "door {} should not be ajar",
+                i
+            );
         }
 
         handle.abort();

@@ -575,8 +575,8 @@ impl PlatformConfig {
         let v = self.variant.read().unwrap();
         match feature {
             "double_lock" => v.double_lock_enabled,
-            "nfc"         => v.nfc_enabled,
-            "ble_key"     => v.ble_key_enabled,
+            "nfc" => v.nfc_enabled,
+            "ble_key" => v.ble_key_enabled,
             "remote_lock" => v.remote_lock_enabled,
             _ => true,
         }
