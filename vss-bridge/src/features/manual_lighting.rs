@@ -2,13 +2,13 @@
 //!
 //! # Light switch positions (`Body.Lights.LightSwitch`)
 //!
-//! | Value        | DRL                             | Parking lights                  | Low beam                        | High beam               |
-//! |--------------|---------------------------------|---------------------------------|---------------------------------|-------------------------|
-//! | `"OFF"`      | off                             | off                             | off                             | off                     |
-//! | `"POSITION"` | off                             | on (ignition gate only)         | off                             | off                     |
-//! | `"DRL"`      | on (ignition gate only)         | off                             | off                             | off                     |
-//! | `"AUTO"`     | on when illuminance < threshold | on when illuminance < threshold | on when illuminance < threshold | follows high-beam stalk |
-//! | `"BEAM"`     | on (ignition gate only)         | on (ignition gate only)         | on (ignition gate only)         | follows high-beam stalk |
+//! | Value        | DRL                             | Parking lights                  | Low beam                        | License plate                   | High beam               |
+//! |--------------|---------------------------------|---------------------------------|---------------------------------|---------------------------------|-------------------------|
+//! | `"OFF"`      | off                             | off                             | off                             | off                             | off                     |
+//! | `"POSITION"` | off                             | on (ignition gate only)         | off                             | off                             | off                     |
+//! | `"DRL"`      | on (ignition gate only)         | off                             | off                             | off                             | off                     |
+//! | `"AUTO"`     | on when illuminance < threshold | on when illuminance < threshold | on when illuminance < threshold | on when illuminance < threshold | follows high-beam stalk |
+//! | `"BEAM"`     | on (ignition gate only)         | on (ignition gate only)         | on (ignition gate only)         | on (ignition gate only)         | follows high-beam stalk |
 //!
 //! # AUTO mode — ambient light threshold
 //!
@@ -52,6 +52,7 @@ const DRL_OUT: &str = "Body.Lights.Running.IsOn";
 const PARKING_OUT: &str = "Body.Lights.Parking.IsOn";
 const LOW_BEAM_OUT: &str = "Body.Lights.Beam.Low.IsOn";
 const HIGH_BEAM_OUT: &str = "Body.Lights.Beam.High.IsOn";
+const LICENSE_PLATE_OUT: &str = "Body.Lights.LicensePlate.IsOn";
 
 // ── Switch position ────────────────────────────────────────────────────────
 
@@ -164,6 +165,8 @@ impl<B: SignalBus + Send + Sync + 'static> ManualLighting<B> {
         let drl_on = low_on || (ignition_on && switch_pos == SwitchPos::Drl);
         // Parking lights: on at POSITION (sidelights only) and whenever low beam is on.
         let parking_on = low_on || (ignition_on && switch_pos == SwitchPos::Position);
+        // License plate lamp: follows low beam exactly.
+        let license_on = low_on;
         // High beam interlock: only active when low beam is on.
         let high_on = low_on && high_beam_engaged;
         let _ = self.bus.publish(DRL_OUT, SignalValue::Bool(drl_on)).await;
@@ -174,6 +177,10 @@ impl<B: SignalBus + Send + Sync + 'static> ManualLighting<B> {
         let _ = self
             .bus
             .publish(LOW_BEAM_OUT, SignalValue::Bool(low_on))
+            .await;
+        let _ = self
+            .bus
+            .publish(LICENSE_PLATE_OUT, SignalValue::Bool(license_on))
             .await;
         let _ = self
             .bus
@@ -456,6 +463,56 @@ mod tests {
             h.iter()
                 .any(|(s, v)| *s == PARKING_OUT && *v == SignalValue::Bool(false)),
             "ignition OFF should force parking lights off, got: {:?}",
+            h
+        );
+    }
+
+    #[tokio::test]
+    async fn low_beam_on_enables_license_plate_lamp() {
+        let bus = setup().await;
+        bus.inject(POWER_STATE, SignalValue::String("ON".into()));
+        bus.inject(LIGHT_SWITCH, SignalValue::String("BEAM".into()));
+        drain().await;
+        let h = bus.history();
+        assert!(
+            h.iter()
+                .any(|(s, v)| *s == LICENSE_PLATE_OUT && *v == SignalValue::Bool(true)),
+            "low beam on should enable license plate lamp, got: {:?}",
+            h
+        );
+    }
+
+    #[tokio::test]
+    async fn no_low_beam_no_license_plate_lamp() {
+        let bus = setup().await;
+        bus.inject(POWER_STATE, SignalValue::String("ON".into()));
+        bus.inject(LIGHT_SWITCH, SignalValue::String("POSITION".into()));
+        drain().await;
+        let h = bus.history();
+        assert!(
+            !h.iter()
+                .any(|(s, v)| *s == LICENSE_PLATE_OUT && *v == SignalValue::Bool(true)),
+            "POSITION (no low beam) should NOT enable license plate lamp, got: {:?}",
+            h
+        );
+    }
+
+    #[tokio::test]
+    async fn ignition_off_extinguishes_license_plate_lamp() {
+        let bus = setup().await;
+        bus.inject(POWER_STATE, SignalValue::String("ON".into()));
+        bus.inject(LIGHT_SWITCH, SignalValue::String("BEAM".into()));
+        drain().await;
+        bus.clear_history();
+
+        bus.inject(POWER_STATE, SignalValue::String("OFF".into()));
+        drain().await;
+
+        let h = bus.history();
+        assert!(
+            h.iter()
+                .any(|(s, v)| *s == LICENSE_PLATE_OUT && *v == SignalValue::Bool(false)),
+            "ignition OFF should extinguish license plate lamp, got: {:?}",
             h
         );
     }
