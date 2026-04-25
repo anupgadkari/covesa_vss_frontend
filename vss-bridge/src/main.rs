@@ -10,6 +10,7 @@ use tracing_subscriber::EnvFilter;
 use vss_bridge::adapters::mock::MockBus;
 use vss_bridge::arbiter;
 use vss_bridge::config;
+use vss_bridge::features::brake_reverse_lamps::BrakeReverseLamps;
 use vss_bridge::features::double_lock_release::DoubleLockRelease;
 use vss_bridge::features::hazard_lighting::HazardLighting;
 use vss_bridge::features::lock_feedback::LockFeedback;
@@ -135,10 +136,13 @@ async fn main() -> anyhow::Result<()> {
     // ThumbPadLock — Row 1 outside handle thumb pad, 500 ms debounce.
     tokio::spawn(ThumbPadLock::new(Arc::clone(&bus), Arc::clone(&door_lock_arb)).run());
 
+    // BrakeReverseLamps — pedal-driven stop lights, gear-driven backup lights.
+    tokio::spawn(BrakeReverseLamps::new(Arc::clone(&bus)).run());
+
     // TODO: remaining features
     // tokio::spawn(AutoRelock::from_config(Arc::clone(&door_lock_arb), Arc::clone(&bus), &_platform_config).run());
 
-    tracing::info!("features spawned: ManualLighting, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock");
+    tracing::info!("features spawned: ManualLighting, BrakeReverseLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock");
 
     // ── Plant Models ────────────────────────────────────────────────
     // Simulate physical lamp behavior the M7 / smart actuator firmware
