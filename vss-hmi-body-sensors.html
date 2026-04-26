@@ -115,10 +115,17 @@ const INIT_STATE={
   'Powertrain.Transmission.CurrentGear':0,
   // Light Switch
   'Body.Lights.LightSwitch':'OFF',
+  // Ambient light sensor — OEM overlay (Uint16, lux). Default 10000 = daylight.
+  // AUTO headlamp mode activates low beam below 200 lux (ECE R48 §6.1 threshold).
+  'Body.Lights.AmbientLightSensor.Illuminance':10000,
+  // ADAS camera — oncoming vehicle detection for Auto High Beam suppression.
+  'Vehicle.ADAS.HighBeam.OncomingVehicleDetected':false,
   // Switch / Stalk inputs (overlay — physical driver controls)
   'Body.Switches.Hazard.IsEngaged':false,
   'Body.Switches.TurnIndicator.Direction':'OFF',
   'Body.Switches.HighBeam.IsEngaged':false,
+  'Body.Switches.Fog.Front.IsEngaged':false,
+  'Body.Switches.Fog.Rear.IsEngaged':false,
   'Chassis.ParkingBrake.IsEngaged':true,
   // PEPS (Passive Entry / Passive Start)
   'Body.PEPS.KeyPresent':false,
@@ -281,10 +288,10 @@ function App(){
           </div>
         </div>
 
-        {/* LIGHT SWITCH */}
+        {/* LIGHT CONTROL */}
         <div className="section">
           <div className="section-title">Light Control</div>
-          <div className="section-info">Headlamp and exterior light switch mode</div>
+          <div className="section-info">Headlamp switch mode. AUTO activates low beam when lux &lt; 200 (ECE R48 §6.1).</div>
           <div className="control">
             <div className="control-label">Mode</div>
             <div className="button-group">
@@ -296,6 +303,103 @@ function App(){
               ))}
             </div>
             <div className="control-value">{state['Body.Lights.LightSwitch']}</div>
+          </div>
+          <div style={{marginTop:'8px',padding:'10px',background:'var(--s3)',border:'1px solid var(--bdr)',borderRadius:'6px'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:'8px'}}>
+              <span style={{fontFamily:'var(--fm)',fontSize:'10px',color:'var(--white)',fontWeight:500}}>Ambient Illuminance</span>
+              <span style={{fontFamily:'var(--fm)',fontSize:'11px',color:'#F59E0B',fontWeight:700}}>
+                {state['Body.Lights.AmbientLightSensor.Illuminance']} lux &nbsp;
+                <span style={{fontSize:'9px',color:state['Body.Lights.AmbientLightSensor.Illuminance']<200?'#F59E0B':'#6B7E99'}}>
+                  {state['Body.Lights.AmbientLightSensor.Illuminance']<50?'🌙 Night'
+                   :state['Body.Lights.AmbientLightSensor.Illuminance']<200?'🌆 Dusk — beam ON'
+                   :state['Body.Lights.AmbientLightSensor.Illuminance']<500?'🌇 Twilight'
+                   :state['Body.Lights.AmbientLightSensor.Illuminance']<10000?'☁ Overcast'
+                   :'☀ Daylight'}
+                </span>
+              </span>
+            </div>
+            <input type="range" min="0" max="100000" step="500"
+              style={{width:'100%',display:'block',marginBottom:'10px',height:'6px',WebkitAppearance:'none',
+                background:'var(--s4)',borderRadius:'4px',outline:'none',cursor:'pointer'}}
+              value={state['Body.Lights.AmbientLightSensor.Illuminance']}
+              onChange={(e)=>set('Body.Lights.AmbientLightSensor.Illuminance',parseInt(e.target.value))}/>
+            <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
+              {[{label:'Night',lux:5},{label:'Tunnel',lux:50},{label:'Dusk',lux:100},
+                {label:'Twilight',lux:300},{label:'Overcast',lux:2000},{label:'Daylight',lux:25000}
+              ].map(p=>(
+                <button key={p.label}
+                  className={`btn ${state['Body.Lights.AmbientLightSensor.Illuminance']===p.lux?'active':''}`}
+                  onClick={()=>set('Body.Lights.AmbientLightSensor.Illuminance',p.lux)}>
+                  {p.label} ({p.lux})
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="control" style={{marginTop:'8px'}}>
+            <div className="control-label">Front Fog</div>
+            <div className="button-group">
+              <button className={`btn ${state['Body.Switches.Fog.Front.IsEngaged']?'active':''}`}
+                style={state['Body.Switches.Fog.Front.IsEngaged']?{background:'#BAD6FE',borderColor:'#BAD6FE',color:'#06101C'}:{}}
+                onClick={()=>set('Body.Switches.Fog.Front.IsEngaged',!state['Body.Switches.Fog.Front.IsEngaged'])}>
+                {state['Body.Switches.Fog.Front.IsEngaged']?'ON':'OFF'}
+              </button>
+            </div>
+          </div>
+          <div className="control">
+            <div className="control-label">Rear Fog</div>
+            <div className="button-group">
+              <button className={`btn ${state['Body.Switches.Fog.Rear.IsEngaged']?'active':''}`}
+                style={state['Body.Switches.Fog.Rear.IsEngaged']?{background:'#EF4444',borderColor:'#EF4444',color:'#fff'}:{}}
+                onClick={()=>set('Body.Switches.Fog.Rear.IsEngaged',!state['Body.Switches.Fog.Rear.IsEngaged'])}>
+                {state['Body.Switches.Fog.Rear.IsEngaged']?'ON':'OFF'}
+              </button>
+            </div>
+          </div>
+          <div className="control">
+            <div className="control-label">High Beam Stalk</div>
+            <div style={{flex:1}}/>
+            <div className="tog"
+              onClick={()=>set('Body.Switches.HighBeam.IsEngaged',!state['Body.Switches.HighBeam.IsEngaged'])}
+              style={state['Body.Switches.HighBeam.IsEngaged']?{borderColor:'#4A9EF5',background:'rgba(74,158,245,.12)'}:{}}>
+              <div className="knob" style={state['Body.Switches.HighBeam.IsEngaged']?{transform:'translateX(20px)',background:'#4A9EF5'}:{}}/>
+            </div>
+          </div>
+        </div>
+
+        {/* ADAS CAMERA */}
+        <div className="section" style={{borderColor:'#60A5FA',borderWidth:'2px'}}>
+          <div className="section-title" style={{color:'#60A5FA'}}>ADAS Camera</div>
+          <div className="section-info">
+            Simulates the forward mono-camera that drives Auto High Beam (AHB).
+            When <b>Oncoming Vehicle Detected</b> is ON the bridge claims{' '}
+            <code>Beam.High.IsOn = false</code> at HIGH priority — overriding any
+            manual high-beam stalk request until the path is clear.
+          </div>
+          <div style={{display:'flex',alignItems:'center',gap:'12px',marginTop:'8px'}}>
+            <div className="control-label" style={{minWidth:'unset'}}>Oncoming Vehicle Detected</div>
+            <button
+              className={`btn ${state['Vehicle.ADAS.HighBeam.OncomingVehicleDetected'] ? 'active' : ''}`}
+              style={{
+                background: state['Vehicle.ADAS.HighBeam.OncomingVehicleDetected'] ? '#EF4444' : undefined,
+                borderColor: state['Vehicle.ADAS.HighBeam.OncomingVehicleDetected'] ? '#EF4444' : undefined,
+                color: state['Vehicle.ADAS.HighBeam.OncomingVehicleDetected'] ? '#fff' : undefined,
+                minWidth: '120px',
+              }}
+              onClick={() => set(
+                'Vehicle.ADAS.HighBeam.OncomingVehicleDetected',
+                !state['Vehicle.ADAS.HighBeam.OncomingVehicleDetected']
+              )}>
+              {state['Vehicle.ADAS.HighBeam.OncomingVehicleDetected'] ? '🚗 ONCOMING — HIGH BEAM OFF' : '✅ Path clear'}
+            </button>
+            <span style={{
+              fontSize:'12px',
+              color: state['Vehicle.ADAS.HighBeam.OncomingVehicleDetected'] ? '#EF4444' : '#6B7E99',
+              fontWeight: state['Vehicle.ADAS.HighBeam.OncomingVehicleDetected'] ? 700 : 400,
+            }}>
+              {state['Vehicle.ADAS.HighBeam.OncomingVehicleDetected']
+                ? 'AHB suppressing high beam'
+                : 'Manual high beam available'}
+            </span>
           </div>
         </div>
 
@@ -422,15 +526,6 @@ function App(){
               ))}
             </div>
             <div className="control-value">{state['Body.Switches.TurnIndicator.Direction']}</div>
-          </div>
-          <div className="control">
-            <div className="control-label">High Beam Stalk</div>
-            <div style={{flex:1}}/>
-            <div className="tog"
-              onClick={()=>set('Body.Switches.HighBeam.IsEngaged',!state['Body.Switches.HighBeam.IsEngaged'])}
-              style={state['Body.Switches.HighBeam.IsEngaged']?{borderColor:'#4A9EF5',background:'rgba(74,158,245,.12)'}:{}}>
-              <div className="knob" style={state['Body.Switches.HighBeam.IsEngaged']?{transform:'translateX(20px)',background:'#4A9EF5'}:{}}/>
-            </div>
           </div>
           <div className="control">
             <div className="control-label">Parking Brake</div>

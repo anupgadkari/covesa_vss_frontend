@@ -160,6 +160,8 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Body.Switches.TurnIndicator.Direction" => Some(0x000D_0002),
         "Body.Switches.HighBeam.IsEngaged" => Some(0x000D_0003),
         "Chassis.ParkingBrake.IsEngaged" => Some(0x000D_0004),
+        "Body.Switches.Fog.Front.IsEngaged" => Some(0x000D_0005),
+        "Body.Switches.Fog.Rear.IsEngaged" => Some(0x000D_0006),
 
         // Chassis / Powertrain (sensor inputs)
         "Chassis.Brake.PedalPosition" => Some(0x000C_0001),
@@ -254,6 +256,17 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // Thumb-pad lock triggers — Row1 outside handle lock area (no Row2 pads).
         "Body.Doors.Row1.Left.Handle.Outside.LockPad.IsPressed" => Some(0x0014_0002),
         "Body.Doors.Row1.Right.Handle.Outside.LockPad.IsPressed" => Some(0x0014_0003),
+        // Central lock command — published by arbiter; HMI diagnostic override also
+        // uses this path to send lock_double / release_double directly to plant model.
+        "Body.Doors.CentralLock.Command" => Some(0x0014_0004),
+
+        // Ambient light sensor (OEM custom — not in standard VSS v4.x).
+        // Used by ManualLighting AUTO mode to gate low-beam activation.
+        "Body.Lights.AmbientLightSensor.Illuminance" => Some(0x0015_0001),
+
+        // ADAS camera signals (OEM custom — block 0x0016).
+        // OncomingVehicleDetected: true when forward camera sees oncoming headlights.
+        "Vehicle.ADAS.HighBeam.OncomingVehicleDetected" => Some(0x0016_0001),
 
         _ => None,
     }
@@ -431,6 +444,8 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Body.Switches.TurnIndicator.Direction", 0x000D_0002),
     ("Body.Switches.HighBeam.IsEngaged", 0x000D_0003),
     ("Chassis.ParkingBrake.IsEngaged", 0x000D_0004),
+    ("Body.Switches.Fog.Front.IsEngaged", 0x000D_0005),
+    ("Body.Switches.Fog.Rear.IsEngaged", 0x000D_0006),
     // Chassis / Powertrain
     ("Chassis.Brake.PedalPosition", 0x000C_0001),
     ("Powertrain.Transmission.CurrentGear", 0x000C_0002),
@@ -521,6 +536,9 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
         "Body.Doors.Row1.Right.Handle.Outside.LockPad.IsPressed",
         0x0014_0003,
     ),
+    ("Body.Doors.CentralLock.Command", 0x0014_0004),
+    ("Body.Lights.AmbientLightSensor.Illuminance", 0x0015_0001),
+    ("Vehicle.ADAS.HighBeam.OncomingVehicleDetected", 0x0016_0001),
 ];
 
 #[cfg(test)]

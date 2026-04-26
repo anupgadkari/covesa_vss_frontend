@@ -39,6 +39,8 @@ anyhow          = "1"
 tracing         = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 fastrand         = "2"
+axum             = "0.7"
+tower-http       = { version = "0.6", features = ["fs", "set-header"] }
 
 [dev-dependencies]
 tokio           = { version = "1", features = ["full", "test-util"] }

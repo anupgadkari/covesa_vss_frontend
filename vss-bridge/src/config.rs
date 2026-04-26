@@ -160,6 +160,11 @@ pub struct VehicleLineCal {
     /// continues for this many complete flash cycles (on + off = one flash)
     /// before releasing. Set to 0 to disable comfort blink.
     pub lane_change_flash_count: u8,
+
+    /// Ambient illuminance threshold for AUTO headlamp mode (lux).
+    /// Low beam activates when the ambient light sensor reads below this value.
+    /// Typical dusk/dawn threshold: 200 lux (aligned with ECE R48 §6.1).
+    pub auto_headlamp_lux_threshold: u16,
 }
 
 impl Default for VehicleLineCal {
@@ -173,6 +178,7 @@ impl Default for VehicleLineCal {
             lock_feedback_blink_period_ms: 400,
             shutdown_grace_secs: 30,
             lane_change_flash_count: 3,
+            auto_headlamp_lux_threshold: 200,
         }
     }
 }
@@ -362,9 +368,9 @@ impl Default for VariantCal {
         Self {
             auto_lock_speed_kmh: 20,
             double_lock_enabled: false,
-            nfc_enabled: false,
-            ble_key_enabled: false,
-            remote_lock_enabled: false,
+            nfc_enabled: true,
+            ble_key_enabled: true,
+            remote_lock_enabled: true,
             welcome_light_pattern: WelcomeLightPattern::Simple,
             doors: DoorConfig::default(),
         }
@@ -694,7 +700,9 @@ mod tests {
         let vc = VariantCal::default();
         assert_eq!(vc.auto_lock_speed_kmh, 20);
         assert!(!vc.double_lock_enabled);
-        assert!(!vc.nfc_enabled);
+        assert!(vc.nfc_enabled);
+        assert!(vc.ble_key_enabled);
+        assert!(vc.remote_lock_enabled);
         assert!(vc.doors.row2_left); // 4-door by default
         assert!(!vc.doors.removable); // not removable by default
 

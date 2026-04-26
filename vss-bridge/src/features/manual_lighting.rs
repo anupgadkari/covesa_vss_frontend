@@ -1,0 +1,658 @@
+//! Manual Lighting — low beam and high beam stalk control.
+//!
+//! # Light switch positions (`Body.Lights.LightSwitch`)
+//!
+//! | Value        | DRL                             | Parking lights                  | Low beam                        | License plate                   | High beam               |
+//! |--------------|---------------------------------|---------------------------------|---------------------------------|---------------------------------|-------------------------|
+//! | `"OFF"`      | off                             | off                             | off                             | off                             | off                     |
+//! | `"POSITION"` | off                             | on (ignition gate only)         | off                             | off                             | off                     |
+//! | `"DRL"`      | on (ignition gate only)         | off                             | off                             | off                             | off                     |
+//! | `"AUTO"`     | on when illuminance < threshold | on when illuminance < threshold | on when illuminance < threshold | on when illuminance < threshold | follows high-beam stalk |
+//! | `"BEAM"`     | on (ignition gate only)         | on (ignition gate only)         | on (ignition gate only)         | on (ignition gate only)         | follows high-beam stalk |
+//!
+//! # AUTO mode — ambient light threshold
+//!
+//! In `"AUTO"` mode the feature subscribes to
+//! `Body.Lights.AmbientLightSensor.Illuminance` (Uint16, lux).
+//! Low beam activates when the reading falls below
+//! `auto_headlamp_lux_threshold` (calibrated in `VehicleLineCal`,
+//! default 200 lux — aligned with ECE R48 §6.1 dusk/dawn threshold).
+//! High beam follows `Body.Switches.HighBeam.IsEngaged` while low beam is on.
+//!
+//! The ambient sensor starts at u16::MAX (full daylight) so that AUTO mode
+//! does not switch the headlamps on at cold boot before any sensor reading
+//! has arrived.
+//!
+//! # High beam interlock
+//!
+//! `Body.Switches.HighBeam.IsEngaged` (Bool) — latched stalk toggle.
+//! High beam only activates when low beam is currently on.
+//!
+//! # Ignition gate
+//!
+//! All switch-driven modes require ignition `ON` or `START`.
+//! On ignition `OFF` or `ACC` all claims are released, reverting outputs
+//! to off (unless a higher-priority feature such as FollowMeHome holds a
+//! claim via the LowBeam arbiter).
+
+use std::sync::Arc;
+
+use futures::StreamExt;
+use tokio::select;
+
+use crate::arbiter::{ActuatorRequest, DomainArbiter};
+use crate::ipc_message::{FeatureId, Priority, SignalValue};
+use crate::signal_bus::{SignalBus, VssPath};
+
+// ── Signal constants ───────────────────────────────────────────────────────
+
+const LIGHT_SWITCH: &str = "Body.Lights.LightSwitch";
+const HIGH_BEAM_SWITCH: &str = "Body.Switches.HighBeam.IsEngaged";
+const POWER_STATE: &str = "Vehicle.LowVoltageSystemState";
+const ILLUMINANCE: &str = "Body.Lights.AmbientLightSensor.Illuminance";
+
+const DRL_OUT: VssPath = "Body.Lights.Running.IsOn";
+const PARKING_OUT: VssPath = "Body.Lights.Parking.IsOn";
+const LOW_BEAM_OUT: VssPath = "Body.Lights.Beam.Low.IsOn";
+const HIGH_BEAM_OUT: VssPath = "Body.Lights.Beam.High.IsOn";
+const LICENSE_PLATE_OUT: VssPath = "Body.Lights.LicensePlate.IsOn";
+
+// ── Switch position ────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+enum SwitchPos {
+    #[default]
+    Off,
+    Position,
+    Drl,
+    Auto,
+    Beam,
+}
+
+impl SwitchPos {
+    fn from_signal(val: &SignalValue) -> Self {
+        match val {
+            SignalValue::String(s) => match s.as_str() {
+                "POSITION" => Self::Position,
+                "DRL" => Self::Drl,
+                "AUTO" => Self::Auto,
+                "BEAM" => Self::Beam,
+                _ => Self::Off,
+            },
+            _ => Self::Off,
+        }
+    }
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+fn is_power_on(val: &SignalValue) -> bool {
+    matches!(val, SignalValue::String(s) if s == "ON" || s == "START")
+}
+
+// ── Feature struct ─────────────────────────────────────────────────────────
+
+pub struct ManualLighting<B: SignalBus> {
+    arbiter: Arc<DomainArbiter>,
+    bus: Arc<B>,
+    /// Illuminance threshold (lux) below which AUTO mode activates low beam.
+    auto_lux_threshold: u16,
+}
+
+impl<B: SignalBus + Send + Sync + 'static> ManualLighting<B> {
+    pub fn new(arbiter: Arc<DomainArbiter>, bus: Arc<B>, auto_lux_threshold: u16) -> Self {
+        Self {
+            arbiter,
+            bus,
+            auto_lux_threshold,
+        }
+    }
+
+    pub async fn run(self) {
+        let mut power_rx = self.bus.subscribe(POWER_STATE).await;
+        let mut switch_rx = self.bus.subscribe(LIGHT_SWITCH).await;
+        let mut hb_rx = self.bus.subscribe(HIGH_BEAM_SWITCH).await;
+        let mut lux_rx = self.bus.subscribe(ILLUMINANCE).await;
+
+        let mut ignition_on = false;
+        let mut switch_pos = SwitchPos::Off;
+        let mut high_beam_engaged = false;
+        // Start at maximum lux — no headlamps at boot before first sensor reading.
+        let mut ambient_lux: u16 = u16::MAX;
+
+        tracing::info!(
+            threshold_lux = self.auto_lux_threshold,
+            "ManualLighting feature started"
+        );
+
+        loop {
+            select! {
+                Some(val) = power_rx.next() => {
+                    ignition_on = is_power_on(&val);
+                    self.apply(ignition_on, switch_pos, high_beam_engaged, ambient_lux).await;
+                }
+                Some(val) = switch_rx.next() => {
+                    switch_pos = SwitchPos::from_signal(&val);
+                    self.apply(ignition_on, switch_pos, high_beam_engaged, ambient_lux).await;
+                }
+                Some(val) = hb_rx.next() => {
+                    high_beam_engaged = val == SignalValue::Bool(true);
+                    self.apply(ignition_on, switch_pos, high_beam_engaged, ambient_lux).await;
+                }
+                Some(val) = lux_rx.next() => {
+                    // Illuminance arrives as Uint8 for 0-255 and Uint16 for 256-65535
+                    // (json_to_signal_value range heuristic). Accept both so low-lux
+                    // presets (Night=5, Tunnel=50, Dusk=100) update the reading.
+                    let new_lux = match val {
+                        SignalValue::Uint16(v) => Some(v),
+                        SignalValue::Uint8(v) => Some(v as u16),
+                        _ => None,
+                    };
+                    if let Some(lux) = new_lux {
+                        ambient_lux = lux;
+                        tracing::debug!(lux, threshold = self.auto_lux_threshold, "ambient illuminance update");
+                        self.apply(ignition_on, switch_pos, high_beam_engaged, ambient_lux).await;
+                    }
+                }
+                else => break,
+            }
+        }
+
+        tracing::info!("ManualLighting feature stopped");
+    }
+
+    async fn apply(
+        &self,
+        ignition_on: bool,
+        switch_pos: SwitchPos,
+        high_beam_engaged: bool,
+        ambient_lux: u16,
+    ) {
+        let low_on = ignition_on
+            && match switch_pos {
+                SwitchPos::Beam => true,
+                SwitchPos::Auto => ambient_lux < self.auto_lux_threshold,
+                _ => false,
+            };
+        // DRL: on at DRL position and whenever low beam is on.
+        let drl_on = low_on || (ignition_on && switch_pos == SwitchPos::Drl);
+        // Parking lights: on at POSITION (sidelights only) and whenever low beam is on.
+        let parking_on = low_on || (ignition_on && switch_pos == SwitchPos::Position);
+        // License plate lamp: follows low beam exactly.
+        let license_on = low_on;
+        // High beam interlock: only active when low beam is on.
+        let high_on = low_on && high_beam_engaged;
+
+        self.claim(LOW_BEAM_OUT, low_on, FeatureId::LowBeam, Priority::Medium)
+            .await;
+        self.claim(
+            PARKING_OUT,
+            parking_on,
+            FeatureId::LowBeam,
+            Priority::Medium,
+        )
+        .await;
+        self.claim(
+            LICENSE_PLATE_OUT,
+            license_on,
+            FeatureId::LowBeam,
+            Priority::Medium,
+        )
+        .await;
+        self.claim(
+            HIGH_BEAM_OUT,
+            high_on,
+            FeatureId::HighBeam,
+            Priority::Medium,
+        )
+        .await;
+        self.claim(DRL_OUT, drl_on, FeatureId::Drl, Priority::Medium)
+            .await;
+    }
+
+    /// Submit a claim (on=true) or release (on=false) to the LowBeam arbiter.
+    async fn claim(&self, signal: VssPath, on: bool, feature_id: FeatureId, priority: Priority) {
+        let result = if on {
+            self.arbiter
+                .request(ActuatorRequest {
+                    signal,
+                    value: SignalValue::Bool(true),
+                    priority,
+                    feature_id,
+                })
+                .await
+        } else {
+            self.arbiter.release(signal, feature_id).await
+        };
+        if let Err(e) = result {
+            tracing::error!(signal, error = %e, "ManualLighting: arbiter op failed");
+        }
+    }
+}
+
+// ── Tests ──────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::adapters::mock::MockBus;
+    use crate::arbiter::low_beam_arbiter;
+    use tokio::time::{sleep, Duration};
+
+    const THRESHOLD: u16 = 200;
+
+    async fn setup() -> (Arc<MockBus>, Arc<DomainArbiter>) {
+        let bus = Arc::new(MockBus::new());
+        let (arb, loop_fut) = low_beam_arbiter(Arc::clone(&bus));
+        tokio::spawn(loop_fut);
+        let arb = Arc::new(arb);
+        let feature = ManualLighting::new(Arc::clone(&arb), Arc::clone(&bus), THRESHOLD);
+        tokio::spawn(feature.run());
+        tokio::task::yield_now().await;
+        (bus, arb)
+    }
+
+    async fn drain() {
+        tokio::task::yield_now().await;
+        sleep(Duration::from_millis(5)).await;
+        tokio::task::yield_now().await;
+    }
+
+    #[tokio::test]
+    async fn beam_switch_with_ignition_on_enables_low_beam() {
+        let (bus, _arb) = setup().await;
+        bus.inject(POWER_STATE, SignalValue::String("ON".into()));
+        bus.inject(LIGHT_SWITCH, SignalValue::String("BEAM".into()));
+        drain().await;
+        let h = bus.history();
+        assert!(
+            h.iter()
+                .any(|(s, v)| *s == LOW_BEAM_OUT && *v == SignalValue::Bool(true)),
+            "expected Low.IsOn = true, got: {:?}",
+            h
+        );
+    }
+
+    #[tokio::test]
+    async fn beam_switch_off_no_low_beam() {
+        let (bus, _arb) = setup().await;
+        bus.inject(POWER_STATE, SignalValue::String("ON".into()));
+        bus.inject(LIGHT_SWITCH, SignalValue::String("OFF".into()));
+        drain().await;
+        let h = bus.history();
+        assert!(
+            !h.iter()
+                .any(|(s, v)| *s == LOW_BEAM_OUT && *v == SignalValue::Bool(true)),
+            "expected Low.IsOn = false when switch OFF, got: {:?}",
+            h
+        );
+    }
+
+    #[tokio::test]
+    async fn ignition_off_forces_both_beams_off() {
+        let (bus, _arb) = setup().await;
+        bus.inject(POWER_STATE, SignalValue::String("ON".into()));
+        bus.inject(LIGHT_SWITCH, SignalValue::String("BEAM".into()));
+        bus.inject(HIGH_BEAM_SWITCH, SignalValue::Bool(true));
+        drain().await;
+        bus.clear_history();
+
+        bus.inject(POWER_STATE, SignalValue::String("OFF".into()));
+        drain().await;
+
+        let h = bus.history();
+        assert!(
+            h.iter()
+                .any(|(s, v)| *s == LOW_BEAM_OUT && *v == SignalValue::Bool(false)),
+            "expected Low off after ignition OFF, got: {:?}",
+            h
+        );
+        assert!(
+            h.iter()
+                .any(|(s, v)| *s == HIGH_BEAM_OUT && *v == SignalValue::Bool(false)),
+            "expected High off after ignition OFF, got: {:?}",
+            h
+        );
+    }
+
+    #[tokio::test]
+    async fn high_beam_requires_low_beam_on() {
+        let (bus, _arb) = setup().await;
+        bus.inject(POWER_STATE, SignalValue::String("ON".into()));
+        bus.inject(LIGHT_SWITCH, SignalValue::String("OFF".into()));
+        bus.inject(HIGH_BEAM_SWITCH, SignalValue::Bool(true));
+        drain().await;
+        let h = bus.history();
+        assert!(
+            !h.iter()
+                .any(|(s, v)| *s == HIGH_BEAM_OUT && *v == SignalValue::Bool(true)),
+            "high beam must not fire without low beam, got: {:?}",
+            h
+        );
+    }
+
+    #[tokio::test]
+    async fn high_beam_active_when_low_beam_on() {
+        let (bus, _arb) = setup().await;
+        bus.inject(POWER_STATE, SignalValue::String("ON".into()));
+        bus.inject(LIGHT_SWITCH, SignalValue::String("BEAM".into()));
+        bus.inject(HIGH_BEAM_SWITCH, SignalValue::Bool(true));
+        drain().await;
+        let h = bus.history();
+        assert!(
+            h.iter()
+                .any(|(s, v)| *s == HIGH_BEAM_OUT && *v == SignalValue::Bool(true)),
+            "expected High.IsOn = true with low beam on, got: {:?}",
+            h
+        );
+    }
+
+    #[tokio::test]
+    async fn auto_mode_below_threshold_enables_low_beam() {
+        let (bus, _arb) = setup().await;
+        bus.inject(POWER_STATE, SignalValue::String("ON".into()));
+        bus.inject(LIGHT_SWITCH, SignalValue::String("AUTO".into()));
+        bus.inject(ILLUMINANCE, SignalValue::Uint16(THRESHOLD - 1));
+        drain().await;
+        let h = bus.history();
+        assert!(
+            h.iter()
+                .any(|(s, v)| *s == LOW_BEAM_OUT && *v == SignalValue::Bool(true)),
+            "AUTO + lux below threshold should enable low beam, got: {:?}",
+            h
+        );
+    }
+
+    #[tokio::test]
+    async fn auto_mode_above_threshold_no_low_beam() {
+        let (bus, _arb) = setup().await;
+        bus.inject(POWER_STATE, SignalValue::String("ON".into()));
+        bus.inject(LIGHT_SWITCH, SignalValue::String("AUTO".into()));
+        bus.inject(ILLUMINANCE, SignalValue::Uint16(THRESHOLD + 1));
+        drain().await;
+        let h = bus.history();
+        assert!(
+            !h.iter()
+                .any(|(s, v)| *s == LOW_BEAM_OUT && *v == SignalValue::Bool(true)),
+            "AUTO + lux above threshold should NOT enable low beam, got: {:?}",
+            h
+        );
+    }
+
+    #[tokio::test]
+    async fn auto_mode_no_sensor_reading_no_low_beam() {
+        let (bus, _arb) = setup().await;
+        bus.inject(POWER_STATE, SignalValue::String("ON".into()));
+        bus.inject(LIGHT_SWITCH, SignalValue::String("AUTO".into()));
+        drain().await;
+        let h = bus.history();
+        assert!(
+            !h.iter()
+                .any(|(s, v)| *s == LOW_BEAM_OUT && *v == SignalValue::Bool(true)),
+            "AUTO with no sensor reading should NOT enable low beam (safe default), got: {:?}",
+            h
+        );
+    }
+
+    #[tokio::test]
+    async fn auto_mode_lux_rises_above_threshold_turns_beam_off() {
+        let (bus, _arb) = setup().await;
+        bus.inject(POWER_STATE, SignalValue::String("ON".into()));
+        bus.inject(LIGHT_SWITCH, SignalValue::String("AUTO".into()));
+        bus.inject(ILLUMINANCE, SignalValue::Uint16(50));
+        drain().await;
+        bus.clear_history();
+
+        bus.inject(ILLUMINANCE, SignalValue::Uint16(5000));
+        drain().await;
+
+        let h = bus.history();
+        assert!(
+            h.iter()
+                .any(|(s, v)| *s == LOW_BEAM_OUT && *v == SignalValue::Bool(false)),
+            "LOW beam should turn off when lux rises above threshold, got: {:?}",
+            h
+        );
+    }
+
+    #[tokio::test]
+    async fn position_mode_does_not_enable_beams() {
+        let (bus, _arb) = setup().await;
+        bus.inject(POWER_STATE, SignalValue::String("ON".into()));
+        bus.inject(LIGHT_SWITCH, SignalValue::String("POSITION".into()));
+        drain().await;
+        let h = bus.history();
+        assert!(
+            !h.iter()
+                .any(|(s, v)| *s == LOW_BEAM_OUT && *v == SignalValue::Bool(true)),
+            "POSITION mode should not enable low beam, got: {:?}",
+            h
+        );
+    }
+
+    #[tokio::test]
+    async fn position_mode_enables_parking_lights() {
+        let (bus, _arb) = setup().await;
+        bus.inject(POWER_STATE, SignalValue::String("ON".into()));
+        bus.inject(LIGHT_SWITCH, SignalValue::String("POSITION".into()));
+        drain().await;
+        let h = bus.history();
+        assert!(
+            h.iter()
+                .any(|(s, v)| *s == PARKING_OUT && *v == SignalValue::Bool(true)),
+            "POSITION mode should enable parking lights, got: {:?}",
+            h
+        );
+        assert!(
+            !h.iter()
+                .any(|(s, v)| *s == LOW_BEAM_OUT && *v == SignalValue::Bool(true)),
+            "POSITION mode should NOT enable low beam, got: {:?}",
+            h
+        );
+    }
+
+    #[tokio::test]
+    async fn beam_mode_enables_parking_and_low_beam() {
+        let (bus, _arb) = setup().await;
+        bus.inject(POWER_STATE, SignalValue::String("ON".into()));
+        bus.inject(LIGHT_SWITCH, SignalValue::String("BEAM".into()));
+        drain().await;
+        let h = bus.history();
+        assert!(
+            h.iter()
+                .any(|(s, v)| *s == PARKING_OUT && *v == SignalValue::Bool(true)),
+            "BEAM mode should enable parking lights, got: {:?}",
+            h
+        );
+        assert!(
+            h.iter()
+                .any(|(s, v)| *s == LOW_BEAM_OUT && *v == SignalValue::Bool(true)),
+            "BEAM mode should enable low beam, got: {:?}",
+            h
+        );
+    }
+
+    #[tokio::test]
+    async fn auto_mode_dark_enables_parking_and_low_beam() {
+        let (bus, _arb) = setup().await;
+        bus.inject(POWER_STATE, SignalValue::String("ON".into()));
+        bus.inject(LIGHT_SWITCH, SignalValue::String("AUTO".into()));
+        bus.inject(ILLUMINANCE, SignalValue::Uint16(THRESHOLD - 1));
+        drain().await;
+        let h = bus.history();
+        assert!(
+            h.iter()
+                .any(|(s, v)| *s == PARKING_OUT && *v == SignalValue::Bool(true)),
+            "AUTO below threshold should enable parking lights, got: {:?}",
+            h
+        );
+    }
+
+    #[tokio::test]
+    async fn ignition_off_forces_parking_off() {
+        let (bus, _arb) = setup().await;
+        bus.inject(POWER_STATE, SignalValue::String("ON".into()));
+        bus.inject(LIGHT_SWITCH, SignalValue::String("POSITION".into()));
+        drain().await;
+        bus.clear_history();
+
+        bus.inject(POWER_STATE, SignalValue::String("OFF".into()));
+        drain().await;
+
+        let h = bus.history();
+        assert!(
+            h.iter()
+                .any(|(s, v)| *s == PARKING_OUT && *v == SignalValue::Bool(false)),
+            "ignition OFF should force parking lights off, got: {:?}",
+            h
+        );
+    }
+
+    #[tokio::test]
+    async fn low_beam_on_enables_license_plate_lamp() {
+        let (bus, _arb) = setup().await;
+        bus.inject(POWER_STATE, SignalValue::String("ON".into()));
+        bus.inject(LIGHT_SWITCH, SignalValue::String("BEAM".into()));
+        drain().await;
+        let h = bus.history();
+        assert!(
+            h.iter()
+                .any(|(s, v)| *s == LICENSE_PLATE_OUT && *v == SignalValue::Bool(true)),
+            "low beam on should enable license plate lamp, got: {:?}",
+            h
+        );
+    }
+
+    #[tokio::test]
+    async fn no_low_beam_no_license_plate_lamp() {
+        let (bus, _arb) = setup().await;
+        bus.inject(POWER_STATE, SignalValue::String("ON".into()));
+        bus.inject(LIGHT_SWITCH, SignalValue::String("POSITION".into()));
+        drain().await;
+        let h = bus.history();
+        assert!(
+            !h.iter()
+                .any(|(s, v)| *s == LICENSE_PLATE_OUT && *v == SignalValue::Bool(true)),
+            "POSITION (no low beam) should NOT enable license plate lamp, got: {:?}",
+            h
+        );
+    }
+
+    #[tokio::test]
+    async fn ignition_off_extinguishes_license_plate_lamp() {
+        let (bus, _arb) = setup().await;
+        bus.inject(POWER_STATE, SignalValue::String("ON".into()));
+        bus.inject(LIGHT_SWITCH, SignalValue::String("BEAM".into()));
+        drain().await;
+        bus.clear_history();
+
+        bus.inject(POWER_STATE, SignalValue::String("OFF".into()));
+        drain().await;
+
+        let h = bus.history();
+        assert!(
+            h.iter()
+                .any(|(s, v)| *s == LICENSE_PLATE_OUT && *v == SignalValue::Bool(false)),
+            "ignition OFF should extinguish license plate lamp, got: {:?}",
+            h
+        );
+    }
+
+    #[tokio::test]
+    async fn drl_mode_enables_drl_only() {
+        let (bus, _arb) = setup().await;
+        bus.inject(POWER_STATE, SignalValue::String("ON".into()));
+        bus.inject(LIGHT_SWITCH, SignalValue::String("DRL".into()));
+        drain().await;
+        let h = bus.history();
+        assert!(
+            h.iter()
+                .any(|(s, v)| *s == DRL_OUT && *v == SignalValue::Bool(true)),
+            "DRL mode should enable running lights, got: {:?}",
+            h
+        );
+        assert!(
+            !h.iter()
+                .any(|(s, v)| *s == LOW_BEAM_OUT && *v == SignalValue::Bool(true)),
+            "DRL mode should NOT enable low beam, got: {:?}",
+            h
+        );
+        assert!(
+            !h.iter()
+                .any(|(s, v)| *s == PARKING_OUT && *v == SignalValue::Bool(true)),
+            "DRL mode should NOT enable parking lights, got: {:?}",
+            h
+        );
+    }
+
+    #[tokio::test]
+    async fn beam_mode_also_enables_drl() {
+        let (bus, _arb) = setup().await;
+        bus.inject(POWER_STATE, SignalValue::String("ON".into()));
+        bus.inject(LIGHT_SWITCH, SignalValue::String("BEAM".into()));
+        drain().await;
+        let h = bus.history();
+        assert!(
+            h.iter()
+                .any(|(s, v)| *s == DRL_OUT && *v == SignalValue::Bool(true)),
+            "BEAM mode should enable DRL, got: {:?}",
+            h
+        );
+    }
+
+    #[tokio::test]
+    async fn auto_mode_dark_enables_drl() {
+        let (bus, _arb) = setup().await;
+        bus.inject(POWER_STATE, SignalValue::String("ON".into()));
+        bus.inject(LIGHT_SWITCH, SignalValue::String("AUTO".into()));
+        bus.inject(ILLUMINANCE, SignalValue::Uint16(THRESHOLD - 1));
+        drain().await;
+        let h = bus.history();
+        assert!(
+            h.iter()
+                .any(|(s, v)| *s == DRL_OUT && *v == SignalValue::Bool(true)),
+            "AUTO below threshold should enable DRL, got: {:?}",
+            h
+        );
+    }
+
+    #[tokio::test]
+    async fn ignition_off_forces_drl_off() {
+        let (bus, _arb) = setup().await;
+        bus.inject(POWER_STATE, SignalValue::String("ON".into()));
+        bus.inject(LIGHT_SWITCH, SignalValue::String("DRL".into()));
+        drain().await;
+        bus.clear_history();
+
+        bus.inject(POWER_STATE, SignalValue::String("OFF".into()));
+        drain().await;
+
+        let h = bus.history();
+        assert!(
+            h.iter()
+                .any(|(s, v)| *s == DRL_OUT && *v == SignalValue::Bool(false)),
+            "ignition OFF should force DRL off, got: {:?}",
+            h
+        );
+    }
+
+    #[tokio::test]
+    async fn acc_state_forces_beams_off() {
+        let (bus, _arb) = setup().await;
+        bus.inject(POWER_STATE, SignalValue::String("ON".into()));
+        bus.inject(LIGHT_SWITCH, SignalValue::String("BEAM".into()));
+        drain().await;
+        bus.clear_history();
+
+        bus.inject(POWER_STATE, SignalValue::String("ACC".into()));
+        drain().await;
+
+        let h = bus.history();
+        assert!(
+            h.iter()
+                .any(|(s, v)| *s == LOW_BEAM_OUT && *v == SignalValue::Bool(false)),
+            "ACC state should force low beam off, got: {:?}",
+            h
+        );
+    }
+}

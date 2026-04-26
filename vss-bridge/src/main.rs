@@ -7,12 +7,21 @@
 use std::sync::Arc;
 use tracing_subscriber::EnvFilter;
 
+use axum::Router;
+use tower_http::services::ServeDir;
+use tower_http::set_header::SetResponseHeaderLayer;
+
 use vss_bridge::adapters::mock::MockBus;
 use vss_bridge::arbiter;
 use vss_bridge::config;
+use vss_bridge::features::auto_high_beam::AutoHighBeam;
+use vss_bridge::features::brake_reverse_lamps::BrakeReverseLamps;
 use vss_bridge::features::double_lock_release::DoubleLockRelease;
+use vss_bridge::features::fog_lamps::FogLamps;
+use vss_bridge::features::follow_me_home::FollowMeHome;
 use vss_bridge::features::hazard_lighting::HazardLighting;
 use vss_bridge::features::lock_feedback::LockFeedback;
+use vss_bridge::features::manual_lighting::ManualLighting;
 use vss_bridge::features::rke::{PairedFob, RkeFeature};
 use vss_bridge::features::thumb_pad_lock::ThumbPadLock;
 use vss_bridge::features::turn_indicator::TurnIndicator;
@@ -56,20 +65,35 @@ async fn main() -> anyhow::Result<()> {
 
     // ── Domain Arbiters ─────────────────────────────────────────────
     let (lighting_arb, lighting_fut) = arbiter::lighting_arbiter(Arc::clone(&bus));
+    let (low_beam_arb, low_beam_fut) = arbiter::low_beam_arbiter(Arc::clone(&bus));
     let (door_lock_arb, door_lock_ack_tx, door_lock_fut) =
         arbiter::door_lock_arbiter(Arc::clone(&bus));
     let (_horn_arb, horn_fut) = arbiter::horn_arbiter(Arc::clone(&bus));
     let (_comfort_arb, comfort_fut) = arbiter::comfort_arbiter(Arc::clone(&bus));
 
     tokio::spawn(lighting_fut);
+    tokio::spawn(low_beam_fut);
     tokio::spawn(door_lock_fut);
     tokio::spawn(horn_fut);
     tokio::spawn(comfort_fut);
 
     let lighting_arb = Arc::new(lighting_arb);
+    let low_beam_arb = Arc::new(low_beam_arb);
     let door_lock_arb = Arc::new(door_lock_arb);
 
     // ── Feature Business Logic ──────────────────────────────────────
+    let lux_threshold = _platform_config.vehicle_line.auto_headlamp_lux_threshold;
+
+    // ManualLighting — switch-driven low/high/DRL/parking/license outputs via LowBeam arbiter.
+    tokio::spawn(
+        ManualLighting::new(Arc::clone(&low_beam_arb), Arc::clone(&bus), lux_threshold).run(),
+    );
+
+    // FollowMeHome — activates low beam 45 s after ignition-off door open (dark only).
+    tokio::spawn(
+        FollowMeHome::new(Arc::clone(&low_beam_arb), Arc::clone(&bus), lux_threshold).run(),
+    );
+
     // HazardLighting — no ignition gate, works in any power state
     tokio::spawn(HazardLighting::new(Arc::clone(&lighting_arb), Arc::clone(&bus)).run());
 
@@ -125,10 +149,21 @@ async fn main() -> anyhow::Result<()> {
     // ThumbPadLock — Row 1 outside handle thumb pad, 500 ms debounce.
     tokio::spawn(ThumbPadLock::new(Arc::clone(&bus), Arc::clone(&door_lock_arb)).run());
 
+    // AutoHighBeam — ADAS camera suppresses high beam when oncoming vehicle detected.
+    // Claims Beam.High.IsOn at High priority with Bool(false), overriding ManualLighting's
+    // Medium-priority claim. Releases when path is clear so manual high beam resumes.
+    tokio::spawn(AutoHighBeam::new(Arc::clone(&low_beam_arb), Arc::clone(&bus)).run());
+
+    // BrakeReverseLamps — pedal-driven stop lights, gear-driven backup lights.
+    tokio::spawn(BrakeReverseLamps::new(Arc::clone(&bus)).run());
+
+    // FogLamps — front and rear fog lamps, ignition-gated switch pass-through.
+    tokio::spawn(FogLamps::new(Arc::clone(&bus)).run());
+
     // TODO: remaining features
     // tokio::spawn(AutoRelock::from_config(Arc::clone(&door_lock_arb), Arc::clone(&bus), &_platform_config).run());
 
-    tracing::info!("features spawned: HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock");
+    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock");
 
     // ── Plant Models ────────────────────────────────────────────────
     // Simulate physical lamp behavior the M7 / smart actuator firmware
@@ -171,8 +206,36 @@ async fn main() -> anyhow::Result<()> {
     let kuksa = kuksa_sync::KuksaSync::new(&kuksa_endpoint, Arc::clone(&bus));
     tokio::spawn(async move { kuksa.run().await });
 
-    tracing::info!("vss-bridge ready — open vss-hmi-body-sensors.html in a browser");
-    tracing::info!("  WebSocket: ws://localhost:8080");
+    // ── Static HTTP server for HMI files ───────────────────────────
+    // Serves the repo root (HTML files) on port 3000 so the browser
+    // can open http://localhost:3000/vss-hmi-body-sensors.html instead
+    // of a file:// URL (which has CORS and caching quirks).
+    // Port is overridable via VSS_BRIDGE_HTTP_PORT.
+    let http_port: u16 = std::env::var("VSS_BRIDGE_HTTP_PORT")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(3000);
+    // Serve the directory one level above the vss-bridge crate (the repo root).
+    let hmi_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("repo root")
+        .to_path_buf();
+    let http_app = Router::new()
+        .nest_service("/", ServeDir::new(hmi_root))
+        .layer(SetResponseHeaderLayer::overriding(
+            axum::http::header::CACHE_CONTROL,
+            axum::http::HeaderValue::from_static("no-store"),
+        ));
+    let http_listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{http_port}")).await?;
+    tokio::spawn(async move {
+        if let Err(e) = axum::serve(http_listener, http_app).await {
+            tracing::error!(error = %e, "HTTP file server failed");
+        }
+    });
+
+    tracing::info!("vss-bridge ready");
+    tracing::info!("  HMI:             http://localhost:{http_port}/vss-hmi.html");
+    tracing::info!("  WebSocket:       ws://localhost:8080");
     tracing::info!("  Press Ctrl+C to stop");
 
     tokio::signal::ctrl_c().await?;
