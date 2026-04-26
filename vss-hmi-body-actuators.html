@@ -415,6 +415,10 @@ function TopView({s, set}){
       <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
         <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#0a1420" strokeWidth="0.5"/>
       </pattern>
+      <filter id="backupGlow" x="-40%" y="-40%" width="180%" height="180%">
+        <feGaussianBlur stdDeviation="3" result="blur"/>
+        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
     </defs>
     <rect width="360" height="700" fill="url(#grid)" opacity="0.1"/>
 
@@ -438,26 +442,35 @@ function TopView({s, set}){
     <rect x="70" y="40" width="220" height="40" fill="#09111E" stroke="#182030" strokeWidth="0.5"/>
 
     {/* Headlights - left */}
-    <rect x="70" y="45" width="30" height="28" rx="3" fill={hlc} opacity={hlo/1.5}/>
-    <text x="85" y="65" textAnchor="middle" fill={hlc} fontSize="10" fontWeight="bold" opacity={hlo}>{lo?'●':'○'}</text>
-
+    <g><title>{`Left headlight — ${hi?'HIGH BEAM':lo?'LOW BEAM':drl?'DRL':park?'PARKING':'off'}`}</title>
+      <rect x="70" y="45" width="30" height="28" rx="3" fill={hlc} opacity={hlo/1.5}/>
+      <text x="85" y="65" textAnchor="middle" fill={hlc} fontSize="10" fontWeight="bold" opacity={hlo}>{lo?'●':'○'}</text>
+    </g>
     {/* Headlights - right */}
-    <rect x="260" y="45" width="30" height="28" rx="3" fill={hlc} opacity={hlo/1.5}/>
-    <text x="275" y="65" textAnchor="middle" fill={hlc} fontSize="10" fontWeight="bold" opacity={hlo}>{lo?'●':'○'}</text>
+    <g><title>{`Right headlight — ${hi?'HIGH BEAM':lo?'LOW BEAM':drl?'DRL':park?'PARKING':'off'}`}</title>
+      <rect x="260" y="45" width="30" height="28" rx="3" fill={hlc} opacity={hlo/1.5}/>
+      <text x="275" y="65" textAnchor="middle" fill={hlc} fontSize="10" fontWeight="bold" opacity={hlo}>{lo?'●':'○'}</text>
+    </g>
 
     {/* Turn indicators - left */}
-    <rect x="65" y="75" width="32" height="10" rx="2" fill={li?'#F59E0B':'#1A1208'} opacity={li?1:.25}/>
-
+    <rect x="65" y="75" width="32" height="10" rx="2" fill={li?'#F59E0B':'#1A1208'} opacity={li?1:.25}>
+      <title>{li?'Left front turn indicator — signaling':'Left front turn indicator — off'}</title>
+    </rect>
     {/* Turn indicators - right */}
-    <rect x="263" y="75" width="32" height="10" rx="2" fill={ri?'#F59E0B':'#1A1208'} opacity={ri?1:.25}/>
+    <rect x="263" y="75" width="32" height="10" rx="2" fill={ri?'#F59E0B':'#1A1208'} opacity={ri?1:.25}>
+      <title>{ri?'Right front turn indicator — signaling':'Right front turn indicator — off'}</title>
+    </rect>
 
     {/* Front fog lights - left */}
-    <rect x="75" y="88" width="20" height="8" rx="2" fill={ffog?'#BAD6FE':'#0A1420'} opacity={ffog?0.85:.25}/>
-    <text x="85" y="95" textAnchor="middle" fill={ffog?'#BAD6FE':'#1C3050'} fontSize="7" fontWeight="bold" opacity={ffog?1:.3}>●</text>
-
+    <g><title>{ffog?'Left front fog — on':'Left front fog — off'}</title>
+      <rect x="75" y="88" width="20" height="8" rx="2" fill={ffog?'#BAD6FE':'#0A1420'} opacity={ffog?0.85:.25}/>
+      <text x="85" y="95" textAnchor="middle" fill={ffog?'#BAD6FE':'#1C3050'} fontSize="7" fontWeight="bold" opacity={ffog?1:.3}>●</text>
+    </g>
     {/* Front fog lights - right */}
-    <rect x="265" y="88" width="20" height="8" rx="2" fill={ffog?'#BAD6FE':'#0A1420'} opacity={ffog?0.85:.25}/>
-    <text x="275" y="95" textAnchor="middle" fill={ffog?'#BAD6FE':'#1C3050'} fontSize="7" fontWeight="bold" opacity={ffog?1:.3}>●</text>
+    <g><title>{ffog?'Right front fog — on':'Right front fog — off'}</title>
+      <rect x="265" y="88" width="20" height="8" rx="2" fill={ffog?'#BAD6FE':'#0A1420'} opacity={ffog?0.85:.25}/>
+      <text x="275" y="95" textAnchor="middle" fill={ffog?'#BAD6FE':'#1C3050'} fontSize="7" fontWeight="bold" opacity={ffog?1:.3}>●</text>
+    </g>
     <circle cx="65" cy="35" r="4" fill={park?'#F59E0B':'#1A1208'} opacity={park?0.9:.3}/>
     <circle cx="295" cy="35" r="4" fill={park?'#F59E0B':'#1A1208'} opacity={park?0.9:.3}/>
 
@@ -483,7 +496,9 @@ function TopView({s, set}){
       return <g key={pfx}>
         {/* Door body */}
         <rect x={rx} y={ry} width={rw} height={rh}
-          fill="#0E1825" stroke={open?'#F59E0B':'#1A2838'} strokeWidth={open?2:1} rx="2"
+          fill="#0E1825"
+          stroke={open?'#F59E0B':dblLock?'rgba(168,85,247,0.5)':locked?'rgba(239,68,68,0.4)':'#1A2838'}
+          strokeWidth={open?2:1} rx="2"
           style={{cursor: open?'pointer':'default'}}
           onClick={open ? ()=>set(pfx+'.CloseCmd',true) : undefined}/>
         <rect x={rx+2} y={ry+2} width={rw-4} height={rh-4} fill="#08111f"/>
@@ -494,30 +509,38 @@ function TopView({s, set}){
           <text x={cx} y={ry+rh+12} textAnchor="middle" fill="#F59E0B" fontSize="6" fontWeight="bold">▣ TAP DOOR</text>
         </>}
 
-        {/* Outside handle — left side: near outer edge */}
+        {/* Outside handle */}
         <rect x={hOutX} y={hY-4} width="6" height="8" rx="1"
-          fill={outPulled?'#38BDF8': dblLock?'#4B2020': locked?'#3A2A0A':'#1E4060'}
-          stroke={outPulled?'#7DD3FC':'#2A5070'} strokeWidth="0.5"
-          style={{cursor: dblLock?'not-allowed':'pointer'}}
-          onMouseDown={dblLock||locked ? undefined : ()=>set(pfx+'.Handle.Outside.IsPulled',true)}
-          onMouseUp  ={dblLock||locked ? undefined : ()=>set(pfx+'.Handle.Outside.IsPulled',false)}
-          onMouseLeave={dblLock||locked? undefined : ()=>set(pfx+'.Handle.Outside.IsPulled',false)}/>
+          fill={open?'#0DC8C8':outPulled?'#38BDF8':dblLock?'#4B2020':locked?'#3A2A0A':'#1E4060'}
+          stroke={open?'#0DC8C8':outPulled?'#7DD3FC':'#2A5070'} strokeWidth="0.5"
+          style={{cursor: open||(!dblLock&&!locked)?'pointer':dblLock?'not-allowed':'default'}}
+          onClick={open?()=>set(pfx+'.CloseCmd',true):undefined}
+          onMouseDown={open||dblLock||locked?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',true)}
+          onMouseUp  ={open||dblLock||locked?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',false)}
+          onMouseLeave={open||dblLock||locked?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',false)}>
+          <title>{open?'Outside handle — click to close door':dblLock?'Outside handle — double-locked':locked?'Outside handle — locked':'Outside handle — pull to open'}</title>
+        </rect>
 
-        {/* Inside handle — near inner edge */}
+        {/* Inside handle */}
         <rect x={hInX} y={hY-4} width="6" height="8" rx="1"
-          fill={inPulled?'#34D399': dblLock?'#4B2020':'#1E3A28'}
-          stroke={inPulled?'#6EE7B7':'#2A5040'} strokeWidth="0.5"
-          style={{cursor: dblLock?'not-allowed':'pointer'}}
-          onMouseDown={dblLock ? undefined : ()=>set(pfx+'.Handle.Inside.IsPulled',true)}
-          onMouseUp  ={dblLock ? undefined : ()=>set(pfx+'.Handle.Inside.IsPulled',false)}
-          onMouseLeave={dblLock ? undefined : ()=>set(pfx+'.Handle.Inside.IsPulled',false)}/>
+          fill={open?'#0DC8C8':inPulled?'#34D399':dblLock?'#4B2020':'#1E3A28'}
+          stroke={open?'#0DC8C8':inPulled?'#6EE7B7':'#2A5040'} strokeWidth="0.5"
+          style={{cursor: open||!dblLock?'pointer':dblLock?'not-allowed':'default'}}
+          onClick={open?()=>set(pfx+'.CloseCmd',true):undefined}
+          onMouseDown={open||dblLock?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',true)}
+          onMouseUp  ={open||dblLock?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',false)}
+          onMouseLeave={open||dblLock?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',false)}>
+          <title>{open?'Inside handle — click to close door':dblLock?'Inside handle — double-locked':'Inside handle — pull to open'}</title>
+        </rect>
 
-        {/* Soldier knob — all doors have interior lock knob; double-lock blocks it */}
-        <circle cx={soldX} cy={soldY} r="3.5"
-          fill={locked?'#7F1D1D': dblLock?'#581C87':'#1A3A28'}
-          stroke={locked?'#EF4444': dblLock?'#A855F7':'#22C55E'} strokeWidth="0.8"
+        {/* Soldier sill pin — double-lock blocks it */}
+        <rect x={soldX-3} y={soldY-5} width="6" height="10" rx="1"
+          fill={dblLock?'#581C87':locked?'#7F1D1D':'#1A3A28'}
+          stroke={dblLock?'#A855F7':locked?'#EF4444':'#22C55E'} strokeWidth="0.8"
           style={{cursor: dblLock?'not-allowed':'pointer'}}
-          onClick={dblLock ? undefined : ()=>set(pfx+'.Soldier.IsUnlocked', locked)}/>
+          onClick={dblLock?undefined:()=>set(pfx+'.Soldier.IsUnlocked',locked)}>
+          <title>{dblLock?'Sill pin — double-locked, release via RKE first':locked?'Sill pin — locked · click to unlock':'Sill pin — unlocked · click to lock'}</title>
+        </rect>
 
         {/* Latch indicator (small notch on door edge) */}
         <rect x={isLeft ? rx : rx+rw-3} y={ry+Math.floor(rh*0.6)} width="3" height="6" rx="1"
@@ -558,32 +581,50 @@ function TopView({s, set}){
     <text x="180" y="582" textAnchor="middle" fill={lp?'#FFF8DC':'#666'} fontSize="5" fontWeight="bold" opacity={lp?1:.3}>LICENSE</text>
 
     {/* Taillights - left */}
-    <rect x="70" y="568" width="35" height="10" rx="2" fill={tlc} opacity={tlo}/>
-    <text x="87" y="576" textAnchor="middle" fill={brake?'#fff':tlc} fontSize="8" fontWeight="bold" opacity={tlo}>{brake?'●':'○'}</text>
-
+    <g><title>{brake?'Left taillight — brake active':lo||hi||park?'Left taillight — tail on':'Left taillight — off'}</title>
+      <rect x="70" y="568" width="35" height="10" rx="2" fill={tlc} opacity={tlo}/>
+      <text x="87" y="576" textAnchor="middle" fill={brake?'#fff':tlc} fontSize="8" fontWeight="bold" opacity={tlo}>{brake?'●':'○'}</text>
+    </g>
     {/* Taillights - right */}
-    <rect x="255" y="568" width="35" height="10" rx="2" fill={tlc} opacity={tlo}/>
-    <text x="272" y="576" textAnchor="middle" fill={brake?'#fff':tlc} fontSize="8" fontWeight="bold" opacity={tlo}>{brake?'●':'○'}</text>
+    <g><title>{brake?'Right taillight — brake active':lo||hi||park?'Right taillight — tail on':'Right taillight — off'}</title>
+      <rect x="255" y="568" width="35" height="10" rx="2" fill={tlc} opacity={tlo}/>
+      <text x="272" y="576" textAnchor="middle" fill={brake?'#fff':tlc} fontSize="8" fontWeight="bold" opacity={tlo}>{brake?'●':'○'}</text>
+    </g>
 
-    {/* Backup/Reverse lights - left (white) */}
-    {back&&<rect x="70" y="555" width="35" height="8" rx="2" fill="#FFFFFF" opacity="0.8"/>}
-    {back&&<text x="87" y="562" textAnchor="middle" fill="#FFFFFF" fontSize="9" fontWeight="bold">●</text>}
-
-    {/* Backup/Reverse lights - right (white) */}
-    {back&&<rect x="255" y="555" width="35" height="8" rx="2" fill="#FFFFFF" opacity="0.8"/>}
-    {back&&<text x="272" y="562" textAnchor="middle" fill="#FFFFFF" fontSize="9" fontWeight="bold">●</text>}
+    {/* Backup / reverse lights — always-visible housing */}
+    <g opacity={back?1:0.8} filter={back?'url(#backupGlow)':undefined}>
+      <title>{back?'Left backup / reverse light — ACTIVE (reversing)':'Left backup / reverse light — off'}</title>
+      <rect x="70" y="555" width="35" height="8" rx="2"
+        fill={back?'#F0F8FF':'#2A4A6A'} stroke={back?'#FFFFFF':'#4A7AA0'} strokeWidth="1.2"/>
+      <text x="87" y="562" textAnchor="middle" fontSize="6" fontWeight="bold"
+        fill={back?'#001830':'#7AB0D0'} fontFamily="monospace">R</text>
+    </g>
+    <g opacity={back?1:0.8} filter={back?'url(#backupGlow)':undefined}>
+      <title>{back?'Right backup / reverse light — ACTIVE (reversing)':'Right backup / reverse light — off'}</title>
+      <rect x="255" y="555" width="35" height="8" rx="2"
+        fill={back?'#F0F8FF':'#2A4A6A'} stroke={back?'#FFFFFF':'#4A7AA0'} strokeWidth="1.2"/>
+      <text x="272" y="562" textAnchor="middle" fontSize="6" fontWeight="bold"
+        fill={back?'#001830':'#7AB0D0'} fontFamily="monospace">R</text>
+    </g>
 
     {/* Rear turn indicators */}
-    <rect x="65" y="580" width="32" height="8" rx="2" fill={li?'#F59E0B':'#1A1208'} opacity={li?1:.25}/>
-    <rect x="263" y="580" width="32" height="8" rx="2" fill={ri?'#F59E0B':'#1A1208'} opacity={ri?1:.25}/>
+    <rect x="65" y="580" width="32" height="8" rx="2" fill={li?'#F59E0B':'#1A1208'} opacity={li?1:.25}>
+      <title>{li?'Left rear turn indicator — signaling':'Left rear turn indicator — off'}</title>
+    </rect>
+    <rect x="263" y="580" width="32" height="8" rx="2" fill={ri?'#F59E0B':'#1A1208'} opacity={ri?1:.25}>
+      <title>{ri?'Right rear turn indicator — signaling':'Right rear turn indicator — off'}</title>
+    </rect>
 
     {/* Rear fog lights (red) - left */}
-    <rect x="120" y="568" width="20" height="10" rx="2" fill={rfog?'#CC0000':'#1A0808'} opacity={rfog?0.9:.25}/>
-    <text x="130" y="576" textAnchor="middle" fill={rfog?'#FF4444':'#1A0808'} fontSize="8" fontWeight="bold" opacity={rfog?1:.3}>●</text>
-
+    <g><title>{rfog?'Left rear fog — on':'Left rear fog — off'}</title>
+      <rect x="120" y="568" width="20" height="10" rx="2" fill={rfog?'#CC0000':'#1A0808'} opacity={rfog?0.9:.25}/>
+      <text x="130" y="576" textAnchor="middle" fill={rfog?'#FF4444':'#1A0808'} fontSize="8" fontWeight="bold" opacity={rfog?1:.3}>●</text>
+    </g>
     {/* Rear fog lights (red) - right */}
-    <rect x="220" y="568" width="20" height="10" rx="2" fill={rfog?'#CC0000':'#1A0808'} opacity={rfog?0.9:.25}/>
-    <text x="230" y="576" textAnchor="middle" fill={rfog?'#FF4444':'#1A0808'} fontSize="8" fontWeight="bold" opacity={rfog?1:.3}>●</text>
+    <g><title>{rfog?'Right rear fog — on':'Right rear fog — off'}</title>
+      <rect x="220" y="568" width="20" height="10" rx="2" fill={rfog?'#CC0000':'#1A0808'} opacity={rfog?0.9:.25}/>
+      <text x="230" y="576" textAnchor="middle" fill={rfog?'#FF4444':'#1A0808'} fontSize="8" fontWeight="bold" opacity={rfog?1:.3}>●</text>
+    </g>
     <circle cx="65" cy="595" r="4" fill={park?'#F59E0B':'#1A1208'} opacity={park?0.9:.3}/>
     <circle cx="295" cy="595" r="4" fill={park?'#F59E0B':'#1A1208'} opacity={park?0.9:.3}/>
 
@@ -603,9 +644,21 @@ function TopView({s, set}){
     {spokes(265,630,7,14)}
 
     {/* Mirrors */}
-    {!mlf?<circle cx="50" cy="200" r="6" fill="#0F1A28" stroke="#1A2838" strokeWidth="0.5" opacity=".8"/>
+    {!mlf
+      ?<g><title>Left side mirror</title>
+        <circle cx="50" cy="200" r="6" fill="#0F1A28" stroke="#1A2838" strokeWidth="0.5" opacity=".8"/>
+        <rect x="44" y="202" width="5" height="4" rx="1" fill={li?'#F59E0B':'#1A1208'} opacity={li?.95:.28}>
+          <title>{li?'Left mirror turn indicator — signaling':'Left mirror turn indicator — off'}</title>
+        </rect>
+      </g>
       :<circle cx="50" cy="200" r="3" fill="#0F1A28"/>}
-    {!mrf?<circle cx="310" cy="200" r="6" fill="#0F1A28" stroke="#1A2838" strokeWidth="0.5" opacity=".8"/>
+    {!mrf
+      ?<g><title>Right side mirror</title>
+        <circle cx="310" cy="200" r="6" fill="#0F1A28" stroke="#1A2838" strokeWidth="0.5" opacity=".8"/>
+        <rect x="311" y="202" width="5" height="4" rx="1" fill={ri?'#F59E0B':'#1A1208'} opacity={ri?.95:.28}>
+          <title>{ri?'Right mirror turn indicator — signaling':'Right mirror turn indicator — off'}</title>
+        </rect>
+      </g>
       :<circle cx="310" cy="200" r="3" fill="#0F1A28"/>}
 
     {s['Body.Mirrors.Left.IsHeatingOn']&&<circle cx="50" cy="200" r="7" fill="none" stroke="#FF4040" strokeWidth="1" opacity=".6" className="pulse"/>}
@@ -644,6 +697,12 @@ function SideView({s}){
   });
 
   return <svg viewBox="0 0 1000 450" style={{width:'100%',maxWidth:'1000px'}}>
+    <defs>
+      <filter id="backupGlowSide" x="-40%" y="-40%" width="180%" height="180%">
+        <feGaussianBlur stdDeviation="3" result="blur"/>
+        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+    </defs>
     {/* Ground */}
     <line x1="20" y1="400" x2="980" y2="400" stroke="#182030" strokeWidth="2" opacity=".5"/>
     <ellipse cx="500" cy="415" rx="450" ry="12" fill="#000" opacity=".15"/>
@@ -705,37 +764,59 @@ function SideView({s}){
     <path d="M 880,320 L 900,250 L 920,320 Z" fill="#0D1628" stroke="#182030" strokeWidth="1"/>
 
     {/* HEADLIGHT - Left */}
-    <ellipse cx="130" cy="200" rx="18" ry="28" fill={hlc} opacity={hlo*0.75}/>
-    <circle cx="130" cy="210" r="8" fill={hlc} opacity={hlo*1.4}/>
-    <text x="130" y="214" textAnchor="middle" fill="#fff" fontSize="8" fontWeight="bold" opacity={hlo}>{lo?'●':'○'}</text>
+    <g><title>{`Headlight — ${hi?'HIGH BEAM':lo?'LOW BEAM':drl?'DRL':park?'PARKING':'off'}`}</title>
+      <ellipse cx="130" cy="200" rx={hi?30:18} ry={hi?14:28} fill={hlc} opacity={hlo*0.75}/>
+      <circle cx={hi?118:130} cy="200" r={hi?10:8} fill={hlc} opacity={hlo*1.4}/>
+      {hi&&<g stroke="#FFFFFF" strokeLinecap="round" opacity="0.35">
+        <line x1="100" y1="185" x2="48" y2="162" strokeWidth="1.5"/>
+        <line x1="100" y1="200" x2="40" y2="200" strokeWidth="2"/>
+        <line x1="100" y1="215" x2="48" y2="238" strokeWidth="1.5"/>
+      </g>}
+    </g>
 
     {/* Front indicators/turn signal */}
-    <rect x="110" y="240" width="28" height="14" rx="2" fill={li?'#F59E0B':'#1A1208'} opacity={li?0.95:.25}/>
-
+    <rect x="110" y="240" width="28" height="14" rx="2" fill={li?'#F59E0B':'#1A1208'} opacity={li?0.95:.25}>
+      <title>{li?'Front turn indicator — signaling':'Front turn indicator — off'}</title>
+    </rect>
     {/* Front fog */}
-    {ffog&&<rect x="110" y="260" width="28" height="12" rx="2" fill="#BAD6FE" opacity=".88"/>}
+    {ffog&&<rect x="110" y="260" width="28" height="12" rx="2" fill="#BAD6FE" opacity=".88">
+      <title>Front fog lamp — on</title>
+    </rect>}
 
     {/* TAILLIGHT - Right */}
-    <ellipse cx="870" cy="200" rx="18" ry="28" fill={tlc} opacity={tlo}/>
-    <circle cx="870" cy="210" r="8" fill={tlc} opacity={tlo*1.4}/>
-    <text x="870" y="214" textAnchor="middle" fill="#fff" fontSize="8" fontWeight="bold" opacity={tlo}>{brake?'●':'○'}</text>
+    <g><title>{brake?'Taillight — brake active':lo||hi||park?'Taillight — tail on':'Taillight — off'}</title>
+      <ellipse cx="870" cy="200" rx="18" ry="28" fill={tlc} opacity={tlo}/>
+      <circle cx="870" cy="210" r="8" fill={tlc} opacity={tlo*1.4}/>
+    </g>
 
     {/* Rear turn indicator */}
-    <rect x="862" y="240" width="28" height="14" rx="2" fill={li?'#F59E0B':'#1A1208'} opacity={li?0.95:.25}/>
-
+    <rect x="862" y="240" width="28" height="14" rx="2" fill={li?'#F59E0B':'#1A1208'} opacity={li?0.95:.25}>
+      <title>{li?'Rear turn indicator — signaling':'Rear turn indicator — off'}</title>
+    </rect>
     {/* Rear fog */}
-    {rfog&&<rect x="862" y="260" width="28" height="12" rx="2" fill="#EF2020" opacity=".88"/>}
-
-    {/* Reverse */}
-    {back&&<rect x="862" y="280" width="28" height="10" rx="2" fill="#FFFFFF" opacity=".82"/>}
+    {rfog&&<rect x="862" y="260" width="28" height="12" rx="2" fill="#EF2020" opacity=".88">
+      <title>Rear fog lamp — on</title>
+    </rect>}
+    {/* Backup / reverse light — always-visible housing */}
+    <g opacity={back?1:0.8} filter={back?'url(#backupGlowSide)':undefined}>
+      <title>{back?'Backup / reverse light — ACTIVE (reversing)':'Backup / reverse light — off'}</title>
+      <rect x="860" y="278" width="32" height="14" rx="2"
+        fill={back?'#F0F8FF':'#2A4A6A'} stroke={back?'#FFFFFF':'#4A7AA0'} strokeWidth="1.2"/>
+      <text x="876" y="288" textAnchor="middle" fontSize="7" fontWeight="bold"
+        fill={back?'#001830':'#7AB0D0'} fontFamily="monospace">REV</text>
+    </g>
 
     {/* License plate light */}
     {lp&&<rect x="862" y="298" width="28" height="8" rx="2" fill="#FFF8DC" opacity=".85"/>}
 
     {/* MIRRORS */}
     {!mlf?<g>
+      <title>Left side mirror</title>
       <ellipse cx="75" cy="210" rx="12" ry="18" fill="#0F1A28" stroke="#1A2838" strokeWidth="1"/>
       <ellipse cx="77" cy="213" rx="8" ry="13" fill="#18304A" opacity=".7"/>
+      <rect x="65" y="224" width="20" height="5" rx="2" fill={li?'#F59E0B':'#1A1208'} opacity={li?.95:.25}>
+        <title>{li?'Mirror turn indicator — signaling':'Mirror turn indicator — off'}</title>
+      </rect>
     </g>
     :<circle cx="78" cy="210" r="5" fill="#0F1A28"/>}
     {s['Body.Mirrors.Left.IsHeatingOn']&&<circle cx="75" cy="210" r="16" fill="none" stroke="#FF4040" strokeWidth="1.2" opacity=".7" className="pulse"/>}
