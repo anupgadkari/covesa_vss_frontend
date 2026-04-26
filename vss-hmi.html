@@ -41,10 +41,6 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--white);fo
 .vbtn:hover{background:var(--s2);color:var(--white)}
 .vbtn.active{background:var(--amber2);border-color:rgba(245,158,11,.35);color:var(--amber)}
 .vbtn svg{width:20px;height:20px;stroke-width:1.5}
-.sbsep{width:40px;height:1px;background:var(--bdr);margin:8px 0}
-.sbi{width:64px;display:flex;flex-direction:column;align-items:center;gap:3px;padding:5px 0}
-.sbd{width:8px;height:8px;border-radius:50%;transition:all .25s}
-.sbl{font-family:var(--fm);font-size:9px;color:var(--muted);transition:color .25s;font-weight:600}
 .canvas{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg)}
 .ctbar{height:32px;background:var(--s1);border-bottom:1px solid var(--bdr);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0}
 .ctlabel{font-family:var(--fd);font-size:11px;letter-spacing:.14em;color:var(--white);font-weight:500}
@@ -1109,17 +1105,8 @@ function DevicePanel({s, set, sel, setSel}){
   </div>;
 }
 
-function ControlPanel({s,set}){
-  const anyDoor=['Row1.Left','Row1.Right','Row2.Left','Row2.Right'].some(d=>s[`Body.Doors.${d}.IsOpen`]);
-  const anyLight=Object.keys(s).some(k=>k.startsWith('Body.Lights')&&s[k]===true);
-  const lux=s['Body.Lights.AmbientLightSensor.Illuminance']??10000;
-
-  return <div className="cp">
-    <div className="cphdr">
-      <div style={{width:7,height:7,borderRadius:2,background:'var(--amber)',opacity:.5}}/>
-      <span className="cptitle">VSS SIGNAL CONTROL</span>
-    </div>
-    <div className="cpscroll">
+function ControlPanelContent({s,set,anyDoor,anyLight,lux}){
+  return <>
 
       <SG title="Vehicle Power" vss="Vehicle" def={true}>
         <EnumR label="Power Mode" k="Vehicle.LowVoltageSystemState" s={s} set={set}
@@ -1328,15 +1315,33 @@ function ControlPanel({s,set}){
         ))}
       </SG>
 
+  </>;
+}
+
+function ControlPanel({s,set,inline=false}){
+  const anyDoor=['Row1.Left','Row1.Right','Row2.Left','Row2.Right'].some(d=>s[`Body.Doors.${d}.IsOpen`]);
+  const anyLight=Object.keys(s).some(k=>k.startsWith('Body.Lights')&&s[k]===true);
+  const lux=s['Body.Lights.AmbientLightSensor.Illuminance']??10000;
+  if(inline) return <div style={{flex:1,overflowY:'auto',padding:'16px 20px',scrollbarWidth:'thin',scrollbarColor:'var(--bdr2) transparent'}}>
+    <ControlPanelContent s={s} set={set} anyDoor={anyDoor} anyLight={anyLight} lux={lux}/>
+  </div>;
+  return <div className="cp">
+    <div className="cphdr">
+      <div style={{width:7,height:7,borderRadius:2,background:'var(--amber)',opacity:.5}}/>
+      <span className="cptitle">VSS SIGNAL CONTROL</span>
+    </div>
+    <div className="cpscroll">
+      <ControlPanelContent s={s} set={set} anyDoor={anyDoor} anyLight={anyLight} lux={lux}/>
     </div>
   </div>;
 }
 
 /* ══════ APP ══════ */
 const VIEWS=[
-  {id:'top',    label:'TOP / PEPS', icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="5" y="3" width="14" height="18" rx="3"/><line x1="5" y1="9" x2="19" y2="9"/><line x1="5" y1="15" x2="19" y2="15"/></svg>},
-  {id:'side',   label:'SIDE',       icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3,16 L6,8 L8,5 L18,5 L21,8 L21,16 Z"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg>},
-  {id:'cockpit',label:'COCKPIT',    icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/><circle cx="12" cy="12" r="2"/></svg>},
+  {id:'top',    label:'TOP',    icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="5" y="3" width="14" height="18" rx="3"/><line x1="5" y1="9" x2="19" y2="9"/><line x1="5" y1="15" x2="19" y2="15"/></svg>},
+  {id:'side',   label:'SIDE',   icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3,16 L6,8 L8,5 L18,5 L21,8 L21,16 Z"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg>},
+  {id:'cockpit',label:'DASH',   icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/><circle cx="12" cy="12" r="2"/></svg>},
+  {id:'config', label:'CONFIG', icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg>},
 ];
 
 function App(){
@@ -1409,26 +1414,8 @@ function App(){
       <div className="sb">
         {VIEWS.map(v=>(
           <button key={v.id} className={`vbtn ${view===v.id?'active':''}`} onClick={()=>setView(v.id)}>
-            {v.icon}{v.label.split(' ')[0]}
+            {v.icon}{v.label}
           </button>
-        ))}
-        <div className="sbsep"/>
-        {[
-          {k:'Body.Lights.Hazard.IsSignaling',  c:'var(--amber)',l:'HAZ'},
-          {k:'Body.Lights.Parking.IsOn',        c:'var(--amber)',l:'PARK'},
-          {k:'Body.Lights.Beam.Low.IsOn',       c:'var(--amber)',l:'LO'},
-          {k:'Body.Lights.Beam.High.IsOn',      c:'var(--blue)',  l:'HI'},
-          {k:'Body.Lights.Fog.Front.IsOn',      c:'#BAD6FE',      l:'FFG'},
-          {k:'Body.Lights.Fog.Rear.IsOn',       c:'var(--red)',   l:'RFG'},
-          {k:'Body.Lights.Brake.IsActive',      c:'var(--red)',   l:'BRK'},
-          {k:'Body.Lights.Backup.IsActive',     c:'#E0E0E0',      l:'REV'},
-          {k:'Body.Lights.LicensePlate.IsOn',   c:'#E0E0E0',      l:'LP'},
-          {k:'Body.Horn.IsActive',              c:'var(--red)',   l:'HRN'},
-        ].map(({k,c,l})=>(
-          <div key={k} className="sbi">
-            <div className="sbd" style={{background:s[k]?c:'var(--muted)',boxShadow:s[k]?`0 0 8px ${c}`:''}}/>
-            <span className="sbl" style={{color:s[k]?c:''}}>{l}</span>
-          </div>
         ))}
       </div>
 
@@ -1438,10 +1425,11 @@ function App(){
           <span className="ctlabel"><b>VSS</b> · {viewLabel}</span>
           <span className="ctright">NXP S32G2 · BODY DOMAIN · QM+ASIL-B</span>
         </div>
-        <div className="svgwrap">
+        <div className={view==='config'?'':' svgwrap'} style={view==='config'?{flex:1,display:'flex',minHeight:0}:{}}>
           {view==='top'     &&<CombinedView s={s} set={set} onDeviceSelect={setSelDev}/>}
           {view==='side'    &&<SideView s={s}/>}
           {view==='cockpit' &&<CockpitView s={s} set={set}/>}
+          {view==='config'  &&<ControlPanel s={s} set={set} inline={true}/>}
         </div>
         <div className="stbar">
           {[
@@ -1463,8 +1451,8 @@ function App(){
         </div>
       </div>
 
-      <DevicePanel s={s} set={set} sel={selDev} setSel={setSelDev}/>
-      <ControlPanel s={s} set={set}/>
+      {view!=='config'&&<DevicePanel s={s} set={set} sel={selDev} setSel={setSelDev}/>}
+      {view!=='config'&&<ControlPanel s={s} set={set}/>}
     </div>
   </div>;
 }
