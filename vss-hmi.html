@@ -473,6 +473,10 @@ function CombinedView({s,set,onDeviceSelect}){
       <pattern id="cg" width="20" height="20" patternUnits="userSpaceOnUse">
         <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#0a1420" strokeWidth="0.5"/>
       </pattern>
+      <filter id="backupGlow" x="-40%" y="-40%" width="180%" height="180%">
+        <feGaussianBlur stdDeviation="3" result="blur"/>
+        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
     </defs>
     <rect x="-200" y="-60" width="760" height="840" fill="url(#cg)" opacity="0.07"/>
 
@@ -668,15 +672,21 @@ function CombinedView({s,set,onDeviceSelect}){
     <rect x="264" y="568" width="26" height="10" rx="2" fill={tlc} opacity={tlo}>
       <title>{brake?'Right taillight — brake active':lo||hi||park?'Right taillight — tail on':'Right taillight — off'}</title>
     </rect>
-    {/* Backup / reverse lights — in taillight band, inboard of taillights; stroke outline makes off-state visible */}
-    <rect x="98"  y="568" width="20" height="10" rx="2"
-      fill={back?'#FFFFFF':'#0E1624'} stroke={back?'#CCCCCC':'#2A3C54'} strokeWidth="0.8" opacity={back?0.9:0.85}>
-      <title>{back?'Left backup / reverse light — active':'Left backup / reverse light — off'}</title>
-    </rect>
-    <rect x="242" y="568" width="20" height="10" rx="2"
-      fill={back?'#FFFFFF':'#0E1624'} stroke={back?'#CCCCCC':'#2A3C54'} strokeWidth="0.8" opacity={back?0.9:0.85}>
-      <title>{back?'Right backup / reverse light — active':'Right backup / reverse light — off'}</title>
-    </rect>
+    {/* Backup / reverse lights — in taillight band, inboard of taillights */}
+    <g opacity={back?1:0.8} filter={back?'url(#backupGlow)':undefined}>
+      <title>{back?'Left backup / reverse light — ACTIVE (reversing)':'Left backup / reverse light — off'}</title>
+      <rect x="97" y="567" width="24" height="12" rx="2"
+        fill={back?'#F0F8FF':'#2A4A6A'} stroke={back?'#FFFFFF':'#4A7AA0'} strokeWidth="1.2"/>
+      <text x="109" y="576" textAnchor="middle" fontSize="6" fontWeight="bold"
+        fill={back?'#001830':'#7AB0D0'} fontFamily="monospace">R</text>
+    </g>
+    <g opacity={back?1:0.8} filter={back?'url(#backupGlow)':undefined}>
+      <title>{back?'Right backup / reverse light — ACTIVE (reversing)':'Right backup / reverse light — off'}</title>
+      <rect x="239" y="567" width="24" height="12" rx="2"
+        fill={back?'#F0F8FF':'#2A4A6A'} stroke={back?'#FFFFFF':'#4A7AA0'} strokeWidth="1.2"/>
+      <text x="251" y="576" textAnchor="middle" fontSize="6" fontWeight="bold"
+        fill={back?'#001830':'#7AB0D0'} fontFamily="monospace">R</text>
+    </g>
 
     {/* Rear turn */}
     <rect x="65"  y="580" width="32" height="8" rx="2" fill={li?'#F59E0B':'#1A1208'} opacity={li?1:.25}>
@@ -789,6 +799,12 @@ function SideView({s}){
     return <line key={a} x1={cx+16*Math.cos(r)} y1={cy+16*Math.sin(r)} x2={cx+31*Math.cos(r)} y2={cy+31*Math.sin(r)} stroke="#1E2A3C" strokeWidth="2.5" strokeLinecap="round"/>;
   });
   return <svg viewBox="0 0 1000 450" style={{width:'100%',maxWidth:'1000px'}}>
+    <defs>
+      <filter id="backupGlowSide" x="-40%" y="-40%" width="180%" height="180%">
+        <feGaussianBlur stdDeviation="3" result="blur"/>
+        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+    </defs>
     <line x1="20" y1="400" x2="980" y2="400" stroke="#182030" strokeWidth="2" opacity=".5"/>
     <path d="M 100,320 L 120,240 L 180,120 L 280,80 L 800,80 L 880,140 L 900,250 L 920,320 L 920,400 L 100,400 Z" fill="#0C1825" stroke="#1A2838" strokeWidth="2"/>
     <path d="M 180,120 L 280,80 L 290,240 L 200,250 Z" fill="#0F2840" stroke="#1E3A56" strokeWidth="1" opacity=".85"/>
@@ -829,10 +845,13 @@ function SideView({s}){
     {rfog&&<rect x="862" y="260" width="28" height="12" rx="2" fill="#EF2020" opacity=".88">
       <title>Rear fog lamp — on</title>
     </rect>}
-    <rect x="862" y="280" width="28" height="10" rx="2"
-      fill={back?'#FFFFFF':'#0E1624'} stroke={back?'#CCCCCC':'#2A3C54'} strokeWidth="0.8" opacity={back?0.88:0.85}>
-      <title>{back?'Backup / reverse light — active':'Backup / reverse light — off'}</title>
-    </rect>
+    <g opacity={back?1:0.8} filter={back?'url(#backupGlowSide)':undefined}>
+      <title>{back?'Backup / reverse light — ACTIVE (reversing)':'Backup / reverse light — off'}</title>
+      <rect x="860" y="278" width="32" height="14" rx="2"
+        fill={back?'#F0F8FF':'#2A4A6A'} stroke={back?'#FFFFFF':'#4A7AA0'} strokeWidth="1.2"/>
+      <text x="876" y="288" textAnchor="middle" fontSize="7" fontWeight="bold"
+        fill={back?'#001830':'#7AB0D0'} fontFamily="monospace">REV</text>
+    </g>
     {lp&&<rect x="862" y="298" width="28" height="8" rx="2" fill="#FFF8DC" opacity=".85">
       <title>License plate lamp — on</title>
     </rect>}
@@ -1160,7 +1179,7 @@ function ControlPanel({s,set}){
           <Tog val={s['Chassis.ParkingBrake.IsEngaged']} on={()=>set('Chassis.ParkingBrake.IsEngaged',!s['Chassis.ParkingBrake.IsEngaged'])} c="r"/>
         </div>
         <EnumR label="Gear" k="Powertrain.Transmission.CurrentGear" s={s} set={set}
-          opts={[-2,-1,0,1,2,3,4,5,6].map(String)}/>
+          opts={[-2,-1,0,1,2,3,4,5,6]}/>
       </SG>
 
       <SG title="ADAS" vss="Vehicle.ADAS">

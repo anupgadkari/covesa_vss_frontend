@@ -42,8 +42,14 @@ fn pedal_pressed(val: &SignalValue) -> bool {
 /// Negative gear value = reverse.
 /// Neutral (0) and forward gears (≥ 1) arrive as Uint8; reverse gears
 /// arrive as Int16 (negative) from ws_bridge's json_to_signal_value.
+/// Also handles String("-1") / String("-2") defensively in case a caller
+/// sends the value as a quoted number (e.g. legacy JSON clients).
 fn is_reverse(val: &SignalValue) -> bool {
-    matches!(val, SignalValue::Int16(g) if *g < 0)
+    match val {
+        SignalValue::Int16(g) => *g < 0,
+        SignalValue::String(s) => s.parse::<i64>().map(|n| n < 0).unwrap_or(false),
+        _ => false,
+    }
 }
 
 // ── Feature struct ─────────────────────────────────────────────────────────
