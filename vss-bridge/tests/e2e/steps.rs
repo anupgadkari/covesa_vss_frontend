@@ -15,6 +15,7 @@ use tokio::time::advance;
 use vss_bridge::adapters::mock::MockBus;
 use vss_bridge::arbiter::{self, DomainArbiter};
 use vss_bridge::features::hazard_lighting::HazardLighting;
+use vss_bridge::features::panic_alarm::PanicAlarm;
 use vss_bridge::features::turn_indicator::TurnIndicator;
 use vss_bridge::ipc_message::SignalValue;
 use vss_bridge::plant_models::blink_relay::BlinkRelay;
@@ -26,6 +27,13 @@ use vss_bridge::signal_bus::VssPath;
 
 const LEFT_SIGNALING: VssPath = "Body.Lights.DirectionIndicator.Left.IsSignaling";
 const RIGHT_SIGNALING: VssPath = "Body.Lights.DirectionIndicator.Right.IsSignaling";
+const HORN: VssPath = "Body.Horn.IsActive";
+const PANIC_SWITCH: VssPath = "Body.Switches.Panic.IsEngaged";
+const ALARM_STATUS: VssPath = "Vehicle.Body.Alarm.IsActive";
+
+// PanicAlarm pulse cadence — must mirror src/features/panic_alarm.rs.
+const PANIC_ON_MS: u64 = 400;
+const PANIC_OFF_MS: u64 = 600;
 
 // ---------------------------------------------------------------------------
 // World
@@ -74,14 +82,20 @@ impl VssWorld {
 
         let bus = Arc::new(MockBus::new());
         let (arb, arb_fut) = arbiter::lighting_arbiter(Arc::clone(&bus));
+        let (horn_arb, horn_fut) = arbiter::horn_arbiter(Arc::clone(&bus));
         self._tasks.push(tokio::spawn(arb_fut));
+        self._tasks.push(tokio::spawn(horn_fut));
         let arb = Arc::new(arb);
+        let horn_arb = Arc::new(horn_arb);
 
         self._tasks.push(tokio::spawn(
             TurnIndicator::new(Arc::clone(&arb), Arc::clone(&bus)).run(),
         ));
         self._tasks.push(tokio::spawn(
             HazardLighting::new(Arc::clone(&arb), Arc::clone(&bus)).run(),
+        ));
+        self._tasks.push(tokio::spawn(
+            PanicAlarm::new(Arc::clone(&arb), Arc::clone(&horn_arb), Arc::clone(&bus)).run(),
         ));
         self._tasks
             .push(tokio::spawn(BlinkRelay::new(Arc::clone(&bus)).run()));
@@ -527,3 +541,352 @@ async fn then_no_change(w: &mut VssWorld) {
 
 // Lock Feedback Then steps are also intentionally NOT defined here.
 // See note on When steps above.
+
+// ===========================================================================
+// Panic Alarm — Background, Given, When, Then steps
+// ===========================================================================
+
+// ---- Background ----
+// (The "Lighting domain arbiter is running" Given is shared above.)
+
+#[given("the Horn domain arbiter is running")]
+#[given("the PanicAlarm feature is running")]
+async fn panic_infrastructure(w: &mut VssWorld) {
+    w.ensure_started().await;
+}
+
+// ---- Given: panic switch state ----
+
+#[given("the panic switch is not engaged")]
+async fn given_panic_off(w: &mut VssWorld) {
+    w.ensure_started().await;
+    w.inject(PANIC_SWITCH, SignalValue::Bool(false)).await;
+}
+
+#[given("the panic switch is engaged")]
+async fn given_panic_on(w: &mut VssWorld) {
+    w.ensure_started().await;
+    w.inject(PANIC_SWITCH, SignalValue::Bool(true)).await;
+    // Settle into the first ON window so subsequent steps see active claims.
+    settle().await;
+}
+
+#[given("Vehicle.Body.Alarm.IsActive is TRUE")]
+async fn given_alarm_status_true(w: &mut VssWorld) {
+    settle().await;
+    assert_eq!(
+        w.current_value(ALARM_STATUS),
+        Some(SignalValue::Bool(true)),
+        "expected Vehicle.Body.Alarm.IsActive = TRUE as precondition"
+    );
+}
+
+#[given("both indicators and the horn are active under PanicAlarm")]
+async fn given_panic_outputs_active(w: &mut VssWorld) {
+    settle().await;
+    assert_eq!(
+        w.current_value(LEFT_SIGNALING),
+        Some(SignalValue::Bool(true)),
+        "expected Left.IsSignaling = TRUE as precondition"
+    );
+    assert_eq!(
+        w.current_value(RIGHT_SIGNALING),
+        Some(SignalValue::Bool(true)),
+        "expected Right.IsSignaling = TRUE as precondition"
+    );
+    assert_eq!(
+        w.current_value(HORN),
+        Some(SignalValue::Bool(true)),
+        "expected Body.Horn.IsActive = TRUE as precondition"
+    );
+}
+
+#[given("both indicators are signaling at priority HIGH due to hazard")]
+async fn given_hazard_high(w: &mut VssWorld) {
+    settle().await;
+    assert_eq!(
+        w.current_value(LEFT_SIGNALING),
+        Some(SignalValue::Bool(true))
+    );
+    assert_eq!(
+        w.current_value(RIGHT_SIGNALING),
+        Some(SignalValue::Bool(true))
+    );
+}
+
+/// Engage/disengage helper — does an extra settle pass after `inject()` so
+/// the spawned `pulse_loop`'s first claim has time to traverse:
+///   PanicAlarm task → mpsc → arbiter loop → publish_resolved → bus.publish
+/// (~8 awaits) before the first Then assertion runs.
+async fn panic_engage_helper(w: &mut VssWorld, val: bool) {
+    w.bus().clear_history();
+    w.inject(PANIC_SWITCH, SignalValue::Bool(val)).await;
+    settle().await;
+    settle().await;
+}
+
+// ---- When: panic switch transitions ----
+
+#[when("Body.Switches.Panic.IsEngaged transitions to TRUE")]
+async fn when_panic_engage(w: &mut VssWorld) {
+    panic_engage_helper(w, true).await;
+}
+
+#[when("Body.Switches.Panic.IsEngaged transitions to FALSE")]
+async fn when_panic_disengage(w: &mut VssWorld) {
+    panic_engage_helper(w, false).await;
+}
+
+#[when("Body.Switches.Panic.IsEngaged is set to TRUE again")]
+async fn when_panic_re_engage(w: &mut VssWorld) {
+    w.bus().clear_history();
+    w.inject(PANIC_SWITCH, SignalValue::Bool(true)).await;
+}
+
+// ---- When: panic timing windows ----
+
+#[when("the panic alarm has been running long enough to enter a complete OFF window")]
+async fn when_into_off_window(_w: &mut VssWorld) {
+    // After engage we are within the first ON window.  Advance past it
+    // into the OFF window with a small margin to clear the boundary.
+    advance(Duration::from_millis(PANIC_ON_MS + 50)).await;
+    for _ in 0..8 {
+        tokio::task::yield_now().await;
+    }
+}
+
+#[when("the panic alarm advances into the next ON window")]
+async fn when_into_next_on(_w: &mut VssWorld) {
+    // From inside an OFF window, step past the OFF→ON edge.
+    advance(Duration::from_millis(PANIC_OFF_MS + 50)).await;
+    for _ in 0..8 {
+        tokio::task::yield_now().await;
+    }
+}
+
+#[when("the panic alarm runs through three complete pulse cycles")]
+async fn when_three_cycles(_w: &mut VssWorld) {
+    advance(Duration::from_millis((PANIC_ON_MS + PANIC_OFF_MS) * 3)).await;
+    for _ in 0..16 {
+        tokio::task::yield_now().await;
+    }
+}
+
+// ---- Then: PanicAlarm requests ----
+
+#[then(
+    regex = r"^the PanicAlarm feature requests DirectionIndicator\.(Left|Right)\.IsSignaling = TRUE at priority HIGH$"
+)]
+async fn then_panic_indicator_true(w: &mut VssWorld, side: String) {
+    let path = indicator_path(&side);
+    assert_eq!(
+        w.current_value(path),
+        Some(SignalValue::Bool(true)),
+        "expected {side}.IsSignaling = TRUE under PanicAlarm"
+    );
+}
+
+#[then("the PanicAlarm feature requests Body.Horn.IsActive = TRUE at priority HIGH")]
+async fn then_panic_horn_true(w: &mut VssWorld) {
+    assert_eq!(
+        w.current_value(HORN),
+        Some(SignalValue::Bool(true)),
+        "expected Body.Horn.IsActive = TRUE under PanicAlarm"
+    );
+}
+
+// ---- Then: pulse window state ----
+
+#[then("both direction indicators are OFF")]
+async fn then_indicators_off(w: &mut VssWorld) {
+    assert_eq!(
+        w.current_value(LEFT_SIGNALING),
+        Some(SignalValue::Bool(false)),
+        "Left should be OFF in OFF window"
+    );
+    assert_eq!(
+        w.current_value(RIGHT_SIGNALING),
+        Some(SignalValue::Bool(false)),
+        "Right should be OFF in OFF window"
+    );
+}
+
+#[then("both direction indicators are ON")]
+async fn then_indicators_on(w: &mut VssWorld) {
+    assert_eq!(
+        w.current_value(LEFT_SIGNALING),
+        Some(SignalValue::Bool(true)),
+        "Left should be ON in ON window"
+    );
+    assert_eq!(
+        w.current_value(RIGHT_SIGNALING),
+        Some(SignalValue::Bool(true)),
+        "Right should be ON in ON window"
+    );
+}
+
+#[then("Body.Horn.IsActive is FALSE")]
+async fn then_horn_false(w: &mut VssWorld) {
+    assert_eq!(
+        w.current_value(HORN),
+        Some(SignalValue::Bool(false)),
+        "Horn should be FALSE in OFF window (in sync with lights)"
+    );
+}
+
+#[then("Body.Horn.IsActive is TRUE")]
+async fn then_horn_true(w: &mut VssWorld) {
+    assert_eq!(
+        w.current_value(HORN),
+        Some(SignalValue::Bool(true)),
+        "Horn should be TRUE in ON window (in sync with lights)"
+    );
+}
+
+// ---- Then: alarm status flag ----
+
+#[then("Vehicle.Body.Alarm.IsActive becomes TRUE")]
+async fn then_alarm_status_true(w: &mut VssWorld) {
+    assert_eq!(w.current_value(ALARM_STATUS), Some(SignalValue::Bool(true)));
+}
+
+#[then("Vehicle.Body.Alarm.IsActive becomes FALSE")]
+async fn then_alarm_status_false(w: &mut VssWorld) {
+    assert_eq!(
+        w.current_value(ALARM_STATUS),
+        Some(SignalValue::Bool(false))
+    );
+}
+
+#[then("Vehicle.Body.Alarm.IsActive has been published exactly once with value TRUE")]
+async fn then_alarm_status_once(w: &mut VssWorld) {
+    let publishes: Vec<_> = w
+        .bus()
+        .history()
+        .into_iter()
+        .filter(|(s, _)| *s == ALARM_STATUS)
+        .collect();
+    // Background sets it to FALSE on engage transition then never again.
+    // History was NOT cleared between engage and the cycles, so we expect
+    // exactly one TRUE entry from the FALSE→TRUE transition.
+    let true_count = publishes
+        .iter()
+        .filter(|(_, v)| *v == SignalValue::Bool(true))
+        .count();
+    assert_eq!(
+        true_count, 1,
+        "expected exactly one TRUE publish on Vehicle.Body.Alarm.IsActive, got {true_count} (history: {publishes:?})"
+    );
+}
+
+#[then("Vehicle.Body.Alarm.IsActive has not been re-published on any pulse edge")]
+async fn then_alarm_status_no_duty_cycle(w: &mut VssWorld) {
+    let publishes: Vec<_> = w
+        .bus()
+        .history()
+        .into_iter()
+        .filter(|(s, _)| *s == ALARM_STATUS)
+        .collect();
+    // Same total of 1 TRUE — confirms no per-pulse re-publishes.
+    assert!(
+        publishes.len() <= 1,
+        "ALARM_STATUS must not be republished per pulse, got {} entries: {:?}",
+        publishes.len(),
+        publishes
+    );
+}
+
+#[then("Vehicle.Body.Alarm.IsActive is not re-published")]
+async fn then_alarm_status_idempotent(w: &mut VssWorld) {
+    let publishes = w.publish_count(ALARM_STATUS);
+    assert_eq!(
+        publishes, 0,
+        "no ALARM_STATUS publish expected on idempotent re-engage, got {publishes}"
+    );
+}
+
+// ---- Then: claim release + arbiter default-off ----
+
+#[then(
+    regex = r"^the PanicAlarm feature releases its claim on DirectionIndicator\.(Left|Right)\.IsSignaling$"
+)]
+async fn then_panic_releases_indicator(_w: &mut VssWorld, _side: String) {
+    // Internal state — observable consequence checked by the next step.
+}
+
+#[then("the PanicAlarm feature releases its claim on Body.Horn.IsActive")]
+async fn then_panic_releases_horn(_w: &mut VssWorld) {}
+
+#[then("with no other active claim, the arbiters publish default-off on indicators and horn")]
+async fn then_panic_default_off(w: &mut VssWorld) {
+    assert_eq!(
+        w.current_value(LEFT_SIGNALING),
+        Some(SignalValue::Bool(false))
+    );
+    assert_eq!(
+        w.current_value(RIGHT_SIGNALING),
+        Some(SignalValue::Bool(false))
+    );
+    assert_eq!(w.current_value(HORN), Some(SignalValue::Bool(false)));
+}
+
+// ---- Then: pulse loop continues uninterrupted ----
+
+#[then("the pulse loop continues uninterrupted at the existing cadence")]
+async fn then_pulse_continues(w: &mut VssWorld) {
+    // After a re-engage no-op, advance past the next ON→OFF→ON edges and
+    // verify the lights still toggle on schedule.
+    advance(Duration::from_millis(PANIC_ON_MS + 50)).await;
+    for _ in 0..8 {
+        tokio::task::yield_now().await;
+    }
+    assert_eq!(
+        w.current_value(LEFT_SIGNALING),
+        Some(SignalValue::Bool(false)),
+        "Should be in OFF window after ON_MS"
+    );
+    advance(Duration::from_millis(PANIC_OFF_MS + 50)).await;
+    for _ in 0..8 {
+        tokio::task::yield_now().await;
+    }
+    assert_eq!(
+        w.current_value(LEFT_SIGNALING),
+        Some(SignalValue::Bool(true)),
+        "Should be in ON window after OFF_MS"
+    );
+}
+
+// ---- Then: Hazard / PanicAlarm interaction ----
+
+#[then("the PanicAlarm feature claims both indicators at priority HIGH (latest-wins on tie)")]
+async fn then_panic_takes_indicators(w: &mut VssWorld) {
+    // PanicAlarm claim is more recent than Hazard's, both at HIGH —
+    // arbiter's max_by_key on (priority, seq) lets PanicAlarm win.
+    // Indicators are ON during the first ON window after engage.
+    assert_eq!(
+        w.current_value(LEFT_SIGNALING),
+        Some(SignalValue::Bool(true))
+    );
+    assert_eq!(
+        w.current_value(RIGHT_SIGNALING),
+        Some(SignalValue::Bool(true))
+    );
+}
+
+#[then("the PanicAlarm feature releases both indicators")]
+async fn then_panic_releases_both(_w: &mut VssWorld) {}
+
+#[then("Hazard's still-engaged claim resumes control of both indicators")]
+async fn then_hazard_resumes(w: &mut VssWorld) {
+    // After PanicAlarm releases, Hazard's HIGH claim (still active) wins.
+    assert_eq!(
+        w.current_value(LEFT_SIGNALING),
+        Some(SignalValue::Bool(true)),
+        "Hazard should resume Left.IsSignaling = TRUE"
+    );
+    assert_eq!(
+        w.current_value(RIGHT_SIGNALING),
+        Some(SignalValue::Bool(true)),
+        "Hazard should resume Right.IsSignaling = TRUE"
+    );
+}

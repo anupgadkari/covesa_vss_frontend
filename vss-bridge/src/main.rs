@@ -22,6 +22,7 @@ use vss_bridge::features::follow_me_home::FollowMeHome;
 use vss_bridge::features::hazard_lighting::HazardLighting;
 use vss_bridge::features::lock_feedback::LockFeedback;
 use vss_bridge::features::manual_lighting::ManualLighting;
+use vss_bridge::features::panic_alarm::PanicAlarm;
 use vss_bridge::features::rke::{PairedFob, RkeFeature};
 use vss_bridge::features::thumb_pad_lock::ThumbPadLock;
 use vss_bridge::features::turn_indicator::TurnIndicator;
@@ -68,7 +69,7 @@ async fn main() -> anyhow::Result<()> {
     let (low_beam_arb, low_beam_fut) = arbiter::low_beam_arbiter(Arc::clone(&bus));
     let (door_lock_arb, door_lock_ack_tx, door_lock_fut) =
         arbiter::door_lock_arbiter(Arc::clone(&bus));
-    let (_horn_arb, horn_fut) = arbiter::horn_arbiter(Arc::clone(&bus));
+    let (horn_arb, horn_fut) = arbiter::horn_arbiter(Arc::clone(&bus));
     let (_comfort_arb, comfort_fut) = arbiter::comfort_arbiter(Arc::clone(&bus));
 
     tokio::spawn(lighting_fut);
@@ -80,6 +81,7 @@ async fn main() -> anyhow::Result<()> {
     let lighting_arb = Arc::new(lighting_arb);
     let low_beam_arb = Arc::new(low_beam_arb);
     let door_lock_arb = Arc::new(door_lock_arb);
+    let horn_arb = Arc::new(horn_arb);
 
     // ── Feature Business Logic ──────────────────────────────────────
     let lux_threshold = _platform_config.vehicle_line.auto_headlamp_lux_threshold;
@@ -160,10 +162,22 @@ async fn main() -> anyhow::Result<()> {
     // FogLamps — front and rear fog lamps, ignition-gated switch pass-through.
     tokio::spawn(FogLamps::new(Arc::clone(&bus)).run());
 
+    // PanicAlarm — flashes both indicators + chirps horn while
+    // Body.Switches.Panic.IsEngaged is TRUE.  Triggered by RKE on a paired-
+    // keyfob PANIC press; ignition-independent (security feature).
+    tokio::spawn(
+        PanicAlarm::new(
+            Arc::clone(&lighting_arb),
+            Arc::clone(&horn_arb),
+            Arc::clone(&bus),
+        )
+        .run(),
+    );
+
     // TODO: remaining features
     // tokio::spawn(AutoRelock::from_config(Arc::clone(&door_lock_arb), Arc::clone(&bus), &_platform_config).run());
 
-    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock");
+    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm");
 
     // ── Plant Models ────────────────────────────────────────────────
     // Simulate physical lamp behavior the M7 / smart actuator firmware
@@ -199,6 +213,13 @@ async fn main() -> anyhow::Result<()> {
         SignalValue::String("OFF".to_string()),
     )
     .await?;
+
+    // Panic alarm starts disengaged — keep the PanicAlarm feature's switch
+    // subscription primed so it sees the first FALSE→TRUE transition.
+    bus.publish("Body.Switches.Panic.IsEngaged", SignalValue::Bool(false))
+        .await?;
+    bus.publish("Vehicle.Body.Alarm.IsActive", SignalValue::Bool(false))
+        .await?;
 
     // gRPC client for kuksa.val databroker at L4 (optional — fails gracefully)
     let kuksa_endpoint =

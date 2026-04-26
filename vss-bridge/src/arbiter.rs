@@ -304,6 +304,20 @@ pub fn lighting_arbiter<B: SignalBus>(
             signal: "Body.Lights.DirectionIndicator.Right.IsSignaling",
             priority: Priority::High,
         },
+        // PanicAlarm — synchronized blink of both indicators while alarm
+        // is active.  Same priority as Hazard (HIGH); the alarm explicitly
+        // pre-empts hazard while it runs and releases on disengage so any
+        // pending hazard claim resumes.
+        AllowEntry {
+            feature_id: FeatureId::PanicAlarm,
+            signal: "Body.Lights.DirectionIndicator.Left.IsSignaling",
+            priority: Priority::High,
+        },
+        AllowEntry {
+            feature_id: FeatureId::PanicAlarm,
+            signal: "Body.Lights.DirectionIndicator.Right.IsSignaling",
+            priority: Priority::High,
+        },
         // Hazard master signal
         AllowEntry {
             feature_id: FeatureId::Hazard,
@@ -728,14 +742,17 @@ pub fn door_lock_arbiter<B: SignalBus>(
 
 /// Create the Horn domain arbiter.
 ///
-/// Single-feature domain today. Arbiter ensures uniform pattern
-/// and validates priority claims for future multi-feature contention.
+/// PanicAlarm is the first feature to register — it pulses Body.Horn.IsActive
+/// in sync with the indicator blink.  Future features (e.g. ManualHorn for
+/// the steering-wheel push, AntiTheftIntrusion) would register here too.
 pub fn horn_arbiter<B: SignalBus>(
     bus: Arc<B>,
 ) -> (DomainArbiter, impl std::future::Future<Output = ()>) {
-    // No competing features today — pass-through with validation.
-    // When a Horn feature is added, its allow entry goes here.
-    let allow_list = vec![];
+    let allow_list = vec![AllowEntry {
+        feature_id: FeatureId::PanicAlarm,
+        signal: "Body.Horn.IsActive",
+        priority: Priority::High,
+    }];
 
     DomainArbiter::new("Horn", allow_list, bus)
 }

@@ -251,6 +251,9 @@ pub struct RkeFeature<B: SignalBus> {
     pending_trunk_release: Option<PendingTrunkRelease>,
     /// Pending first half of a LOCK+UNLOCK combo for toggle detection.
     pending_combo: Option<PendingCombo>,
+    /// Latched panic-alarm state.  Each authenticated PANIC press flips this
+    /// and publishes the new value on Body.Switches.Panic.IsEngaged.
+    panic_engaged: bool,
 }
 
 impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
@@ -276,6 +279,7 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
             pending_double_lock: None,
             pending_trunk_release: None,
             pending_combo: None,
+            panic_engaged: false,
         }
     }
 
@@ -401,7 +405,7 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
                 tracing::info!(fob_id, "RKE: RemoteStart — not implemented in this module");
             }
             FobButton::PanicAlarm => {
-                tracing::info!(fob_id, "RKE: PanicAlarm — not implemented in this module");
+                self.handle_panic(fob_id).await;
             }
         }
     }
@@ -564,6 +568,28 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
                 fob_id,
             });
         }
+    }
+
+    /// Handle a PANIC press from a paired keyfob.
+    ///
+    /// Each authenticated panic press toggles `Body.Switches.Panic.IsEngaged`.
+    /// Engaging the signal arms the PanicAlarm feature (synchronized
+    /// indicator blink + horn chirps); disengaging stops it.  This matches
+    /// typical OEM behaviour: press once to start, press again to cancel.
+    async fn handle_panic(&mut self, fob_id: u32) {
+        self.panic_engaged = !self.panic_engaged;
+        tracing::info!(
+            fob_id,
+            engaged = self.panic_engaged,
+            "RKE: PANIC press — toggling alarm engaged state"
+        );
+        let _ = self
+            .bus
+            .publish(
+                "Body.Switches.Panic.IsEngaged",
+                crate::ipc_message::SignalValue::Bool(self.panic_engaged),
+            )
+            .await;
     }
 
     /// Parse an RF message hex string from the bus.
