@@ -129,8 +129,10 @@ mod tests {
         drain().await;
         let h = bus.history();
         assert!(
-            h.iter().any(|(s, v)| *s == FRONT_OUT && *v == SignalValue::Bool(true)),
-            "front fog should be ON with ignition ON + switch ON, got: {:?}", h
+            h.iter()
+                .any(|(s, v)| *s == FRONT_OUT && *v == SignalValue::Bool(true)),
+            "front fog should be ON with ignition ON + switch ON, got: {:?}",
+            h
         );
     }
 
@@ -142,8 +144,10 @@ mod tests {
         drain().await;
         let h = bus.history();
         assert!(
-            h.iter().any(|(s, v)| *s == REAR_OUT && *v == SignalValue::Bool(true)),
-            "rear fog should be ON with ignition ON + switch ON, got: {:?}", h
+            h.iter()
+                .any(|(s, v)| *s == REAR_OUT && *v == SignalValue::Bool(true)),
+            "rear fog should be ON with ignition ON + switch ON, got: {:?}",
+            h
         );
     }
 
@@ -155,8 +159,10 @@ mod tests {
         drain().await;
         let h = bus.history();
         assert!(
-            !h.iter().any(|(s, v)| *s == FRONT_OUT && *v == SignalValue::Bool(true)),
-            "front fog should NOT turn on without ignition, got: {:?}", h
+            !h.iter()
+                .any(|(s, v)| *s == FRONT_OUT && *v == SignalValue::Bool(true)),
+            "front fog should NOT turn on without ignition, got: {:?}",
+            h
         );
     }
 
@@ -167,8 +173,10 @@ mod tests {
         drain().await;
         let h = bus.history();
         assert!(
-            !h.iter().any(|(s, v)| *s == REAR_OUT && *v == SignalValue::Bool(true)),
-            "rear fog should NOT turn on without ignition, got: {:?}", h
+            !h.iter()
+                .any(|(s, v)| *s == REAR_OUT && *v == SignalValue::Bool(true)),
+            "rear fog should NOT turn on without ignition, got: {:?}",
+            h
         );
     }
 
@@ -186,12 +194,16 @@ mod tests {
 
         let h = bus.history();
         assert!(
-            h.iter().any(|(s, v)| *s == FRONT_OUT && *v == SignalValue::Bool(false)),
-            "ignition OFF should extinguish front fog, got: {:?}", h
+            h.iter()
+                .any(|(s, v)| *s == FRONT_OUT && *v == SignalValue::Bool(false)),
+            "ignition OFF should extinguish front fog, got: {:?}",
+            h
         );
         assert!(
-            h.iter().any(|(s, v)| *s == REAR_OUT && *v == SignalValue::Bool(false)),
-            "ignition OFF should extinguish rear fog, got: {:?}", h
+            h.iter()
+                .any(|(s, v)| *s == REAR_OUT && *v == SignalValue::Bool(false)),
+            "ignition OFF should extinguish rear fog, got: {:?}",
+            h
         );
     }
 
@@ -208,8 +220,10 @@ mod tests {
 
         let h = bus.history();
         assert!(
-            h.iter().any(|(s, v)| *s == FRONT_OUT && *v == SignalValue::Bool(false)),
-            "front fog should turn off when switch is OFF, got: {:?}", h
+            h.iter()
+                .any(|(s, v)| *s == FRONT_OUT && *v == SignalValue::Bool(false)),
+            "front fog should turn off when switch is OFF, got: {:?}",
+            h
         );
     }
 
@@ -222,12 +236,16 @@ mod tests {
         drain().await;
         let h = bus.history();
         assert!(
-            h.iter().any(|(s, v)| *s == FRONT_OUT && *v == SignalValue::Bool(true)),
-            "front fog should be ON, got: {:?}", h
+            h.iter()
+                .any(|(s, v)| *s == FRONT_OUT && *v == SignalValue::Bool(true)),
+            "front fog should be ON, got: {:?}",
+            h
         );
         assert!(
-            !h.iter().any(|(s, v)| *s == REAR_OUT && *v == SignalValue::Bool(true)),
-            "rear fog should remain OFF, got: {:?}", h
+            !h.iter()
+                .any(|(s, v)| *s == REAR_OUT && *v == SignalValue::Bool(true)),
+            "rear fog should remain OFF, got: {:?}",
+            h
         );
     }
 
@@ -245,12 +263,16 @@ mod tests {
 
         let h = bus.history();
         assert!(
-            h.iter().any(|(s, v)| *s == FRONT_OUT && *v == SignalValue::Bool(false)),
-            "ACC state should extinguish front fog, got: {:?}", h
+            h.iter()
+                .any(|(s, v)| *s == FRONT_OUT && *v == SignalValue::Bool(false)),
+            "ACC state should extinguish front fog, got: {:?}",
+            h
         );
         assert!(
-            h.iter().any(|(s, v)| *s == REAR_OUT && *v == SignalValue::Bool(false)),
-            "ACC state should extinguish rear fog, got: {:?}", h
+            h.iter()
+                .any(|(s, v)| *s == REAR_OUT && *v == SignalValue::Bool(false)),
+            "ACC state should extinguish rear fog, got: {:?}",
+            h
         );
     }
 }

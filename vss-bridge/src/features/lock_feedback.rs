@@ -83,7 +83,7 @@ impl<B: SignalBus + Send + Sync + 'static> LockFeedback<B> {
 
     pub async fn run(self) {
         let mut feedback_rx = self.bus.subscribe(FEEDBACK_REQUEST).await;
-        let mut trunk_rx    = self.bus.subscribe(TRUNK_OPEN_SIG).await;
+        let mut trunk_rx = self.bus.subscribe(TRUNK_OPEN_SIG).await;
 
         // Subscribe to all door IsLocked signals so we always know whether
         // the cabin is fully secured.  Unknown at startup → assume unlocked.
@@ -463,7 +463,8 @@ mod tests {
 
         // Doors unlocked (default). Arm the trunk-close latch.
         send_feedback(&bus, "trunk_unlock").await;
-        advance(Duration::from_millis(2400)).await; drain().await;
+        advance(Duration::from_millis(2400)).await;
+        drain().await;
 
         bus.clear_history();
 
@@ -472,18 +473,26 @@ mod tests {
         drain().await;
 
         // Advance through full unlock sequence (2 flashes).
-        advance(Duration::from_millis(LEAD_IN_MS + 1)).await; drain().await;
-        advance(Duration::from_millis(FLASH_ON_MS + 1)).await; drain().await;
-        advance(Duration::from_millis(GAP_MS + 1)).await;     drain().await;
-        advance(Duration::from_millis(LEAD_IN_MS + 1)).await; drain().await;
-        advance(Duration::from_millis(FLASH_ON_MS + 1)).await; drain().await;
+        advance(Duration::from_millis(LEAD_IN_MS + 1)).await;
+        drain().await;
+        advance(Duration::from_millis(FLASH_ON_MS + 1)).await;
+        drain().await;
+        advance(Duration::from_millis(GAP_MS + 1)).await;
+        drain().await;
+        advance(Duration::from_millis(LEAD_IN_MS + 1)).await;
+        drain().await;
+        advance(Duration::from_millis(FLASH_ON_MS + 1)).await;
+        drain().await;
 
         let h = bus.history();
-        let on_count = h.iter()
+        let on_count = h
+            .iter()
             .filter(|(s, v)| *s == LEFT_SIG && *v == SignalValue::Bool(true))
             .count();
-        assert_eq!(on_count, 2,
-            "trunk close with unsecured cabin should play 2-flash unlock warning, got {on_count}");
+        assert_eq!(
+            on_count, 2,
+            "trunk close with unsecured cabin should play 2-flash unlock warning, got {on_count}"
+        );
     }
 
     #[tokio::test(start_paused = true)]

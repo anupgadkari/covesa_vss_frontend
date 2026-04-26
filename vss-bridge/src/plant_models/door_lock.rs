@@ -647,7 +647,10 @@ mod tests {
         // Simulate HMI user flipping Row1.Left.IsLocked to false
         // (and soldier to IsUnlocked=true) — bypassing the arbiter.
         bus.inject("Body.Doors.Row1.Left.IsLocked", SignalValue::Bool(false));
-        bus.inject("Body.Doors.Row1.Left.Soldier.IsUnlocked", SignalValue::Bool(true));
+        bus.inject(
+            "Body.Doors.Row1.Left.Soldier.IsUnlocked",
+            SignalValue::Bool(true),
+        );
         tokio::task::yield_now().await;
         tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
         tokio::task::yield_now().await;
@@ -663,14 +666,17 @@ mod tests {
 
         let history = bus.history();
         assert!(
-            history.iter().any(|(p, v)| *p == "Body.Doors.Row1.Left.IsLocked"
-                && *v == SignalValue::Bool(true)),
+            history.iter().any(
+                |(p, v)| *p == "Body.Doors.Row1.Left.IsLocked" && *v == SignalValue::Bool(true)
+            ),
             "LOCK command must re-publish IsLocked=true after HMI override; history: {:?}",
             history
         );
         assert!(
-            history.iter().any(|(p, v)| *p == "Body.Doors.Row1.Left.Soldier.IsUnlocked"
-                && *v == SignalValue::Bool(false)),
+            history
+                .iter()
+                .any(|(p, v)| *p == "Body.Doors.Row1.Left.Soldier.IsUnlocked"
+                    && *v == SignalValue::Bool(false)),
             "LOCK command must reset Soldier.IsUnlocked=false after HMI override; history: {:?}",
             history
         );
