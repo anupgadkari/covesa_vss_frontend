@@ -661,18 +661,20 @@ function CombinedView({s,set,onDeviceSelect}){
       <title>{lp?'License plate lamp — on':'License plate lamp — off'}</title>
     </rect>
 
-    {/* Taillights */}
-    <rect x="70"  y="568" width="35" height="10" rx="2" fill={tlc} opacity={tlo}>
+    {/* Taillights — narrowed to 26 px to leave room for backup lamp beside each */}
+    <rect x="70"  y="568" width="26" height="10" rx="2" fill={tlc} opacity={tlo}>
       <title>{brake?'Left taillight — brake active':lo||hi||park?'Left taillight — tail on':'Left taillight — off'}</title>
     </rect>
-    <rect x="255" y="568" width="35" height="10" rx="2" fill={tlc} opacity={tlo}>
+    <rect x="264" y="568" width="26" height="10" rx="2" fill={tlc} opacity={tlo}>
       <title>{brake?'Right taillight — brake active':lo||hi||park?'Right taillight — tail on':'Right taillight — off'}</title>
     </rect>
-    {/* Backup / reverse lights — always visible; y=561 puts them in the bumper strip above taillights */}
-    <rect x="73" y="561" width="28" height="7" rx="2" fill={back?'#FFFFFF':'#131A28'} opacity={back?0.88:.45}>
+    {/* Backup / reverse lights — in taillight band, inboard of taillights; stroke outline makes off-state visible */}
+    <rect x="98"  y="568" width="20" height="10" rx="2"
+      fill={back?'#FFFFFF':'#0E1624'} stroke={back?'#CCCCCC':'#2A3C54'} strokeWidth="0.8" opacity={back?0.9:0.85}>
       <title>{back?'Left backup / reverse light — active':'Left backup / reverse light — off'}</title>
     </rect>
-    <rect x="259" y="561" width="28" height="7" rx="2" fill={back?'#FFFFFF':'#131A28'} opacity={back?0.88:.45}>
+    <rect x="242" y="568" width="20" height="10" rx="2"
+      fill={back?'#FFFFFF':'#0E1624'} stroke={back?'#CCCCCC':'#2A3C54'} strokeWidth="0.8" opacity={back?0.9:0.85}>
       <title>{back?'Right backup / reverse light — active':'Right backup / reverse light — off'}</title>
     </rect>
 
@@ -827,7 +829,8 @@ function SideView({s}){
     {rfog&&<rect x="862" y="260" width="28" height="12" rx="2" fill="#EF2020" opacity=".88">
       <title>Rear fog lamp — on</title>
     </rect>}
-    <rect x="862" y="280" width="28" height="10" rx="2" fill={back?'#FFFFFF':'#131A28'} opacity={back?.88:.45}>
+    <rect x="862" y="280" width="28" height="10" rx="2"
+      fill={back?'#FFFFFF':'#0E1624'} stroke={back?'#CCCCCC':'#2A3C54'} strokeWidth="0.8" opacity={back?0.88:0.85}>
       <title>{back?'Backup / reverse light — active':'Backup / reverse light — off'}</title>
     </rect>
     {lp&&<rect x="862" y="298" width="28" height="8" rx="2" fill="#FFF8DC" opacity=".85">
