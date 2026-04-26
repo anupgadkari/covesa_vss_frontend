@@ -44,6 +44,14 @@ const LEFT_SIG: VssPath = "Body.Lights.DirectionIndicator.Left.IsSignaling";
 const RIGHT_SIG: VssPath = "Body.Lights.DirectionIndicator.Right.IsSignaling";
 const TRUNK_OPEN_SIG: VssPath = "Body.Trunk.IsOpen";
 
+/// Door IsLocked signals tracked to determine whether the cabin is secured.
+const DOOR_LOCKED_SIGNALS: [VssPath; 4] = [
+    "Body.Doors.Row1.Left.IsLocked",
+    "Body.Doors.Row1.Right.IsLocked",
+    "Body.Doors.Row2.Left.IsLocked",
+    "Body.Doors.Row2.Right.IsLocked",
+];
+
 // ── Flash timing ───────────────────────────────────────────────────────────
 
 /// Dark lead-in before each flash unit (ms). Creates a deliberate "OFF" gap
@@ -75,7 +83,15 @@ impl<B: SignalBus + Send + Sync + 'static> LockFeedback<B> {
 
     pub async fn run(self) {
         let mut feedback_rx = self.bus.subscribe(FEEDBACK_REQUEST).await;
-        let mut trunk_rx = self.bus.subscribe(TRUNK_OPEN_SIG).await;
+        let mut trunk_rx    = self.bus.subscribe(TRUNK_OPEN_SIG).await;
+
+        // Subscribe to all door IsLocked signals so we always know whether
+        // the cabin is fully secured.  Unknown at startup → assume unlocked.
+        let mut door_rx0 = self.bus.subscribe(DOOR_LOCKED_SIGNALS[0]).await;
+        let mut door_rx1 = self.bus.subscribe(DOOR_LOCKED_SIGNALS[1]).await;
+        let mut door_rx2 = self.bus.subscribe(DOOR_LOCKED_SIGNALS[2]).await;
+        let mut door_rx3 = self.bus.subscribe(DOOR_LOCKED_SIGNALS[3]).await;
+        let mut doors_locked = [false; 4];
 
         let mut current_flash: Option<JoinHandle<()>> = None;
         // Set when a "trunk_unlock" feedback is received; cleared when trunk closes.
@@ -88,7 +104,11 @@ impl<B: SignalBus + Send + Sync + 'static> LockFeedback<B> {
                 Some(val) = feedback_rx.next() => {
                     let kind = match &val {
                         SignalValue::String(s) => match s.as_str() {
-                            "lock" => "lock",
+                            // Trust the command for direct lock/unlock requests.
+                            // Checking door state here races with the plant model
+                            // publishing IsLocked — the feedback arrives before the
+                            // confirmed state has propagated.
+                            "lock"   => "lock",
                             "unlock" => "unlock",
                             "trunk_unlock" => {
                                 trunk_opened_externally = true;
@@ -112,17 +132,39 @@ impl<B: SignalBus + Send + Sync + 'static> LockFeedback<B> {
                 }
 
                 Some(val) = trunk_rx.next() => {
-                    // Trunk closed while we were tracking an external open
+                    // Trunk closed while we were tracking an external open.
+                    // If the cabin is secured → lock flash (all good).
+                    // If the cabin is still unsecured → unlock flash (warn: not secured).
                     if val == SignalValue::Bool(false) && trunk_opened_externally {
                         trunk_opened_externally = false;
-                        tracing::info!("LockFeedback: trunk closed after external open — lock flash");
+                        let kind = if doors_locked.iter().all(|&l| l) {
+                            tracing::info!("LockFeedback: trunk closed, cabin secured — lock flash");
+                            "lock"
+                        } else {
+                            tracing::info!("LockFeedback: trunk closed, cabin UNSECURED — unlock flash (warning)");
+                            "unlock"
+                        };
                         preempt_and_start(
                             &mut current_flash,
-                            "lock",
+                            kind,
                             Arc::clone(&self.lighting_arb),
                         )
                         .await;
                     }
+                }
+
+                // ── Track door lock state ──────────────────────────────────
+                Some(val) = door_rx0.next() => {
+                    if let SignalValue::Bool(b) = val { doors_locked[0] = b; }
+                }
+                Some(val) = door_rx1.next() => {
+                    if let SignalValue::Bool(b) = val { doors_locked[1] = b; }
+                }
+                Some(val) = door_rx2.next() => {
+                    if let SignalValue::Bool(b) = val { doors_locked[2] = b; }
+                }
+                Some(val) = door_rx3.next() => {
+                    if let SignalValue::Bool(b) = val { doors_locked[3] = b; }
                 }
 
                 else => break,
@@ -409,6 +451,39 @@ mod tests {
             true_count, 1,
             "trunk-close should trigger a single lock flash, got {true_count}"
         );
+    }
+
+    /// Trunk closes after trunk_unlock, but cabin is unsecured → unlock flash.
+    #[tokio::test(start_paused = true)]
+    async fn trunk_close_plays_unlock_when_cabin_unsecured() {
+        let (bus, arb) = setup().await;
+        let feature = LockFeedback::new(Arc::clone(&bus), Arc::clone(&arb));
+        tokio::spawn(feature.run());
+        drain().await;
+
+        // Doors unlocked (default). Arm the trunk-close latch.
+        send_feedback(&bus, "trunk_unlock").await;
+        advance(Duration::from_millis(2400)).await; drain().await;
+
+        bus.clear_history();
+
+        // Trunk closes — cabin is unsecured.
+        bus.inject(TRUNK_OPEN_SIG, SignalValue::Bool(false));
+        drain().await;
+
+        // Advance through full unlock sequence (2 flashes).
+        advance(Duration::from_millis(LEAD_IN_MS + 1)).await; drain().await;
+        advance(Duration::from_millis(FLASH_ON_MS + 1)).await; drain().await;
+        advance(Duration::from_millis(GAP_MS + 1)).await;     drain().await;
+        advance(Duration::from_millis(LEAD_IN_MS + 1)).await; drain().await;
+        advance(Duration::from_millis(FLASH_ON_MS + 1)).await; drain().await;
+
+        let h = bus.history();
+        let on_count = h.iter()
+            .filter(|(s, v)| *s == LEFT_SIG && *v == SignalValue::Bool(true))
+            .count();
+        assert_eq!(on_count, 2,
+            "trunk close with unsecured cabin should play 2-flash unlock warning, got {on_count}");
     }
 
     #[tokio::test(start_paused = true)]

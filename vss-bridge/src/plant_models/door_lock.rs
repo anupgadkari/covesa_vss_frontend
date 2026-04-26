@@ -237,6 +237,22 @@ impl<B: SignalBus + Send + Sync + 'static> DoorLockPlantModel<B> {
         // Single command subscription — arbiter writes one high-level token.
         let mut cmd_rx = self.bus.subscribe(CENTRAL_LOCK_CMD).await;
 
+        // Mirror subscriptions — keep self.locked / self.double_locked in sync
+        // with whatever is actually on the bus.  This matters when the HMI (or
+        // a test harness) manually overrides Body.Doors.*.IsLocked or
+        // Soldier.IsUnlocked without going through a command.  Without these
+        // subscriptions the dedup guard in apply_lock_cmd would believe the door
+        // is still locked and silently skip the re-publish, leaving the manually-
+        // flipped soldier in the wrong position after a LOCK command.
+        let mut islocked_rx0 = self.bus.subscribe(DOOR_LOCKED_SIGNALS[0]).await;
+        let mut islocked_rx1 = self.bus.subscribe(DOOR_LOCKED_SIGNALS[1]).await;
+        let mut islocked_rx2 = self.bus.subscribe(DOOR_LOCKED_SIGNALS[2]).await;
+        let mut islocked_rx3 = self.bus.subscribe(DOOR_LOCKED_SIGNALS[3]).await;
+        let mut isdblocked_rx0 = self.bus.subscribe(DOOR_DOUBLE_LOCKED_SIGNALS[0]).await;
+        let mut isdblocked_rx1 = self.bus.subscribe(DOOR_DOUBLE_LOCKED_SIGNALS[1]).await;
+        let mut isdblocked_rx2 = self.bus.subscribe(DOOR_DOUBLE_LOCKED_SIGNALS[2]).await;
+        let mut isdblocked_rx3 = self.bus.subscribe(DOOR_DOUBLE_LOCKED_SIGNALS[3]).await;
+
         // Publish initial state (all unlocked).
         self.publish_all().await;
         tracing::info!("DoorLock plant model started — all doors unlocked");
@@ -299,6 +315,38 @@ impl<B: SignalBus + Send + Sync + 'static> DoorLockPlantModel<B> {
                         }
                     }
                 }
+
+                // ── Mirror: sync self.locked from bus ──────────────────────
+                // When the HMI overrides Body.Doors.*.IsLocked directly (e.g.
+                // to simulate a defeated lock), update internal state so the
+                // next LOCK command correctly re-asserts the locked position.
+                // The feedback of our own publishes is harmless (same value).
+                Some(val) = islocked_rx0.next() => {
+                    if let SignalValue::Bool(b) = val { self.locked[0] = b; }
+                }
+                Some(val) = islocked_rx1.next() => {
+                    if let SignalValue::Bool(b) = val { self.locked[1] = b; }
+                }
+                Some(val) = islocked_rx2.next() => {
+                    if let SignalValue::Bool(b) = val { self.locked[2] = b; }
+                }
+                Some(val) = islocked_rx3.next() => {
+                    if let SignalValue::Bool(b) = val { self.locked[3] = b; }
+                }
+                Some(val) = isdblocked_rx0.next() => {
+                    if let SignalValue::Bool(b) = val { self.double_locked[0] = b; }
+                }
+                Some(val) = isdblocked_rx1.next() => {
+                    if let SignalValue::Bool(b) = val { self.double_locked[1] = b; }
+                }
+                Some(val) = isdblocked_rx2.next() => {
+                    if let SignalValue::Bool(b) = val { self.double_locked[2] = b; }
+                }
+                Some(val) = isdblocked_rx3.next() => {
+                    if let SignalValue::Bool(b) = val { self.double_locked[3] = b; }
+                }
+
+                else => break,
             }
         }
     }
@@ -572,6 +620,59 @@ mod tests {
             dl_cleared.len(),
             4,
             "all 4 doors should have IsDoubleLocked cleared"
+        );
+
+        handle.abort();
+        let _ = handle.await;
+    }
+
+    /// When the HMI directly overrides IsLocked (e.g. simulating a defeated
+    /// lock sensor), the plant model must re-assert the correct state on the
+    /// next LOCK command.  Without the mirror subscriptions the dedup guard
+    /// would suppress the re-publish and the soldier would stay in the wrong
+    /// position.
+    #[tokio::test]
+    async fn lock_command_reasserts_after_hmi_override() {
+        let bus = Arc::new(MockBus::new());
+        let model = DoorLockPlantModel::new(Arc::clone(&bus));
+        let handle = tokio::spawn(model.run());
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        // Put vehicle into locked state.
+        cmd(&bus, "lock_all");
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        // Simulate HMI user flipping Row1.Left.IsLocked to false
+        // (and soldier to IsUnlocked=true) — bypassing the arbiter.
+        bus.inject("Body.Doors.Row1.Left.IsLocked", SignalValue::Bool(false));
+        bus.inject("Body.Doors.Row1.Left.Soldier.IsUnlocked", SignalValue::Bool(true));
+        tokio::task::yield_now().await;
+        tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
+        tokio::task::yield_now().await;
+
+        bus.clear_history();
+
+        // Issue a fresh LOCK command — plant model must re-publish IsLocked=true
+        // and Soldier.IsUnlocked=false for the overridden door.
+        cmd(&bus, "lock_all");
+        tokio::task::yield_now().await;
+        tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
+        tokio::task::yield_now().await;
+
+        let history = bus.history();
+        assert!(
+            history.iter().any(|(p, v)| *p == "Body.Doors.Row1.Left.IsLocked"
+                && *v == SignalValue::Bool(true)),
+            "LOCK command must re-publish IsLocked=true after HMI override; history: {:?}",
+            history
+        );
+        assert!(
+            history.iter().any(|(p, v)| *p == "Body.Doors.Row1.Left.Soldier.IsUnlocked"
+                && *v == SignalValue::Bool(false)),
+            "LOCK command must reset Soldier.IsUnlocked=false after HMI override; history: {:?}",
+            history
         );
 
         handle.abort();
