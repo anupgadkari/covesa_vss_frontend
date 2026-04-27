@@ -205,16 +205,26 @@ const INIT_STATE={
   'Body.PEPS.Plant.BlePhone.2.Zone':'OutOfRange','Body.PEPS.Plant.BlePhone.2.RssiResponse':'',
   'Body.PEPS.Plant.NfcCard.1.Position':'NotPresent',
   'Body.PEPS.Plant.NfcCard.2.Position':'NotPresent',
-  // Doors
-  'Body.Doors.Row1.Left.IsOpen':false,'Body.Doors.Row1.Left.IsLocked':false,'Body.Doors.Row1.Left.IsDoubleLocked':false,'Body.Doors.Row1.Left.LatchStatus':'FULL_LATCHED','Body.Doors.Row1.Left.IsChildLockActive':false,'Body.Doors.Row1.Left.Window.Position':0,'Body.Doors.Row1.Left.Latch.IsLatched':true,'Body.Doors.Row1.Left.Handle.Inside.IsPulled':false,'Body.Doors.Row1.Left.Handle.Outside.IsPulled':false,'Body.Doors.Row1.Left.Soldier.IsUnlocked':false,
-  'Body.Doors.Row1.Right.IsOpen':false,'Body.Doors.Row1.Right.IsLocked':false,'Body.Doors.Row1.Right.IsDoubleLocked':false,'Body.Doors.Row1.Right.LatchStatus':'FULL_LATCHED','Body.Doors.Row1.Right.IsChildLockActive':false,'Body.Doors.Row1.Right.Window.Position':0,'Body.Doors.Row1.Right.Latch.IsLatched':true,'Body.Doors.Row1.Right.Handle.Inside.IsPulled':false,'Body.Doors.Row1.Right.Handle.Outside.IsPulled':false,'Body.Doors.Row1.Right.Soldier.IsUnlocked':false,
-  'Body.Doors.Row2.Left.IsOpen':false,'Body.Doors.Row2.Left.IsLocked':false,'Body.Doors.Row2.Left.IsDoubleLocked':false,'Body.Doors.Row2.Left.LatchStatus':'FULL_LATCHED','Body.Doors.Row2.Left.IsChildLockActive':false,'Body.Doors.Row2.Left.Window.Position':0,'Body.Doors.Row2.Left.Latch.IsLatched':true,'Body.Doors.Row2.Left.Handle.Inside.IsPulled':false,'Body.Doors.Row2.Left.Handle.Outside.IsPulled':false,'Body.Doors.Row2.Left.Soldier.IsUnlocked':false,
-  'Body.Doors.Row2.Right.IsOpen':false,'Body.Doors.Row2.Right.IsLocked':false,'Body.Doors.Row2.Right.IsDoubleLocked':false,'Body.Doors.Row2.Right.LatchStatus':'FULL_LATCHED','Body.Doors.Row2.Right.IsChildLockActive':false,'Body.Doors.Row2.Right.Window.Position':0,'Body.Doors.Row2.Right.Latch.IsLatched':true,'Body.Doors.Row2.Right.Handle.Inside.IsPulled':false,'Body.Doors.Row2.Right.Handle.Outside.IsPulled':false,'Body.Doors.Row2.Right.Soldier.IsUnlocked':false,
-  // Body
-  'Body.Hood.IsOpen':false,'Body.Trunk.IsOpen':false,'Body.Trunk.IsLocked':true,'Body.Horn.IsActive':false,'Body.FuelLid.IsOpen':false,'Body.ChargeLid.IsOpen':false,
-  // Anti-theft alarm + auto-relock status (project extensions)
-  'Vehicle.Body.Alarm.IsActive':false,
-  'Body.Doors.AutoRelock.IsArmed':false,'Body.Doors.AutoRelock.TimeoutSeconds':45,
+  // ── Doors — HMI-owned inputs only ────────────────────────────────────
+  // Bridge-owned door state (IsLocked, IsDoubleLocked, IsOpen, LatchStatus,
+  // Latch.IsLatched, Soldier.IsUnlocked) is INTENTIONALLY OMITTED from
+  // INIT_STATE per docs/signal-ownership-and-state-hydration.md — the
+  // door-lock plant model owns those values and the WS bridge delivers
+  // them in the first snapshot.  Step 2 of that plan adds wsHydrated
+  // gating so the HMI doesn't render owned-signal visuals until the
+  // snapshot has arrived.  Until then those reads return `undefined`,
+  // which React renders as the "off" state — better than asserting a
+  // wrong default that may briefly conflict with reality.
+  'Body.Doors.Row1.Left.IsChildLockActive':false,'Body.Doors.Row1.Left.Window.Position':0,'Body.Doors.Row1.Left.Handle.Inside.IsPulled':false,'Body.Doors.Row1.Left.Handle.Outside.IsPulled':false,
+  'Body.Doors.Row1.Right.IsChildLockActive':false,'Body.Doors.Row1.Right.Window.Position':0,'Body.Doors.Row1.Right.Handle.Inside.IsPulled':false,'Body.Doors.Row1.Right.Handle.Outside.IsPulled':false,
+  'Body.Doors.Row2.Left.IsChildLockActive':false,'Body.Doors.Row2.Left.Window.Position':0,'Body.Doors.Row2.Left.Handle.Inside.IsPulled':false,'Body.Doors.Row2.Left.Handle.Outside.IsPulled':false,
+  'Body.Doors.Row2.Right.IsChildLockActive':false,'Body.Doors.Row2.Right.Window.Position':0,'Body.Doors.Row2.Right.Handle.Inside.IsPulled':false,'Body.Doors.Row2.Right.Handle.Outside.IsPulled':false,
+  // ── Body — HMI-owned inputs only ─────────────────────────────────────
+  // Body.Trunk.IsOpen, Body.Trunk.IsLocked, Body.Horn.IsActive are
+  // bridge-owned (TrunkPlantModel + Horn arbiter) and likewise omitted.
+  'Body.Hood.IsOpen':false,'Body.FuelLid.IsOpen':false,'Body.ChargeLid.IsOpen':false,
+  // Anti-theft alarm + auto-relock status (project extensions) — bridge-owned,
+  // omitted.  PanicAlarm and AutoRelock features publish them.
   // Sunroof
   'Body.Sunroof.Position':0,'Body.Sunroof.Shade.Position':0,
   // Wipers
