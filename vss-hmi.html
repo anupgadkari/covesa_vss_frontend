@@ -213,7 +213,7 @@ const INIT_STATE={
   'Body.PEPS.Plant.NfcCard.1.Position':'NotPresent',
   'Body.PEPS.Plant.NfcCard.2.Position':'NotPresent',
   // ── Doors — HMI-owned inputs only ────────────────────────────────────
-  // Bridge-owned door state (IsLocked, IsDoubleLocked, IsOpen, LatchStatus,
+  // Bridge-owned door state (IsLocked, IsDoubleLocked, IsOpen,
   // Latch.IsLatched, Soldier.IsUnlocked) is INTENTIONALLY OMITTED from
   // INIT_STATE per docs/signal-ownership-and-state-hydration.md — the
   // door-lock plant model owns those values and the WS bridge delivers
@@ -222,6 +222,8 @@ const INIT_STATE={
   // snapshot has arrived.  Until then those reads return `undefined`,
   // which React renders as the "off" state — better than asserting a
   // wrong default that may briefly conflict with reality.
+  // (LatchStatus exists in the signal catalog but has no consumers
+  // today — see DoorCard comment for context.)
   // Front doors don't have child-lock — only rear (Row 2) doors do.
   'Body.Doors.Row1.Left.Window.Position':0,'Body.Doors.Row1.Left.Handle.Inside.IsPulled':false,'Body.Doors.Row1.Left.Handle.Outside.IsPulled':false,
   'Body.Doors.Row1.Right.Window.Position':0,'Body.Doors.Row1.Right.Handle.Inside.IsPulled':false,'Body.Doors.Row1.Right.Handle.Outside.IsPulled':false,
@@ -313,12 +315,13 @@ function DoorCard({label,pfx,s,set}){
       <input type="range" className="slr" min={0} max={100} value={s[`${p}.Window.Position`]??0}
         onChange={e=>set(`${p}.Window.Position`,parseInt(e.target.value))}/>
     </div>
-    <div className="ebrow" style={{marginTop:3}}>
-      {['UNLATCHED','HALF_LATCHED','FULL_LATCHED'].map(v=>(
-        <button key={v} className={`eb ${s[`${p}.LatchStatus`]===v?'on':''}`}
-          onClick={()=>set(`${p}.LatchStatus`,v)}>{v.replace('_LATCHED','').replace('UN','UN-')}</button>
-      ))}
-    </div>
+    {/* The 3-button latch-state selector (UN-LATCHED / HALF / FULL) was
+        removed — `Body.Doors.Row*.LatchStatus` has no consumers anywhere
+        (no feature, plant model, arbiter, or ws_bridge subscribes to it),
+        so the buttons were pure dead UI.  The boolean "Latched" toggle
+        above is the real signal, published by DoorHandlePlantModel and
+        forwarded via OUTPUT_SIGNALS.  Re-add this group if/when a
+        half-latched test scenario is wired up to a real consumer. */}
   </div>;
 }
 
