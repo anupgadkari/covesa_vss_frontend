@@ -222,8 +222,9 @@ const INIT_STATE={
   // snapshot has arrived.  Until then those reads return `undefined`,
   // which React renders as the "off" state — better than asserting a
   // wrong default that may briefly conflict with reality.
-  'Body.Doors.Row1.Left.IsChildLockActive':false,'Body.Doors.Row1.Left.Window.Position':0,'Body.Doors.Row1.Left.Handle.Inside.IsPulled':false,'Body.Doors.Row1.Left.Handle.Outside.IsPulled':false,
-  'Body.Doors.Row1.Right.IsChildLockActive':false,'Body.Doors.Row1.Right.Window.Position':0,'Body.Doors.Row1.Right.Handle.Inside.IsPulled':false,'Body.Doors.Row1.Right.Handle.Outside.IsPulled':false,
+  // Front doors don't have child-lock — only rear (Row 2) doors do.
+  'Body.Doors.Row1.Left.Window.Position':0,'Body.Doors.Row1.Left.Handle.Inside.IsPulled':false,'Body.Doors.Row1.Left.Handle.Outside.IsPulled':false,
+  'Body.Doors.Row1.Right.Window.Position':0,'Body.Doors.Row1.Right.Handle.Inside.IsPulled':false,'Body.Doors.Row1.Right.Handle.Outside.IsPulled':false,
   'Body.Doors.Row2.Left.IsChildLockActive':false,'Body.Doors.Row2.Left.Window.Position':0,'Body.Doors.Row2.Left.Handle.Inside.IsPulled':false,'Body.Doors.Row2.Left.Handle.Outside.IsPulled':false,
   'Body.Doors.Row2.Right.IsChildLockActive':false,'Body.Doors.Row2.Right.Window.Position':0,'Body.Doors.Row2.Right.Handle.Inside.IsPulled':false,'Body.Doors.Row2.Right.Handle.Outside.IsPulled':false,
   // ── Body — HMI-owned inputs only ─────────────────────────────────────
@@ -293,13 +294,20 @@ function SG({title,vss,children,def=false,lit=false}){
 }
 function DoorCard({label,pfx,s,set}){
   const p=pfx;
+  // Child-lock is a Row 2 (rear-doors-only) feature in real vehicles —
+  // the front doors don't expose this control.  We detect Row 2 from
+  // the signal prefix and conditionally render the toggle so the panel
+  // matches a real OEM door card layout.
+  const isRearDoor = p.includes('Row2');
   return <div className="dcard">
     <div className="dctitle">{label}</div>
     <div className="dcr"><span className="dcl">Open</span><Tog val={s[`${p}.IsOpen`]} on={()=>set(`${p}.IsOpen`,!s[`${p}.IsOpen`])} c="a"/></div>
     <div className="dcr"><span className="dcl">Soldier</span><Tog val={s[`${p}.IsLocked`]} on={()=>set(`${p}.Soldier.IsUnlocked`,s[`${p}.IsLocked`])} c="r"/></div>
     <div className="dcr"><span className="dcl">DblLock</span><Tog val={s[`${p}.IsDoubleLocked`]} on={()=>set('Body.Doors.CentralLock.Command',s[`${p}.IsDoubleLocked`]?'release_double':'lock_double')} c="r"/></div>
     <div className="dcr"><span className="dcl">Latched</span><Tog val={s[`${p}.Latch.IsLatched`]} c="v"/></div>
-    <div className="dcr"><span className="dcl">ChildLk</span><Tog val={s[`${p}.IsChildLockActive`]} on={()=>set(`${p}.IsChildLockActive`,!s[`${p}.IsChildLockActive`])} c="v"/></div>
+    {isRearDoor && (
+      <div className="dcr"><span className="dcl">ChildLk</span><Tog val={s[`${p}.IsChildLockActive`]} on={()=>set(`${p}.IsChildLockActive`,!s[`${p}.IsChildLockActive`])} c="v"/></div>
+    )}
     <div style={{marginTop:2}}>
       <div className="slhdr"><span className="dcl">Win</span><span className="sv">{s[`${p}.Window.Position`]??0}%</span></div>
       <input type="range" className="slr" min={0} max={100} value={s[`${p}.Window.Position`]??0}
