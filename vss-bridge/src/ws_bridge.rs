@@ -188,6 +188,39 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     "Body.Doors.AutoRelock.TimeoutSeconds",
 ];
 
+/// Subset of `OUTPUT_SIGNALS` whose authoritative boot value comes from
+/// a plant model.  The bridge waits until each of these has been
+/// observed in `output_state` at least once before serving the first
+/// snapshot to a freshly-connected HMI client — this guarantees the
+/// "first WS message is always a complete, consistent snapshot"
+/// contract documented in
+/// `docs/signal-ownership-and-state-hydration.md` §5.
+///
+/// Signals that are normally OFF / inactive at boot (e.g. brake lamp,
+/// indicator lamps, horn) are intentionally NOT in this list — they
+/// would never tick at boot and would deadlock the gate.  Only owned
+/// state that the plant model proactively publishes goes here.
+const ESSENTIAL_BOOT_SIGNALS: &[VssPath] = &[
+    // Door lock state — DoorLockPlantModel.publish_all() publishes 12
+    // values (4×IsLocked + 4×IsDoubleLocked + 4×Soldier.IsUnlocked).
+    "Body.Doors.Row1.Left.IsLocked",
+    "Body.Doors.Row1.Right.IsLocked",
+    "Body.Doors.Row2.Left.IsLocked",
+    "Body.Doors.Row2.Right.IsLocked",
+    "Body.Doors.Row1.Left.IsDoubleLocked",
+    "Body.Doors.Row1.Right.IsDoubleLocked",
+    "Body.Doors.Row2.Left.IsDoubleLocked",
+    "Body.Doors.Row2.Right.IsDoubleLocked",
+    "Body.Doors.Row1.Left.Soldier.IsUnlocked",
+    "Body.Doors.Row1.Right.Soldier.IsUnlocked",
+    "Body.Doors.Row2.Left.Soldier.IsUnlocked",
+    "Body.Doors.Row2.Right.Soldier.IsUnlocked",
+    // Status flags published once at boot from main.rs.
+    "Body.Switches.Panic.IsEngaged",
+    "Vehicle.Body.Alarm.IsActive",
+    "Body.Doors.AutoRelock.IsArmed",
+];
+
 /// Shared state snapshot sent to HMI clients.
 type StateSnapshot = HashMap<&'static str, serde_json::Value>;
 
@@ -215,6 +248,14 @@ impl<B: SignalBus> WsBridge<B> {
         // Shared output state + broadcast channel for pushing updates to clients.
         let output_state: Arc<Mutex<StateSnapshot>> = Arc::new(Mutex::new(HashMap::new()));
         let (update_tx, _) = broadcast::channel::<String>(256);
+
+        // Boot-readiness gate.  Flips TRUE the first time `output_state`
+        // contains every signal in ESSENTIAL_BOOT_SIGNALS — guaranteeing
+        // that any client that connects after that moment receives a
+        // complete, consistent first snapshot.  See
+        // docs/signal-ownership-and-state-hydration.md §5.
+        let (ready_tx, ready_rx) = tokio::sync::watch::channel::<bool>(false);
+        let ready_tx = Arc::new(ready_tx);
 
         // Coalesce per-signal updates into a single 10 ms batch so that
         // multi-signal publications (e.g. BlinkRelay toggling three lamps
@@ -261,10 +302,13 @@ impl<B: SignalBus> WsBridge<B> {
 
         // Broadcaster: waits for a dirty notification, sleeps 10 ms to
         // collect further updates, then sends one coalesced snapshot.
+        // Also flips the boot-readiness gate once every essential
+        // boot signal has been observed at least once.
         {
             let state = Arc::clone(&output_state);
             let tx = update_tx.clone();
             let dirty = Arc::clone(&dirty);
+            let ready_tx = Arc::clone(&ready_tx);
             tokio::spawn(async move {
                 const BATCH_WINDOW: Duration = Duration::from_millis(10);
                 loop {
@@ -276,6 +320,20 @@ impl<B: SignalBus> WsBridge<B> {
                         let s = state.lock().await;
                         s.clone()
                     };
+                    // Boot-readiness check — only flips once, watch
+                    // dedup makes a redundant `send(true)` a no-op.
+                    if !*ready_tx.borrow() {
+                        let all_essential_present = ESSENTIAL_BOOT_SIGNALS
+                            .iter()
+                            .all(|s| snapshot.contains_key(s));
+                        if all_essential_present {
+                            tracing::info!(
+                                essentials = ESSENTIAL_BOOT_SIGNALS.len(),
+                                "WS bridge: boot-ready (all essential signals present)"
+                            );
+                            let _ = ready_tx.send(true);
+                        }
+                    }
                     let msg = serde_json::json!({ "state": snapshot });
                     let _ = tx.send(msg.to_string());
                 }
@@ -297,6 +355,7 @@ impl<B: SignalBus> WsBridge<B> {
             let config_rx = config_tx.subscribe();
             let platform_config = Arc::clone(&self.platform_config);
             let config_tx2 = config_tx.clone();
+            let ready_rx = ready_rx.clone();
 
             tokio::spawn(async move {
                 if let Err(e) = handle_connection(
@@ -308,6 +367,7 @@ impl<B: SignalBus> WsBridge<B> {
                     config_tx2,
                     platform_config,
                     peer,
+                    ready_rx,
                 )
                 .await
                 {
@@ -328,11 +388,25 @@ async fn handle_connection<B: SignalBus>(
     config_tx: broadcast::Sender<String>,
     platform_config: Arc<PlatformConfig>,
     peer: SocketAddr,
+    mut ready_rx: tokio::sync::watch::Receiver<bool>,
 ) -> anyhow::Result<()> {
     let ws_stream = tokio_tungstenite::accept_async(stream).await?;
     let (mut ws_tx, mut ws_rx) = ws_stream.split();
 
     tracing::info!(%peer, "HMI client connected");
+
+    // Wait for boot-readiness before sending the first snapshot.  This
+    // guarantees that every signal in ESSENTIAL_BOOT_SIGNALS is already
+    // populated in `output_state` — the HMI's first message is then
+    // always complete and consistent.  See
+    // docs/signal-ownership-and-state-hydration.md §5.
+    if !*ready_rx.borrow() {
+        tracing::debug!(%peer, "HMI client waiting for bridge boot-readiness");
+        // Watch::changed() resolves when the value changes since last
+        // observation; combined with the `*borrow() == false` check
+        // above it skips the wait when we're already ready.
+        let _ = ready_rx.changed().await;
+    }
 
     // Send current signal state immediately on connect.
     {
