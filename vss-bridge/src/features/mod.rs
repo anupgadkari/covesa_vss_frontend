@@ -14,3 +14,4 @@ pub mod rke;
 pub mod thumb_pad_lock;
 pub mod turn_indicator;
 pub mod walk_away_lock;
+pub mod welcome;

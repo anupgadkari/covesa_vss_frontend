@@ -88,8 +88,8 @@ impl<B: SignalBus + Send + Sync + 'static> ThumbPadLock<B> {
         // `Zone` cache in memory for the keys-in-vehicle gate.
         let mut zone_streams: Vec<futures::stream::BoxStream<'static, SignalValue>> =
             Vec::with_capacity(PAIRED_ZONE_SIGNALS.len());
-        for sig in PAIRED_ZONE_SIGNALS.iter() {
-            zone_streams.push(self.bus.subscribe(*sig).await);
+        for &sig in PAIRED_ZONE_SIGNALS.iter() {
+            zone_streams.push(self.bus.subscribe(sig).await);
         }
         let mut device_zones: Vec<Zone> = vec![Zone::OutOfRange; PAIRED_ZONE_SIGNALS.len()];
 
@@ -397,8 +397,9 @@ mod tests {
             "expected NO lock command when no paired device is outside, got {h:?}"
         );
         assert!(
-            h.iter().any(|(s, v)| *s == FEEDBACK_REQUEST
-                && *v == SignalValue::String("lock_denied".into())),
+            h.iter()
+                .any(|(s, v)| *s == FEEDBACK_REQUEST
+                    && *v == SignalValue::String("lock_denied".into())),
             "expected lock_denied feedback, got {h:?}"
         );
     }

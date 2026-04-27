@@ -29,6 +29,7 @@ use vss_bridge::features::rke::{PairedFob, RkeFeature};
 use vss_bridge::features::thumb_pad_lock::ThumbPadLock;
 use vss_bridge::features::turn_indicator::TurnIndicator;
 use vss_bridge::features::walk_away_lock::WalkAwayLock;
+use vss_bridge::features::welcome::Welcome;
 use vss_bridge::ipc_message::SignalValue;
 use vss_bridge::kuksa_sync;
 use vss_bridge::nvm::NvmStore;
@@ -254,9 +255,13 @@ async fn main() -> anyhow::Result<()> {
         )
         .run(),
     );
-    let _ = courtesy_arb; // suppressed until Welcome feature lands in this branch
+    // Welcome — exterior puddle + dome courtesy lights when any
+    // paired PEPS device enters LF coverage (Approach or proximity).
+    // 30 s hold by default; releases early on ignition ON or when
+    // all devices leave LF.
+    tokio::spawn(Welcome::new(Arc::clone(&bus), Arc::clone(&courtesy_arb)).run());
 
-    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm, AutoRelock, PassiveEntry");
+    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome");
 
     // ── Plant Models ────────────────────────────────────────────────
     // Simulate physical lamp behavior the M7 / smart actuator firmware

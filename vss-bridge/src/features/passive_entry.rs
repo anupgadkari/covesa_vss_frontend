@@ -472,17 +472,14 @@ impl<B: SignalBus + Send + Sync + 'static> PassiveEntry<B> {
             }
         } else {
             // Driver door: stage 2 only if a recent stage-1 succeeded.
-            match &self.pending_stage_two {
+            matches!(
+                &self.pending_stage_two,
                 Some(p)
                     if p.device_slot == dev.slot
                         && matches!(p.device_kind, DeviceKind::Fob)
                             == matches!(dev.kind, DeviceKind::Fob)
-                        && now.duration_since(p.started) < window =>
-                {
-                    true
-                }
-                _ => false,
-            }
+                        && now.duration_since(p.started) < window
+            )
         };
 
         let cmd = if stage_two {
@@ -629,18 +626,12 @@ mod tests {
         }
         // Initial sentinel publishes so each door's IsLocked is observable
         // for assertions.
-        bus.publish(
-            "Body.Doors.Row1.Left.IsLocked",
-            SignalValue::Bool(true),
-        )
-        .await
-        .unwrap();
-        bus.publish(
-            "Body.Doors.Row1.Right.IsLocked",
-            SignalValue::Bool(true),
-        )
-        .await
-        .unwrap();
+        bus.publish("Body.Doors.Row1.Left.IsLocked", SignalValue::Bool(true))
+            .await
+            .unwrap();
+        bus.publish("Body.Doors.Row1.Right.IsLocked", SignalValue::Bool(true))
+            .await
+            .unwrap();
         bus
     }
 
@@ -871,7 +862,7 @@ mod tests {
     }
 
     /// 10. Crypto sanity: verify our test secrets match what the plant
-    /// model produces — guards against silent secret-key drift.
+    ///     model produces — guards against silent secret-key drift.
     #[test]
     fn test_secrets_match_plant_default_format() {
         let s = default_secret(b'F', 1);
@@ -882,7 +873,7 @@ mod tests {
     }
 
     /// 11. crypto::compute_challenge_response is deterministic — same
-    /// (key, nonce) always produces the same output.  Sanity check.
+    ///     (key, nonce) always produces the same output.  Sanity check.
     #[test]
     fn crypto_response_deterministic() {
         let key = default_secret(b'F', 1);
