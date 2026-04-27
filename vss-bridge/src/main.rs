@@ -92,6 +92,7 @@ async fn main() -> anyhow::Result<()> {
     let (horn_arb, horn_fut) = arbiter::horn_arbiter(Arc::clone(&bus));
     let (_comfort_arb, comfort_fut) = arbiter::comfort_arbiter(Arc::clone(&bus));
     let (courtesy_arb, courtesy_fut) = arbiter::courtesy_arbiter(Arc::clone(&bus));
+    let (puddle_arb, puddle_fut) = arbiter::puddle_arbiter(Arc::clone(&bus));
 
     tokio::spawn(lighting_fut);
     tokio::spawn(low_beam_fut);
@@ -99,12 +100,14 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(horn_fut);
     tokio::spawn(comfort_fut);
     tokio::spawn(courtesy_fut);
+    tokio::spawn(puddle_fut);
 
     let lighting_arb = Arc::new(lighting_arb);
     let low_beam_arb = Arc::new(low_beam_arb);
     let door_lock_arb = Arc::new(door_lock_arb);
     let horn_arb = Arc::new(horn_arb);
     let courtesy_arb = Arc::new(courtesy_arb);
+    let puddle_arb = Arc::new(puddle_arb);
 
     // ── Feature Business Logic ──────────────────────────────────────
     let lux_threshold = _platform_config.vehicle_line.auto_headlamp_lux_threshold;
@@ -259,7 +262,14 @@ async fn main() -> anyhow::Result<()> {
     // paired PEPS device enters LF coverage (Approach or proximity).
     // 30 s hold by default; releases early on ignition ON or when
     // all devices leave LF.
-    tokio::spawn(Welcome::new(Arc::clone(&bus), Arc::clone(&courtesy_arb)).run());
+    tokio::spawn(
+        Welcome::new(
+            Arc::clone(&bus),
+            Arc::clone(&courtesy_arb),
+            Arc::clone(&puddle_arb),
+        )
+        .run(),
+    );
 
     tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome");
 

@@ -776,18 +776,45 @@ pub fn comfort_arbiter<B: SignalBus>(
 
 /// Create the Courtesy domain arbiter.
 ///
-/// Covers exterior puddle lamps + interior dome light — outputs that
-/// are *shared* between several courtesy / convenience features:
-/// Welcome (approach entry), Farewell (door open after ignition off),
-/// PerimeterAlarm (intrusion attention-grabber), Follow-Me-Home
-/// (already on low_beam_arbiter for its primary outputs).  Putting
-/// puddle/dome on a dedicated arbiter prevents these features from
-/// stepping on each other when the conditions overlap.
+/// Today this covers the **interior dome light** only.  Exterior
+/// puddle lamps moved to their own dedicated `puddle_arbiter` because
+/// they're a distinct contention surface (Welcome today; Farewell,
+/// PerimeterAlarm, future "puddle on door open" all want them).
 ///
-/// All claims at MEDIUM priority — this is courtesy lighting, not
-/// safety-critical, so a future security feature (e.g. PerimeterAlarm)
-/// can take HIGH if it ever lands.
+/// Adding a new shared interior-courtesy actuator (cabin ambient,
+/// glove-box, vanity mirror lamps) means just adding an allow entry
+/// here.
 pub fn courtesy_arbiter<B: SignalBus>(
+    bus: Arc<B>,
+) -> (DomainArbiter, impl std::future::Future<Output = ()>) {
+    let allow_list = vec![AllowEntry {
+        feature_id: FeatureId::Welcome,
+        signal: "Cabin.Lights.IsDomeOn",
+        priority: Priority::Medium,
+    }];
+
+    DomainArbiter::new("Courtesy", allow_list, bus)
+}
+
+/// Create the Puddle domain arbiter.
+///
+/// Dedicated arbiter for the under-mirror exterior puddle lamps
+/// (`Body.Lights.Puddle.{Left,Right}.IsOn`).  Multiple features will
+/// want to claim these:
+///
+/// | Feature | When | Priority |
+/// |---|---|---|
+/// | **Welcome** (today) | Any paired PEPS device enters LF coverage | MEDIUM |
+/// | **Farewell** (planned) | Driver opens door after ignition OFF | MEDIUM |
+/// | **DoorOpenAssist** (planned) | Any door opens at night | LOW |
+/// | **PerimeterAlarm** (planned) | Intrusion event — pulse pattern as attention-grabber | HIGH |
+///
+/// Splitting puddle onto its own arbiter (rather than rolling into
+/// `courtesy_arbiter`) keeps the contention surface explicit so each
+/// future feature can pick the right priority without a global
+/// renumbering, and so a future security claim can pre-empt courtesy
+/// claims cleanly.
+pub fn puddle_arbiter<B: SignalBus>(
     bus: Arc<B>,
 ) -> (DomainArbiter, impl std::future::Future<Output = ()>) {
     let allow_list = vec![
@@ -801,14 +828,9 @@ pub fn courtesy_arbiter<B: SignalBus>(
             signal: "Body.Lights.Puddle.Right.IsOn",
             priority: Priority::Medium,
         },
-        AllowEntry {
-            feature_id: FeatureId::Welcome,
-            signal: "Cabin.Lights.IsDomeOn",
-            priority: Priority::Medium,
-        },
     ];
 
-    DomainArbiter::new("Courtesy", allow_list, bus)
+    DomainArbiter::new("Puddle", allow_list, bus)
 }
 
 // ---------------------------------------------------------------------------

@@ -97,15 +97,27 @@ fn is_powered_on(val: &SignalValue) -> bool {
 
 pub struct Welcome<B: SignalBus> {
     bus: Arc<B>,
+    /// Arbiter for the interior dome light (and any future shared
+    /// interior courtesy actuators).
     courtesy_arb: Arc<DomainArbiter>,
+    /// Dedicated arbiter for the exterior puddle lamps — separate
+    /// surface because Farewell / PerimeterAlarm / DoorOpenAssist
+    /// are all expected to claim them under different conditions
+    /// and priorities.
+    puddle_arb: Arc<DomainArbiter>,
     hold: Duration,
 }
 
 impl<B: SignalBus + Send + Sync + 'static> Welcome<B> {
-    pub fn new(bus: Arc<B>, courtesy_arb: Arc<DomainArbiter>) -> Self {
+    pub fn new(
+        bus: Arc<B>,
+        courtesy_arb: Arc<DomainArbiter>,
+        puddle_arb: Arc<DomainArbiter>,
+    ) -> Self {
         Self {
             bus,
             courtesy_arb,
+            puddle_arb,
             hold: Duration::from_secs(WELCOME_HOLD_SECS),
         }
     }
@@ -208,9 +220,10 @@ impl<B: SignalBus + Send + Sync + 'static> Welcome<B> {
     }
 
     async fn claim_all(&self, on: bool) {
-        for &sig in &[PUDDLE_LEFT, PUDDLE_RIGHT, DOME] {
+        // Puddle lamps go through the dedicated puddle arbiter.
+        for &sig in &[PUDDLE_LEFT, PUDDLE_RIGHT] {
             let _ = self
-                .courtesy_arb
+                .puddle_arb
                 .request(ActuatorRequest {
                     signal: sig,
                     value: SignalValue::Bool(on),
@@ -219,12 +232,23 @@ impl<B: SignalBus + Send + Sync + 'static> Welcome<B> {
                 })
                 .await;
         }
+        // Dome light goes through the (interior) courtesy arbiter.
+        let _ = self
+            .courtesy_arb
+            .request(ActuatorRequest {
+                signal: DOME,
+                value: SignalValue::Bool(on),
+                priority: Priority::Medium,
+                feature_id: FEATURE_ID,
+            })
+            .await;
     }
 
     async fn release_all(&self) {
-        for &sig in &[PUDDLE_LEFT, PUDDLE_RIGHT, DOME] {
-            let _ = self.courtesy_arb.release(sig, FEATURE_ID).await;
+        for &sig in &[PUDDLE_LEFT, PUDDLE_RIGHT] {
+            let _ = self.puddle_arb.release(sig, FEATURE_ID).await;
         }
+        let _ = self.courtesy_arb.release(DOME, FEATURE_ID).await;
     }
 }
 
@@ -234,7 +258,7 @@ impl<B: SignalBus + Send + Sync + 'static> Welcome<B> {
 mod tests {
     use super::*;
     use crate::adapters::mock::MockBus;
-    use crate::arbiter::courtesy_arbiter;
+    use crate::arbiter::{courtesy_arbiter, puddle_arbiter};
     use tokio::time::advance;
 
     /// Build the bus, courtesy arbiter, and a Welcome feature with a
@@ -242,10 +266,13 @@ mod tests {
     /// by 30 s for the timer-expiry case.
     async fn setup_with_hold(hold: Duration) -> (Arc<MockBus>, tokio::task::JoinHandle<()>) {
         let bus = Arc::new(MockBus::new());
-        let (arb, fut) = courtesy_arbiter(Arc::clone(&bus));
-        tokio::spawn(fut);
-        let arb = Arc::new(arb);
-        let feature = Welcome::new(Arc::clone(&bus), arb).with_hold(hold);
+        let (carb, cfut) = courtesy_arbiter(Arc::clone(&bus));
+        let (parb, pfut) = puddle_arbiter(Arc::clone(&bus));
+        tokio::spawn(cfut);
+        tokio::spawn(pfut);
+        let carb = Arc::new(carb);
+        let parb = Arc::new(parb);
+        let feature = Welcome::new(Arc::clone(&bus), carb, parb).with_hold(hold);
         let h = tokio::spawn(feature.run());
         for _ in 0..16 {
             tokio::task::yield_now().await;
