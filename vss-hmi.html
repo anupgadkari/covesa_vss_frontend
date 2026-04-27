@@ -497,6 +497,11 @@ function CombinedView({s,set,onDeviceSelect}){
   const hood=s['Body.Hood.IsOpen'],trunk=s['Body.Trunk.IsOpen'];
   const mlf=s['Body.Mirrors.Left.IsFolded'],mrf=s['Body.Mirrors.Right.IsFolded'];
   const wf=s['Body.Windshield.Front.Wiping.Mode']!=='OFF';
+  // Exterior puddle lamps — driven by Welcome (and future Farewell /
+  // PerimeterAlarm) via the courtesy arbiter.  Rendered as soft blue
+  // ovals projected on the ground outboard of each side mirror.
+  const puddleL=s['Body.Lights.Puddle.Left.IsOn'];
+  const puddleR=s['Body.Lights.Puddle.Right.IsOn'];
 
   const doorsData=[
     {pfx:'Body.Doors.Row1.Left',  open:s['Body.Doors.Row1.Left.IsOpen'],  cx:85,cy:207,dx:-65,rx:60, ry:125,rw:50,rh:165,handleSide:'left'},
@@ -695,28 +700,50 @@ function CombinedView({s,set,onDeviceSelect}){
           <path d={`M ${cx+dx*0.2},${cy} L ${cx+dx},${cy}`} stroke="#F59E0B" strokeWidth="2" opacity=".6" strokeDasharray="3,2"/>
           <text x={cx} y={ry+rh+12} textAnchor="middle" fill="#F59E0B" fontSize="6" fontWeight="bold">▣ TAP</text>
         </>}
-        {/* Outer handle — when door open: click to close; when closed: drag to pull */}
-        <rect x={hOutX} y={hY-4} width="6" height="8" rx="1"
-          fill={open?'#0DC8C8':outPulled?'#38BDF8':dblLock?'#4B2020':locked?'#3A2A0A':'#1E4060'}
-          stroke={open?'#5EEAD4':outPulled?'#7DD3FC':'#2A5070'} strokeWidth="0.5"
-          style={{cursor:open?'pointer':dblLock||locked?'not-allowed':'pointer'}}
-          onClick={open?()=>set(pfx+'.CloseCmd',true):undefined}
-          onMouseDown={open||dblLock||locked?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',true)}
-          onMouseUp={open||dblLock||locked?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',false)}
-          onMouseLeave={open||dblLock||locked?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',false)}>
-          <title>{open?'Outside handle — click to close door':dblLock?'Outside handle — double-locked, cannot pull':locked?'Outside handle — locked, cannot pull':'Outside handle — hold to pull open'}</title>
-        </rect>
-        {/* Inner handle — when door open: click to close; when closed: drag to pull */}
-        <rect x={hInX} y={hY-4} width="6" height="8" rx="1"
-          fill={open?'#0DC8C8':inPulled?'#34D399':dblLock?'#4B2020':'#1E3A28'}
-          stroke={open?'#5EEAD4':inPulled?'#6EE7B7':'#2A5040'} strokeWidth="0.5"
-          style={{cursor:open?'pointer':dblLock?'not-allowed':'pointer'}}
-          onClick={open?()=>set(pfx+'.CloseCmd',true):undefined}
-          onMouseDown={open||dblLock?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',true)}
-          onMouseUp={open||dblLock?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',false)}
-          onMouseLeave={open||dblLock?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',false)}>
-          <title>{open?'Inside handle — click to close door':dblLock?'Inside handle — double-locked, cannot pull':'Inside handle — hold to pull open'}</title>
-        </rect>
+        {/* Outer handle — physically pullable in any state.  When the
+            door is locked the pull won't open the door (plant model
+            decides), but it still triggers PassiveEntry auth, so the
+            HMI must let the user pull regardless of lock state.  A
+            small red 🔒 badge above the handle warns "won't open"
+            when locked.  When open, click to close. */}
+        <g>
+          <rect x={hOutX} y={hY-4} width="6" height="8" rx="1"
+            fill={open?'#0DC8C8':outPulled?'#38BDF8':'#1E4060'}
+            stroke={open?'#5EEAD4':outPulled?'#7DD3FC':'#2A5070'} strokeWidth="0.5"
+            style={{cursor:'pointer',transform:outPulled?`translate(${isLeft?'-1px':'1px'},0)`:'none',transition:'transform 80ms ease-out'}}
+            onClick={open?()=>set(pfx+'.CloseCmd',true):undefined}
+            onMouseDown={open?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',true)}
+            onMouseUp={open?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',false)}
+            onMouseLeave={open?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',false)}>
+            <title>{open?'Outside handle — click to close door':dblLock?'Outside handle — door is double-locked; pull will not open':locked?'Outside handle — door is locked; pull will not open (PassiveEntry may unlock if a paired device is in proximity zone)':'Outside handle — hold to pull open'}</title>
+          </rect>
+          {!open && (locked || dblLock) && (
+            <text x={hOutX+3} y={hY-6} textAnchor="middle"
+              fill={dblLock?'#FCA5A5':'#F87171'} fontSize="6" fontWeight="bold"
+              style={{pointerEvents:'none'}}>🔒</text>
+          )}
+        </g>
+        {/* Inner handle — same model: pullable always; the latch
+            decides.  Inside handle is fully blocked when double-locked
+            (interior linkage physically disconnected), but we still
+            allow the visual pull animation. */}
+        <g>
+          <rect x={hInX} y={hY-4} width="6" height="8" rx="1"
+            fill={open?'#0DC8C8':inPulled?'#34D399':'#1E3A28'}
+            stroke={open?'#5EEAD4':inPulled?'#6EE7B7':'#2A5040'} strokeWidth="0.5"
+            style={{cursor:'pointer',transform:inPulled?`translate(${isLeft?'1px':'-1px'},0)`:'none',transition:'transform 80ms ease-out'}}
+            onClick={open?()=>set(pfx+'.CloseCmd',true):undefined}
+            onMouseDown={open?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',true)}
+            onMouseUp={open?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',false)}
+            onMouseLeave={open?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',false)}>
+            <title>{open?'Inside handle — click to close door':dblLock?'Inside handle — double-locked; interior linkage physically disconnected, pull will not open':'Inside handle — hold to pull open'}</title>
+          </rect>
+          {!open && dblLock && (
+            <text x={hInX+3} y={hY-6} textAnchor="middle"
+              fill="#FCA5A5" fontSize="6" fontWeight="bold"
+              style={{pointerEvents:'none'}}>🔒</text>
+          )}
+        </g>
         {/* Soldier sill-pin — vertical rect, inner window-sill edge */}
         <rect x={soldX} y={soldY} width={soldW} height={soldH} rx="1"
           fill={lockFill} stroke={lockStroke} strokeWidth="0.8"
@@ -800,6 +827,33 @@ function CombinedView({s,set,onDeviceSelect}){
       <title>{park?'Right rear parking light — on':'Right rear parking light — off'}</title>
     </circle>
 
+
+    {/* Exterior puddle lamps — under-mirror courtesy lamps that
+        project a pool of light onto the ground outboard of each
+        front door.  Driven by the Welcome feature on PEPS approach
+        entry.  Rendered as soft blue ovals offset outward from the
+        mirror centres so they read as ground projection. */}
+    <defs>
+      <radialGradient id="puddleGlow" cx="50%" cy="50%" r="50%">
+        <stop offset="0%"  stopColor="#7CC8FF" stopOpacity="0.85"/>
+        <stop offset="60%" stopColor="#3D85C6" stopOpacity="0.45"/>
+        <stop offset="100%" stopColor="#3D85C6" stopOpacity="0"/>
+      </radialGradient>
+    </defs>
+    {puddleL && (
+      <g>
+        <title>Left puddle lamp — on</title>
+        <ellipse cx="24" cy="210" rx="20" ry="12" fill="url(#puddleGlow)"/>
+        <ellipse cx="24" cy="210" rx="6" ry="3" fill="#BAD6FE" opacity="0.95"/>
+      </g>
+    )}
+    {puddleR && (
+      <g>
+        <title>Right puddle lamp — on</title>
+        <ellipse cx="336" cy="210" rx="20" ry="12" fill="url(#puddleGlow)"/>
+        <ellipse cx="336" cy="210" rx="6" ry="3" fill="#BAD6FE" opacity="0.95"/>
+      </g>
+    )}
 
     {/* Mirrors — top view (elongated housing + trailing-edge turn indicator) */}
     {!mlf
@@ -971,28 +1025,38 @@ function SideView({s,set}){
       stroke={d2?'#F59E0B':'#1A2838'} strokeWidth={d2?2.5:1.2} rx="2"/>
     {d2&&<text x="680" y="322" textAnchor="middle" fill="#F59E0B" fontSize="8" fontWeight="bold">DOOR OPEN</text>}
 
-    {/* ── Door handles — interactive pull-bars mapped to visible side ── */}
+    {/* ── Door handles — always pullable.  When the door is locked the
+         pull won't open the door (plant model decides), but it still
+         triggers PassiveEntry auth, so the HMI must allow it
+         regardless of lock state.  A small red 🔒 badge to the left
+         of the handle warns "won't open" when locked. ── */}
     {[
       {pfx:r1pfx, x:458, open:d1, locked:r1locked, dbl:r1dbl, pulled:r1pulled, label:'Row 1'},
       {pfx:r2pfx, x:616, open:d2, locked:r2locked, dbl:r2dbl, pulled:r2pulled, label:'Row 2'},
     ].map(({pfx,x,open,locked,dbl,pulled,label})=>{
-      const canPull=set&&!open&&!locked&&!dbl;
       const tip=open?`${label} outside handle — door is open`
-               :dbl ?`${label} outside handle — double-locked, cannot pull`
-               :locked?`${label} outside handle — locked, cannot pull`
+               :dbl ?`${label} outside handle — door is double-locked; pull will not open`
+               :locked?`${label} outside handle — door is locked; pull will not open (PassiveEntry may unlock if a paired device is in proximity zone)`
                :pulled?`${label} outside handle — pulling…`
                :`${label} outside handle — hold to pull open`;
-      const hfill=pulled?'#4A9EF5':locked||dbl?'#3A1818':'#1E3250';
-      const hstroke=pulled?'#6BB8FF':locked||dbl?'#6A2222':'#2A4468';
-      const kfill=pulled?'#6BB8FF':locked||dbl?'#5A2222':'#253A58';
-      return <g key={pfx} fill={hfill} stroke={hstroke} strokeWidth="0.8"
-        style={canPull?{cursor:'pointer'}:{cursor:locked||dbl?'not-allowed':'default'}}
-        onMouseDown={canPull?()=>set(pfx+'.Handle.Outside.IsPulled',true):undefined}
-        onMouseUp={canPull?()=>set(pfx+'.Handle.Outside.IsPulled',false):undefined}
-        onMouseLeave={canPull?()=>set(pfx+'.Handle.Outside.IsPulled',false):undefined}>
-        <title>{tip}</title>
-        <rect x={x}   y="276" width="38" height="9" rx="3"/>
-        <rect x={x}   y="276" width="5"  height="9" rx="2" fill={kfill}/>
+      const hfill=pulled?'#4A9EF5':'#1E3250';
+      const hstroke=pulled?'#6BB8FF':'#2A4468';
+      const kfill=pulled?'#6BB8FF':'#253A58';
+      return <g key={pfx}>
+        <g fill={hfill} stroke={hstroke} strokeWidth="0.8"
+          style={{cursor:'pointer',transform:pulled?'translate(-2px,1px)':'none',transition:'transform 80ms ease-out'}}
+          onMouseDown={open?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',true)}
+          onMouseUp={open?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',false)}
+          onMouseLeave={open?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',false)}>
+          <title>{tip}</title>
+          <rect x={x}   y="276" width="38" height="9" rx="3"/>
+          <rect x={x}   y="276" width="5"  height="9" rx="2" fill={kfill}/>
+        </g>
+        {!open && (locked || dbl) && (
+          <text x={x-6} y="284" textAnchor="middle"
+            fill={dbl?'#FCA5A5':'#F87171'} fontSize="9" fontWeight="bold"
+            style={{pointerEvents:'none'}}>🔒</text>
+        )}
       </g>;
     })}
 
