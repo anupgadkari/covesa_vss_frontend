@@ -694,21 +694,17 @@ function CombinedView({s,set,onDeviceSelect}){
       const clX=isLeft?rx+rw-7:rx+7;
       const clY=ry+Math.floor(rh*0.82);
       return <g key={pfx}>
-        {/* Door body — subtle red tint on border when locked.  The
-            outer rect carries onClick=CloseCmd when the door is open;
-            the inner fill rect uses `pointer-events:none` so the
-            click bubbles through to the outer.  Without this, the
-            inner rect (which covers all but the 2-px border) would
-            absorb every click on the door body and the close action
-            would never fire. */}
+        {/* Door body — purely visual (fill + stroke).  Clicks are
+            handled by an explicit transparent click-catcher below
+            so we don't have to fight pointer-events propagation
+            through stacked rects. */}
         <rect x={rx} y={ry} width={rw} height={rh}
           fill="#0E1825"
           stroke={open?'#F59E0B':dblLock?'rgba(168,85,247,0.5)':locked?'rgba(239,68,68,0.4)':'#1A2838'}
           strokeWidth={open?2:locked||dblLock?1.5:1} rx="2"
-          style={{cursor:open?'pointer':'default'}}
-          onClick={open?()=>set(pfx+'.CloseCmd',true):undefined}/>
+          style={{pointerEvents:'none'}}/>
         <rect x={rx+2} y={ry+2} width={rw-4} height={rh-4} fill="#08111f"
-          pointerEvents="none"/>
+          style={{pointerEvents:'none'}}/>
         {open&&<>
           <path d={`M ${cx+dx*0.2},${cy} L ${cx+dx},${cy}`}
             stroke="#F59E0B" strokeWidth="2" opacity=".6" strokeDasharray="3,2"
@@ -717,6 +713,19 @@ function CombinedView({s,set,onDeviceSelect}){
             fill="#F59E0B" fontSize="6" fontWeight="bold"
             style={{pointerEvents:'none'}}>▣ TAP</text>
         </>}
+        {/* Click-catcher — covers the entire door body.  Renders
+            BEFORE the handle hit-areas / soldier pin so those are
+            on top and capture their own events first.  This rect
+            is the close-door affordance: clicking anywhere on the
+            door (except on a handle / soldier) fires CloseCmd while
+            the door is open.  When the door is closed, the rect is
+            inert so handle hit-areas / soldier pin still work. */}
+        <rect x={rx} y={ry} width={rw} height={rh} rx="2"
+          fill="transparent" pointerEvents={open?'all':'none'}
+          style={{cursor:open?'pointer':'default'}}
+          onClick={open?()=>set(pfx+'.CloseCmd',true):undefined}>
+          {open && <title>Door is open · click anywhere on the door body to close</title>}
+        </rect>
         {/* Outer handle — physically pullable in any state.  When the
             door is locked the pull won't open the door (plant model
             decides), but it still triggers PassiveEntry auth, so the
