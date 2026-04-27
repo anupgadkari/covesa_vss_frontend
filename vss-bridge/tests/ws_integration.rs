@@ -317,12 +317,7 @@ async fn passive_entry_unlocks_driver_door_via_handle_pull() {
     let (mut tx, mut rx) = connect_ws(&bridge.ws_url()).await;
 
     // Make sure doors start locked so we'll see the unlock transition.
-    send_sensor(
-        &mut tx,
-        "Body.Doors.CentralLock.Command",
-        json!("lock_all"),
-    )
-    .await;
+    send_sensor(&mut tx, "Body.Doors.CentralLock.Command", json!("lock_all")).await;
     let locked = wait_for_state(
         &mut rx,
         "Body.Doors.Row1.Left.IsLocked",
@@ -373,12 +368,7 @@ async fn passive_entry_no_device_in_zone_keeps_doors_locked() {
     let bridge = BridgeProcess::start();
     let (mut tx, mut rx) = connect_ws(&bridge.ws_url()).await;
 
-    send_sensor(
-        &mut tx,
-        "Body.Doors.CentralLock.Command",
-        json!("lock_all"),
-    )
-    .await;
+    send_sensor(&mut tx, "Body.Doors.CentralLock.Command", json!("lock_all")).await;
     let locked = wait_for_state(
         &mut rx,
         "Body.Doors.Row1.Left.IsLocked",
@@ -418,12 +408,7 @@ async fn welcome_arms_puddle_lamps_on_approach_entry() {
     let (mut tx, mut rx) = connect_ws(&bridge.ws_url()).await;
 
     // Place fob 1 at Approach.
-    send_sensor(
-        &mut tx,
-        "Body.PEPS.Plant.KeyFob.1.Zone",
-        json!("Approach"),
-    )
-    .await;
+    send_sensor(&mut tx, "Body.PEPS.Plant.KeyFob.1.Zone", json!("Approach")).await;
 
     let on = wait_for_state(
         &mut rx,
