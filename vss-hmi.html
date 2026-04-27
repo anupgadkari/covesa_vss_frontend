@@ -706,28 +706,21 @@ function CombinedView({s,set,onDeviceSelect}){
             HMI must let the user pull regardless of lock state.  A
             small red 🔒 badge above the handle warns "won't open"
             when locked.  When open, click to close. */}
-        {/* Outer handle — fixed position so the hit area stays under
-            the cursor while held.  A `translate` here would shift the
-            rect 1-2 px out from under the mouse, immediately firing
-            onMouseLeave and dropping IsPulled — which breaks the
-            PassiveEntry hold-and-unlock flow.  Visual cue is a brighter
-            fill + stroke + a small "pulled" glow rect appearing just
-            beside the handle (does not steal pointer events). */}
+        {/* Outer handle.  The visible rect is small (6×8 px); to make
+            press-and-hold reliable in spite of mouse jitter, an
+            invisible padded hit-area rect (16×18 px) absorbs the
+            pointer events on top.  `pointer-events:visible` on the
+            invisible rect ensures it still registers clicks despite
+            having `fill: transparent`. */}
         <g>
           <rect x={hOutX} y={hY-4} width="6" height="8" rx="1"
             fill={open?'#0DC8C8':outPulled?'#7DD3FC':'#1E4060'}
             stroke={open?'#5EEAD4':outPulled?'#FFFFFF':'#2A5070'}
             strokeWidth={outPulled?'0.9':'0.5'}
-            style={{cursor:'pointer'}}
-            onClick={open?()=>set(pfx+'.CloseCmd',true):undefined}
-            onMouseDown={open?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',true)}
-            onMouseUp={open?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',false)}
-            onMouseLeave={open?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',false)}>
-            <title>{open?'Outside handle — click to close door':dblLock?'Outside handle — door is double-locked; pull will not open':locked?'Outside handle — door is locked; pull will not open (PassiveEntry may unlock if a paired device is in proximity zone)':'Outside handle — hold to pull open'}</title>
-          </rect>
-          {/* Pulled-state glow indicator — sits next to the handle when
-              held.  Pointer-events:none so it never intercepts the
-              mouse-leave check. */}
+            style={{pointerEvents:'none'}}/>
+          {/* Pulled-state glow indicator — sits next to the visual
+              handle when held.  Pointer-events:none so it doesn't
+              steal the hit area. */}
           {outPulled && (
             <rect x={isLeft?hOutX-3:hOutX+7} y={hY-4} width="2" height="8"
               rx="1" fill="#7DD3FC" opacity="0.85"
@@ -738,20 +731,26 @@ function CombinedView({s,set,onDeviceSelect}){
               fill={dblLock?'#FCA5A5':'#F87171'} fontSize="6" fontWeight="bold"
               style={{pointerEvents:'none'}}>🔒</text>
           )}
+          {/* Invisible hit area — much larger than the visual handle
+              so press-and-hold survives mouse jitter (essential for the
+              PassiveEntry challenge-response window of ~80 ms). */}
+          <rect x={hOutX-5} y={hY-9} width="16" height="18" rx="2"
+            fill="transparent" pointerEvents="all"
+            style={{cursor:'pointer'}}
+            onClick={open?()=>set(pfx+'.CloseCmd',true):undefined}
+            onMouseDown={open?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',true)}
+            onMouseUp={open?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',false)}
+            onMouseLeave={open?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',false)}>
+            <title>{open?'Outside handle — click to close door':dblLock?'Outside handle — door is double-locked; pull will not open':locked?'Outside handle — door is locked; pull will not open (PassiveEntry may unlock if a paired device is in proximity zone)':'Outside handle — hold to pull open'}</title>
+          </rect>
         </g>
-        {/* Inner handle — same fixed-position approach. */}
+        {/* Inner handle — same padded-hit-area approach. */}
         <g>
           <rect x={hInX} y={hY-4} width="6" height="8" rx="1"
             fill={open?'#0DC8C8':inPulled?'#6EE7B7':'#1E3A28'}
             stroke={open?'#5EEAD4':inPulled?'#FFFFFF':'#2A5040'}
             strokeWidth={inPulled?'0.9':'0.5'}
-            style={{cursor:'pointer'}}
-            onClick={open?()=>set(pfx+'.CloseCmd',true):undefined}
-            onMouseDown={open?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',true)}
-            onMouseUp={open?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',false)}
-            onMouseLeave={open?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',false)}>
-            <title>{open?'Inside handle — click to close door':dblLock?'Inside handle — double-locked; interior linkage physically disconnected, pull will not open':'Inside handle — hold to pull open'}</title>
-          </rect>
+            style={{pointerEvents:'none'}}/>
           {inPulled && (
             <rect x={isLeft?hInX+7:hInX-3} y={hY-4} width="2" height="8"
               rx="1" fill="#6EE7B7" opacity="0.85"
@@ -762,6 +761,15 @@ function CombinedView({s,set,onDeviceSelect}){
               fill="#FCA5A5" fontSize="6" fontWeight="bold"
               style={{pointerEvents:'none'}}>🔒</text>
           )}
+          <rect x={hInX-5} y={hY-9} width="16" height="18" rx="2"
+            fill="transparent" pointerEvents="all"
+            style={{cursor:'pointer'}}
+            onClick={open?()=>set(pfx+'.CloseCmd',true):undefined}
+            onMouseDown={open?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',true)}
+            onMouseUp={open?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',false)}
+            onMouseLeave={open?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',false)}>
+            <title>{open?'Inside handle — click to close door':dblLock?'Inside handle — double-locked; interior linkage physically disconnected, pull will not open':'Inside handle — hold to pull open'}</title>
+          </rect>
         </g>
         {/* Soldier sill-pin — vertical rect, inner window-sill edge */}
         <rect x={soldX} y={soldY} width={soldW} height={soldH} rx="1"
