@@ -216,7 +216,7 @@ async fn main() -> anyhow::Result<()> {
         DoorLockPlantModel::with_ack_and_nvm(Arc::clone(&bus), door_lock_ack_tx, nvm.clone()).run(),
     );
     tokio::spawn(DoorHandlePlantModel::new(Arc::clone(&bus)).run());
-    tokio::spawn(TrunkPlantModel::new(Arc::clone(&bus)).run());
+    tokio::spawn(TrunkPlantModel::with_nvm(Arc::clone(&bus), nvm.clone()).run());
     tokio::spawn(PepsPlantModel::new(Arc::clone(&bus)).run());
     tracing::info!("plant models spawned: BlinkRelay, DoorLockPlantModel, DoorHandlePlantModel, TrunkPlantModel, PepsPlantModel");
 

@@ -62,6 +62,18 @@ pub struct DoorLockState {
     pub double_locked: [bool; 4],
 }
 
+/// Persisted state for the trunk plant model.
+///
+/// In a real vehicle the trunk's open/closed position is read from a
+/// physical hall-effect sensor at boot — there's no NVM involved
+/// because the position can't change while the BCM is off.  In our
+/// simulation we persist it so that "vehicle parked with trunk open,
+/// restart bridge, trunk is still open" is reproducible end-to-end.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct TrunkState {
+    pub is_open: bool,
+}
+
 /// Handle to the on-disk NVM directory.  Cloneable; cheap to pass around.
 ///
 /// Construct via [`NvmStore::from_env`] (production path — reads
@@ -139,6 +151,17 @@ impl NvmStore {
     /// either way.
     pub fn save_door_lock(&self, state: &DoorLockState) {
         self.save("door_lock.json", state);
+    }
+
+    /// Load `TrunkState` from disk.  Same fallback semantics as
+    /// `load_door_lock`.
+    pub fn load_trunk(&self) -> TrunkState {
+        self.load("trunk.json")
+    }
+
+    /// Atomically persist `TrunkState` to disk.
+    pub fn save_trunk(&self, state: &TrunkState) {
+        self.save("trunk.json", state);
     }
 
     // ── Internals ──────────────────────────────────────────────────────
@@ -242,6 +265,37 @@ mod tests {
         nvm.save_door_lock(&want);
         let got = nvm.load_door_lock();
         assert_eq!(got, want);
+    }
+
+    #[test]
+    fn trunk_state_roundtrip() {
+        let (nvm, _g) = store();
+        // Default = closed.
+        assert!(!nvm.load_trunk().is_open);
+
+        nvm.save_trunk(&TrunkState { is_open: true });
+        assert!(nvm.load_trunk().is_open);
+
+        nvm.save_trunk(&TrunkState { is_open: false });
+        assert!(!nvm.load_trunk().is_open);
+    }
+
+    #[test]
+    fn door_lock_and_trunk_files_are_independent() {
+        let (nvm, dir) = store();
+        nvm.save_door_lock(&DoorLockState {
+            locked: [true; 4],
+            ..Default::default()
+        });
+        nvm.save_trunk(&TrunkState { is_open: true });
+
+        // Both files exist independently.
+        assert!(dir.path().join("door_lock.json").exists());
+        assert!(dir.path().join("trunk.json").exists());
+
+        // Loading one doesn't affect the other.
+        assert_eq!(nvm.load_door_lock().locked, [true; 4]);
+        assert!(nvm.load_trunk().is_open);
     }
 
     #[test]

@@ -215,6 +215,8 @@ const ESSENTIAL_BOOT_SIGNALS: &[VssPath] = &[
     "Body.Doors.Row1.Right.Soldier.IsUnlocked",
     "Body.Doors.Row2.Left.Soldier.IsUnlocked",
     "Body.Doors.Row2.Right.Soldier.IsUnlocked",
+    // Trunk plant model — boots from NVM and publishes IsOpen on startup.
+    "Body.Trunk.IsOpen",
     // Status flags published once at boot from main.rs.
     "Body.Switches.Panic.IsEngaged",
     "Vehicle.Body.Alarm.IsActive",
