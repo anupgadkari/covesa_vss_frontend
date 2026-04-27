@@ -676,7 +676,13 @@ function CombinedView({s,set,onDeviceSelect}){
       const isRow2=pfx.includes('Row2');
       const hInX=isLeft?rx+rw-10:rx+4;
       const hOutX=isLeft?rx+4:rx+rw-10;
-      const hY=ry+Math.floor(rh*0.45);
+      // Inside handle stays near the middle of the door panel
+      // (where a seated occupant naturally reaches).
+      const hInY=ry+Math.floor(rh*0.45);
+      // Outside handle is near the door's trailing edge (B-pillar
+      // for front doors, C-pillar for rear doors) — that's where
+      // it lives on real production vehicles.
+      const hOutY=ry+Math.floor(rh*0.82);
       // Soldier sill-pin: narrow vertical rect on inner window-sill edge
       // dblLock takes priority over locked in colour
       const soldW=4, soldH=16;
@@ -713,7 +719,7 @@ function CombinedView({s,set,onDeviceSelect}){
             invisible rect ensures it still registers clicks despite
             having `fill: transparent`. */}
         <g>
-          <rect x={hOutX} y={hY-4} width="6" height="8" rx="1"
+          <rect x={hOutX} y={hOutY-4} width="6" height="8" rx="1"
             fill={open?'#0DC8C8':outPulled?'#7DD3FC':'#1E4060'}
             stroke={open?'#5EEAD4':outPulled?'#FFFFFF':'#2A5070'}
             strokeWidth={outPulled?'0.9':'0.5'}
@@ -722,19 +728,19 @@ function CombinedView({s,set,onDeviceSelect}){
               handle when held.  Pointer-events:none so it doesn't
               steal the hit area. */}
           {outPulled && (
-            <rect x={isLeft?hOutX-3:hOutX+7} y={hY-4} width="2" height="8"
+            <rect x={isLeft?hOutX-3:hOutX+7} y={hOutY-4} width="2" height="8"
               rx="1" fill="#7DD3FC" opacity="0.85"
               style={{pointerEvents:'none'}}/>
           )}
           {!open && (locked || dblLock) && (
-            <text x={hOutX+3} y={hY-6} textAnchor="middle"
+            <text x={hOutX+3} y={hOutY-6} textAnchor="middle"
               fill={dblLock?'#FCA5A5':'#F87171'} fontSize="6" fontWeight="bold"
               style={{pointerEvents:'none'}}>🔒</text>
           )}
           {/* Invisible hit area — much larger than the visual handle
               so press-and-hold survives mouse jitter (essential for the
               PassiveEntry challenge-response window of ~80 ms). */}
-          <rect x={hOutX-5} y={hY-9} width="16" height="18" rx="2"
+          <rect x={hOutX-5} y={hOutY-9} width="16" height="18" rx="2"
             fill="transparent" pointerEvents="all"
             style={{cursor:'pointer'}}
             onClick={open?()=>set(pfx+'.CloseCmd',true):undefined}
@@ -746,22 +752,22 @@ function CombinedView({s,set,onDeviceSelect}){
         </g>
         {/* Inner handle — same padded-hit-area approach. */}
         <g>
-          <rect x={hInX} y={hY-4} width="6" height="8" rx="1"
+          <rect x={hInX} y={hInY-4} width="6" height="8" rx="1"
             fill={open?'#0DC8C8':inPulled?'#6EE7B7':'#1E3A28'}
             stroke={open?'#5EEAD4':inPulled?'#FFFFFF':'#2A5040'}
             strokeWidth={inPulled?'0.9':'0.5'}
             style={{pointerEvents:'none'}}/>
           {inPulled && (
-            <rect x={isLeft?hInX+7:hInX-3} y={hY-4} width="2" height="8"
+            <rect x={isLeft?hInX+7:hInX-3} y={hInY-4} width="2" height="8"
               rx="1" fill="#6EE7B7" opacity="0.85"
               style={{pointerEvents:'none'}}/>
           )}
           {!open && dblLock && (
-            <text x={hInX+3} y={hY-6} textAnchor="middle"
+            <text x={hInX+3} y={hInY-6} textAnchor="middle"
               fill="#FCA5A5" fontSize="6" fontWeight="bold"
               style={{pointerEvents:'none'}}>🔒</text>
           )}
-          <rect x={hInX-5} y={hY-9} width="16" height="18" rx="2"
+          <rect x={hInX-5} y={hInY-9} width="16" height="18" rx="2"
             fill="transparent" pointerEvents="all"
             style={{cursor:'pointer'}}
             onClick={open?()=>set(pfx+'.CloseCmd',true):undefined}
