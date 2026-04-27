@@ -740,14 +740,19 @@ function CombinedView({s,set,onDeviceSelect}){
           {/* Invisible hit area — much larger than the visual handle
               so press-and-hold survives mouse jitter (essential for the
               PassiveEntry challenge-response window of ~80 ms). */}
+          {/* Hit-area is unconditional press-and-hold.  Do NOT register
+              onClick here — when a press-and-hold opens the door
+              mid-press (PassiveEntry), the trailing click event would
+              otherwise fire CloseCmd and immediately re-close the
+              just-opened door.  To close an open door, click the
+              door body itself (it carries the "▣ TAP" close hint). */}
           <rect x={hOutX-5} y={hOutY-9} width="16" height="18" rx="2"
             fill="transparent" pointerEvents="all"
             style={{cursor:'pointer'}}
-            onClick={open?()=>set(pfx+'.CloseCmd',true):undefined}
-            onMouseDown={open?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',true)}
-            onMouseUp={open?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',false)}
-            onMouseLeave={open?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',false)}>
-            <title>{open?'Outside handle — click to close door':dblLock?'Outside handle — door is double-locked; pull will not open':locked?'Outside handle — door is locked; pull will not open (PassiveEntry may unlock if a paired device is in proximity zone)':'Outside handle — hold to pull open'}</title>
+            onMouseDown={()=>set(pfx+'.Handle.Outside.IsPulled',true)}
+            onMouseUp={()=>set(pfx+'.Handle.Outside.IsPulled',false)}
+            onMouseLeave={()=>set(pfx+'.Handle.Outside.IsPulled',false)}>
+            <title>{open?'Outside handle — door is open · click door body to close':dblLock?'Outside handle — door is double-locked; pull will not open':locked?'Outside handle — door is locked; pull will not open (PassiveEntry may unlock if a paired device is in proximity zone)':'Outside handle — hold to pull open'}</title>
           </rect>
         </g>
         {/* Inner handle — same padded-hit-area approach. */}
@@ -770,11 +775,10 @@ function CombinedView({s,set,onDeviceSelect}){
           <rect x={hInX-5} y={hInY-9} width="16" height="18" rx="2"
             fill="transparent" pointerEvents="all"
             style={{cursor:'pointer'}}
-            onClick={open?()=>set(pfx+'.CloseCmd',true):undefined}
-            onMouseDown={open?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',true)}
-            onMouseUp={open?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',false)}
-            onMouseLeave={open?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',false)}>
-            <title>{open?'Inside handle — click to close door':dblLock?'Inside handle — double-locked; interior linkage physically disconnected, pull will not open':'Inside handle — hold to pull open'}</title>
+            onMouseDown={()=>set(pfx+'.Handle.Inside.IsPulled',true)}
+            onMouseUp={()=>set(pfx+'.Handle.Inside.IsPulled',false)}
+            onMouseLeave={()=>set(pfx+'.Handle.Inside.IsPulled',false)}>
+            <title>{open?'Inside handle — door is open · click door body to close':dblLock?'Inside handle — double-locked; interior linkage physically disconnected, pull will not open':'Inside handle — hold to pull open'}</title>
           </rect>
         </g>
         {/* Soldier sill-pin — vertical rect, inner window-sill edge */}
@@ -1083,9 +1087,9 @@ function SideView({s,set}){
             plus a small "pulled" indicator chip beside the handle. */}
         <g fill={hfill} stroke={hstroke} strokeWidth={pulled?'1.2':'0.8'}
           style={{cursor:'pointer'}}
-          onMouseDown={open?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',true)}
-          onMouseUp={open?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',false)}
-          onMouseLeave={open?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',false)}>
+          onMouseDown={()=>set(pfx+'.Handle.Outside.IsPulled',true)}
+          onMouseUp={()=>set(pfx+'.Handle.Outside.IsPulled',false)}
+          onMouseLeave={()=>set(pfx+'.Handle.Outside.IsPulled',false)}>
           <title>{tip}</title>
           <rect x={x}   y="276" width="38" height="9" rx="3"/>
           <rect x={x}   y="276" width="5"  height="9" rx="2" fill={kfill}/>
