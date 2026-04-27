@@ -130,6 +130,10 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     // Exterior puddle lamps — Welcome / Farewell courtesy outputs.
     "Body.Lights.Puddle.Left.IsOn",
     "Body.Lights.Puddle.Right.IsOn",
+    // Interior dome / courtesy light — claimed by Welcome via the
+    // courtesy_arbiter so the HMI shows the cabin illuminated on
+    // approach.
+    "Cabin.Lights.IsDomeOn",
     "Body.Doors.Row1.Left.IsLocked",
     "Body.Doors.Row1.Right.IsLocked",
     "Body.Doors.Row2.Left.IsLocked",

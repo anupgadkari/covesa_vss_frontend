@@ -502,6 +502,10 @@ function CombinedView({s,set,onDeviceSelect}){
   // ovals projected on the ground outboard of each side mirror.
   const puddleL=s['Body.Lights.Puddle.Left.IsOn'];
   const puddleR=s['Body.Lights.Puddle.Right.IsOn'];
+  // Interior dome / overhead courtesy lamp — claimed by Welcome via
+  // the courtesy arbiter.  Rendered as a soft warm glow over the
+  // front-cabin headliner area in the top view.
+  const dome=s['Cabin.Lights.IsDomeOn'];
 
   const doorsData=[
     {pfx:'Body.Doors.Row1.Left',  open:s['Body.Doors.Row1.Left.IsOpen'],  cx:85,cy:207,dx:-65,rx:60, ry:125,rw:50,rh:165,handleSide:'left'},
@@ -912,6 +916,26 @@ function CombinedView({s,set,onDeviceSelect}){
         <title>Right puddle lamp — on</title>
         <ellipse cx="336" cy="210" rx="20" ry="12" fill="url(#puddleGlow)"/>
         <ellipse cx="336" cy="210" rx="6" ry="3" fill="#BAD6FE" opacity="0.95"/>
+      </g>
+    )}
+
+    {/* Interior dome / overhead courtesy lamp — claimed by Welcome
+        on PEPS approach (and by manual switch).  Rendered as a warm
+        amber glow over the front-cabin headliner area, centered
+        between the two front seats. */}
+    <defs>
+      <radialGradient id="domeGlow" cx="50%" cy="50%" r="50%">
+        <stop offset="0%"  stopColor="#FFF6C8" stopOpacity="1"/>
+        <stop offset="40%" stopColor="#FCD34D" stopOpacity="0.85"/>
+        <stop offset="80%" stopColor="#F59E0B" stopOpacity="0.35"/>
+        <stop offset="100%" stopColor="#F59E0B" stopOpacity="0"/>
+      </radialGradient>
+    </defs>
+    {dome && (
+      <g style={{pointerEvents:'none'}}>
+        <title>Dome / overhead courtesy lamp — on</title>
+        <ellipse cx="180" cy="240" rx="48" ry="32" fill="url(#domeGlow)"/>
+        <rect x="172" y="234" width="16" height="10" rx="2" fill="#FFF3C4" stroke="#B45309" strokeWidth="0.6" opacity="0.98"/>
       </g>
     )}
 
