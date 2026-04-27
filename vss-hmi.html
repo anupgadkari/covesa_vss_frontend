@@ -694,17 +694,28 @@ function CombinedView({s,set,onDeviceSelect}){
       const clX=isLeft?rx+rw-7:rx+7;
       const clY=ry+Math.floor(rh*0.82);
       return <g key={pfx}>
-        {/* Door body — subtle red tint on border when locked */}
+        {/* Door body — subtle red tint on border when locked.  The
+            outer rect carries onClick=CloseCmd when the door is open;
+            the inner fill rect uses `pointer-events:none` so the
+            click bubbles through to the outer.  Without this, the
+            inner rect (which covers all but the 2-px border) would
+            absorb every click on the door body and the close action
+            would never fire. */}
         <rect x={rx} y={ry} width={rw} height={rh}
           fill="#0E1825"
           stroke={open?'#F59E0B':dblLock?'rgba(168,85,247,0.5)':locked?'rgba(239,68,68,0.4)':'#1A2838'}
           strokeWidth={open?2:locked||dblLock?1.5:1} rx="2"
           style={{cursor:open?'pointer':'default'}}
           onClick={open?()=>set(pfx+'.CloseCmd',true):undefined}/>
-        <rect x={rx+2} y={ry+2} width={rw-4} height={rh-4} fill="#08111f"/>
+        <rect x={rx+2} y={ry+2} width={rw-4} height={rh-4} fill="#08111f"
+          pointerEvents="none"/>
         {open&&<>
-          <path d={`M ${cx+dx*0.2},${cy} L ${cx+dx},${cy}`} stroke="#F59E0B" strokeWidth="2" opacity=".6" strokeDasharray="3,2"/>
-          <text x={cx} y={ry+rh+12} textAnchor="middle" fill="#F59E0B" fontSize="6" fontWeight="bold">▣ TAP</text>
+          <path d={`M ${cx+dx*0.2},${cy} L ${cx+dx},${cy}`}
+            stroke="#F59E0B" strokeWidth="2" opacity=".6" strokeDasharray="3,2"
+            style={{pointerEvents:'none'}}/>
+          <text x={cx} y={ry+rh+12} textAnchor="middle"
+            fill="#F59E0B" fontSize="6" fontWeight="bold"
+            style={{pointerEvents:'none'}}>▣ TAP</text>
         </>}
         {/* Outer handle — physically pullable in any state.  When the
             door is locked the pull won't open the door (plant model
@@ -788,9 +799,12 @@ function CombinedView({s,set,onDeviceSelect}){
           onClick={dblLock?undefined:()=>set(pfx+'.Soldier.IsUnlocked',locked)}>
           <title>{dblLock?'Sill pin — double-locked, release via RKE first':locked?'Sill pin — locked · click to unlock':'Sill pin — unlocked · click to lock'}</title>
         </rect>
-        {/* Latch indicator — leading edge of door */}
+        {/* Latch indicator — leading edge of door.  Decorative only —
+            pointer-events:none so it doesn't absorb clicks meant for
+            the close-door body. */}
         <rect x={isLeft?rx:rx+rw-3} y={ry+Math.floor(rh*0.6)} width="3" height="6" rx="1"
-          fill={latched?'#22C55E':'#F59E0B'} opacity="0.8"/>
+          fill={latched?'#22C55E':'#F59E0B'} opacity="0.8"
+          pointerEvents="none"/>
         {/* Child lock indicator — inner edge, lower portion, Row 2 + when active */}
         {childLock&&<g style={{cursor:'default'}}>
           <circle cx={clX} cy={clY} r="4.5" fill="rgba(168,85,247,0.18)" stroke="#A855F7" strokeWidth="0.8"/>
