@@ -24,6 +24,7 @@ use vss_bridge::features::hazard_lighting::HazardLighting;
 use vss_bridge::features::lock_feedback::LockFeedback;
 use vss_bridge::features::manual_lighting::ManualLighting;
 use vss_bridge::features::panic_alarm::PanicAlarm;
+use vss_bridge::features::passive_entry::{DeviceKind, PairedDevice, PassiveEntry};
 use vss_bridge::features::rke::{PairedFob, RkeFeature};
 use vss_bridge::features::thumb_pad_lock::ThumbPadLock;
 use vss_bridge::features::turn_indicator::TurnIndicator;
@@ -89,17 +90,20 @@ async fn main() -> anyhow::Result<()> {
         arbiter::door_lock_arbiter(Arc::clone(&bus));
     let (horn_arb, horn_fut) = arbiter::horn_arbiter(Arc::clone(&bus));
     let (_comfort_arb, comfort_fut) = arbiter::comfort_arbiter(Arc::clone(&bus));
+    let (courtesy_arb, courtesy_fut) = arbiter::courtesy_arbiter(Arc::clone(&bus));
 
     tokio::spawn(lighting_fut);
     tokio::spawn(low_beam_fut);
     tokio::spawn(door_lock_fut);
     tokio::spawn(horn_fut);
     tokio::spawn(comfort_fut);
+    tokio::spawn(courtesy_fut);
 
     let lighting_arb = Arc::new(lighting_arb);
     let low_beam_arb = Arc::new(low_beam_arb);
     let door_lock_arb = Arc::new(door_lock_arb);
     let horn_arb = Arc::new(horn_arb);
+    let courtesy_arb = Arc::new(courtesy_arb);
 
     // ── Feature Business Logic ──────────────────────────────────────
     let lux_threshold = _platform_config.vehicle_line.auto_headlamp_lux_threshold;
@@ -205,7 +209,54 @@ async fn main() -> anyhow::Result<()> {
         .run(),
     );
 
-    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm, AutoRelock");
+    // PassiveEntry — handle-pull authenticated unlock for the four
+    // outside doors.  Subscribes to handle pulls + paired-device zone
+    // signals; on a pull, issues an LF + BLE challenge, verifies the
+    // first response, dispatches UnlockDriver / UnlockAll via the
+    // door-lock arbiter (two-stage cal shared with RKE).
+    let pe_devices: Vec<PairedDevice> = {
+        // Same secret-derivation formula as the RKE wiring above + the
+        // PEPS plant model's default_secret().  Four paired fobs and
+        // two paired phones.
+        fn secret(device_type: u8, index: u8) -> [u8; 16] {
+            let mut key = [0u8; 16];
+            key[0] = device_type;
+            key[1] = index;
+            for (k, byte) in key.iter_mut().enumerate().skip(2) {
+                *byte = (device_type.wrapping_mul(17))
+                    .wrapping_add(index.wrapping_mul(31).wrapping_add(k as u8));
+            }
+            key
+        }
+        let mut v = Vec::new();
+        for i in 1u8..=4 {
+            v.push(PairedDevice {
+                kind: DeviceKind::Fob,
+                slot: (i - 1) as usize,
+                secret: secret(b'F', i),
+            });
+        }
+        for i in 1u8..=2 {
+            v.push(PairedDevice {
+                kind: DeviceKind::Phone,
+                slot: (i - 1) as usize,
+                secret: secret(b'P', i),
+            });
+        }
+        v
+    };
+    tokio::spawn(
+        PassiveEntry::new(
+            Arc::clone(&bus),
+            Arc::clone(&door_lock_arb),
+            Arc::clone(&_platform_config),
+            pe_devices,
+        )
+        .run(),
+    );
+    let _ = courtesy_arb; // suppressed until Welcome feature lands in this branch
+
+    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm, AutoRelock, PassiveEntry");
 
     // ── Plant Models ────────────────────────────────────────────────
     // Simulate physical lamp behavior the M7 / smart actuator firmware

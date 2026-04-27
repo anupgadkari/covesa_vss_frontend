@@ -9,6 +9,7 @@ pub mod hazard_lighting;
 pub mod lock_feedback;
 pub mod manual_lighting;
 pub mod panic_alarm;
+pub mod passive_entry;
 pub mod rke;
 pub mod thumb_pad_lock;
 pub mod turn_indicator;
