@@ -132,6 +132,7 @@ pub enum FeatureId {
     FollowMeHome = 0x15,
     AutoHighBeam = 0x16,
     FogLamps = 0x17,
+    PanicAlarm = 0x18,
 }
 
 impl FeatureId {
@@ -160,6 +161,7 @@ impl FeatureId {
             0x15 => Some(Self::FollowMeHome),
             0x16 => Some(Self::AutoHighBeam),
             0x17 => Some(Self::FogLamps),
+            0x18 => Some(Self::PanicAlarm),
             _ => None,
         }
     }

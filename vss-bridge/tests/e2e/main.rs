@@ -41,4 +41,18 @@ fn main() {
             .run_and_exit("../features/hazard.feature")
             .await;
     });
+
+    // Third pass for panic alarm scenarios (separate runtime so virtual
+    // time resets cleanly).
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .start_paused(true)
+        .build()
+        .expect("failed to build Tokio runtime");
+
+    rt.block_on(async {
+        VssWorld::cucumber()
+            .run_and_exit("../features/panic_alarm.feature")
+            .await;
+    });
 }

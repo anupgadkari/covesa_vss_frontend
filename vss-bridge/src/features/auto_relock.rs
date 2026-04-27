@@ -39,6 +39,14 @@ const CRASH_SIGNAL: VssPath = "Vehicle.Safety.CrashDetected";
 /// Power state signal — standard VSS v4.0.
 const POWER_STATE_SIGNAL: VssPath = "Vehicle.LowVoltageSystemState";
 
+/// Status signal — TRUE while the relock timer is counting down.
+const STATUS_IS_ARMED: VssPath = "Body.Doors.AutoRelock.IsArmed";
+
+/// Status signal — published once on each arm to advertise the configured
+/// timeout (seconds) to the HMI / consumers.  Allows the HMI to render a
+/// matching client-side countdown without hardcoding the value.
+const STATUS_TIMEOUT_SECS: VssPath = "Body.Doors.AutoRelock.TimeoutSeconds";
+
 /// Default door lock signals (4-door sedan). Used when no DoorConfig
 /// is provided (backward compatibility / simple tests).
 const DEFAULT_LOCK_SIGNALS: &[VssPath] = &[
@@ -174,6 +182,21 @@ impl<B: SignalBus> AutoRelock<B> {
 
             tracing::info!("AutoRelock: unlock detected, starting relock timer");
 
+            // Advertise to the HMI / consumers: timer is armed, here's the
+            // configured timeout.  HMI uses these to render a client-side
+            // countdown banner.
+            let _ = self
+                .bus
+                .publish(
+                    STATUS_TIMEOUT_SECS,
+                    SignalValue::Uint16(self.timeout.as_secs() as u16),
+                )
+                .await;
+            let _ = self
+                .bus
+                .publish(STATUS_IS_ARMED, SignalValue::Bool(true))
+                .await;
+
             // Phase 2: Timer is running.
             let timer_result = loop {
                 select! {
@@ -191,10 +214,18 @@ impl<B: SignalBus> AutoRelock<B> {
                             tracing::info!("AutoRelock: doors re-locked externally, timer cancelled");
                             break TimerOutcome::AlreadyLocked;
                         }
-                        if val == SignalValue::Bool(false) {
-                            tracing::info!("AutoRelock: second unlock, restarting timer");
-                            break TimerOutcome::Restart;
-                        }
+                        // IsLocked=false during an active timer is a no-op:
+                        // a single user UNLOCK press causes the door-lock
+                        // plant model to publish IsLocked=false for ALL
+                        // doors in microseconds (passenger doors superlock-
+                        // downgrade through the unlocked state).  Treating
+                        // each as a "second unlock" (and restarting the
+                        // timer) would cause the IsArmed flag to flicker
+                        // FALSE on the rebound and ultimately settle FALSE
+                        // — breaking the HMI countdown banner.
+                        // Real second-press behaviour requires the user to
+                        // LOCK first (TimerOutcome::AlreadyLocked above)
+                        // and then UNLOCK again, which re-enters Phase 1.
                     }
                     Some(val) = crash_stream.next() => {
                         if val == SignalValue::Bool(true) {
@@ -204,6 +235,13 @@ impl<B: SignalBus> AutoRelock<B> {
                     else => return,
                 }
             };
+
+            // Whatever happens to the timer below, the armed status flag
+            // must clear so the HMI banner hides.
+            let _ = self
+                .bus
+                .publish(STATUS_IS_ARMED, SignalValue::Bool(false))
+                .await;
 
             match timer_result {
                 TimerOutcome::Expired => {
@@ -226,9 +264,6 @@ impl<B: SignalBus> AutoRelock<B> {
                 }
                 TimerOutcome::DoorOpened | TimerOutcome::AlreadyLocked => {
                     // Back to phase 1
-                }
-                TimerOutcome::Restart => {
-                    continue; // Re-enter phase 2 (timer restarts)
                 }
                 TimerOutcome::CrashDisable => {
                     tracing::warn!(
@@ -311,8 +346,6 @@ enum TimerOutcome {
     DoorOpened,
     /// Doors were re-locked by another source.
     AlreadyLocked,
-    /// Another unlock event — restart timer.
-    Restart,
     /// Crash detected — enter DISABLED state.
     CrashDisable,
 }

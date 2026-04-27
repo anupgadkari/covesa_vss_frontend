@@ -46,9 +46,14 @@ struct BridgeProcess {
 impl BridgeProcess {
     fn start() -> Self {
         let port = free_port();
+        // Each test bridge needs its own HTTP port too — the default
+        // (3000) is the developer-facing HMI port and would collide
+        // when cargo runs integration tests in parallel.
+        let http_port = free_port();
         let child = Command::new(env!("CARGO_BIN_EXE_vss-bridge"))
             .env("RUST_LOG", "warn")
             .env("VSS_BRIDGE_WS_PORT", port.to_string())
+            .env("VSS_BRIDGE_HTTP_PORT", http_port.to_string())
             .spawn()
             .expect("failed to start vss-bridge");
         Self { child, port }
