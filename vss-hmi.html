@@ -41,7 +41,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--white);fo
 .vbtn:hover{background:var(--s2);color:var(--white)}
 .vbtn.active{background:var(--amber2);border-color:rgba(245,158,11,.35);color:var(--amber)}
 .vbtn svg{width:20px;height:20px;stroke-width:1.5}
-.canvas{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg)}
+.canvas{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg);position:relative}
 .ctbar{height:32px;background:var(--s1);border-bottom:1px solid var(--bdr);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0}
 .ctlabel{font-family:var(--fd);font-size:11px;letter-spacing:.14em;color:var(--white);font-weight:500}
 .ctlabel b{color:var(--amber)}
@@ -98,6 +98,13 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--white);fo
 .blinks{animation:blink 1.4s infinite}
 .pulse{animation:pulse .5s infinite}
 .relock-banner{display:flex;align-items:center;gap:8px;padding:3px 10px;border-radius:14px;border:1px solid rgba(245,158,11,.55);font-family:var(--fm);font-size:10px;color:#FCD34D;font-weight:600;letter-spacing:.04em;animation:relockPulseBg 1.6s infinite;text-shadow:0 0 6px rgba(252,211,77,.4)}
+/* Hydration overlay — dims the canvas + shows a "Connecting…" banner
+   while the WS snapshot is being delivered.  Pointer events stay live
+   so the user can still see the layout but can't act on stale data. */
+.hyd-overlay{position:absolute;inset:0;background:rgba(8,15,24,.60);display:flex;align-items:center;justify-content:center;z-index:10;backdrop-filter:blur(1px);font-family:var(--fm);font-size:11px;color:var(--amber);letter-spacing:.08em;pointer-events:none}
+.hyd-overlay .hyd-card{background:var(--s2);border:1px solid var(--bdr);border-radius:6px;padding:14px 22px;display:flex;flex-direction:column;align-items:center;gap:6px;box-shadow:0 4px 22px rgba(0,0,0,.45)}
+.hyd-overlay .hyd-card .dot{width:8px;height:8px;border-radius:50%;background:var(--amber);animation:pulse .9s infinite}
+.hyd-overlay .hyd-card .sub{color:var(--muted);font-size:9px;letter-spacing:.04em;text-transform:uppercase}
 .relock-banner b{color:#FFEDD5;font-weight:800;font-size:12px}
 .horn-viz{position:relative;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px}
 .horn-viz svg{position:relative;z-index:2}
@@ -1750,6 +1757,14 @@ function App(){
   const [view,setView]=useState('top');
   const [time,setTime]=useState(new Date());
   const [wsConnected,setWsConnected]=useState(false);
+  // wsHydrated — flips TRUE the first time the bridge's WS snapshot
+  // arrives.  Visuals that depend on bridge-owned signals (door locks,
+  // trunk, horn, alarm-active flag, AutoRelock status, …) gate on this
+  // and render a dimmed "loading" placeholder until the snapshot lands.
+  // Reset to FALSE on every reconnect (ws.onclose) so the gating kicks
+  // back in during bridge restarts.  See
+  // docs/signal-ownership-and-state-hydration.md §4.
+  const [wsHydrated,setWsHydrated]=useState(false);
   const [selDev,setSelDev]=useState({type:'fob',index:1}); // selected auth device
   // AutoRelock countdown — captures wall-clock at the moment IsArmed went TRUE.
   // The banner derives remaining seconds = timeoutSecs - (now - armedAt) and
@@ -1788,7 +1803,11 @@ function App(){
       try{
         const ws=new WebSocket(`ws://${window.location.hostname||'localhost'}:8080`);
         ws.onopen=()=>{setWsConnected(true);attemptsRef.current=0;
-          setS(INIT_STATE); // request fresh state
+          // Reset HMI-owned defaults (e.g. fob-zone OUT, switches off);
+          // bridge-owned signals come in the snapshot below.  wsHydrated
+          // stays FALSE until that snapshot arrives.
+          setS(INIT_STATE);
+          setWsHydrated(false);
         };
         ws.onmessage=(e)=>{
           try{
@@ -1799,13 +1818,23 @@ function App(){
                 variant:   {...prev.variant,  ...(msg.config.variant||{})},
                 vehicle_line:{...prev.vehicle_line,...(msg.config.vehicle_line||{})},
               }));
-            } else if(msg.state) setS(prev=>({...prev,...msg.state}));
+            } else if(msg.state) {
+              setS(prev=>({...prev,...msg.state}));
+              // The first state snapshot from the bridge marks hydration
+              // complete — every owned signal now has its authoritative
+              // value and visuals can drop the dimmed placeholder.
+              setWsHydrated(true);
+            }
             else if(msg.path!==undefined) setS(prev=>({...prev,[msg.path]:msg.value}));
           }catch(err){}
         };
         ws.onerror=()=>{};
         ws.onclose=()=>{
           setWsConnected(false);
+          // Disconnect → the values we hold may now be stale.  Force
+          // re-hydration via the dim placeholder until reconnect lands
+          // a fresh snapshot.
+          setWsHydrated(false);
           const delay=Math.min(1000*2**Math.min(attemptsRef.current,5),30000);
           attemptsRef.current++;
           reconnRef.current=setTimeout(connect,delay);
@@ -1865,6 +1894,19 @@ function App(){
 
       {/* Canvas */}
       <div className="canvas">
+        {/* Hydration overlay — covers the canvas while the WS snapshot
+            of bridge-owned signals is in flight.  Pointer-events:none
+            so the user can still see the layout underneath but the
+            dimming makes it visually clear nothing is actionable yet. */}
+        {!wsHydrated && (
+          <div className="hyd-overlay">
+            <div className="hyd-card">
+              <div className="dot"/>
+              <div>{wsConnected ? 'HYDRATING STATE…' : 'CONNECTING TO BRIDGE…'}</div>
+              <div className="sub">{wsConnected ? 'awaiting plant-model snapshot' : 'ws://localhost:8080'}</div>
+            </div>
+          </div>
+        )}
         <div className="ctbar">
           <span className="ctlabel"><b>VSS</b> · {viewLabel}</span>
           {/* AutoRelock countdown banner — visible only while IsArmed=true.
