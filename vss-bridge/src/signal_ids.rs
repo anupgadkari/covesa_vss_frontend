@@ -24,6 +24,11 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Body.Lights.Brake.IsActive" => Some(0x0002_0007),
         "Body.Lights.Backup.IsActive" => Some(0x0002_0008),
         "Body.Lights.LicensePlate.IsOn" => Some(0x0002_0009),
+        // Exterior puddle lamps — under-mirror courtesy lamps that
+        // illuminate the ground next to the front doors.  Driven by
+        // Welcome / Farewell / PerimeterAlarm via the courtesy arbiter.
+        "Body.Lights.Puddle.Left.IsOn" => Some(0x0002_0019),
+        "Body.Lights.Puddle.Right.IsOn" => Some(0x0002_001A),
         "Body.Lights.DirectionIndicator.Left.IsSignaling" => Some(0x0002_000A),
         "Body.Lights.DirectionIndicator.Right.IsSignaling" => Some(0x0002_000B),
         "Body.Lights.Hazard.IsSignaling" => Some(0x0002_000C),
@@ -302,6 +307,8 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Body.Lights.Brake.IsActive", 0x0002_0007),
     ("Body.Lights.Backup.IsActive", 0x0002_0008),
     ("Body.Lights.LicensePlate.IsOn", 0x0002_0009),
+    ("Body.Lights.Puddle.Left.IsOn", 0x0002_0019),
+    ("Body.Lights.Puddle.Right.IsOn", 0x0002_001A),
     (
         "Body.Lights.DirectionIndicator.Left.IsSignaling",
         0x0002_000A,

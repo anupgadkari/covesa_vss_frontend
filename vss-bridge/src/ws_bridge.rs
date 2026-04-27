@@ -127,6 +127,9 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     "Body.Lights.Brake.IsActive",
     "Body.Lights.Backup.IsActive",
     "Body.Lights.LicensePlate.IsOn",
+    // Exterior puddle lamps — Welcome / Farewell courtesy outputs.
+    "Body.Lights.Puddle.Left.IsOn",
+    "Body.Lights.Puddle.Right.IsOn",
     "Body.Doors.Row1.Left.IsLocked",
     "Body.Doors.Row1.Right.IsLocked",
     "Body.Doors.Row2.Left.IsLocked",

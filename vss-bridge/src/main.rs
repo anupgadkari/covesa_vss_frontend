@@ -217,7 +217,15 @@ async fn main() -> anyhow::Result<()> {
     );
     tokio::spawn(DoorHandlePlantModel::new(Arc::clone(&bus)).run());
     tokio::spawn(TrunkPlantModel::with_nvm(Arc::clone(&bus), nvm.clone()).run());
-    tokio::spawn(PepsPlantModel::new(Arc::clone(&bus)).run());
+    tokio::spawn(
+        PepsPlantModel::new(Arc::clone(&bus))
+            // 10 ms × slot index — fob 1 = 10 ms, fob 6 = 60 ms.
+            // Stops concurrent same-zone devices from all responding
+            // on the same scheduler tick and lets PassiveEntry pick
+            // a deterministic "first responder wins".
+            .with_response_stagger_ms(vss_bridge::plant_models::peps::PRODUCTION_STAGGER_MS)
+            .run(),
+    );
     tracing::info!("plant models spawned: BlinkRelay, DoorLockPlantModel, DoorHandlePlantModel, TrunkPlantModel, PepsPlantModel");
 
     // ── WebSocket bridge for L6 HMI ─────────────────────────────────

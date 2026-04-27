@@ -735,6 +735,9 @@ pub fn door_lock_arbiter<B: SignalBus>(
         DoorLockAllowEntry {
             feature_id: FeatureId::DoubleLockRelease,
         },
+        DoorLockAllowEntry {
+            feature_id: FeatureId::PassiveEntry,
+        },
     ];
 
     DoorLockArbiter::new(allow_list, bus)
@@ -769,6 +772,43 @@ pub fn comfort_arbiter<B: SignalBus>(
     let allow_list = vec![];
 
     DomainArbiter::new("Comfort", allow_list, bus)
+}
+
+/// Create the Courtesy domain arbiter.
+///
+/// Covers exterior puddle lamps + interior dome light — outputs that
+/// are *shared* between several courtesy / convenience features:
+/// Welcome (approach entry), Farewell (door open after ignition off),
+/// PerimeterAlarm (intrusion attention-grabber), Follow-Me-Home
+/// (already on low_beam_arbiter for its primary outputs).  Putting
+/// puddle/dome on a dedicated arbiter prevents these features from
+/// stepping on each other when the conditions overlap.
+///
+/// All claims at MEDIUM priority — this is courtesy lighting, not
+/// safety-critical, so a future security feature (e.g. PerimeterAlarm)
+/// can take HIGH if it ever lands.
+pub fn courtesy_arbiter<B: SignalBus>(
+    bus: Arc<B>,
+) -> (DomainArbiter, impl std::future::Future<Output = ()>) {
+    let allow_list = vec![
+        AllowEntry {
+            feature_id: FeatureId::Welcome,
+            signal: "Body.Lights.Puddle.Left.IsOn",
+            priority: Priority::Medium,
+        },
+        AllowEntry {
+            feature_id: FeatureId::Welcome,
+            signal: "Body.Lights.Puddle.Right.IsOn",
+            priority: Priority::Medium,
+        },
+        AllowEntry {
+            feature_id: FeatureId::Welcome,
+            signal: "Cabin.Lights.IsDomeOn",
+            priority: Priority::Medium,
+        },
+    ];
+
+    DomainArbiter::new("Courtesy", allow_list, bus)
 }
 
 // ---------------------------------------------------------------------------
