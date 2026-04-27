@@ -19,9 +19,12 @@
 //!
 //! The hold is released early when any of:
 //! 1. Timer expires (default 30 s).
-//! 2. Ignition transitions to ON / START — driver is in the seat,
+//! 2. Any door opens — the user has entered the vehicle (or
+//!    a door was opened externally); the cabin lights take over
+//!    from this point and the puddle is no longer useful.
+//! 3. Ignition transitions to ON / START — driver is in the seat,
 //!    courtesy lighting is no longer useful.
-//! 3. All paired devices leave the LF coverage entirely (back to
+//! 4. All paired devices leave the LF coverage entirely (back to
 //!    `OutOfRange` or `RfRange`).
 //!
 //! # Idempotence
@@ -67,6 +70,17 @@ const PAIRED_ZONE_SIGNALS: [VssPath; 6] = [
     "Body.PEPS.Plant.KeyFob.4.Zone",
     peps_signals::PHONE_1_ZONE,
     peps_signals::PHONE_2_ZONE,
+];
+
+/// Door-open signals — used to release the courtesy lights early
+/// once the user has actually entered the vehicle (or any door has
+/// opened externally).  No point illuminating the puddle while the
+/// door is already open — the cabin lights take over.
+const DOOR_OPEN_SIGNALS: [VssPath; 4] = [
+    "Body.Doors.Row1.Left.IsOpen",
+    "Body.Doors.Row1.Right.IsOpen",
+    "Body.Doors.Row2.Left.IsOpen",
+    "Body.Doors.Row2.Right.IsOpen",
 ];
 
 /// Default hold duration for the welcome courtesy lights.  30 s is
@@ -140,6 +154,14 @@ impl<B: SignalBus + Send + Sync + 'static> Welcome<B> {
 
         let mut power_rx = self.bus.subscribe(POWER_STATE).await;
 
+        // Door-open subscriptions — release the courtesy lights as
+        // soon as any door opens.
+        let mut door_streams: Vec<futures::stream::BoxStream<'static, SignalValue>> =
+            Vec::with_capacity(DOOR_OPEN_SIGNALS.len());
+        for &sig in DOOR_OPEN_SIGNALS.iter() {
+            door_streams.push(self.bus.subscribe(sig).await);
+        }
+
         // None = idle; Some(deadline) = courtesy lights latched until
         // this Instant (or until released early by ignition / no
         // devices in LF / etc.).
@@ -148,6 +170,12 @@ impl<B: SignalBus + Send + Sync + 'static> Welcome<B> {
         loop {
             let zone_event = futures::future::select_all(
                 zone_streams
+                    .iter_mut()
+                    .enumerate()
+                    .map(|(i, s)| Box::pin(async move { (i, s.next().await) })),
+            );
+            let door_event = futures::future::select_all(
+                door_streams
                     .iter_mut()
                     .enumerate()
                     .map(|(i, s)| Box::pin(async move { (i, s.next().await) })),
@@ -203,6 +231,18 @@ impl<B: SignalBus + Send + Sync + 'static> Welcome<B> {
                 Some(val) = power_rx.next() => {
                     if deadline.is_some() && is_powered_on(&val) {
                         tracing::info!("Welcome: ignition ON — releasing courtesy lights");
+                        self.release_all().await;
+                        deadline = None;
+                    }
+                }
+                ((door_idx, opt), _, _) = door_event => {
+                    if deadline.is_some()
+                        && matches!(opt, Some(SignalValue::Bool(true)))
+                    {
+                        tracing::info!(
+                            door = DOOR_OPEN_SIGNALS[door_idx],
+                            "Welcome: door opened — releasing courtesy lights"
+                        );
                         self.release_all().await;
                         deadline = None;
                     }
@@ -438,6 +478,74 @@ mod tests {
             bus.latest_value(PUDDLE_LEFT),
             None,
             "RfRange has no LF coverage → Welcome should not arm"
+        );
+    }
+
+    /// Any door opening releases the courtesy lights early.
+    #[tokio::test(start_paused = true)]
+    async fn door_open_releases_lights_early() {
+        let (bus, _h) = setup_with_hold(Duration::from_secs(30)).await;
+        bus.inject(
+            "Body.PEPS.Plant.KeyFob.1.Zone",
+            SignalValue::String("Approach".into()),
+        );
+        settle().await;
+        assert_eq!(bus.latest_value(PUDDLE_LEFT), Some(SignalValue::Bool(true)));
+
+        // Driver opens the door (via PassiveEntry, kick handle, etc.).
+        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        settle().await;
+
+        assert_eq!(
+            bus.latest_value(PUDDLE_LEFT),
+            Some(SignalValue::Bool(false)),
+            "any door open should release courtesy lights"
+        );
+    }
+
+    /// Verify ALL four doors trigger the release, not just Row1.Left.
+    #[tokio::test(start_paused = true)]
+    async fn rear_door_open_also_releases_lights() {
+        let (bus, _h) = setup_with_hold(Duration::from_secs(30)).await;
+        bus.inject(
+            "Body.PEPS.Plant.KeyFob.1.Zone",
+            SignalValue::String("Approach".into()),
+        );
+        settle().await;
+        assert_eq!(bus.latest_value(PUDDLE_LEFT), Some(SignalValue::Bool(true)));
+
+        // Passenger rear door opens.
+        bus.inject("Body.Doors.Row2.Right.IsOpen", SignalValue::Bool(true));
+        settle().await;
+
+        assert_eq!(
+            bus.latest_value(PUDDLE_LEFT),
+            Some(SignalValue::Bool(false)),
+            "Row2.Right open should also release"
+        );
+    }
+
+    /// A `door open` event arriving while NO hold is in progress is a
+    /// no-op — must not push spurious release publishes onto the bus.
+    #[tokio::test(start_paused = true)]
+    async fn door_open_when_idle_is_noop() {
+        let (bus, _h) = setup_with_hold(Duration::from_secs(30)).await;
+
+        bus.clear_history();
+        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        settle().await;
+
+        // No claims and no releases on the courtesy / puddle arbiters
+        // because Welcome was never armed.
+        assert_eq!(
+            count_published(&bus, PUDDLE_LEFT, false),
+            0,
+            "door open while idle must not produce a release"
+        );
+        assert_eq!(
+            count_published(&bus, PUDDLE_LEFT, true),
+            0,
+            "door open while idle must not produce a claim either"
         );
     }
 }
