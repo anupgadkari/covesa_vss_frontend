@@ -167,6 +167,10 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // Anti-theft alarm status (project extension — not in standard VSS v4.0)
         "Vehicle.Body.Alarm.IsActive" => Some(0x0006_0009),
 
+        // AutoRelock status (project extension — set when the relock timer is armed)
+        "Body.Doors.AutoRelock.IsArmed" => Some(0x000A_0040),
+        "Body.Doors.AutoRelock.TimeoutSeconds" => Some(0x000A_0041),
+
         // Chassis / Powertrain (sensor inputs)
         "Chassis.Brake.PedalPosition" => Some(0x000C_0001),
         "Powertrain.Transmission.CurrentGear" => Some(0x000C_0002),
@@ -421,6 +425,8 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Body.FuelLid.IsOpen", 0x0006_0005),
     ("Body.ChargeLid.IsOpen", 0x0006_0006),
     ("Vehicle.Body.Alarm.IsActive", 0x0006_0009),
+    ("Body.Doors.AutoRelock.IsArmed", 0x000A_0040),
+    ("Body.Doors.AutoRelock.TimeoutSeconds", 0x000A_0041),
     ("Body.Sunroof.Position", 0x0007_0001),
     ("Body.Sunroof.Shade.Position", 0x0007_0002),
     ("Cabin.Lights.IsDomeOn", 0x0008_0001),

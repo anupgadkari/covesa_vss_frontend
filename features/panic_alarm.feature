@@ -63,6 +63,24 @@ Feature: Panic Alarm
   #               the indicators.  On disengage, the released claim allows
   #               a still-engaged Hazard to resume control of the
   #               indicators automatically.
+  #
+  # REQ-PANIC-010: While the alarm is engaged, ANY successful authenticated
+  #               unlock command SHALL cancel the alarm.  Sources of valid
+  #               unlock include: RKE keyfob UNLOCK, smart entry handle
+  #               pull (PEPS authenticated), phone-app remote unlock, BLE
+  #               key, NFC card.  All such sources publish
+  #               Body.Doors.CentralLock.FeedbackRequest = "unlock"; the
+  #               PanicAlarm feature SHALL subscribe to this signal and
+  #               disengage when it sees "unlock" while engaged.
+  #
+  # REQ-PANIC-011: When the alarm is cancelled by an unlock feedback, the
+  #               PanicAlarm feature SHALL self-publish
+  #               Body.Switches.Panic.IsEngaged = FALSE so the switch state
+  #               on the bus matches the alarm's actual state.
+  #
+  # REQ-PANIC-012: A "lock" feedback (AutoRelock, WalkAwayLock, ThumbPad)
+  #               SHALL NOT cancel the alarm.  Only "unlock" feedback
+  #               cancels.
   # -------------------------------------------------------------------------
 
   Background:
@@ -141,3 +159,18 @@ Feature: Panic Alarm
     When Body.Switches.Panic.IsEngaged transitions to FALSE
     Then the PanicAlarm feature releases both indicators
     And Hazard's still-engaged claim resumes control of both indicators
+
+  # --- REQ-PANIC-010, REQ-PANIC-011 ---
+  Scenario: Successful unlock command cancels a running panic alarm
+    Given the panic switch is engaged
+    And Vehicle.Body.Alarm.IsActive is TRUE
+    When a successful authenticated unlock publishes FeedbackRequest = "unlock"
+    Then Vehicle.Body.Alarm.IsActive becomes FALSE
+    And Body.Switches.Panic.IsEngaged is self-published as FALSE
+
+  # --- REQ-PANIC-012 ---
+  Scenario: A "lock" feedback does NOT cancel an active panic alarm
+    Given the panic switch is engaged
+    And Vehicle.Body.Alarm.IsActive is TRUE
+    When the central-lock bus publishes FeedbackRequest = "lock"
+    Then Vehicle.Body.Alarm.IsActive remains TRUE

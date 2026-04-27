@@ -890,3 +890,42 @@ async fn then_hazard_resumes(w: &mut VssWorld) {
         "Hazard should resume Right.IsSignaling = TRUE"
     );
 }
+
+// ---- Cancel-on-unlock (REQ-PANIC-010..012) ----
+
+const FEEDBACK_REQUEST: VssPath = "Body.Doors.CentralLock.FeedbackRequest";
+
+#[when(r#"a successful authenticated unlock publishes FeedbackRequest = "unlock""#)]
+async fn when_unlock_feedback(w: &mut VssWorld) {
+    w.bus().clear_history();
+    w.inject(FEEDBACK_REQUEST, SignalValue::String("unlock".into()))
+        .await;
+    settle().await;
+    settle().await;
+}
+
+#[when(r#"the central-lock bus publishes FeedbackRequest = "lock""#)]
+async fn when_lock_feedback(w: &mut VssWorld) {
+    w.bus().clear_history();
+    w.inject(FEEDBACK_REQUEST, SignalValue::String("lock".into()))
+        .await;
+    settle().await;
+}
+
+#[then("Body.Switches.Panic.IsEngaged is self-published as FALSE")]
+async fn then_panic_switch_self_published_false(w: &mut VssWorld) {
+    assert_eq!(
+        w.current_value(PANIC_SWITCH),
+        Some(SignalValue::Bool(false)),
+        "PanicAlarm must self-publish PANIC_SWITCH = FALSE on unlock cancel"
+    );
+}
+
+#[then("Vehicle.Body.Alarm.IsActive remains TRUE")]
+async fn then_alarm_status_remains_true(w: &mut VssWorld) {
+    assert_eq!(
+        w.current_value(ALARM_STATUS),
+        Some(SignalValue::Bool(true)),
+        "ALARM_STATUS must remain TRUE — lock-feedback must not cancel"
+    );
+}

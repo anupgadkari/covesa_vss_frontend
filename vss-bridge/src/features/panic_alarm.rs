@@ -36,6 +36,15 @@
 //! # Re-engage idempotence
 //! A redundant TRUE while already engaged is a no-op.  A FALSE while
 //! disengaged is a no-op.
+//!
+//! # Cancel-on-unlock
+//! Any successful unlock command on the central-lock feedback bus
+//! (`Body.Doors.CentralLock.FeedbackRequest = "unlock"`) cancels the
+//! alarm — matches typical OEM behaviour where returning to the vehicle
+//! and unlocking it (RKE / smart entry / phone / BLE / NFC) is treated
+//! as proof that the user is back.  When this happens, PanicAlarm
+//! self-publishes `Body.Switches.Panic.IsEngaged = false` so the source
+//! of truth stays consistent with internal state.
 
 use std::sync::Arc;
 
@@ -43,7 +52,7 @@ use futures::StreamExt;
 use tokio::task::JoinHandle;
 use tokio::time::{sleep, Duration};
 
-use crate::arbiter::{ActuatorRequest, DomainArbiter};
+use crate::arbiter::{ActuatorRequest, DomainArbiter, FEEDBACK_REQUEST};
 use crate::ipc_message::{FeatureId, Priority, SignalValue};
 use crate::signal_bus::{SignalBus, VssPath};
 
@@ -87,6 +96,28 @@ impl<B: SignalBus + Send + Sync + 'static> PanicAlarm<B> {
 
     pub async fn run(self) {
         tracing::info!("PanicAlarm feature started");
+
+        // Cancel-on-unlock watcher — runs independently of the main switch
+        // loop.  Whenever an authenticated source publishes
+        // `FEEDBACK_REQUEST = "unlock"`, this task injects
+        // `PANIC_SWITCH = false` on the bus.  The main loop then sees the
+        // transition like any other disengage and tears the alarm down.
+        // Doing this is idempotent — a redundant FALSE while already
+        // disengaged is a no-op (PanicAlarm dedups same-state edges).
+        let bus_for_watcher = Arc::clone(&self.bus);
+        tokio::spawn(async move {
+            let mut feedback_rx = bus_for_watcher.subscribe(FEEDBACK_REQUEST).await;
+            while let Some(val) = feedback_rx.next().await {
+                if matches!(&val, SignalValue::String(s) if s == "unlock") {
+                    tracing::debug!(
+                        "PanicAlarm: unlock feedback observed — synthesising panic cancel"
+                    );
+                    let _ = bus_for_watcher
+                        .publish(PANIC_SWITCH, SignalValue::Bool(false))
+                        .await;
+                }
+            }
+        });
 
         let mut switch_rx = self.bus.subscribe(PANIC_SWITCH).await;
         let mut current: Option<JoinHandle<()>> = None;
@@ -425,6 +456,105 @@ mod tests {
             bus.latest_value(HORN),
             Some(SignalValue::Bool(true)),
             "horn should be ON in sync with lights"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn unlock_feedback_cancels_running_alarm() {
+        let (bus, _h) = setup().await;
+
+        // Engage the alarm.
+        bus.inject(PANIC_SWITCH, SignalValue::Bool(true));
+        settle(1).await;
+        assert_eq!(
+            bus.latest_value(ALARM_STATUS),
+            Some(SignalValue::Bool(true))
+        );
+        assert_eq!(bus.latest_value(HORN), Some(SignalValue::Bool(true)));
+
+        // Simulate a successful authenticated unlock — RKE / smart entry /
+        // phone / BLE / NFC all converge on FEEDBACK_REQUEST = "unlock".
+        bus.inject(FEEDBACK_REQUEST, SignalValue::String("unlock".into()));
+        settle(1).await;
+
+        // Alarm must stop: status flag false, indicators + horn released.
+        assert_eq!(
+            bus.latest_value(ALARM_STATUS),
+            Some(SignalValue::Bool(false)),
+            "ALARM_STATUS must fall to FALSE on unlock cancel"
+        );
+        assert_eq!(
+            bus.latest_value(LEFT_INDICATOR),
+            Some(SignalValue::Bool(false)),
+            "indicators must release on unlock cancel"
+        );
+        assert_eq!(
+            bus.latest_value(RIGHT_INDICATOR),
+            Some(SignalValue::Bool(false))
+        );
+        assert_eq!(bus.latest_value(HORN), Some(SignalValue::Bool(false)));
+
+        // PanicAlarm must self-publish the switch FALSE so internal state
+        // tracked by RKE / HMI stays in sync.
+        assert_eq!(
+            bus.latest_value(PANIC_SWITCH),
+            Some(SignalValue::Bool(false)),
+            "PanicAlarm must self-publish the switch FALSE on unlock cancel"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn lock_feedback_does_not_cancel_alarm() {
+        let (bus, _h) = setup().await;
+
+        // Engage the alarm.
+        bus.inject(PANIC_SWITCH, SignalValue::Bool(true));
+        settle(1).await;
+        assert_eq!(
+            bus.latest_value(ALARM_STATUS),
+            Some(SignalValue::Bool(true))
+        );
+
+        // A "lock" feedback (e.g. AutoRelock, WalkAwayLock) must NOT cancel
+        // an active panic alarm — only "unlock" does.
+        bus.inject(FEEDBACK_REQUEST, SignalValue::String("lock".into()));
+        settle(1).await;
+
+        assert_eq!(
+            bus.latest_value(ALARM_STATUS),
+            Some(SignalValue::Bool(true)),
+            "ALARM_STATUS must remain TRUE on lock-feedback (not unlock)"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn unlock_feedback_when_disengaged_is_state_noop() {
+        let (bus, _h) = setup().await;
+
+        // Alarm never engaged.
+        bus.clear_history();
+        bus.inject(FEEDBACK_REQUEST, SignalValue::String("unlock".into()));
+        settle(1).await;
+
+        // The watcher publishes PANIC_SWITCH=false unconditionally on every
+        // "unlock" — that's benign because PanicAlarm dedups same-state
+        // transitions.  Verify the *state* of the alarm is unchanged:
+        //   - no ALARM_STATUS toggle
+        //   - no indicator / horn claim transitions
+        let h = bus.history();
+        assert!(
+            !h.iter().any(|(s, _)| *s == ALARM_STATUS),
+            "no ALARM_STATUS publish expected when alarm was never engaged: {h:?}"
+        );
+        assert!(
+            !h.iter()
+                .any(|(s, v)| *s == LEFT_INDICATOR && *v == SignalValue::Bool(true)),
+            "no LEFT_INDICATOR=TRUE expected when alarm was never engaged"
+        );
+        assert!(
+            !h.iter()
+                .any(|(s, v)| *s == HORN && *v == SignalValue::Bool(true)),
+            "no HORN=TRUE expected when alarm was never engaged"
         );
     }
 }

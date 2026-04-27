@@ -172,6 +172,20 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     "Body.PEPS.Plant.BlePhone.2.RssiResponse",
     // Trunk plant model output — open/close state driven by RKE or CloseCmd.
     "Body.Trunk.IsOpen",
+    // Horn arbiter output — drives the HMI horn-pulse visualisation.
+    "Body.Horn.IsActive",
+    // Anti-theft alarm status (PanicAlarm direct publish).
+    "Vehicle.Body.Alarm.IsActive",
+    // Panic switch — set by RKE on PANIC press, cleared by PanicAlarm
+    // on cancel-via-unlock.  HMI consumes this to keep its own alarm
+    // toggle state in sync.
+    "Body.Switches.Panic.IsEngaged",
+    // AutoRelock status — drives the HMI countdown banner.  IsArmed
+    // is published TRUE when the timer starts, FALSE on every exit.
+    // TimeoutSeconds is published once per arm so the HMI can render
+    // the matching client-side countdown.
+    "Body.Doors.AutoRelock.IsArmed",
+    "Body.Doors.AutoRelock.TimeoutSeconds",
 ];
 
 /// Shared state snapshot sent to HMI clients.

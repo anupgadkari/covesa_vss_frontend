@@ -607,6 +607,11 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
         let mut rf1 = self.bus.subscribe(KEYFOB_RF_MSGS[1]).await;
         let mut rf2 = self.bus.subscribe(KEYFOB_RF_MSGS[2]).await;
         let mut rf3 = self.bus.subscribe(KEYFOB_RF_MSGS[3]).await;
+        // Mirror Body.Switches.Panic.IsEngaged so the next PANIC press toggles
+        // from whatever the bus currently shows — important when PanicAlarm
+        // self-cancels on a successful unlock and writes FALSE back to the
+        // switch.  Without this, the local latch and the bus could drift.
+        let mut panic_rx = self.bus.subscribe("Body.Switches.Panic.IsEngaged").await;
 
         tracing::info!("RKE feature started");
 
@@ -678,6 +683,11 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
                             let action = msg.action;
                             self.handle_authenticated(fob_id, action).await;
                         }
+                    }
+                }
+                Some(val) = panic_rx.next() => {
+                    if let SignalValue::Bool(b) = val {
+                        self.panic_engaged = b;
                     }
                 }
                 _ = sleep(sleep_dur) => {

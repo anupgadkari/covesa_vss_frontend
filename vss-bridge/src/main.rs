@@ -15,6 +15,7 @@ use vss_bridge::adapters::mock::MockBus;
 use vss_bridge::arbiter;
 use vss_bridge::config;
 use vss_bridge::features::auto_high_beam::AutoHighBeam;
+use vss_bridge::features::auto_relock::AutoRelock;
 use vss_bridge::features::brake_reverse_lamps::BrakeReverseLamps;
 use vss_bridge::features::double_lock_release::DoubleLockRelease;
 use vss_bridge::features::fog_lamps::FogLamps;
@@ -174,10 +175,20 @@ async fn main() -> anyhow::Result<()> {
         .run(),
     );
 
-    // TODO: remaining features
-    // tokio::spawn(AutoRelock::from_config(Arc::clone(&door_lock_arb), Arc::clone(&bus), &_platform_config).run());
+    // AutoRelock — re-locks the vehicle ${auto_relock_timeout_secs} seconds
+    // after an unlock event if no door has been opened.  Cancelled if a
+    // door opens, the vehicle is re-locked manually, or a crash is
+    // detected (and stays disabled until full power-cycle in that case).
+    tokio::spawn(
+        AutoRelock::from_config(
+            Arc::clone(&door_lock_arb),
+            Arc::clone(&bus),
+            &_platform_config,
+        )
+        .run(),
+    );
 
-    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm");
+    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm, AutoRelock");
 
     // ── Plant Models ────────────────────────────────────────────────
     // Simulate physical lamp behavior the M7 / smart actuator firmware
@@ -219,6 +230,8 @@ async fn main() -> anyhow::Result<()> {
     bus.publish("Body.Switches.Panic.IsEngaged", SignalValue::Bool(false))
         .await?;
     bus.publish("Vehicle.Body.Alarm.IsActive", SignalValue::Bool(false))
+        .await?;
+    bus.publish("Body.Doors.AutoRelock.IsArmed", SignalValue::Bool(false))
         .await?;
 
     // gRPC client for kuksa.val databroker at L4 (optional — fails gracefully)
