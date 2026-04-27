@@ -110,10 +110,15 @@ pub struct DoorLockPlantModel<B: SignalBus> {
     double_locked: [bool; 4],
     /// Monotonic counter for LockAck event numbers.
     event_number: u32,
+    /// Optional NVM store — when set, every state change is persisted so
+    /// the doors come back in the same state after a power cycle.
+    /// Tests that don't care about persistence pass `None` (via `new`).
+    nvm: Option<crate::nvm::NvmStore>,
 }
 
 impl<B: SignalBus + Send + Sync + 'static> DoorLockPlantModel<B> {
-    /// Create in standalone / test mode — no ACKs sent to any arbiter.
+    /// Create in standalone / test mode — no ACKs, no NVM.  Boots in
+    /// factory-new state (all doors unlocked).
     pub fn new(bus: Arc<B>) -> Self {
         Self {
             bus,
@@ -121,6 +126,22 @@ impl<B: SignalBus + Send + Sync + 'static> DoorLockPlantModel<B> {
             locked: [false; 4],
             double_locked: [false; 4],
             event_number: 0,
+            nvm: None,
+        }
+    }
+
+    /// Test-only constructor that boots with explicit lock state.
+    /// Lets gherkin scenarios say "given the doors were locked at last
+    /// shutdown" by seeding the runtime state directly, bypassing NVM.
+    /// See docs/signal-ownership-and-state-hydration.md §3.3.
+    pub fn with_initial_state(bus: Arc<B>, locked: [bool; 4], double_locked: [bool; 4]) -> Self {
+        Self {
+            bus,
+            ack_tx: None,
+            locked,
+            double_locked,
+            event_number: 0,
+            nvm: None,
         }
     }
 
@@ -137,6 +158,42 @@ impl<B: SignalBus + Send + Sync + 'static> DoorLockPlantModel<B> {
             locked: [false; 4],
             double_locked: [false; 4],
             event_number: 0,
+            nvm: None,
+        }
+    }
+
+    /// Production constructor — wires both the arbiter ACK channel and
+    /// the NVM store, and seeds runtime state from whatever the NVM
+    /// holds (factory default if no file present).
+    pub fn with_ack_and_nvm(
+        bus: Arc<B>,
+        ack_tx: mpsc::Sender<LockAck>,
+        nvm: crate::nvm::NvmStore,
+    ) -> Self {
+        let persisted = nvm.load_door_lock();
+        tracing::info!(
+            locked = ?persisted.locked,
+            double_locked = ?persisted.double_locked,
+            "DoorLock plant: booted from NVM"
+        );
+        Self {
+            bus,
+            ack_tx: Some(ack_tx),
+            locked: persisted.locked,
+            double_locked: persisted.double_locked,
+            event_number: 0,
+            nvm: Some(nvm),
+        }
+    }
+
+    /// Persist current `locked` + `double_locked` arrays to NVM if a
+    /// store is configured.  Called after every confirmed state change.
+    fn save_to_nvm(&self) {
+        if let Some(nvm) = &self.nvm {
+            nvm.save_door_lock(&crate::nvm::DoorLockState {
+                locked: self.locked,
+                double_locked: self.double_locked,
+            });
         }
     }
 
@@ -183,6 +240,7 @@ impl<B: SignalBus + Send + Sync + 'static> DoorLockPlantModel<B> {
             locked,
             "DoorLock plant: door state updated"
         );
+        self.save_to_nvm();
     }
 
     async fn apply_double_lock_cmd(&mut self, door: usize, double_locked: bool) {
@@ -210,6 +268,7 @@ impl<B: SignalBus + Send + Sync + 'static> DoorLockPlantModel<B> {
             double_locked,
             "DoorLock plant: double-lock state updated"
         );
+        self.save_to_nvm();
     }
 
     /// Publish current state for all doors (called at startup to initialise the HMI).
@@ -322,28 +381,44 @@ impl<B: SignalBus + Send + Sync + 'static> DoorLockPlantModel<B> {
                 // next LOCK command correctly re-asserts the locked position.
                 // The feedback of our own publishes is harmless (same value).
                 Some(val) = islocked_rx0.next() => {
-                    if let SignalValue::Bool(b) = val { self.locked[0] = b; }
+                    if let SignalValue::Bool(b) = val {
+                        if self.locked[0] != b { self.locked[0] = b; self.save_to_nvm(); }
+                    }
                 }
                 Some(val) = islocked_rx1.next() => {
-                    if let SignalValue::Bool(b) = val { self.locked[1] = b; }
+                    if let SignalValue::Bool(b) = val {
+                        if self.locked[1] != b { self.locked[1] = b; self.save_to_nvm(); }
+                    }
                 }
                 Some(val) = islocked_rx2.next() => {
-                    if let SignalValue::Bool(b) = val { self.locked[2] = b; }
+                    if let SignalValue::Bool(b) = val {
+                        if self.locked[2] != b { self.locked[2] = b; self.save_to_nvm(); }
+                    }
                 }
                 Some(val) = islocked_rx3.next() => {
-                    if let SignalValue::Bool(b) = val { self.locked[3] = b; }
+                    if let SignalValue::Bool(b) = val {
+                        if self.locked[3] != b { self.locked[3] = b; self.save_to_nvm(); }
+                    }
                 }
                 Some(val) = isdblocked_rx0.next() => {
-                    if let SignalValue::Bool(b) = val { self.double_locked[0] = b; }
+                    if let SignalValue::Bool(b) = val {
+                        if self.double_locked[0] != b { self.double_locked[0] = b; self.save_to_nvm(); }
+                    }
                 }
                 Some(val) = isdblocked_rx1.next() => {
-                    if let SignalValue::Bool(b) = val { self.double_locked[1] = b; }
+                    if let SignalValue::Bool(b) = val {
+                        if self.double_locked[1] != b { self.double_locked[1] = b; self.save_to_nvm(); }
+                    }
                 }
                 Some(val) = isdblocked_rx2.next() => {
-                    if let SignalValue::Bool(b) = val { self.double_locked[2] = b; }
+                    if let SignalValue::Bool(b) = val {
+                        if self.double_locked[2] != b { self.double_locked[2] = b; self.save_to_nvm(); }
+                    }
                 }
                 Some(val) = isdblocked_rx3.next() => {
-                    if let SignalValue::Bool(b) = val { self.double_locked[3] = b; }
+                    if let SignalValue::Bool(b) = val {
+                        if self.double_locked[3] != b { self.double_locked[3] = b; self.save_to_nvm(); }
+                    }
                 }
 
                 else => break,

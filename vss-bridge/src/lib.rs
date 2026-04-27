@@ -9,6 +9,7 @@ pub mod config;
 pub mod features;
 pub mod ipc_message;
 pub mod kuksa_sync;
+pub mod nvm;
 pub mod plant_models;
 pub mod signal_bus;
 pub mod signal_ids;

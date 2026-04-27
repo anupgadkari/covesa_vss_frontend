@@ -30,6 +30,7 @@ use vss_bridge::features::turn_indicator::TurnIndicator;
 use vss_bridge::features::walk_away_lock::WalkAwayLock;
 use vss_bridge::ipc_message::SignalValue;
 use vss_bridge::kuksa_sync;
+use vss_bridge::nvm::NvmStore;
 use vss_bridge::plant_models::blink_relay::BlinkRelay;
 use vss_bridge::plant_models::door_handle::DoorHandlePlantModel;
 use vss_bridge::plant_models::door_lock::DoorLockPlantModel;
@@ -47,7 +48,23 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
 
-    tracing::info!("vss-bridge starting");
+    // ── CLI flags ──────────────────────────────────────────────────
+    // `--reset-nvm` wipes persisted state on boot — used to simulate a
+    // factory-new vehicle for cold-boot test scenarios.  Anything more
+    // sophisticated should grow into clap; today we only have one flag.
+    let args: Vec<String> = std::env::args().collect();
+    let reset_nvm = args.iter().any(|a| a == "--reset-nvm");
+
+    tracing::info!(reset_nvm, "vss-bridge starting");
+
+    // ── NVM store ──────────────────────────────────────────────────
+    // Path defaults to ./nvm/ (overridable via VSS_BRIDGE_NVM_PATH).
+    // Plant models that own persistent state load from / save to here.
+    // See docs/signal-ownership-and-state-hydration.md §3.
+    let nvm = NvmStore::from_env();
+    if reset_nvm {
+        nvm.reset();
+    }
 
     // Platform configuration — four-tier system:
     //   Tier 1: compile-time constants (config::IPC_MAGIC, etc.)
@@ -195,7 +212,9 @@ async fn main() -> anyhow::Result<()> {
     // would normally provide. Plant models bypass the arbiter and
     // publish feedback signals (lamp on/off, defects) directly.
     tokio::spawn(BlinkRelay::new(Arc::clone(&bus)).run());
-    tokio::spawn(DoorLockPlantModel::with_ack_tx(Arc::clone(&bus), door_lock_ack_tx).run());
+    tokio::spawn(
+        DoorLockPlantModel::with_ack_and_nvm(Arc::clone(&bus), door_lock_ack_tx, nvm.clone()).run(),
+    );
     tokio::spawn(DoorHandlePlantModel::new(Arc::clone(&bus)).run());
     tokio::spawn(TrunkPlantModel::new(Arc::clone(&bus)).run());
     tokio::spawn(PepsPlantModel::new(Arc::clone(&bus)).run());

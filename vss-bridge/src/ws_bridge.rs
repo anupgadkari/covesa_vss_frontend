@@ -225,7 +225,23 @@ impl<B: SignalBus> WsBridge<B> {
 
         // Subscriber tasks — update shared state and mark dirty; the
         // broadcaster task handles the debounced snapshot send.
-        for &signal in OUTPUT_SIGNALS {
+        //
+        // Track BOTH OUTPUT_SIGNALS (bridge → HMI) and INPUT_SIGNALS
+        // (HMI → bridge) so a fresh HMI tab — or one that just
+        // reconnected — receives the full current state of everything
+        // the user has configured (ignition state, switch positions,
+        // fob/phone zones, brake pedal …).  Without this, every reload
+        // would reset the HMI to INIT_STATE while the bridge bus still
+        // holds the live values.
+        //
+        // Some signals appear in both lists (e.g. IsOpen, Soldier.IsUnlocked):
+        // dedup with a HashSet so we only spawn one subscriber per signal.
+        use std::collections::HashSet;
+        let mut tracked: HashSet<VssPath> = HashSet::new();
+        tracked.extend(OUTPUT_SIGNALS.iter().copied());
+        tracked.extend(INPUT_SIGNALS.iter().copied());
+
+        for signal in tracked {
             let bus = Arc::clone(&self.bus);
             let state = Arc::clone(&output_state);
             let dirty = Arc::clone(&dirty);

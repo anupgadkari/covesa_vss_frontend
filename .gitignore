@@ -34,3 +34,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# vss-bridge NVM persistence — runtime state, not source.
+# Default location is ./nvm/ relative to the bridge's CWD; override with
+# the VSS_BRIDGE_NVM_PATH env var.
+nvm/
