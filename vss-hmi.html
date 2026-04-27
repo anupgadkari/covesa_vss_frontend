@@ -706,38 +706,57 @@ function CombinedView({s,set,onDeviceSelect}){
             HMI must let the user pull regardless of lock state.  A
             small red 🔒 badge above the handle warns "won't open"
             when locked.  When open, click to close. */}
+        {/* Outer handle — fixed position so the hit area stays under
+            the cursor while held.  A `translate` here would shift the
+            rect 1-2 px out from under the mouse, immediately firing
+            onMouseLeave and dropping IsPulled — which breaks the
+            PassiveEntry hold-and-unlock flow.  Visual cue is a brighter
+            fill + stroke + a small "pulled" glow rect appearing just
+            beside the handle (does not steal pointer events). */}
         <g>
           <rect x={hOutX} y={hY-4} width="6" height="8" rx="1"
-            fill={open?'#0DC8C8':outPulled?'#38BDF8':'#1E4060'}
-            stroke={open?'#5EEAD4':outPulled?'#7DD3FC':'#2A5070'} strokeWidth="0.5"
-            style={{cursor:'pointer',transform:outPulled?`translate(${isLeft?'-1px':'1px'},0)`:'none',transition:'transform 80ms ease-out'}}
+            fill={open?'#0DC8C8':outPulled?'#7DD3FC':'#1E4060'}
+            stroke={open?'#5EEAD4':outPulled?'#FFFFFF':'#2A5070'}
+            strokeWidth={outPulled?'0.9':'0.5'}
+            style={{cursor:'pointer'}}
             onClick={open?()=>set(pfx+'.CloseCmd',true):undefined}
             onMouseDown={open?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',true)}
             onMouseUp={open?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',false)}
             onMouseLeave={open?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',false)}>
             <title>{open?'Outside handle — click to close door':dblLock?'Outside handle — door is double-locked; pull will not open':locked?'Outside handle — door is locked; pull will not open (PassiveEntry may unlock if a paired device is in proximity zone)':'Outside handle — hold to pull open'}</title>
           </rect>
+          {/* Pulled-state glow indicator — sits next to the handle when
+              held.  Pointer-events:none so it never intercepts the
+              mouse-leave check. */}
+          {outPulled && (
+            <rect x={isLeft?hOutX-3:hOutX+7} y={hY-4} width="2" height="8"
+              rx="1" fill="#7DD3FC" opacity="0.85"
+              style={{pointerEvents:'none'}}/>
+          )}
           {!open && (locked || dblLock) && (
             <text x={hOutX+3} y={hY-6} textAnchor="middle"
               fill={dblLock?'#FCA5A5':'#F87171'} fontSize="6" fontWeight="bold"
               style={{pointerEvents:'none'}}>🔒</text>
           )}
         </g>
-        {/* Inner handle — same model: pullable always; the latch
-            decides.  Inside handle is fully blocked when double-locked
-            (interior linkage physically disconnected), but we still
-            allow the visual pull animation. */}
+        {/* Inner handle — same fixed-position approach. */}
         <g>
           <rect x={hInX} y={hY-4} width="6" height="8" rx="1"
-            fill={open?'#0DC8C8':inPulled?'#34D399':'#1E3A28'}
-            stroke={open?'#5EEAD4':inPulled?'#6EE7B7':'#2A5040'} strokeWidth="0.5"
-            style={{cursor:'pointer',transform:inPulled?`translate(${isLeft?'1px':'-1px'},0)`:'none',transition:'transform 80ms ease-out'}}
+            fill={open?'#0DC8C8':inPulled?'#6EE7B7':'#1E3A28'}
+            stroke={open?'#5EEAD4':inPulled?'#FFFFFF':'#2A5040'}
+            strokeWidth={inPulled?'0.9':'0.5'}
+            style={{cursor:'pointer'}}
             onClick={open?()=>set(pfx+'.CloseCmd',true):undefined}
             onMouseDown={open?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',true)}
             onMouseUp={open?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',false)}
             onMouseLeave={open?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',false)}>
             <title>{open?'Inside handle — click to close door':dblLock?'Inside handle — double-locked; interior linkage physically disconnected, pull will not open':'Inside handle — hold to pull open'}</title>
           </rect>
+          {inPulled && (
+            <rect x={isLeft?hInX+7:hInX-3} y={hY-4} width="2" height="8"
+              rx="1" fill="#6EE7B7" opacity="0.85"
+              style={{pointerEvents:'none'}}/>
+          )}
           {!open && dblLock && (
             <text x={hInX+3} y={hY-6} textAnchor="middle"
               fill="#FCA5A5" fontSize="6" fontWeight="bold"
@@ -1043,8 +1062,13 @@ function SideView({s,set}){
       const hstroke=pulled?'#6BB8FF':'#2A4468';
       const kfill=pulled?'#6BB8FF':'#253A58';
       return <g key={pfx}>
-        <g fill={hfill} stroke={hstroke} strokeWidth="0.8"
-          style={{cursor:'pointer',transform:pulled?'translate(-2px,1px)':'none',transition:'transform 80ms ease-out'}}
+        {/* Hit target stays in fixed position — a translate transform
+            would push the rect out from under the cursor and trigger
+            an immediate onMouseLeave, breaking the PassiveEntry
+            hold-and-unlock flow.  Visual cue is fill/stroke change
+            plus a small "pulled" indicator chip beside the handle. */}
+        <g fill={hfill} stroke={hstroke} strokeWidth={pulled?'1.2':'0.8'}
+          style={{cursor:'pointer'}}
           onMouseDown={open?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',true)}
           onMouseUp={open?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',false)}
           onMouseLeave={open?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',false)}>
@@ -1052,6 +1076,13 @@ function SideView({s,set}){
           <rect x={x}   y="276" width="38" height="9" rx="3"/>
           <rect x={x}   y="276" width="5"  height="9" rx="2" fill={kfill}/>
         </g>
+        {pulled && (
+          /* Trailing chip indicating the handle is being held.  Uses
+             pointer-events:none so it can't steal mouseleave events. */
+          <rect x={x+40} y="277" width="3" height="7" rx="1"
+            fill="#6BB8FF" opacity="0.9"
+            style={{pointerEvents:'none'}}/>
+        )}
         {!open && (locked || dbl) && (
           <text x={x-6} y="284" textAnchor="middle"
             fill={dbl?'#FCA5A5':'#F87171'} fontSize="9" fontWeight="bold"
