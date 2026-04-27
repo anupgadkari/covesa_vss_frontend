@@ -303,3 +303,164 @@ async fn plant_model_blinks_at_expected_rate() {
         "expected 4-8 lamp transitions in 2s at 1.5 Hz, got {transitions}"
     );
 }
+
+// ───────────────────────────────────────────────────────────────────────────
+// PEPS / PassiveEntry / Welcome integration tests
+// ───────────────────────────────────────────────────────────────────────────
+
+/// Place paired fob 1 in DriverDoor zone, pull the Row1.Left handle —
+/// verify the bridge unlocks Row1.Left via the real PassiveEntry +
+/// PEPS plant pipeline (challenge → response → arbiter → plant).
+#[tokio::test]
+async fn passive_entry_unlocks_driver_door_via_handle_pull() {
+    let bridge = BridgeProcess::start();
+    let (mut tx, mut rx) = connect_ws(&bridge.ws_url()).await;
+
+    // Make sure doors start locked so we'll see the unlock transition.
+    send_sensor(
+        &mut tx,
+        "Body.Doors.CentralLock.Command",
+        json!("lock_all"),
+    )
+    .await;
+    let locked = wait_for_state(
+        &mut rx,
+        "Body.Doors.Row1.Left.IsLocked",
+        json!(true),
+        Duration::from_secs(2),
+    )
+    .await;
+    assert!(locked, "doors should lock for the test setup");
+
+    // Place fob 1 at the driver door.
+    send_sensor(
+        &mut tx,
+        "Body.PEPS.Plant.KeyFob.1.Zone",
+        json!("DriverDoor"),
+    )
+    .await;
+
+    // Allow the production stagger (10 ms × slot) plus arbiter +
+    // plant model round trip.
+    sleep(Duration::from_millis(50)).await;
+
+    // Pull the driver-door outside handle.
+    send_sensor(
+        &mut tx,
+        "Body.Doors.Row1.Left.Handle.Outside.IsPulled",
+        json!(true),
+    )
+    .await;
+
+    // Driver door should unlock within the 150 ms challenge window
+    // plus ~50 ms arbiter / plant model latency.
+    let unlocked = wait_for_state(
+        &mut rx,
+        "Body.Doors.Row1.Left.IsLocked",
+        json!(false),
+        Duration::from_secs(2),
+    )
+    .await;
+    assert!(
+        unlocked,
+        "Row1.Left should unlock after passive-entry handle pull with paired fob in DriverDoor"
+    );
+}
+
+/// Handle pull with no paired device positioned must NOT unlock.
+#[tokio::test]
+async fn passive_entry_no_device_in_zone_keeps_doors_locked() {
+    let bridge = BridgeProcess::start();
+    let (mut tx, mut rx) = connect_ws(&bridge.ws_url()).await;
+
+    send_sensor(
+        &mut tx,
+        "Body.Doors.CentralLock.Command",
+        json!("lock_all"),
+    )
+    .await;
+    let locked = wait_for_state(
+        &mut rx,
+        "Body.Doors.Row1.Left.IsLocked",
+        json!(true),
+        Duration::from_secs(2),
+    )
+    .await;
+    assert!(locked, "doors should lock for the test setup");
+
+    // No paired device positioned anywhere.  Pull the handle.
+    send_sensor(
+        &mut tx,
+        "Body.Doors.Row1.Left.Handle.Outside.IsPulled",
+        json!(true),
+    )
+    .await;
+
+    // Wait the full challenge timeout + a margin; doors should still
+    // be locked.
+    let still_locked = !wait_for_state(
+        &mut rx,
+        "Body.Doors.Row1.Left.IsLocked",
+        json!(false),
+        Duration::from_millis(500),
+    )
+    .await;
+    assert!(
+        still_locked,
+        "Row1.Left must stay locked when no paired device is in the proximity zone"
+    );
+}
+
+/// Welcome — fob entering Approach turns puddle lamps ON.
+#[tokio::test]
+async fn welcome_arms_puddle_lamps_on_approach_entry() {
+    let bridge = BridgeProcess::start();
+    let (mut tx, mut rx) = connect_ws(&bridge.ws_url()).await;
+
+    // Place fob 1 at Approach.
+    send_sensor(
+        &mut tx,
+        "Body.PEPS.Plant.KeyFob.1.Zone",
+        json!("Approach"),
+    )
+    .await;
+
+    let on = wait_for_state(
+        &mut rx,
+        "Body.Lights.Puddle.Left.IsOn",
+        json!(true),
+        Duration::from_secs(2),
+    )
+    .await;
+    assert!(on, "puddle Left should arm on PEPS approach entry");
+}
+
+/// ThumbPadLock — pad held with fob in Approach locks; pad held with
+/// no fob anywhere does NOT lock (keys-in-vehicle guard end-to-end).
+#[tokio::test]
+async fn thumb_pad_lock_blocked_when_no_fob_outside() {
+    let bridge = BridgeProcess::start();
+    let (mut tx, mut rx) = connect_ws(&bridge.ws_url()).await;
+
+    // No paired device anywhere.  Press the lock pad and hold for >500 ms.
+    send_sensor(
+        &mut tx,
+        "Body.Doors.Row1.Left.Handle.Outside.LockPad.IsPressed",
+        json!(true),
+    )
+    .await;
+
+    // After the 500 ms debounce, the gate should deny.  Verify no
+    // lock state change reaches the HMI within the window.
+    let locked = wait_for_state(
+        &mut rx,
+        "Body.Doors.Row1.Left.IsLocked",
+        json!(true),
+        Duration::from_millis(800),
+    )
+    .await;
+    assert!(
+        !locked,
+        "ThumbPadLock must deny when no paired device is outside the cabin"
+    );
+}
