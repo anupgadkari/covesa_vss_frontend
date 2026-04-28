@@ -541,12 +541,15 @@ fn parse_response_hex(v: &SignalValue) -> Option<ChallengeResponse> {
     Some(out)
 }
 
-/// Generate a fresh 16-byte nonce.  We use a simple time-derived
-/// Generate a cryptographically strong random nonce for PEPS challenge-response.
+/// Generate a cryptographically strong random nonce for PEPS
+/// challenge-response.  Draws from the OS entropy pool via
+/// [`OsRng`] (CSPRNG); the `[0u8; 16]` literal below is just an
+/// uninitialised buffer that `fill_bytes` overwrites in place — it
+/// is never used as the actual challenge value.
 fn rand_nonce() -> Challenge {
-    let mut nonce: Challenge = [0u8; 16];
-    OsRng.fill_bytes(&mut nonce);
-    nonce
+    let mut buf = [0u8; 16];
+    OsRng.fill_bytes(&mut buf);
+    buf
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────
@@ -913,9 +916,12 @@ mod tests {
     #[test]
     fn crypto_response_deterministic() {
         let key = default_secret(b'F', 1);
-        let nonce: Challenge = [42u8; 16];
-        let r1 = crypto::compute_challenge_response(&key, &nonce);
-        let r2 = crypto::compute_challenge_response(&key, &nonce);
+        // Fixed test input — only used to verify determinism of the
+        // crypto helper (same input → same output).  Not a nonce in
+        // any production sense.
+        let test_input: Challenge = [42u8; 16];
+        let r1 = crypto::compute_challenge_response(&key, &test_input);
+        let r2 = crypto::compute_challenge_response(&key, &test_input);
         assert_eq!(r1, r2);
     }
 }

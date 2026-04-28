@@ -103,7 +103,10 @@ enum ArbiterMsg {
     /// being gated (not the gate signal itself); `closed` is true when
     /// the gate is currently suppressing (i.e. the source value matches
     /// `suppress_when`).
-    GateChanged { target: VssPath, closed: bool },
+    GateChanged {
+        target: VssPath,
+        closed: bool,
+    },
 }
 
 impl DomainArbiter {
@@ -145,14 +148,12 @@ impl DomainArbiter {
                 let mut stream = bus.subscribe(gate_signal).await;
                 while let Some(value) = stream.next().await {
                     let closed = value == suppress_when;
-                    tracing::debug!(
-                        domain,
-                        target,
-                        gate_signal,
-                        closed,
-                        "physical gate update"
-                    );
-                    if tx.send(ArbiterMsg::GateChanged { target, closed }).await.is_err() {
+                    tracing::debug!(domain, target, gate_signal, closed, "physical gate update");
+                    if tx
+                        .send(ArbiterMsg::GateChanged { target, closed })
+                        .await
+                        .is_err()
+                    {
                         break;
                     }
                 }
@@ -263,7 +264,12 @@ async fn arbiter_loop<B: SignalBus>(
                     .insert(req.feature_id, claim);
 
                 publish_resolved(
-                    name, req.signal, &claims, &gates_closed, &mut last_published, &bus,
+                    name,
+                    req.signal,
+                    &claims,
+                    &gates_closed,
+                    &mut last_published,
+                    &bus,
                 )
                 .await;
             }
@@ -281,7 +287,12 @@ async fn arbiter_loop<B: SignalBus>(
                         "arbiter: release"
                     );
                     publish_resolved(
-                        name, signal, &claims, &gates_closed, &mut last_published, &bus,
+                        name,
+                        signal,
+                        &claims,
+                        &gates_closed,
+                        &mut last_published,
+                        &bus,
                     )
                     .await;
                 }
@@ -296,7 +307,12 @@ async fn arbiter_loop<B: SignalBus>(
                         "physical gate state changed — re-resolving target"
                     );
                     publish_resolved(
-                        name, target, &claims, &gates_closed, &mut last_published, &bus,
+                        name,
+                        target,
+                        &claims,
+                        &gates_closed,
+                        &mut last_published,
+                        &bus,
                     )
                     .await;
                 }

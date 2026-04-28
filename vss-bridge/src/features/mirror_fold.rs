@@ -67,7 +67,7 @@ const CMD_RIGHT: VssPath = "Body.Mirror.Right.FoldCmd";
 /// `None` if the status doesn't trigger AUTO action.
 fn auto_target_for(status: &str) -> Option<bool> {
     match status {
-        "LOCKED" | "DOUBLE_LOCKED" => Some(true),  // fold
+        "LOCKED" | "DOUBLE_LOCKED" => Some(true),      // fold
         "UNLOCKED" | "DRIVER_UNLOCKED" => Some(false), // unfold
         _ => None,
     }
@@ -170,10 +170,8 @@ impl<B: SignalBus + Send + Sync + 'static> MirrorFold<B> {
             "MirrorFold feature started"
         );
 
-        let mut switch_rx: BoxStream<'static, SignalValue> =
-            self.bus.subscribe(SWITCH_FOLD).await;
-        let mut lock_rx: BoxStream<'static, SignalValue> =
-            self.bus.subscribe(LOCK_STATUS).await;
+        let mut switch_rx: BoxStream<'static, SignalValue> = self.bus.subscribe(SWITCH_FOLD).await;
+        let mut lock_rx: BoxStream<'static, SignalValue> = self.bus.subscribe(LOCK_STATUS).await;
         let mut fb_left_rx: BoxStream<'static, SignalValue> = self.bus.subscribe(FB_LEFT).await;
         let mut fb_right_rx: BoxStream<'static, SignalValue> = self.bus.subscribe(FB_RIGHT).await;
 
@@ -223,7 +221,6 @@ mod tests {
     use super::*;
     use crate::adapters::mock::MockBus;
     use crate::config::PlatformConfig;
-    use std::time::Duration;
     use tempfile::tempdir;
 
     async fn settle_yields() {
@@ -433,7 +430,7 @@ mod tests {
 
         press(&bus);
         settle_yields().await;
-        assert_eq!(nvm.load_mirror_fold_intent().last_fold_cmd, true);
+        assert!(nvm.load_mirror_fold_intent().last_fold_cmd);
     }
 
     #[tokio::test]
@@ -442,7 +439,9 @@ mod tests {
         let nvm = NvmStore::with_path(dir.path());
 
         // Pre-seed intent: last command was fold.
-        nvm.save_mirror_fold_intent(&MirrorFoldIntent { last_fold_cmd: true });
+        nvm.save_mirror_fold_intent(&MirrorFoldIntent {
+            last_fold_cmd: true,
+        });
 
         let bus = Arc::new(MockBus::new());
         let cfg = cfg_with_mode(MirrorFoldMode::Manual);

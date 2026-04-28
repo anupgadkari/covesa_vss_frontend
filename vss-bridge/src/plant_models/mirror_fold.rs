@@ -204,7 +204,11 @@ impl<B: SignalBus + Send + Sync + 'static> MirrorFoldPlantModel<B> {
         // No-op if already at target and not in flight to a different
         // value — saves NVM thrash on duplicate publishes.
         if self.state[side].in_flight_target.is_none() && self.state[side].is_folded == target {
-            tracing::debug!(side, target, "MirrorFold plant: command ignored (already at target)");
+            tracing::debug!(
+                side,
+                target,
+                "MirrorFold plant: command ignored (already at target)"
+            );
         } else {
             tracing::info!(
                 side,
@@ -215,7 +219,6 @@ impl<B: SignalBus + Send + Sync + 'static> MirrorFoldPlantModel<B> {
             self.state[side].in_flight_target = Some(target);
             self.state[side].settle_at = Instant::now() + self.settle;
         }
-
     }
 
     /// Walk through both sides; commit any in-flight targets that have
@@ -229,7 +232,11 @@ impl<B: SignalBus + Send + Sync + 'static> MirrorFoldPlantModel<B> {
                     self.state[side].is_folded = target;
                     self.state[side].in_flight_target = None;
                     if prev != target {
-                        let sig = if side == 0 { IS_FOLDED_LEFT } else { IS_FOLDED_RIGHT };
+                        let sig = if side == 0 {
+                            IS_FOLDED_LEFT
+                        } else {
+                            IS_FOLDED_RIGHT
+                        };
                         if let Err(e) = self.bus.publish(sig, SignalValue::Bool(target)).await {
                             tracing::warn!(side, signal = sig, error = %e, "MirrorFoldPlantModel: publish failed");
                         }
@@ -263,8 +270,8 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn fold_command_publishes_after_one_second() {
         let bus = Arc::new(MockBus::new());
-        let plant = MirrorFoldPlantModel::new(Arc::clone(&bus))
-            .with_settle(Duration::from_millis(100));
+        let plant =
+            MirrorFoldPlantModel::new(Arc::clone(&bus)).with_settle(Duration::from_millis(100));
         tokio::spawn(plant.run());
         settle_yields().await;
 
@@ -289,8 +296,8 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn new_command_preempts_in_flight_target() {
         let bus = Arc::new(MockBus::new());
-        let plant = MirrorFoldPlantModel::new(Arc::clone(&bus))
-            .with_settle(Duration::from_millis(100));
+        let plant =
+            MirrorFoldPlantModel::new(Arc::clone(&bus)).with_settle(Duration::from_millis(100));
         tokio::spawn(plant.run());
         settle_yields().await;
 
@@ -327,8 +334,8 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn sides_settle_independently() {
         let bus = Arc::new(MockBus::new());
-        let plant = MirrorFoldPlantModel::new(Arc::clone(&bus))
-            .with_settle(Duration::from_millis(100));
+        let plant =
+            MirrorFoldPlantModel::new(Arc::clone(&bus)).with_settle(Duration::from_millis(100));
         tokio::spawn(plant.run());
         settle_yields().await;
 
@@ -343,7 +350,10 @@ mod tests {
         // left has settled but right has not.
         advance(Duration::from_millis(60)).await;
         settle_yields().await;
-        assert_eq!(bus.latest_value(IS_FOLDED_LEFT), Some(SignalValue::Bool(true)));
+        assert_eq!(
+            bus.latest_value(IS_FOLDED_LEFT),
+            Some(SignalValue::Bool(true))
+        );
         assert_eq!(
             bus.latest_value(IS_FOLDED_RIGHT),
             Some(SignalValue::Bool(false)),
@@ -352,7 +362,10 @@ mod tests {
 
         advance(Duration::from_millis(60)).await;
         settle_yields().await;
-        assert_eq!(bus.latest_value(IS_FOLDED_RIGHT), Some(SignalValue::Bool(true)));
+        assert_eq!(
+            bus.latest_value(IS_FOLDED_RIGHT),
+            Some(SignalValue::Bool(true))
+        );
     }
 
     #[tokio::test(start_paused = true)]
@@ -399,7 +412,7 @@ mod tests {
         settle_yields().await;
 
         let st = nvm.load_mirror_fold();
-        assert_eq!(st.is_folded[0], true);
-        assert_eq!(st.is_folded[1], false);
+        assert!(st.is_folded[0]);
+        assert!(!st.is_folded[1]);
     }
 }
