@@ -241,8 +241,8 @@ const INIT_STATE={
   'Body.Windshield.Front.Wiping.Mode':'OFF','Body.Windshield.Front.Wiping.Intensity':0,'Body.Windshield.Front.Washing.IsActive':false,
   'Body.Windshield.Rear.Wiping.Mode':'OFF','Body.Windshield.Rear.Washing.IsActive':false,
   // Mirrors
-  'Body.Mirrors.Left.IsFolded':false,'Body.Mirrors.Left.IsHeatingOn':false,'Body.Mirrors.Left.Tilt':0,'Body.Mirrors.Left.Pan':0,
-  'Body.Mirrors.Right.IsFolded':false,'Body.Mirrors.Right.IsHeatingOn':false,'Body.Mirrors.Right.Tilt':0,'Body.Mirrors.Right.Pan':0,
+  'Body.Mirror.Left.IsFolded':false,'Body.Mirror.Left.IsHeatingOn':false,'Body.Mirror.Left.Tilt':0,'Body.Mirror.Left.Pan':0,
+  'Body.Mirror.Right.IsFolded':false,'Body.Mirror.Right.IsHeatingOn':false,'Body.Mirror.Right.Tilt':0,'Body.Mirror.Right.Pan':0,
   // Cabin
   'Cabin.Lights.IsDomeOn':false,'Cabin.Lights.IsGloveBoxOn':false,'Cabin.Lights.Ambient.Intensity':0,'Cabin.Lights.Ambient.Color':'#3B82F6',
   // HVAC
@@ -495,7 +495,7 @@ function CombinedView({s,set,onDeviceSelect}){
   const tlo=brake?.95:lo||hi||park?.75:.08;
   const rlc=back?'#FFFFFF':'#1A1A2A';
   const hood=s['Body.Hood.IsOpen'],trunk=s['Body.Trunk.IsOpen'];
-  const mlf=s['Body.Mirrors.Left.IsFolded'],mrf=s['Body.Mirrors.Right.IsFolded'];
+  const mlf=s['Body.Mirror.Left.IsFolded'],mrf=s['Body.Mirror.Right.IsFolded'];
   const wf=s['Body.Windshield.Front.Wiping.Mode']!=='OFF';
   // Exterior puddle lamps — driven by Welcome (and future Farewell /
   // PerimeterAlarm) via the courtesy arbiter.  Rendered as soft blue
@@ -958,8 +958,8 @@ function CombinedView({s,set,onDeviceSelect}){
         </rect>
       </g>
       :<rect x="306" y="198" width="5" height="4" rx="1" fill="#0D1320"><title>Right mirror — folded</title></rect>}
-    {s['Body.Mirrors.Left.IsHeatingOn']&&<circle cx="46" cy="200" r="10" fill="none" stroke="#FF4040" strokeWidth="1" opacity=".6" className="pulse"><title>Left mirror heating — active</title></circle>}
-    {s['Body.Mirrors.Right.IsHeatingOn']&&<circle cx="314" cy="200" r="10" fill="none" stroke="#FF4040" strokeWidth="1" opacity=".6" className="pulse"><title>Right mirror heating — active</title></circle>}
+    {s['Body.Mirror.Left.IsHeatingOn']&&<circle cx="46" cy="200" r="10" fill="none" stroke="#FF4040" strokeWidth="1" opacity=".6" className="pulse"><title>Left mirror heating — active</title></circle>}
+    {s['Body.Mirror.Right.IsHeatingOn']&&<circle cx="314" cy="200" r="10" fill="none" stroke="#FF4040" strokeWidth="1" opacity=".6" className="pulse"><title>Right mirror heating — active</title></circle>}
 
     <text x="180" y="22"  textAnchor="middle" fill="#1E2C3C" fontSize="8" fontFamily="Share Tech Mono" fontWeight="bold">▲ FRONT</text>
     <text x="180" y="755" textAnchor="middle" fill="#1E2C3C" fontSize="8" fontFamily="Share Tech Mono" fontWeight="bold">REAR ▼</text>
@@ -1019,8 +1019,12 @@ function SideView({s,set}){
   const wf=s['Body.Windshield.Front.Wiping.Mode']!=='OFF';
   const sr=s['Body.Sunroof.Position'];
   // Mirror — read from the visible side
-  const mlf=s[`Body.Mirrors.${side}.IsFolded`];
-  const mheat=s[`Body.Mirrors.${side}.IsHeatingOn`];
+  const mlf=s[`Body.Mirror.${side}.IsFolded`];
+  const mheat=s[`Body.Mirror.${side}.IsHeatingOn`];
+  // Puddle lamp on the visible side — Welcome / Farewell drive these
+  // via the puddle arbiter.  Rendered as a soft cone projecting down
+  // from the mirror housing onto the ground.
+  const puddleSide=s[`Body.Lights.Puddle.${side}.IsOn`];
   const hlc=hi?'#FFF':lo?'#FCD34D':drl?'#C0C8D0':park?'#FEF3C7':'#0A1420';
   const hlo=hi?.95:lo?.85:drl?.45:park?.2:.06;
   const tlc=brake?'#FF2222':lo||hi||park?'#EF4444':'#1A0808';
@@ -1114,9 +1118,15 @@ function SideView({s,set}){
          triggers PassiveEntry auth, so the HMI must allow it
          regardless of lock state.  A small red 🔒 badge to the left
          of the handle warns "won't open" when locked. ── */}
+    {/* Handles sit near the trailing edge of each door panel — front
+        door handle by the B-pillar, rear door handle by the C-pillar
+        — to match how production vehicles are laid out.  Front-door
+        panel spans 430→565 (135 wide) and rear-door panel spans
+        589→772 (183 wide); the 38 px handle is parked ~10 px inboard
+        of the trailing edge. */}
     {[
-      {pfx:r1pfx, x:458, open:d1, locked:r1locked, dbl:r1dbl, pulled:r1pulled, label:'Row 1'},
-      {pfx:r2pfx, x:616, open:d2, locked:r2locked, dbl:r2dbl, pulled:r2pulled, label:'Row 2'},
+      {pfx:r1pfx, x:520, open:d1, locked:r1locked, dbl:r1dbl, pulled:r1pulled, label:'Row 1'},
+      {pfx:r2pfx, x:723, open:d2, locked:r2locked, dbl:r2dbl, pulled:r2pulled, label:'Row 2'},
     ].map(({pfx,x,open,locked,dbl,pulled,label})=>{
       const tip=open?`${label} outside handle — door is open`
                :dbl ?`${label} outside handle — door is double-locked; pull will not open`
@@ -1240,6 +1250,35 @@ function SideView({s,set}){
     {mheat&&<circle cx="238" cy="215" r="14" fill="none" stroke="#FF4040" strokeWidth="1.2" opacity=".7" className="pulse">
       <title>Mirror heating — active</title>
     </circle>}
+
+    {/* ── Puddle lamp beam — projects down from mirror housing onto
+         the ground when Welcome / Farewell claim the puddle lamp on
+         this side.  Trapezoid for the beam cone + bright pool ellipse
+         at ground level. ── */}
+    <defs>
+      <linearGradient id="puddleBeamSide" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%"  stopColor="#BAD6FE" stopOpacity="0.55"/>
+        <stop offset="60%" stopColor="#7CC8FF" stopOpacity="0.30"/>
+        <stop offset="100%" stopColor="#3D85C6" stopOpacity="0.05"/>
+      </linearGradient>
+      <radialGradient id="puddleGroundSide" cx="50%" cy="50%" r="50%">
+        <stop offset="0%"  stopColor="#BAD6FE" stopOpacity="0.85"/>
+        <stop offset="60%" stopColor="#3D85C6" stopOpacity="0.40"/>
+        <stop offset="100%" stopColor="#3D85C6" stopOpacity="0"/>
+      </radialGradient>
+    </defs>
+    {puddleSide && !mlf && (
+      <g style={{pointerEvents:'none'}}>
+        <title>{side} puddle lamp — on</title>
+        {/* Beam cone: narrow at mirror underside (~238, 222),
+            spreading to a ~80 px pool at ground level (y≈445). */}
+        <path d="M 230,224 L 200,448 L 276,448 L 246,224 Z"
+          fill="url(#puddleBeamSide)"/>
+        {/* Bright ground pool */}
+        <ellipse cx="238" cy="448" rx="38" ry="6" fill="url(#puddleGroundSide)"/>
+        <ellipse cx="238" cy="448" rx="10" ry="2" fill="#E0EEFF" opacity="0.85"/>
+      </g>
+    )}
 
     {/* ── Wheels ── */}
     <circle cx="180" cy="400" r="55" fill="#07101A" stroke="#161E2C" strokeWidth="2.2"/>
@@ -1669,12 +1708,30 @@ function ControlPanelContent({s,set,anyDoor,anyLight,lux}){
         <BR label="Rear washer" k="Body.Windshield.Rear.Washing.IsActive" s={s} set={set} c="b"/>
       </SG>
 
-      <SG title="Mirrors" vss="Body.Mirrors">
+      <SG title="Mirror" vss="Body.Mirror">
+        {/* Fold momentary press — drives Body.Switches.Mirror.Fold.
+            The MirrorFold feature treats each false→true edge as a
+            press and toggles `intended_fold_state` (= !last_fold_cmd).
+            Per-side IsFolded readouts below are read-only feedback
+            from the MirrorFoldPlantModel (plant owns those signals
+            now; HMI cannot write them directly). */}
+        <div className="dcr" style={{marginBottom:6}}>
+          <span className="dcl">Fold switch</span>
+          <button onMouseDown={()=>{set('Body.Switches.Mirror.Fold',true);setTimeout(()=>set('Body.Switches.Mirror.Fold',false),60);}}
+                  style={{padding:'4px 14px',borderRadius:4,border:'1px solid var(--bdr2)',background:'var(--s3)',color:'var(--white)',fontFamily:'var(--fm)',fontSize:9,fontWeight:700,cursor:'pointer'}}>
+            ↻ FOLD / UNFOLD
+          </button>
+        </div>
         <div style={{display:'flex',gap:6}}>
-          {[['Left','Body.Mirrors.Left'],['Right','Body.Mirrors.Right']].map(([side,pfx])=>(
+          {[['Left','Body.Mirror.Left'],['Right','Body.Mirror.Right']].map(([side,pfx])=>(
             <div key={side} style={{flex:1,background:'var(--s2)',borderRadius:'var(--r6)',padding:'6px 8px',border:'1px solid var(--bdr)',display:'flex',flexDirection:'column',gap:3}}>
               <div className="dctitle">{side.toUpperCase()}</div>
-              <div className="dcr"><span className="dcl">Fold</span><Tog val={s[`${pfx}.IsFolded`]} on={()=>set(`${pfx}.IsFolded`,!s[`${pfx}.IsFolded`])} c="a"/></div>
+              <div className="dcr">
+                <span className="dcl">Fold status</span>
+                <span style={{fontFamily:'var(--fm)',fontSize:9,fontWeight:700,color:s[`${pfx}.IsFolded`]?'var(--amber)':'var(--dim)'}}>
+                  {s[`${pfx}.IsFolded`]?'◀▶ FOLDED':'OUT'}
+                </span>
+              </div>
               <div className="dcr"><span className="dcl">Heat</span><Tog val={s[`${pfx}.IsHeatingOn`]} on={()=>set(`${pfx}.IsHeatingOn`,!s[`${pfx}.IsHeatingOn`])} c="r"/></div>
               <SlR label="Tilt" k={`${pfx}.Tilt`} s={s} set={set} min={-10} max={10} step={1} unit="°"/>
               <SlR label="Pan"  k={`${pfx}.Pan`}  s={s} set={set} min={-10} max={10} step={1} unit="°"/>
@@ -1758,7 +1815,7 @@ const INIT_CONFIG={
   dealer:{
     auto_relock_enabled:true, horn_chirp_on_lock:true,
     courtesy_light_timeout_secs:30, remote_start_max_minutes:10,
-    two_stage_unlock:true, driver_door_side:'Left',
+    two_stage_unlock:true, driver_door_side:'Left', mirror_fold_mode:'MANUAL',
   },
   variant:{
     auto_lock_speed_kmh:20, double_lock_enabled:false,
@@ -1846,6 +1903,9 @@ function ConfigView({cfg, onSet}){
       </CfgRow>
       <CfgRow label="Remote start max duration" hint="Engine/climate pre-conditioning limit (min)">
         <CfgNum val={d.remote_start_max_minutes} min={1} max={60} onChange={v=>onSet('dealer.remote_start_max_minutes',v)}/>
+      </CfgRow>
+      <CfgRow label="Mirror fold mode" hint="MANUAL=switch only, AUTO=switch + lock-edge auto-fold, OFF=feature inert">
+        <CfgSelect val={d.mirror_fold_mode||'MANUAL'} opts={['MANUAL','AUTO','OFF']} onChange={v=>onSet('dealer.mirror_fold_mode',v)}/>
       </CfgRow>
     </CfgSection>
 

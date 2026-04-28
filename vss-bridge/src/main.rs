@@ -29,6 +29,7 @@ use vss_bridge::features::rke::{PairedFob, RkeFeature};
 use vss_bridge::features::thumb_pad_lock::ThumbPadLock;
 use vss_bridge::features::turn_indicator::TurnIndicator;
 use vss_bridge::features::walk_away_lock::WalkAwayLock;
+use vss_bridge::features::mirror_fold::MirrorFold;
 use vss_bridge::features::welcome::Welcome;
 use vss_bridge::ipc_message::SignalValue;
 use vss_bridge::kuksa_sync;
@@ -37,6 +38,7 @@ use vss_bridge::plant_models::blink_relay::BlinkRelay;
 use vss_bridge::plant_models::door_handle::DoorHandlePlantModel;
 use vss_bridge::plant_models::door_lock::DoorLockPlantModel;
 use vss_bridge::plant_models::peps::PepsPlantModel;
+use vss_bridge::plant_models::mirror_fold::MirrorFoldPlantModel;
 use vss_bridge::plant_models::trunk::TrunkPlantModel;
 use vss_bridge::signal_bus::SignalBus;
 use vss_bridge::signal_ids;
@@ -88,7 +90,7 @@ async fn main() -> anyhow::Result<()> {
     let (lighting_arb, lighting_fut) = arbiter::lighting_arbiter(Arc::clone(&bus));
     let (low_beam_arb, low_beam_fut) = arbiter::low_beam_arbiter(Arc::clone(&bus));
     let (door_lock_arb, door_lock_ack_tx, door_lock_fut) =
-        arbiter::door_lock_arbiter(Arc::clone(&bus));
+        arbiter::door_lock_arbiter_with_nvm(Arc::clone(&bus), nvm.clone());
     let (horn_arb, horn_fut) = arbiter::horn_arbiter(Arc::clone(&bus));
     let (_comfort_arb, comfort_fut) = arbiter::comfort_arbiter(Arc::clone(&bus));
     let (courtesy_arb, courtesy_fut) = arbiter::courtesy_arbiter(Arc::clone(&bus));
@@ -271,7 +273,16 @@ async fn main() -> anyhow::Result<()> {
         .run(),
     );
 
-    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome");
+    // MirrorFold — handles `Body.Switches.Mirror.Fold` momentary press
+    // and (when dealer cal `mirror_fold_mode = AUTO`) auto-folds on
+    // central-lock state edges.  Publishes per-side `FoldCmd` to the
+    // MirrorFoldPlantModel.  Persists `last_fold_cmd` in NVM so the
+    // toggle direction stays consistent across power cycles.
+    tokio::spawn(
+        MirrorFold::with_nvm(Arc::clone(&bus), Arc::clone(&_platform_config), nvm.clone()).run(),
+    );
+
+    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome, MirrorFold");
 
     // ── Plant Models ────────────────────────────────────────────────
     // Simulate physical lamp behavior the M7 / smart actuator firmware
@@ -283,6 +294,7 @@ async fn main() -> anyhow::Result<()> {
     );
     tokio::spawn(DoorHandlePlantModel::new(Arc::clone(&bus)).run());
     tokio::spawn(TrunkPlantModel::with_nvm(Arc::clone(&bus), nvm.clone()).run());
+    tokio::spawn(MirrorFoldPlantModel::with_nvm(Arc::clone(&bus), nvm.clone()).run());
     tokio::spawn(
         PepsPlantModel::new(Arc::clone(&bus))
             // 10 ms × slot index — fob 1 = 10 ms, fob 6 = 60 ms.

@@ -63,6 +63,14 @@ const DOME: VssPath = "Cabin.Lights.IsDomeOn";
 
 const POWER_STATE: VssPath = "Vehicle.LowVoltageSystemState";
 
+// Note: the mirror-folded suppression for puddle lamps is enforced
+// at the *arbiter* layer (see `puddle_arbiter` in `arbiter.rs` —
+// PhysicalGate bound to `Body.Mirror.{Left,Right}.IsFolded`).
+// Welcome therefore claims both puddles unconditionally; the arbiter
+// silently drops the side whose mirror is folded.  This keeps the
+// hardware constraint in one place so Farewell, PerimeterAlarm, and
+// any future puddle claimant inherit the same behaviour.
+
 const PAIRED_ZONE_SIGNALS: [VssPath; 6] = [
     "Body.PEPS.Plant.KeyFob.1.Zone",
     "Body.PEPS.Plant.KeyFob.2.Zone",
@@ -206,6 +214,9 @@ impl<B: SignalBus + Send + Sync + 'static> Welcome<B> {
 
                     if entry_edge && deadline.is_none() {
                         // First device into LF — arm courtesy lights.
+                        // Both puddles + dome are claimed here; the
+                        // puddle arbiter silently drops a side whose
+                        // mirror is folded (PhysicalGate).
                         tracing::info!(
                             slot, old = ?old_zone, new = ?new_zone,
                             "Welcome: entry edge — arming courtesy lights"
@@ -259,8 +270,11 @@ impl<B: SignalBus + Send + Sync + 'static> Welcome<B> {
         }
     }
 
+    /// Arm or release courtesy outputs as a group.  Both puddles are
+    /// claimed unconditionally; the puddle arbiter's `PhysicalGate`
+    /// drops a side whose mirror is folded.  Dome runs through the
+    /// courtesy arbiter independently.
     async fn claim_all(&self, on: bool) {
-        // Puddle lamps go through the dedicated puddle arbiter.
         for &sig in &[PUDDLE_LEFT, PUDDLE_RIGHT] {
             let _ = self
                 .puddle_arb
@@ -272,7 +286,6 @@ impl<B: SignalBus + Send + Sync + 'static> Welcome<B> {
                 })
                 .await;
         }
-        // Dome light goes through the (interior) courtesy arbiter.
         let _ = self
             .courtesy_arb
             .request(ActuatorRequest {
@@ -548,4 +561,9 @@ mod tests {
             "door open while idle must not produce a claim either"
         );
     }
+
+    // Mirror-fold suppression of puddle lamps is verified directly
+    // against the puddle arbiter in `arbiter::tests` (it's an
+    // arbiter-level concern, not Welcome's).  Welcome simply claims
+    // both puddles; the arbiter applies the PhysicalGate.
 }

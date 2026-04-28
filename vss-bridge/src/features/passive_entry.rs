@@ -64,6 +64,10 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use futures::StreamExt;
+// `rand::rngs::OsRng` for PEPS challenge nonces — cryptographically
+// strong RNG drawing from the OS entropy source.  Required by CodeQL
+// for any "random" value used in a challenge/response auth flow,
+// even in simulation, so the wire format mirrors a production ECU.
 use rand::rngs::OsRng;
 use rand::RngCore;
 

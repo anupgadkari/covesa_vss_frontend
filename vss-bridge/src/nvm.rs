@@ -74,6 +74,56 @@ pub struct TrunkState {
     pub is_open: bool,
 }
 
+/// Persisted vehicle-level central lock status.
+///
+/// Reflects the *commanded* state set by the door-lock arbiter (RKE,
+/// PEPS, AutoLock, etc.) and is independent of soldier-knob movements.
+/// Used by features that need to reason about the vehicle's lock
+/// posture as a whole (MirrorFold AUTO triggers, future security
+/// features).
+///
+/// `status` is one of `'UNLOCKED' | 'DRIVER_UNLOCKED' | 'LOCKED' |
+/// 'DOUBLE_LOCKED'`.  Stored as a string to keep the wire format
+/// human-readable and stable across enum reordering.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CabinLockStatusState {
+    pub status: String,
+}
+
+impl Default for CabinLockStatusState {
+    fn default() -> Self {
+        // Factory default: vehicle delivered unlocked.
+        Self {
+            status: "UNLOCKED".into(),
+        }
+    }
+}
+
+/// Persisted state for the mirror-fold plant model — physical position
+/// of each side mirror.  Separate from feature-level intent
+/// (see [`MirrorFoldIntent`]) so the plant stays purely about physics:
+/// two positions, no policy.
+///
+/// Cold boot (no file) = factory: both unfolded.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct MirrorFoldState {
+    /// `[left, right]`.  True = folded.
+    pub is_folded: [bool; 2],
+}
+
+/// Persisted state for the MirrorFold *feature* — last commanded
+/// fold direction.  The next manual press of `Body.Switches.Mirror.Fold`
+/// commands `!last_fold_cmd` (intended state = inverse of last
+/// command), so a power cycle keeps the toggle direction consistent
+/// with what the driver last asked for.
+///
+/// Cold boot (no file) = factory: `last_fold_cmd = false (unfold)`,
+/// so the very first press will command a fold.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct MirrorFoldIntent {
+    pub last_fold_cmd: bool,
+}
+
 /// Handle to the on-disk NVM directory.  Cloneable; cheap to pass around.
 ///
 /// Construct via [`NvmStore::from_env`] (production path — reads
@@ -162,6 +212,37 @@ impl NvmStore {
     /// Atomically persist `TrunkState` to disk.
     pub fn save_trunk(&self, state: &TrunkState) {
         self.save("trunk.json", state);
+    }
+
+    /// Load central lock status from disk.  Factory default = UNLOCKED.
+    pub fn load_cabin_lock_status(&self) -> CabinLockStatusState {
+        self.load("cabin_lock_status.json")
+    }
+
+    /// Atomically persist central lock status.
+    pub fn save_cabin_lock_status(&self, state: &CabinLockStatusState) {
+        self.save("cabin_lock_status.json", state);
+    }
+
+    /// Load mirror-fold plant state.  Factory default = both unfolded,
+    /// `last_fold_cmd = unfold`.
+    pub fn load_mirror_fold(&self) -> MirrorFoldState {
+        self.load("mirror_fold.json")
+    }
+
+    /// Atomically persist mirror-fold plant state.
+    pub fn save_mirror_fold(&self, state: &MirrorFoldState) {
+        self.save("mirror_fold.json", state);
+    }
+
+    /// Load MirrorFold feature intent (last commanded fold direction).
+    pub fn load_mirror_fold_intent(&self) -> MirrorFoldIntent {
+        self.load("mirror_fold_intent.json")
+    }
+
+    /// Atomically persist MirrorFold feature intent.
+    pub fn save_mirror_fold_intent(&self, state: &MirrorFoldIntent) {
+        self.save("mirror_fold_intent.json", state);
     }
 
     // ── Internals ──────────────────────────────────────────────────────

@@ -111,6 +111,14 @@ const INPUT_SIGNALS: &[VssPath] = &[
     // Thumb-pad lock inputs — Row 1 outside handle lock areas (HMI top-view).
     "Body.Doors.Row1.Left.Handle.Outside.LockPad.IsPressed",
     "Body.Doors.Row1.Right.Handle.Outside.LockPad.IsPressed",
+    // Mirror control switches — momentary press (false→true rising edge).
+    // - Fold: toggles intended fold state via the MirrorFold feature.
+    // - Select / Direction: defined now so the namespace is reserved;
+    //   the Mirror-Adjust feature that consumes these is not implemented
+    //   in this PR.
+    "Body.Switches.Mirror.Fold",
+    "Body.Switches.Mirror.Select",
+    "Body.Switches.Mirror.Direction",
 ];
 
 /// Signals the bridge pushes back to the HMI (actuator outputs from arbiters).
@@ -134,6 +142,15 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     // courtesy_arbiter so the HMI shows the cabin illuminated on
     // approach.
     "Cabin.Lights.IsDomeOn",
+    // Mirror fold feedback (per side) — owned by the MirrorFoldPlantModel,
+    // published 1 s after each fold/unfold command settles.  HMI reads this
+    // for visualization; puddle arbiter's PhysicalGate also reads it.
+    "Body.Mirror.Left.IsFolded",
+    "Body.Mirror.Right.IsFolded",
+    // Vehicle-level central lock status (string enum: UNLOCKED |
+    // DRIVER_UNLOCKED | LOCKED | DOUBLE_LOCKED) — published by the
+    // door-lock arbiter on every accepted command, NVM-persisted.
+    "Cabin.LockStatus",
     "Body.Doors.Row1.Left.IsLocked",
     "Body.Doors.Row1.Right.IsLocked",
     "Body.Doors.Row2.Left.IsLocked",
@@ -499,6 +516,7 @@ fn build_config_msg(cfg: &PlatformConfig) -> String {
                 "remote_start_max_minutes":   dealer.remote_start_max_minutes,
                 "two_stage_unlock":           dealer.two_stage_unlock,
                 "driver_door_side":           format!("{:?}", dealer.driver_door_side),
+                "mirror_fold_mode":           format!("{:?}", dealer.mirror_fold_mode).to_uppercase(),
             },
             "variant": {
                 "double_lock_enabled":  variant.double_lock_enabled,
@@ -584,6 +602,15 @@ fn handle_config_set(msg: &serde_json::Value, cfg: &PlatformConfig) -> bool {
             dealer.driver_door_side = match value.as_str() {
                 Some("Right") => DriverDoorSide::Right,
                 _ => DriverDoorSide::Left,
+            };
+            true
+        }
+        "dealer.mirror_fold_mode" => {
+            use crate::config::MirrorFoldMode;
+            dealer.mirror_fold_mode = match value.as_str() {
+                Some("AUTO") => MirrorFoldMode::Auto,
+                Some("OFF") => MirrorFoldMode::Off,
+                _ => MirrorFoldMode::Manual,
             };
             true
         }
