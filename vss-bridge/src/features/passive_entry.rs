@@ -448,34 +448,32 @@ impl<B: SignalBus + Send + Sync + 'static> PassiveEntry<B> {
 
         // Determine whether this is stage 1 (driver door only) or
         // stage 2 (all doors).
+        //
+        // Two-stage rationale: with the standard cal, the FIRST pull
+        // of the driver-door handle unlocks the driver door only — a
+        // privacy/anti-mugging behaviour.  A second pull within the
+        // window escalates to UnlockAll.
+        //
+        // **A pull on a passenger-side handle bypasses two-stage
+        // entirely** and goes straight to UnlockAll.  The user has
+        // approached from the passenger side and is touching that
+        // door's handle — they clearly intend to enter through it,
+        // and there is no reason to leave the doors they're physically
+        // standing next to locked.  Same OEM behaviour as a Tesla /
+        // VW / most modern PEPS implementations.
         let stage_two = if !two_stage_enabled {
             // Two-stage disabled → every successful auth unlocks all.
             true
         } else if !door.is_driver {
-            // Non-driver door: only allowed when a stage-1 unlock is
-            // pending (driver already authenticated).
-            match &self.pending_stage_two {
-                Some(p)
-                    if matches!(p.device_kind, DeviceKind::Fob)
-                        == matches!(dev.kind, DeviceKind::Fob)
-                        && p.device_slot == dev.slot
-                        && now.duration_since(p.started) < window =>
-                {
-                    true
-                }
-                _ => {
-                    tracing::info!(
-                        door = door.name,
-                        device = %dev.label(),
-                        "PassiveEntry: non-driver handle pull without prior stage-1 — driver-only unlock"
-                    );
-                    // Treat as stage 1 — unlock just the driver door.
-                    // (Real vehicles vary; some require stage-1 only on
-                    // the actual driver door.  We accept any door's pull
-                    // as a stage-1 trigger to keep the UX forgiving.)
-                    false
-                }
-            }
+            // Passenger-side handle pulled with passenger-zone auth:
+            // unlock all, regardless of two-stage cal or any pending
+            // stage-1 timer.
+            tracing::info!(
+                door = door.name,
+                device = %dev.label(),
+                "PassiveEntry: passenger-side handle pull → UnlockAll (bypasses two-stage)"
+            );
+            true
         } else {
             // Driver door: stage 2 only if a recent stage-1 succeeded.
             matches!(
@@ -773,6 +771,54 @@ mod tests {
     // where the dealer config is set up via the bridge's normal config
     // pipeline before the feature spawns.  Recreating that in a unit
     // test is more setup than it's worth — left as e2e responsibility.)
+
+    /// Passenger-side handle pull bypasses two-stage and goes straight
+    /// to UnlockAll, even when `two_stage_unlock` is enabled.  The user
+    /// is approaching from the passenger side and touching that door's
+    /// handle — leaving the doors they're standing next to locked
+    /// would be hostile UX.
+    #[tokio::test]
+    async fn passenger_handle_pull_unlocks_all_even_with_two_stage() {
+        let bus = setup().await;
+        bus.inject(
+            peps_signals::KEYFOB_1_ZONE,
+            SignalValue::String("PassengerDoor".into()),
+        );
+        drain().await;
+        bus.clear_history();
+
+        bus.inject(
+            "Body.Doors.Row1.Right.Handle.Outside.IsPulled",
+            SignalValue::Bool(true),
+        );
+        drain().await;
+        assert_eq!(
+            last_command(&bus),
+            Some("unlock_all".into()),
+            "passenger-side first-pull must skip stage-1 and unlock all"
+        );
+    }
+
+    /// Same rule for rear passenger-side doors — Row2.{Left,Right}
+    /// share the passenger-side LF perimeter and therefore behave the
+    /// same as the front passenger handle.
+    #[tokio::test]
+    async fn rear_handle_pull_unlocks_all_even_with_two_stage() {
+        let bus = setup().await;
+        bus.inject(
+            peps_signals::KEYFOB_1_ZONE,
+            SignalValue::String("PassengerDoor".into()),
+        );
+        drain().await;
+        bus.clear_history();
+
+        bus.inject(
+            "Body.Doors.Row2.Right.Handle.Outside.IsPulled",
+            SignalValue::Bool(true),
+        );
+        drain().await;
+        assert_eq!(last_command(&bus), Some("unlock_all".into()));
+    }
 
     /// 6. Wrong-key device in zone → response mismatches; no unlock.
     /// Simulated by placing an unpaired fob (slot 5) in DriverDoor.
