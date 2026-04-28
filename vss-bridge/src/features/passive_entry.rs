@@ -64,6 +64,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use futures::StreamExt;
+use rand::rngs::OsRng;
+use rand::RngCore;
 
 use crate::arbiter::{DoorLockArbiter, DoorLockRequest, LockCommand, FEEDBACK_REQUEST};
 use crate::config::PlatformConfig;
@@ -538,26 +540,10 @@ fn parse_response_hex(v: &SignalValue) -> Option<ChallengeResponse> {
 }
 
 /// Generate a fresh 16-byte nonce.  We use a simple time-derived
-/// pseudorandom value — not cryptographically strong, but adequate
-/// for simulation (and we need only uniqueness across consecutive
-/// challenges, not security).
+/// Generate a cryptographically strong random nonce for PEPS challenge-response.
 fn rand_nonce() -> Challenge {
-    let mut nonce = [0u8; 16];
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
-    let bytes = now.to_le_bytes();
-    let n = bytes.len().min(16);
-    nonce[..n].copy_from_slice(&bytes[..n]);
-    // Mix in a per-call counter so two challenges within the same
-    // nanosecond differ.
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static COUNTER: AtomicU64 = AtomicU64::new(1);
-    let c = COUNTER.fetch_add(1, Ordering::Relaxed).to_le_bytes();
-    for (i, b) in c.iter().enumerate() {
-        nonce[8 + i] ^= *b;
-    }
+    let mut nonce: Challenge = [0u8; 16];
+    OsRng.fill_bytes(&mut nonce);
     nonce
 }
 
