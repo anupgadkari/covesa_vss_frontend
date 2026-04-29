@@ -6,6 +6,8 @@
       "mcp__Claude_Preview__preview_console_logs",
       "mcp__Claude_Preview__preview_start",
       "mcp__Claude_Preview__preview_list",
+      "mcp__Claude_Preview__preview_click",
+      "mcp__Claude_Preview__preview_fill",
       "mcp__ccd_session__mark_chapter",
       "Bash(cargo test --lib)",
       "Bash(cargo test --lib *)",

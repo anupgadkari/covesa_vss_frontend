@@ -7,9 +7,9 @@
 //!
 //! # Zone hierarchy
 //! ```text
-//! OutOfRange → RfRange → Approach → DriverDoor / PassengerDoor / Hood / Trunk / …
+//! OutOfRange → RfRange → Approach → LeftFront / RightFront / Hood / Trunk / …
 //! ```
-//! "In approach" means zone is `Approach`, `DriverDoor`, `PassengerDoor`, `Hood`,
+//! "In approach" means zone is `Approach`, `LeftFront`, `RightFront`, `Hood`,
 //! `Trunk`, `TrunkInside`, or `Cabin` (i.e., any zone closer than `RfRange`).
 //!
 //! # Armed state
@@ -53,7 +53,7 @@ fn zone_is_in_approach(val: &SignalValue) -> bool {
         val,
         SignalValue::String(s) if matches!(
             s.as_str(),
-            "Approach" | "DriverDoor" | "PassengerDoor" | "Hood" | "Trunk" | "TrunkInside" | "Cabin"
+            "Approach" | "LeftFront" | "RightFront" | "Hood" | "Trunk" | "TrunkInside" | "Cabin"
         )
     )
 }

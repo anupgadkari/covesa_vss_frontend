@@ -9,10 +9,10 @@ Feature: Walk-Away Lock
   # -------------------------------------------------------------------------
   # Monitors zone signals for 4 keyfobs and 2 BLE phones.
   # Zone hierarchy (closest → furthest):
-  #   Cabin / TrunkInside / Trunk / Hood / DriverDoor / PassengerDoor
+  #   Cabin / TrunkInside / Trunk / Hood / LeftFront / RightFront
   #   → Approach → RfRange → OutOfRange
   #
-  # "In approach" means zone ∈ {Approach, DriverDoor, PassengerDoor,
+  # "In approach" means zone ∈ {Approach, LeftFront, RightFront,
   #   Hood, Trunk, TrunkInside, Cabin}.
   # "Outside approach" means zone ∈ {RfRange, OutOfRange}.
   #
@@ -67,8 +67,8 @@ Feature: Walk-Away Lock
     And FeedbackRequest "lock" is published
 
   # --- REQ-WAL-001 ---
-  Scenario: Fob passes through DriverDoor zone then leaves
-    When keyfob 1 zone changes to "DriverDoor"
+  Scenario: Fob passes through LeftFront zone then leaves
+    When keyfob 1 zone changes to "LeftFront"
     And keyfob 1 zone changes to "RfRange"
     Then a LockAll command is issued
     And FeedbackRequest "lock" is published

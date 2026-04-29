@@ -6,8 +6,8 @@
 //!
 //! | Zone          | LF  | BLE | NFC | RF  | Auth type                    |
 //! |---------------|-----|-----|-----|-----|------------------------------|
-//! | DriverDoor    | yes | yes | yes | -   | Challenge-response (AES-128) |
-//! | PassengerDoor | yes | yes | -   | -   | Challenge-response (AES-128) |
+//! | LeftFront    | yes | yes | yes | -   | Challenge-response (AES-128) |
+//! | RightFront | yes | yes | -   | -   | Challenge-response (AES-128) |
 //! | Hood          | yes | yes | -   | -   | Challenge-response (AES-128) |
 //! | Trunk         | yes | yes | -   | -   | Challenge-response (AES-128) |
 //! | TrunkInside   | yes | yes | -   | -   | Challenge-response (AES-128) |
@@ -27,9 +27,9 @@ use std::fmt;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Zone {
     /// ~1m from driver door handle — LF antenna present.
-    DriverDoor,
+    LeftFront,
     /// ~1m from passenger door handle — LF antenna present.
-    PassengerDoor,
+    RightFront,
     /// ~1m from hood — LF antenna present.
     Hood,
     /// ~1m from trunk/liftgate — LF antenna present (standing behind car).
@@ -52,8 +52,8 @@ impl Zone {
     pub fn has_lf(self) -> bool {
         matches!(
             self,
-            Zone::DriverDoor
-                | Zone::PassengerDoor
+            Zone::LeftFront
+                | Zone::RightFront
                 | Zone::Hood
                 | Zone::Trunk
                 | Zone::TrunkInside
@@ -67,8 +67,8 @@ impl Zone {
     pub fn supports_challenge_response(self) -> bool {
         matches!(
             self,
-            Zone::DriverDoor
-                | Zone::PassengerDoor
+            Zone::LeftFront
+                | Zone::RightFront
                 | Zone::Hood
                 | Zone::Trunk
                 | Zone::TrunkInside
@@ -95,8 +95,8 @@ impl Zone {
     /// Parse a zone from a VSS string value.
     pub fn from_str_value(s: &str) -> Option<Self> {
         match s {
-            "DriverDoor" => Some(Zone::DriverDoor),
-            "PassengerDoor" => Some(Zone::PassengerDoor),
+            "LeftFront" => Some(Zone::LeftFront),
+            "RightFront" => Some(Zone::RightFront),
             "Hood" => Some(Zone::Hood),
             "Trunk" => Some(Zone::Trunk),
             "TrunkInside" => Some(Zone::TrunkInside),
@@ -111,8 +111,8 @@ impl Zone {
     /// Convert to a VSS string value.
     pub fn as_str(self) -> &'static str {
         match self {
-            Zone::DriverDoor => "DriverDoor",
-            Zone::PassengerDoor => "PassengerDoor",
+            Zone::LeftFront => "LeftFront",
+            Zone::RightFront => "RightFront",
             Zone::Hood => "Hood",
             Zone::Trunk => "Trunk",
             Zone::TrunkInside => "TrunkInside",
@@ -183,8 +183,8 @@ mod tests {
     #[test]
     fn proximity_zones_support_challenge_response() {
         for zone in [
-            Zone::DriverDoor,
-            Zone::PassengerDoor,
+            Zone::LeftFront,
+            Zone::RightFront,
             Zone::Hood,
             Zone::Trunk,
             Zone::TrunkInside,
@@ -227,8 +227,8 @@ mod tests {
     #[test]
     fn zone_string_roundtrip() {
         for zone in [
-            Zone::DriverDoor,
-            Zone::PassengerDoor,
+            Zone::LeftFront,
+            Zone::RightFront,
             Zone::Hood,
             Zone::Trunk,
             Zone::TrunkInside,

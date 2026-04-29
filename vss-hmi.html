@@ -424,8 +424,8 @@ function getDevicePos(zone, idx, total){
     }
     // All interior/near-body zones use absolute SVG coords so they
     // stay glued to the car regardless of VCY.
-    case 'DriverDoor':   return {x:32,        y:300+idx*30}; // left of car body (x=60)
-    case 'PassengerDoor':return {x:328,       y:300+idx*30}; // right of car body (x=300)
+    case 'LeftFront':   return {x:32,        y:300+idx*30}; // left of car body (x=60)
+    case 'RightFront':return {x:328,       y:300+idx*30}; // right of car body (x=300)
     case 'Hood':         return {x:VCX+off,   y:-66};        // above lengthened front panel (y=-50)
     case 'Trunk':        return {x:VCX+off,   y:600};        // below rear bumper (y=580)
     case 'TrunkInside':  return {x:VCX+off,   y:550};        // inside trunk rect (y=440–560)
@@ -445,11 +445,11 @@ function hitTestZone(x,y){
   // collide with the in-body Trunk zone (y=495..544).
   if(x>=60&&x<=300&&y>=580&&y<=650) return 'Trunk';
   // Outboard side slabs — where the device chips actually park
-  // (DriverDoor pos x=32, PassengerDoor pos x=328).  Tested before
+  // (LeftFront pos x=32, RightFront pos x=328).  Tested before
   // body bounds so a chip dropped just OUTBOARD of the door also
   // registers as the door zone.
-  if(x>=5  &&x<60 &&y>=125&&y<=430) return 'DriverDoor';
-  if(x>300&&x<=360&&y>=125&&y<=430) return 'PassengerDoor';
+  if(x>=5  &&x<60 &&y>=125&&y<=430) return 'LeftFront';
+  if(x>300&&x<=360&&y>=125&&y<=430) return 'RightFront';
   // Inside vehicle body bounds (60–300 x, 80–580 y).
   // Trunk-cargo area inside the body is the entire y=440..580 band
   // (the visible "cargo / trunk area" rect spans y=440..560 plus the
@@ -458,8 +458,8 @@ function hitTestZone(x,y){
   if(x>=60&&x<=300&&y>=80&&y<=580){
     if(y<=140) return 'Hood';
     if(y>=440) return 'TrunkInside';
-    if(x<=112) return 'DriverDoor';
-    if(x>=248) return 'PassengerDoor';
+    if(x<=112) return 'LeftFront';
+    if(x>=248) return 'RightFront';
     return 'Cabin';
   }
   if(inStadium(x,y,300)) return 'Approach';
@@ -503,7 +503,7 @@ function CombinedView({s,set,onDeviceSelect}){
   }
   for(let i=1;i<=2;i++){
     const pos=s[`Body.PEPS.Plant.NfcCard.${i}.Position`]||'NotPresent';
-    const zone=pos==='DriverHandle'?'DriverDoor':pos==='PushButton'?'Cabin':'OutOfRange';
+    const zone=pos==='DriverHandle'?'LeftFront':pos==='PushButton'?'Cabin':'OutOfRange';
     allDevices.push({key:`Body.PEPS.Plant.NfcCard.${i}.Position`,type:'nfc',label:`N${i}`,
       zone,paired:true,color:'#0DC8C8',isNfc:true,nfcPos:pos});
   }
@@ -553,7 +553,7 @@ function CombinedView({s,set,onDeviceSelect}){
     }
     const zone=hitTestZone(x,y);
     if(drag.isNfc){
-      const nfcPos=zone==='DriverDoor'?'DriverHandle':zone==='Cabin'?'PushButton':'NotPresent';
+      const nfcPos=zone==='LeftFront'?'DriverHandle':zone==='Cabin'?'PushButton':'NotPresent';
       set(drag.key,nfcPos);
     } else {
       set(drag.key,zone);
@@ -1053,12 +1053,12 @@ function CombinedView({s,set,onDeviceSelect}){
         zones whose slab sits inside the body (Cabin, TrunkInside) are
         visible instead of being covered by the door / cargo fills.
         Uses pointer-events:none so it doesn't intercept drag. */}
-    {['DriverDoor','PassengerDoor','Hood','Trunk','TrunkInside','Cabin'].map(z=>{
+    {['LeftFront','RightFront','Hood','Trunk','TrunkInside','Cabin'].map(z=>{
       if(dropZone!==z) return null;
       const rects={
         // Outboard side slabs — chips park at x=32 / x=328.
-        DriverDoor:   {x:5,  y:125,w:55, h:305},
-        PassengerDoor:{x:300,y:125,w:55, h:305},
+        LeftFront:   {x:5,  y:125,w:55, h:305},
+        RightFront:{x:300,y:125,w:55, h:305},
         // Hood / Trunk slabs sit OUTSIDE the vehicle body — Hood ahead
         // of the front bumper (chip parks at y=-66), Trunk behind the
         // rear bumper (chip parks at y=600).
@@ -1530,7 +1530,7 @@ const ZONE_PROX=[
   {key:'Approach',   label:'APPR',     c:'#F59E0B'},
   {key:'Interior',   label:'INT',      c:'#10D98A'},
 ];
-const INTERIOR_ZONES=new Set(['Hood','Trunk','TrunkInside','DriverDoor','PassengerDoor','Cabin']);
+const INTERIOR_ZONES=new Set(['Hood','Trunk','TrunkInside','LeftFront','RightFront','Cabin']);
 
 /* ── Dedicated Auth Device Panel ──────────────────────────────── */
 function DevicePanel({s, set, sel, setSel}){
@@ -1615,8 +1615,12 @@ function DevicePanel({s, set, sel, setSel}){
           {z:'OutOfRange',  label:'OUT',          c:'#2E3E55'},
           {z:'RfRange',     label:'RF RANGE',      c:'#4A9EF5'},
           {z:'Approach',    label:'APPROACH',      c:'#F59E0B'},
-          {z:'DriverDoor',  label:'DRIVER\nDOOR',  c:'#10D98A'},
-          {z:'PassengerDoor',label:'PASS\nDOOR',   c:'#10D98A'},
+          // Physical-position labels — these zones are LF antenna
+          // patterns mounted on the left and right sides of the
+          // vehicle, independent of LHD/RHD cal.  PassiveEntry then
+          // routes commands per `dealer.driver_door_side`.
+          {z:'LeftFront',  label:'LEFT\nFRONT',  c:'#10D98A'},
+          {z:'RightFront',label:'RIGHT\nFRONT', c:'#10D98A'},
           {z:'Cabin',       label:'CABIN',         c:'#10D98A'},
           {z:'Hood',        label:'HOOD',          c:'#10D98A'},
           {z:'Trunk',       label:'TRUNK\nOUTSIDE',c:'#A78BFA'},
@@ -2133,18 +2137,37 @@ function App(){
 
   useEffect(()=>{const t=setInterval(()=>setTime(new Date()),1000);return()=>clearInterval(t)},[]);
 
-  // Capture / clear the AutoRelock arm timestamp on transitions of IsArmed.
-  // Re-arming during a running countdown (re-press of UNLOCK) restarts the
-  // visible timer because the bus republishes IsArmed=TRUE at the top of
-  // each new timer phase.
+  // AutoRelock countdown banner.  `IsArmed` controls visibility.
+  // For RESET-on-press behaviour we replicate the same filter
+  // AutoRelock applies internally — watch `Cabin.LockStatus.EventNum`
+  // and re-stamp `relockArmedAt` whenever an event matches the
+  // "external unlock" rule.  Mirror of
+  // `auto_relock.rs::EXTERNAL_UNLOCK_REQUESTORS` and `UNLOCK_STATES`;
+  // keep these two lists in sync if either one changes.
+  const RELOCK_EXT_REQUESTORS = ['KeyfobRke','KeyfobPeps','PassiveEntry',
+                                 'PhoneApp','PhoneBle','NfcCard','NfcPhone'];
+  const RELOCK_UNLOCK_STATES = ['UNLOCKED','DRIVER_UNLOCKED'];
   const relockArmed = !!s['Body.Doors.AutoRelock.IsArmed'];
+  const lockEventNum  = s['Cabin.LockStatus.EventNum']      ?? 0;
+  const lockStatus    = s['Cabin.LockStatus']               ?? '';
+  const lockRequestor = s['Cabin.LockStatus.LastRequestor'] ?? '';
+  const isQualifyingArmEvent =
+        RELOCK_UNLOCK_STATES.includes(lockStatus) &&
+        RELOCK_EXT_REQUESTORS.includes(lockRequestor);
   useEffect(()=>{
-    if(relockArmed){
-      setRelockArmedAt(Date.now());
-    } else {
+    if(!relockArmed){
       setRelockArmedAt(null);
+      return;
     }
-  },[relockArmed]);
+    // IsArmed=true.  Re-stamp on every qualifying lock event so a
+    // second/third RKE press during the running countdown restarts
+    // the visible timer in lockstep with the backend.  When IsArmed
+    // *just* flipped true the dependency list re-runs the effect and
+    // the same logic stamps the initial start.
+    if(isQualifyingArmEvent){
+      setRelockArmedAt(Date.now());
+    }
+  },[relockArmed, lockEventNum]);
 
   // Seconds-tick driver — only runs while the banner is visible to keep
   // the rest of the app at a slow heartbeat.

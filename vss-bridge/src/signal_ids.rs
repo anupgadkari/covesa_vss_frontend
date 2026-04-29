@@ -301,6 +301,21 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // moves do NOT update this — it reflects the *commanded* state.
         // Allowed values: 'UNLOCKED','DRIVER_UNLOCKED','LOCKED','DOUBLE_LOCKED'.
         "Cabin.LockStatus" => Some(0x0014_0005),
+        // Identity of the feature whose request the arbiter accepted on the
+        // most recent central-lock dispatch.  String form of `FeatureId`
+        // (e.g. "KeyfobRke", "PassiveEntry").  Lets downstream features
+        // (AutoRelock today) gate behaviour on the source of an unlock
+        // without coupling to per-source signals or having to be added
+        // to a publisher's allow-list.
+        "Cabin.LockStatus.LastRequestor" => Some(0x0014_0006),
+        // Monotonic counter incremented on every accepted central-lock
+        // command (wraps at u16::MAX).  Subscribers use the *change* in
+        // this value as the "a new lock command happened" trigger,
+        // even when the resolved `Cabin.LockStatus` enum value is
+        // unchanged (e.g. UnlockAll dispatched twice when already
+        // unlocked).  Lets AutoRelock restart its 45s timer on every
+        // qualifying press, not just on state transitions.
+        "Cabin.LockStatus.EventNum" => Some(0x0014_0007),
 
         // Ambient light sensor (OEM custom — not in standard VSS v4.x).
         // Used by ManualLighting AUTO mode to gate low-beam activation.

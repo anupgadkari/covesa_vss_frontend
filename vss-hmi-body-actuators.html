@@ -1048,7 +1048,7 @@ function PepsZoneView({s}){
   }
   for(let i=1;i<=2;i++){
     const pos=s[`Body.PEPS.Plant.NfcCard.${i}.Position`]||'NotPresent';
-    const zone=pos==='DriverHandle'?'DriverDoor':pos==='PushButton'?'Cabin':'OutOfRange';
+    const zone=pos==='DriverHandle'?'LeftFront':pos==='PushButton'?'Cabin':'OutOfRange';
     devices.push({type:'nfc',id:i,label:`N${i}`,zone,paired:true,color:'#0DC8C8',nfcPos:pos});
   }
 
@@ -1067,8 +1067,8 @@ function PepsZoneView({s}){
     const off=(idx-(total-1)/2)*spread;
     switch(zone){
       case 'Cabin':        return {x:cx+off,       y:cy};
-      case 'DriverDoor':   return {x:cx-105,       y:cy-30+idx*28};
-      case 'PassengerDoor':return {x:cx+105,       y:cy-30+idx*28};
+      case 'LeftFront':   return {x:cx-105,       y:cy-30+idx*28};
+      case 'RightFront':return {x:cx+105,       y:cy-30+idx*28};
       case 'Hood':         return {x:cx+off,       y:cy-135};
       case 'Trunk':        return {x:cx+off,       y:cy+135};
       case 'TrunkInside':  return {x:cx+off,       y:cy+72};
@@ -1168,7 +1168,7 @@ function PepsZoneView({s}){
 }
 
 /* ═══════════════ PEPS DEVICE CARDS (top-level to avoid remount) ═══════════════ */
-const PEPS_ZONE_OPTS=['OutOfRange','RfRange','Approach','DriverDoor','PassengerDoor','Hood','Trunk','TrunkInside','Cabin'];
+const PEPS_ZONE_OPTS=['OutOfRange','RfRange','Approach','LeftFront','RightFront','Hood','Trunk','TrunkInside','Cabin'];
 const PEPS_BTN_OPTS=[
   {val:'LOCK',label:'LOCK'},{val:'UNLOCK',label:'UNLOCK'},
   {val:'TRUNK_RELEASE',label:'TRUNK'},{val:'REMOTE_START',label:'START'},

@@ -138,6 +138,18 @@ pub enum FeatureId {
     MirrorAdjust = 0x1B,
 }
 
+impl std::fmt::Display for FeatureId {
+    /// Stable, wire-format-safe string representation of a `FeatureId`.
+    /// Used to publish `Cabin.LockStatus.LastRequestor` so subscribers
+    /// (AutoRelock today) can filter on requestor identity by string
+    /// match without coupling to the enum's u8 layout.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Use the variant name directly via Debug — keeps a single
+        // source of truth for the spelling.
+        write!(f, "{:?}", self)
+    }
+}
+
 impl FeatureId {
     pub fn from_u8(v: u8) -> Option<Self> {
         match v {

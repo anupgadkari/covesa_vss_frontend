@@ -15,7 +15,7 @@ machinery first wired up for RKE:
 | Feature | What it does | Trigger | Outputs |
 |---|---|---|---|
 | **PassiveEntry** | Unlock-on-handle-pull | `Body.Doors.Row*.*.Handle.Outside.IsPulled` FALSE→TRUE while a paired device is in the matching proximity zone | `LockCommand::UnlockDriver` / `UnlockAll` via `DoorLockArbiter`; `FEEDBACK_REQUEST = "unlock"` |
-| **ThumbPadLock** (PEPS gate added) | Walk-up lock from outside handle thumb pad — gated on a paired device being **outside the cabin** | 500 ms hold of `LockPad.IsPressed` AND ≥1 paired device in DriverDoor / PassengerDoor / Hood / Trunk / Approach | `LockCommand::LockAll`; `FEEDBACK_REQUEST = "lock"` (or `"lock_denied"` if gate fails) |
+| **ThumbPadLock** (PEPS gate added) | Walk-up lock from outside handle thumb pad — gated on a paired device being **outside the cabin** | 500 ms hold of `LockPad.IsPressed` AND ≥1 paired device in LeftFront / RightFront / Hood / Trunk / Approach | `LockCommand::LockAll`; `FEEDBACK_REQUEST = "lock"` (or `"lock_denied"` if gate fails) |
 | **Welcome** | Courtesy puddle / dome / interior lights on approach | Any paired device transitions from no-LF (OutOfRange/RfRange) into ANY LF zone | `Puddle.Left.IsOn`, `Puddle.Right.IsOn`, `Cabin.Lights.IsDomeOn` via courtesy arbiter |
 
 ---
@@ -27,7 +27,7 @@ HMI / human pulls Row1.Left handle
    │  Body.Doors.Row1.Left.Handle.Outside.IsPulled = true
    ▼
 PassiveEntry feature
-   │  1. Identify door's proximity zone (Row1.Left → DriverDoor)
+   │  1. Identify door's proximity zone (Row1.Left → LeftFront)
    │  2. Pick paired devices currently in that zone
    │     (in-memory device_zones cache, kept fresh by zone-watcher
    │      branch in run() — no per-pull bus subscribe race)
@@ -132,7 +132,7 @@ The stagger has two purposes:
 
 **Rule:** ThumbPadLock fires `LockAll` only if at least one paired
 PEPS device is in a zone outside the cabin
-(`is_outside_cabin(zone) == true` for DriverDoor, PassengerDoor,
+(`is_outside_cabin(zone) == true` for LeftFront, RightFront,
 Hood, Trunk, or Approach).
 
 When the gate denies a press:
@@ -203,7 +203,7 @@ cd vss-bridge && cargo build --release
    secrets.  Useful follow-up; not blocking.
 
 2. **Rear-door proximity-zone mapping** (`Row2.*` doors map to
-   `Zone::PassengerDoor` for the candidate scan).  In real vehicles
+   `Zone::RightFront` for the candidate scan).  In real vehicles
    the rear handles share the cabin LF perimeter rather than having
    their own antennas; this approximation is fine for now but a
    production-grade implementation would gate rear-door auth on a

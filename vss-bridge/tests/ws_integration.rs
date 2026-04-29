@@ -308,7 +308,7 @@ async fn plant_model_blinks_at_expected_rate() {
 // PEPS / PassiveEntry / Welcome integration tests
 // ───────────────────────────────────────────────────────────────────────────
 
-/// Place paired fob 1 in DriverDoor zone, pull the Row1.Left handle —
+/// Place paired fob 1 in LeftFront zone, pull the Row1.Left handle —
 /// verify the bridge unlocks Row1.Left via the real PassiveEntry +
 /// PEPS plant pipeline (challenge → response → arbiter → plant).
 #[tokio::test]
@@ -328,12 +328,7 @@ async fn passive_entry_unlocks_driver_door_via_handle_pull() {
     assert!(locked, "doors should lock for the test setup");
 
     // Place fob 1 at the driver door.
-    send_sensor(
-        &mut tx,
-        "Body.PEPS.Plant.KeyFob.1.Zone",
-        json!("DriverDoor"),
-    )
-    .await;
+    send_sensor(&mut tx, "Body.PEPS.Plant.KeyFob.1.Zone", json!("LeftFront")).await;
 
     // Allow the production stagger (10 ms × slot) plus arbiter +
     // plant model round trip.
@@ -358,7 +353,7 @@ async fn passive_entry_unlocks_driver_door_via_handle_pull() {
     .await;
     assert!(
         unlocked,
-        "Row1.Left should unlock after passive-entry handle pull with paired fob in DriverDoor"
+        "Row1.Left should unlock after passive-entry handle pull with paired fob in LeftFront"
     );
 }
 

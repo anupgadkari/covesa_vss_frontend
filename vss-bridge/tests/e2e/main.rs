@@ -55,4 +55,19 @@ fn main() {
             .run_and_exit("../features/panic_alarm.feature")
             .await;
     });
+
+    // Fourth pass for PassiveEntry scenarios — separate runtime as
+    // above so each scenario's virtual time and spawned tasks start
+    // from a clean baseline.
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .start_paused(true)
+        .build()
+        .expect("failed to build Tokio runtime");
+
+    rt.block_on(async {
+        VssWorld::cucumber()
+            .run_and_exit("../features/passive_entry.feature")
+            .await;
+    });
 }

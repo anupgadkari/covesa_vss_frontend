@@ -14,11 +14,15 @@ use tokio::time::advance;
 
 use vss_bridge::adapters::mock::MockBus;
 use vss_bridge::arbiter::{self, DomainArbiter};
+use vss_bridge::config::PlatformConfig;
 use vss_bridge::features::hazard_lighting::HazardLighting;
 use vss_bridge::features::panic_alarm::PanicAlarm;
+use vss_bridge::features::passive_entry::{DeviceKind, PairedDevice, PassiveEntry};
 use vss_bridge::features::turn_indicator::TurnIndicator;
 use vss_bridge::ipc_message::SignalValue;
 use vss_bridge::plant_models::blink_relay::BlinkRelay;
+use vss_bridge::plant_models::door_lock::DoorLockPlantModel;
+use vss_bridge::plant_models::peps::PepsPlantModel;
 use vss_bridge::signal_bus::VssPath;
 
 // ---------------------------------------------------------------------------
@@ -30,6 +34,19 @@ const RIGHT_SIGNALING: VssPath = "Body.Lights.DirectionIndicator.Right.IsSignali
 const HORN: VssPath = "Body.Horn.IsActive";
 const PANIC_SWITCH: VssPath = "Body.Switches.Panic.IsEngaged";
 const ALARM_STATUS: VssPath = "Vehicle.Body.Alarm.IsActive";
+
+// PassiveEntry observable outputs — the door-lock arbiter publishes
+// `Body.Doors.CentralLock.Command` ("unlock_driver"/"unlock_all"/...)
+// on every accepted command.  PassiveEntry separately publishes
+// `Body.Doors.CentralLock.FeedbackRequest = "unlock"` for the
+// LockFeedback feature to play its flash pattern.  (FEEDBACK_REQUEST
+// is also used by the panic-alarm cancel-on-unlock steps; declared
+// once at line ~1008 of this file.)
+const CENTRAL_LOCK_CMD: VssPath = "Body.Doors.CentralLock.Command";
+
+// PassiveEntry handle inputs — kept short for step regex matching.
+const ROW1_LEFT_HANDLE: VssPath = "Body.Doors.Row1.Left.Handle.Outside.IsPulled";
+const ROW1_RIGHT_HANDLE: VssPath = "Body.Doors.Row1.Right.Handle.Outside.IsPulled";
 
 // PanicAlarm pulse cadence — must mirror src/features/panic_alarm.rs.
 const PANIC_ON_MS: u64 = 400;
@@ -44,8 +61,16 @@ const PANIC_OFF_MS: u64 = 600;
 pub struct VssWorld {
     bus: Option<Arc<MockBus>>,
     _arbiter: Option<Arc<DomainArbiter>>,
+    /// Carried so PEPS-flavour steps can mutate `dealer.two_stage_unlock`
+    /// at runtime via `update_dealer_config`, exercising the same
+    /// watch-channel flow that production dealer-cal updates use.
+    cfg: Option<Arc<PlatformConfig>>,
     _tasks: Vec<tokio::task::JoinHandle<()>>,
     started: bool,
+    /// Set when `ensure_passive_entry_started` has spawned the PEPS
+    /// stack.  Tracked separately from `started` because the two
+    /// stacks are unrelated and either can be active alone.
+    pe_started: bool,
 }
 
 impl std::fmt::Debug for VssWorld {
@@ -131,6 +156,94 @@ impl VssWorld {
             .iter()
             .filter(|(s, _)| *s == path)
             .count()
+    }
+
+    /// Boot the PassiveEntry feature stack: DoorLockArbiter (with its
+    /// ack channel and serialized command queue), DoorLockPlantModel
+    /// (ACKs back the arbiter's commands), PepsPlantModel, and
+    /// PassiveEntry itself with paired-device records matching the
+    /// plant's `default_secret(...)` formula for the first 4 fobs and
+    /// 2 phones.
+    ///
+    /// Idempotent — safe to call from multiple Background steps.
+    async fn ensure_passive_entry_started(&mut self) {
+        if self.pe_started {
+            return;
+        }
+
+        let bus = self.bus.clone().unwrap_or_else(|| Arc::new(MockBus::new()));
+
+        // DoorLockArbiter — serialised lock command queue with ACK
+        // handshake.  Without the plant's ACK the arbiter would stall
+        // after a single command.
+        let (dlarb, ack_tx, dlarb_fut) = arbiter::door_lock_arbiter(Arc::clone(&bus));
+        self._tasks.push(tokio::spawn(dlarb_fut));
+        let dlarb = Arc::new(dlarb);
+
+        let cfg = PlatformConfig::load();
+        // Plant model gets the cfg so `unlock_driver` resolves the
+        // driver door from `dealer.driver_door_side` at runtime
+        // (LHD = Row1.Left, RHD = Row1.Right).
+        let dlpm =
+            DoorLockPlantModel::with_ack_tx(Arc::clone(&bus), ack_tx).with_cfg(Arc::clone(&cfg));
+        self._tasks.push(tokio::spawn(dlpm.run()));
+
+        // PepsPlantModel — default 0 ms response stagger so the
+        // challenge/response handshake completes within a single
+        // virtual-time settle (production stagger is 10 ms × slot,
+        // wired by main.rs).
+        let plant = PepsPlantModel::new(Arc::clone(&bus));
+        self._tasks.push(tokio::spawn(plant.run()));
+
+        // Paired-device list — secrets match the plant's defaults so
+        // challenge responses verify.  Mirror of
+        // `passive_entry::tests::default_secret(...)`.
+        fn key(device_type: u8, index: u8) -> [u8; 16] {
+            let mut k = [0u8; 16];
+            k[0] = device_type;
+            k[1] = index;
+            for (i, b) in k.iter_mut().enumerate().skip(2) {
+                *b = device_type
+                    .wrapping_mul(17)
+                    .wrapping_add(index.wrapping_mul(31).wrapping_add(i as u8));
+            }
+            k
+        }
+        let mut paired = Vec::new();
+        for i in 1u8..=4 {
+            paired.push(PairedDevice {
+                kind: DeviceKind::Fob,
+                slot: (i - 1) as usize,
+                secret: key(b'F', i),
+            });
+        }
+        for i in 1u8..=2 {
+            paired.push(PairedDevice {
+                kind: DeviceKind::Phone,
+                slot: (i - 1) as usize,
+                secret: key(b'P', i),
+            });
+        }
+
+        let pe = PassiveEntry::new(Arc::clone(&bus), dlarb, Arc::clone(&cfg), paired);
+        self._tasks.push(tokio::spawn(pe.run()));
+
+        // Yield until every spawned task reaches its first
+        // `.subscribe().await` — otherwise injections submitted in the
+        // first `When` step can land before the listener is wired up.
+        for _ in 0..32 {
+            tokio::task::yield_now().await;
+        }
+
+        self.bus = Some(bus);
+        self.cfg = Some(cfg);
+        self.pe_started = true;
+    }
+
+    fn cfg(&self) -> &Arc<PlatformConfig> {
+        self.cfg
+            .as_ref()
+            .expect("scenario did not start the PEPS stack")
     }
 }
 
@@ -928,4 +1041,256 @@ async fn then_alarm_status_remains_true(w: &mut VssWorld) {
         Some(SignalValue::Bool(true)),
         "ALARM_STATUS must remain TRUE — lock-feedback must not cancel"
     );
+}
+
+// ===========================================================================
+// PassiveEntry steps
+// ===========================================================================
+//
+// All assertions here read from `MockBus` history.  Each "When the driver/
+// passenger pulls ..." step calls `bus.clear_history()` first so the
+// matching "Then PassiveEntry dispatches X" assertion can search the
+// history without seeing setup-phase noise.
+
+/// Map a short zone name from the gherkin to its full enum string value
+/// as published on `Body.PEPS.Plant.KeyFob.N.Zone` /
+/// `Body.PEPS.Plant.BlePhone.N.Zone`.
+fn zone_string(name: &str) -> String {
+    match name {
+        "LeftFront" | "RightFront" | "Approach" | "RfRange" | "OutOfRange" | "Hood" | "Trunk"
+        | "TrunkInside" | "Cabin" => name.into(),
+        _ => panic!("unknown PEPS zone: {name}"),
+    }
+}
+
+/// Latest non-default `Body.Doors.CentralLock.Command` token published
+/// since the most recent `clear_history`.
+fn latest_lock_command(w: &VssWorld) -> Option<String> {
+    w.bus().history().iter().rev().find_map(|(s, v)| {
+        if *s == CENTRAL_LOCK_CMD {
+            if let SignalValue::String(t) = v {
+                Some(t.clone())
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    })
+}
+
+// ---- Background ----
+
+#[given("the door-lock arbiter and door-lock plant model are running")]
+#[given("the PEPS plant model is running with instant response stagger")]
+#[given("the PassiveEntry feature is running")]
+async fn given_pe_stack(w: &mut VssWorld) {
+    w.ensure_passive_entry_started().await;
+}
+
+// ---- Device positioning ----
+
+#[given(regex = r#"^paired fob (\d+) is in the (\w+) zone$"#)]
+async fn given_paired_fob_in_zone(w: &mut VssWorld, slot: u8, zone: String) {
+    w.ensure_passive_entry_started().await;
+    assert!(
+        (1..=4).contains(&slot),
+        "paired fobs are slots 1..=4 (slots 5, 6 are unpaired in the default plant config)"
+    );
+    let path: VssPath = match slot {
+        1 => "Body.PEPS.Plant.KeyFob.1.Zone",
+        2 => "Body.PEPS.Plant.KeyFob.2.Zone",
+        3 => "Body.PEPS.Plant.KeyFob.3.Zone",
+        4 => "Body.PEPS.Plant.KeyFob.4.Zone",
+        _ => unreachable!(),
+    };
+    w.inject(path, SignalValue::String(zone_string(&zone)))
+        .await;
+}
+
+#[given(regex = r#"^paired phone (\d+) is in the (\w+) zone$"#)]
+async fn given_paired_phone_in_zone(w: &mut VssWorld, slot: u8, zone: String) {
+    w.ensure_passive_entry_started().await;
+    assert!((1..=2).contains(&slot), "paired phones are slots 1..=2");
+    let path: VssPath = match slot {
+        1 => "Body.PEPS.Plant.BlePhone.1.Zone",
+        2 => "Body.PEPS.Plant.BlePhone.2.Zone",
+        _ => unreachable!(),
+    };
+    w.inject(path, SignalValue::String(zone_string(&zone)))
+        .await;
+}
+
+#[given(regex = r#"^unpaired fob (\d+) is in the (\w+) zone$"#)]
+async fn given_unpaired_fob_in_zone(w: &mut VssWorld, slot: u8, zone: String) {
+    w.ensure_passive_entry_started().await;
+    // Slots 5/6 are unpaired by the default plant config.
+    assert!(
+        slot == 5 || slot == 6,
+        "unpaired fobs are slots 5, 6 (1..=4 are paired)"
+    );
+    let path: VssPath = match slot {
+        5 => "Body.PEPS.Plant.KeyFob.5.Zone",
+        6 => "Body.PEPS.Plant.KeyFob.6.Zone",
+        _ => unreachable!(),
+    };
+    w.inject(path, SignalValue::String(zone_string(&zone)))
+        .await;
+}
+
+#[given("no paired devices are positioned in any zone")]
+async fn given_no_devices_positioned(w: &mut VssWorld) {
+    w.ensure_passive_entry_started().await;
+    // Default state: every zone signal is OutOfRange.  Make this
+    // explicit so the scenario is robust to any prior step having
+    // moved a device.
+    for path in [
+        "Body.PEPS.Plant.KeyFob.1.Zone",
+        "Body.PEPS.Plant.KeyFob.2.Zone",
+        "Body.PEPS.Plant.KeyFob.3.Zone",
+        "Body.PEPS.Plant.KeyFob.4.Zone",
+        "Body.PEPS.Plant.BlePhone.1.Zone",
+        "Body.PEPS.Plant.BlePhone.2.Zone",
+    ] {
+        w.inject(path, SignalValue::String("OutOfRange".into()))
+            .await;
+    }
+}
+
+// ---- Dealer cal ----
+
+#[given("dealer.two_stage_unlock is enabled")]
+async fn given_two_stage_enabled(w: &mut VssWorld) {
+    w.ensure_passive_entry_started().await;
+    let mut dc = w.cfg().dealer_config();
+    dc.two_stage_unlock = true;
+    w.cfg().update_dealer_config(dc);
+    settle().await;
+}
+
+#[given("dealer.two_stage_unlock is disabled")]
+async fn given_two_stage_disabled(w: &mut VssWorld) {
+    w.ensure_passive_entry_started().await;
+    let mut dc = w.cfg().dealer_config();
+    dc.two_stage_unlock = false;
+    w.cfg().update_dealer_config(dc);
+    settle().await;
+}
+
+/// RHD selector — flips `dealer.driver_door_side` to `Right`.  On
+/// RHD vehicles, Row1.Right is the driver door and Row1.Left is the
+/// passenger door.  The two-stage / passenger-bypass logic in
+/// PassiveEntry consults this cal at runtime to decide which door
+/// counts as "driver" for stage-1 unlock routing.
+#[given("the vehicle is RHD")]
+async fn given_rhd(w: &mut VssWorld) {
+    use vss_bridge::config::DriverDoorSide;
+    w.ensure_passive_entry_started().await;
+    let mut dc = w.cfg().dealer_config();
+    dc.driver_door_side = DriverDoorSide::Right;
+    w.cfg().update_dealer_config(dc);
+    settle().await;
+}
+
+// ---- Handle pulls ----
+
+#[when("the driver pulls the Row1.Left outside handle")]
+async fn when_driver_pulls_left(w: &mut VssWorld) {
+    // Clear history at the boundary so the following Then assertions
+    // see only what PassiveEntry produces in response to *this* pull.
+    w.bus().clear_history();
+    w.inject(ROW1_LEFT_HANDLE, SignalValue::Bool(true)).await;
+}
+
+/// RHD driver-side pull — Row1.Right is the driver door when
+/// `dealer.driver_door_side = Right`.
+#[when("the driver pulls the Row1.Right outside handle")]
+async fn when_driver_pulls_right(w: &mut VssWorld) {
+    w.bus().clear_history();
+    w.inject(ROW1_RIGHT_HANDLE, SignalValue::Bool(true)).await;
+}
+
+#[when("the passenger pulls the Row1.Right outside handle")]
+async fn when_passenger_pulls_right(w: &mut VssWorld) {
+    w.bus().clear_history();
+    w.inject(ROW1_RIGHT_HANDLE, SignalValue::Bool(true)).await;
+}
+
+/// RHD passenger-side pull — Row1.Left is the passenger door on RHD.
+#[when("the passenger pulls the Row1.Left outside handle")]
+async fn when_passenger_pulls_left(w: &mut VssWorld) {
+    w.bus().clear_history();
+    w.inject(ROW1_LEFT_HANDLE, SignalValue::Bool(true)).await;
+}
+
+#[when(
+    regex = r#"^the driver releases and re-pulls the Row1\.Left outside handle within (\d+) seconds?$"#
+)]
+async fn when_driver_releases_and_repulls_left(w: &mut VssWorld, secs: u64) {
+    // Release.
+    w.inject(ROW1_LEFT_HANDLE, SignalValue::Bool(false)).await;
+    // Wait the requested interval (must stay inside the two-stage window).
+    advance(Duration::from_secs(secs)).await;
+    settle().await;
+    // Clear history so the post-pull Then sees only the second-pull
+    // command, not stage 1.
+    w.bus().clear_history();
+    w.inject(ROW1_LEFT_HANDLE, SignalValue::Bool(true)).await;
+}
+
+/// RHD second-pull within window on the driver door (Row1.Right).
+#[when(
+    regex = r#"^the driver releases and re-pulls the Row1\.Right outside handle within (\d+) seconds?$"#
+)]
+async fn when_driver_releases_and_repulls_right(w: &mut VssWorld, secs: u64) {
+    w.inject(ROW1_RIGHT_HANDLE, SignalValue::Bool(false)).await;
+    advance(Duration::from_secs(secs)).await;
+    settle().await;
+    w.bus().clear_history();
+    w.inject(ROW1_RIGHT_HANDLE, SignalValue::Bool(true)).await;
+}
+
+// ---- Assertions ----
+
+#[then("PassiveEntry dispatches UnlockDriver")]
+#[then("PassiveEntry dispatches UnlockDriver via the DoorLockArbiter")]
+async fn then_unlock_driver(w: &mut VssWorld) {
+    let cmd = latest_lock_command(w);
+    assert_eq!(
+        cmd.as_deref(),
+        Some("unlock_driver"),
+        "expected UnlockDriver dispatch; latest command = {cmd:?}"
+    );
+}
+
+#[then("PassiveEntry dispatches UnlockAll")]
+#[then("PassiveEntry dispatches UnlockAll via the DoorLockArbiter")]
+async fn then_unlock_all(w: &mut VssWorld) {
+    let cmd = latest_lock_command(w);
+    assert_eq!(
+        cmd.as_deref(),
+        Some("unlock_all"),
+        "expected UnlockAll dispatch; latest command = {cmd:?}"
+    );
+}
+
+#[then("PassiveEntry does NOT dispatch any lock command")]
+async fn then_no_lock_command(w: &mut VssWorld) {
+    let cmd = latest_lock_command(w);
+    assert!(
+        cmd.is_none(),
+        "expected no lock command since the When; got {cmd:?}"
+    );
+}
+
+#[then(regex = r#"^Body\.Doors\.CentralLock\.FeedbackRequest is "([^"]+)"$"#)]
+async fn then_feedback_request(w: &mut VssWorld, value: String) {
+    let actual = w.current_value(FEEDBACK_REQUEST);
+    match actual {
+        Some(SignalValue::String(s)) => assert_eq!(
+            s, value,
+            "FeedbackRequest mismatch — expected {value:?}, got {s:?}"
+        ),
+        other => panic!("FeedbackRequest expected string {value:?}, got {other:?}"),
+    }
 }

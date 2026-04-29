@@ -703,6 +703,19 @@ async fn door_lock_loop<B: SignalBus>(
         "UNLOCKED".into()
     };
 
+    // Monotonic counter for `Cabin.LockStatus.EventNum`.  The value
+    // `0` is reserved as the "publisher reset" sentinel — published
+    // exactly once at boot, never again.  Real events count `1, 2, …,
+    // u16::MAX, 1, 2, …` (wrap skips `0`) so subscribers can rely on
+    // `0` meaning "the arbiter just (re)started, no events yet."
+    let mut event_num: u16 = 0;
+    if let Err(e) = bus
+        .publish(CABIN_LOCK_EVENT_NUM, SignalValue::Uint16(0))
+        .await
+    {
+        tracing::warn!(error = %e, "DoorLock: failed to publish boot EventNum=0 sentinel");
+    }
+
     tracing::info!("DoorLock arbiter started");
 
     while let Some(msg) = rx.recv().await {
@@ -743,7 +756,7 @@ async fn door_lock_loop<B: SignalBus>(
                         command = ?req.command,
                         "DoorLock: dispatching immediately (idle)"
                     );
-                    dispatch_lock_command(&req, &bus, &nvm, &mut last_status).await;
+                    dispatch_lock_command(&req, &bus, &nvm, &mut last_status, &mut event_num).await;
 
                     // Start crash lockout if this is a CrashUnlock
                     if req.feature_id == FeatureId::CrashUnlock {
@@ -791,7 +804,8 @@ async fn door_lock_loop<B: SignalBus>(
                         command = ?next.command,
                         "DoorLock: promoting pending to active"
                     );
-                    dispatch_lock_command(&next, &bus, &nvm, &mut last_status).await;
+                    dispatch_lock_command(&next, &bus, &nvm, &mut last_status, &mut event_num)
+                        .await;
 
                     if next.feature_id == FeatureId::CrashUnlock {
                         crash_lockout_until =
@@ -833,6 +847,19 @@ pub const FEEDBACK_REQUEST: VssPath = "Body.Doors.CentralLock.FeedbackRequest";
 /// arbiter on every accepted command.  Many features subscribe.
 pub const CABIN_LOCK_STATUS: VssPath = "Cabin.LockStatus";
 
+/// Companion signal: identity of the feature that requested the most
+/// recent accepted central-lock command.  String form of `FeatureId`
+/// (e.g. "KeyfobRke", "PassiveEntry").  Published in lockstep with
+/// every `EVENT_NUM` bump so subscribers can filter on requestor.
+pub const CABIN_LOCK_LAST_REQUESTOR: VssPath = "Cabin.LockStatus.LastRequestor";
+
+/// Companion signal: monotonic counter incremented on every accepted
+/// central-lock command (wraps at u16::MAX).  Subscribers use the
+/// *change* in this value as the "a new lock command happened"
+/// trigger, even when the resolved `Cabin.LockStatus` enum value is
+/// unchanged.
+pub const CABIN_LOCK_EVENT_NUM: VssPath = "Cabin.LockStatus.EventNum";
+
 /// Map a `LockCommand` to its `Cabin.LockStatus` enum value.
 fn lock_status_for(cmd: LockCommand) -> &'static str {
     match cmd {
@@ -850,6 +877,7 @@ async fn dispatch_lock_command<B: SignalBus>(
     bus: &Arc<B>,
     nvm: &Option<crate::nvm::NvmStore>,
     last_status: &mut String,
+    event_num: &mut u16,
 ) {
     let token = match req.command {
         LockCommand::UnlockDriver => "unlock_driver",
@@ -865,25 +893,53 @@ async fn dispatch_lock_command<B: SignalBus>(
         tracing::error!(token, error = %e, "DoorLock: failed to dispatch command");
     }
 
-    // Update vehicle-level lock status — published on every command,
-    // NVM-persisted so it survives a power cycle.  Features (MirrorFold
-    // AUTO triggers etc.) subscribe to this rather than per-door
-    // IsLocked, because soldier-knob movements don't reflect a
-    // commanded state change.
+    // Vehicle-level lock status — published on EVERY accepted
+    // command (no dedup).  Subscribers that care about *changes*
+    // (MirrorFold AUTO triggers) compare against their own
+    // `last_lock_status` cache.  AutoRelock relies on consecutive
+    // publishes to detect repeated unlock presses.  NVM still only
+    // writes on actual transitions to avoid disk thrash.
     let new_status = lock_status_for(req.command);
+    if let Err(e) = bus
+        .publish(CABIN_LOCK_STATUS, SignalValue::String(new_status.into()))
+        .await
+    {
+        tracing::error!(status = new_status, error = %e, "DoorLock: failed to publish CabinLockStatus");
+    }
     if new_status != last_status.as_str() {
-        if let Err(e) = bus
-            .publish(CABIN_LOCK_STATUS, SignalValue::String(new_status.into()))
-            .await
-        {
-            tracing::error!(status = new_status, error = %e, "DoorLock: failed to publish CabinLockStatus");
-        }
         *last_status = new_status.into();
         if let Some(nvm) = nvm {
             nvm.save_cabin_lock_status(&crate::nvm::CabinLockStatusState {
                 status: new_status.into(),
             });
         }
+    }
+
+    // Requestor + EventNum — also published on every accepted command.
+    // Together with LockStatus they form a per-event tuple AutoRelock
+    // uses to decide arming.
+    let requestor = req.feature_id.to_string();
+    if let Err(e) = bus
+        .publish(
+            CABIN_LOCK_LAST_REQUESTOR,
+            SignalValue::String(requestor.clone()),
+        )
+        .await
+    {
+        tracing::error!(requestor = %requestor, error = %e, "DoorLock: failed to publish LastRequestor");
+    }
+    // Bump, skipping `0` on wrap so subscribers can treat `0` as the
+    // boot-sentinel exclusively.
+    *event_num = if *event_num == u16::MAX {
+        1
+    } else {
+        *event_num + 1
+    };
+    if let Err(e) = bus
+        .publish(CABIN_LOCK_EVENT_NUM, SignalValue::Uint16(*event_num))
+        .await
+    {
+        tracing::error!(event_num = *event_num, error = %e, "DoorLock: failed to publish EventNum");
     }
 }
 
@@ -1493,8 +1549,11 @@ mod tests {
             .unwrap();
         tokio::task::yield_now().await;
 
-        let history = bus.history();
-        // Single command signal dispatched
+        let history: Vec<_> = bus
+            .history()
+            .into_iter()
+            .filter(|(s, _)| *s == CENTRAL_LOCK_CMD)
+            .collect();
         assert_eq!(history.len(), 1);
         assert_eq!(history[0].0, CENTRAL_LOCK_CMD);
         assert_eq!(history[0].1, SignalValue::String("unlock_all".into()));
@@ -1665,8 +1724,15 @@ mod tests {
             .unwrap();
         tokio::task::yield_now().await;
 
+        let cmd_count = |bus: &MockBus| -> usize {
+            bus.history()
+                .into_iter()
+                .filter(|(s, _)| *s == CENTRAL_LOCK_CMD)
+                .count()
+        };
+
         // 1 command dispatched (crash unlock)
-        assert_eq!(bus.history().len(), 1);
+        assert_eq!(cmd_count(&bus), 1);
 
         // KeyfobRke tries to lock → rejected (crash lockout)
         arbiter
@@ -1679,7 +1745,7 @@ mod tests {
         tokio::task::yield_now().await;
 
         // Still 1 — KeyfobRke was rejected
-        assert_eq!(bus.history().len(), 1);
+        assert_eq!(cmd_count(&bus), 1);
     }
 
     #[tokio::test]
@@ -1696,11 +1762,15 @@ mod tests {
             .unwrap();
         tokio::task::yield_now().await;
 
-        assert_eq!(
-            bus.history().len(),
-            0,
-            "unauthorized request should not dispatch"
-        );
+        // No CentralLock command should have been dispatched.  (The
+        // arbiter publishes a one-off EventNum=0 sentinel on boot —
+        // ignore it.)
+        let cmd_count = bus
+            .history()
+            .into_iter()
+            .filter(|(s, _)| *s == CENTRAL_LOCK_CMD)
+            .count();
+        assert_eq!(cmd_count, 0, "unauthorized request should not dispatch");
     }
 
     // ─── PhysicalGate (puddle / mirror-fold) ─────────────────────────────

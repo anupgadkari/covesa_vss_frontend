@@ -165,14 +165,14 @@ impl RssiResponse {
     /// Closer zones produce stronger (less negative) RSSI.
     pub fn for_zone(zone: Zone) -> Self {
         match zone {
-            Zone::DriverDoor => RssiResponse {
+            Zone::LeftFront => RssiResponse {
                 driver_door_dbm: -30,
                 passenger_door_dbm: -65,
                 hood_dbm: -60,
                 trunk_dbm: -70,
                 cabin_dbm: -55,
             },
-            Zone::PassengerDoor => RssiResponse {
+            Zone::RightFront => RssiResponse {
                 driver_door_dbm: -65,
                 passenger_door_dbm: -30,
                 hood_dbm: -60,
@@ -419,13 +419,13 @@ mod tests {
     fn fob_challenge_response_in_proximity_zone() {
         let fob = KeyFob::new(1, true, test_secret(0xAA));
         let mut fob = fob;
-        fob.zone = Zone::DriverDoor;
+        fob.zone = Zone::LeftFront;
 
         let nonce = crate::plant_models::peps::crypto::random_nonce();
         let resp = fob.respond_to_challenge(&nonce);
         assert!(
             resp.is_some(),
-            "fob at DriverDoor should respond to challenge"
+            "fob at LeftFront should respond to challenge"
         );
 
         // Verify it's a proper AES-128 response
@@ -454,7 +454,7 @@ mod tests {
     #[test]
     fn fob_rssi_in_proximity() {
         let mut fob = KeyFob::new(1, true, test_secret(0xAA));
-        fob.zone = Zone::DriverDoor;
+        fob.zone = Zone::LeftFront;
         let rssi = fob.rssi_response();
         assert!(rssi.is_some(), "proximity zone should also support RSSI");
     }
@@ -522,7 +522,7 @@ mod tests {
         let mut fob = KeyFob::new(1, true, test_secret(0xCC));
 
         // RF buttons should work from any reachable zone (fob always transmits RF)
-        for zone in [Zone::DriverDoor, Zone::Approach, Zone::RfRange, Zone::Cabin] {
+        for zone in [Zone::LeftFront, Zone::Approach, Zone::RfRange, Zone::Cabin] {
             fob.zone = zone;
             assert!(
                 fob.press_button(FobButton::Lock).is_some(),
@@ -551,7 +551,7 @@ mod tests {
         // feature logic rejects the response. The plant model just simulates
         // the physical device behavior.
         let mut fob = KeyFob::new(5, false, test_secret(0xFF));
-        fob.zone = Zone::DriverDoor;
+        fob.zone = Zone::LeftFront;
         assert!(fob.respond_to_challenge(&ZONE_GATE_NONCE).is_some());
     }
 
@@ -560,7 +560,7 @@ mod tests {
     #[test]
     fn phone_challenge_response_in_proximity() {
         let mut phone = BlePhone::new(1, test_secret(0xDD));
-        phone.zone = Zone::DriverDoor;
+        phone.zone = Zone::LeftFront;
 
         let nonce = crate::plant_models::peps::crypto::random_nonce();
         let resp = phone.respond_to_challenge(&nonce);
@@ -621,7 +621,7 @@ mod tests {
 
     #[test]
     fn rssi_driver_door_strongest_at_driver() {
-        let rssi = RssiResponse::for_zone(Zone::DriverDoor);
+        let rssi = RssiResponse::for_zone(Zone::LeftFront);
         assert!(
             rssi.driver_door_dbm > rssi.passenger_door_dbm,
             "driver antenna should be strongest at driver door"
@@ -635,7 +635,7 @@ mod tests {
     #[test]
     fn rssi_approach_weaker_than_proximity() {
         let approach = RssiResponse::for_zone(Zone::Approach);
-        let proximity = RssiResponse::for_zone(Zone::DriverDoor);
+        let proximity = RssiResponse::for_zone(Zone::LeftFront);
         assert!(
             approach.driver_door_dbm < proximity.driver_door_dbm,
             "approach RSSI should be weaker than proximity"

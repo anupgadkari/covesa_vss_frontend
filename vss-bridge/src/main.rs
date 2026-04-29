@@ -297,7 +297,9 @@ async fn main() -> anyhow::Result<()> {
     // publish feedback signals (lamp on/off, defects) directly.
     tokio::spawn(BlinkRelay::new(Arc::clone(&bus)).run());
     tokio::spawn(
-        DoorLockPlantModel::with_ack_and_nvm(Arc::clone(&bus), door_lock_ack_tx, nvm.clone()).run(),
+        DoorLockPlantModel::with_ack_and_nvm(Arc::clone(&bus), door_lock_ack_tx, nvm.clone())
+            .with_cfg(Arc::clone(&_platform_config))
+            .run(),
     );
     tokio::spawn(DoorHandlePlantModel::new(Arc::clone(&bus)).run());
     tokio::spawn(TrunkPlantModel::with_nvm(Arc::clone(&bus), nvm.clone()).run());

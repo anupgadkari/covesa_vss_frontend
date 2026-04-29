@@ -7,7 +7,7 @@
 //! ## How it works
 //!
 //! The HMI or test harness positions devices by publishing zone signals
-//! (e.g., `Body.PEPS.Plant.KeyFob.1.Zone = "DriverDoor"`). When the
+//! (e.g., `Body.PEPS.Plant.KeyFob.1.Zone = "LeftFront"`). When the
 //! vehicle-side feature logic sends a challenge, each device in a
 //! compatible zone responds with an AES-128 encrypted reply.
 //!
@@ -526,8 +526,8 @@ mod tests {
         let bus = Arc::new(MockBus::new());
         let mut model = PepsPlantModel::new(Arc::clone(&bus));
 
-        model.set_fob_zone(0, Zone::DriverDoor).await;
-        assert_eq!(model.fobs[0].zone, Zone::DriverDoor);
+        model.set_fob_zone(0, Zone::LeftFront).await;
+        assert_eq!(model.fobs[0].zone, Zone::LeftFront);
 
         model.set_fob_zone(0, Zone::Cabin).await;
         assert_eq!(model.fobs[0].zone, Zone::Cabin);
@@ -586,8 +586,8 @@ mod tests {
     #[test]
     fn str_to_zone_parsing() {
         assert_eq!(
-            str_to_zone(&SignalValue::String("DriverDoor".into())),
-            Some(Zone::DriverDoor)
+            str_to_zone(&SignalValue::String("LeftFront".into())),
+            Some(Zone::LeftFront)
         );
         assert_eq!(
             str_to_zone(&SignalValue::String("Trunk".into())),
@@ -652,7 +652,7 @@ mod tests {
         let mut model = PepsPlantModel::new(Arc::clone(&bus));
 
         // Put fob 1 at driver door, fob 2 at approach, rest out of range
-        model.set_fob_zone(0, Zone::DriverDoor).await;
+        model.set_fob_zone(0, Zone::LeftFront).await;
         model.set_fob_zone(1, Zone::Approach).await;
 
         bus.clear_history(); // clear RSSI publishes from zone changes
@@ -666,7 +666,7 @@ mod tests {
             .iter()
             .filter(|(p, _)| *p == signals::KEYFOB_1_CHALLENGE_RESP)
             .collect();
-        assert_eq!(fob1_resps.len(), 1, "fob 1 at DriverDoor should respond");
+        assert_eq!(fob1_resps.len(), 1, "fob 1 at LeftFront should respond");
 
         // Fob 2 should NOT respond (approach = no challenge-response)
         let fob2_resps: Vec<_> = history
@@ -687,7 +687,7 @@ mod tests {
 
         model.set_fob_zone(0, Zone::Approach).await;
         model.set_fob_zone(1, Zone::OutOfRange).await;
-        model.set_phone_zone(0, Zone::DriverDoor).await;
+        model.set_phone_zone(0, Zone::LeftFront).await;
 
         bus.clear_history(); // clear RSSI publishes from zone changes
         model.handle_approach_poll().await;
@@ -707,7 +707,7 @@ mod tests {
         // Phone 1 (driver door) should publish RSSI
         assert!(
             history.iter().any(|(p, _)| *p == signals::PHONE_1_RSSI),
-            "phone 1 at DriverDoor should publish RSSI"
+            "phone 1 at LeftFront should publish RSSI"
         );
     }
 
@@ -718,7 +718,7 @@ mod tests {
         let bus = Arc::new(MockBus::new());
         let mut model = PepsPlantModel::new(Arc::clone(&bus));
 
-        model.set_fob_zone(0, Zone::DriverDoor).await;
+        model.set_fob_zone(0, Zone::LeftFront).await;
 
         let history = bus.history();
         let rssi_msgs: Vec<_> = history
@@ -771,7 +771,7 @@ mod tests {
         let mut model = PepsPlantModel::new(Arc::clone(&bus));
 
         // First move to an LF zone, then out of range
-        model.set_fob_zone(0, Zone::DriverDoor).await;
+        model.set_fob_zone(0, Zone::LeftFront).await;
         bus.clear_history();
 
         model.set_fob_zone(0, Zone::OutOfRange).await;
@@ -809,7 +809,7 @@ mod tests {
         let bus = Arc::new(MockBus::new());
         let mut model = PepsPlantModel::new(Arc::clone(&bus));
 
-        model.set_phone_zone(0, Zone::PassengerDoor).await;
+        model.set_phone_zone(0, Zone::RightFront).await;
 
         let history = bus.history();
         let rssi_msgs: Vec<_> = history
@@ -837,7 +837,7 @@ mod tests {
         let mut model = PepsPlantModel::new(Arc::clone(&bus));
 
         // Move fob through several zones, check RSSI changes
-        model.set_fob_zone(0, Zone::DriverDoor).await;
+        model.set_fob_zone(0, Zone::LeftFront).await;
         model.set_fob_zone(0, Zone::Trunk).await;
 
         let history = bus.history();
@@ -855,7 +855,7 @@ mod tests {
         if let (SignalValue::String(p1), SignalValue::String(p2)) =
             (&rssi_msgs[0].1, &rssi_msgs[1].1)
         {
-            assert_ne!(p1, p2, "RSSI should differ between DriverDoor and Trunk");
+            assert_ne!(p1, p2, "RSSI should differ between LeftFront and Trunk");
         }
     }
 
@@ -872,7 +872,7 @@ mod tests {
         // Inject a zone change via the bus
         bus.inject(
             signals::KEYFOB_1_ZONE,
-            SignalValue::String("DriverDoor".into()),
+            SignalValue::String("LeftFront".into()),
         );
         tokio::task::yield_now().await;
         tokio::task::yield_now().await;
@@ -954,10 +954,10 @@ mod tests {
         tokio::task::yield_now().await;
         tokio::task::yield_now().await;
 
-        // Place fob 1 at DriverDoor (proximity)
+        // Place fob 1 at LeftFront (proximity)
         bus.inject(
             signals::KEYFOB_1_ZONE,
-            SignalValue::String("DriverDoor".into()),
+            SignalValue::String("LeftFront".into()),
         );
         tokio::task::yield_now().await;
         tokio::task::yield_now().await;
@@ -1111,10 +1111,10 @@ mod tests {
         tokio::task::yield_now().await;
         tokio::task::yield_now().await;
 
-        // Place unpaired fob 5 at DriverDoor
+        // Place unpaired fob 5 at LeftFront
         bus.inject(
             signals::KEYFOB_5_ZONE,
-            SignalValue::String("DriverDoor".into()),
+            SignalValue::String("LeftFront".into()),
         );
         tokio::task::yield_now().await;
         tokio::task::yield_now().await;
@@ -1167,10 +1167,10 @@ mod tests {
         tokio::task::yield_now().await;
         tokio::task::yield_now().await;
 
-        // Place phone 1 at PassengerDoor
+        // Place phone 1 at RightFront
         bus.inject(
             signals::PHONE_1_ZONE,
-            SignalValue::String("PassengerDoor".into()),
+            SignalValue::String("RightFront".into()),
         );
         tokio::task::yield_now().await;
         tokio::task::yield_now().await;
@@ -1545,7 +1545,7 @@ mod tests {
 
         bus.inject(
             signals::KEYFOB_1_ZONE,
-            SignalValue::String("DriverDoor".into()),
+            SignalValue::String("LeftFront".into()),
         );
         tokio::task::yield_now().await;
         tokio::task::yield_now().await;
@@ -1692,7 +1692,7 @@ mod tests {
 
         bus.inject(
             signals::PHONE_1_ZONE,
-            SignalValue::String("PassengerDoor".into()),
+            SignalValue::String("RightFront".into()),
         );
         tokio::task::yield_now().await;
         tokio::task::yield_now().await;
@@ -1711,7 +1711,7 @@ mod tests {
         if let SignalValue::String(payload) = &rssi_msgs[0].1 {
             assert!(
                 payload.contains("\"passenger\":-30"),
-                "passenger antenna should be strongest at PassengerDoor: {payload}"
+                "passenger antenna should be strongest at RightFront: {payload}"
             );
         }
 
@@ -1764,10 +1764,10 @@ mod tests {
         tokio::task::yield_now().await;
         tokio::task::yield_now().await;
 
-        // Phone 1 at DriverDoor (proximity), Phone 2 at Approach (no challenge)
+        // Phone 1 at LeftFront (proximity), Phone 2 at Approach (no challenge)
         bus.inject(
             signals::PHONE_1_ZONE,
-            SignalValue::String("DriverDoor".into()),
+            SignalValue::String("LeftFront".into()),
         );
         bus.inject(
             signals::PHONE_2_ZONE,
@@ -1793,7 +1793,7 @@ mod tests {
             .iter()
             .filter(|(p, _)| *p == signals::PHONE_1_CHALLENGE_RESP)
             .collect();
-        assert_eq!(p1.len(), 1, "phone 1 at DriverDoor should respond");
+        assert_eq!(p1.len(), 1, "phone 1 at LeftFront should respond");
         if let SignalValue::String(hex) = &p1[0].1 {
             let expected = crypto::compute_challenge_response(&phone1_secret, &nonce);
             assert_eq!(hex_to_bytes(hex).as_slice(), &expected);
@@ -2034,10 +2034,10 @@ mod tests {
         tokio::task::yield_now().await;
         tokio::task::yield_now().await;
 
-        // Place unpaired fob 6 at PassengerDoor
+        // Place unpaired fob 6 at RightFront
         bus.inject(
             signals::KEYFOB_6_ZONE,
-            SignalValue::String("PassengerDoor".into()),
+            SignalValue::String("RightFront".into()),
         );
         tokio::task::yield_now().await;
         tokio::task::yield_now().await;
@@ -2083,26 +2083,26 @@ mod tests {
         tokio::task::yield_now().await;
         tokio::task::yield_now().await;
 
-        // Place unpaired fob 5 and all paired fobs at DriverDoor
+        // Place unpaired fob 5 and all paired fobs at LeftFront
         bus.inject(
             signals::KEYFOB_5_ZONE,
-            SignalValue::String("DriverDoor".into()),
+            SignalValue::String("LeftFront".into()),
         );
         bus.inject(
             signals::KEYFOB_1_ZONE,
-            SignalValue::String("DriverDoor".into()),
+            SignalValue::String("LeftFront".into()),
         );
         bus.inject(
             signals::KEYFOB_2_ZONE,
-            SignalValue::String("DriverDoor".into()),
+            SignalValue::String("LeftFront".into()),
         );
         bus.inject(
             signals::KEYFOB_3_ZONE,
-            SignalValue::String("DriverDoor".into()),
+            SignalValue::String("LeftFront".into()),
         );
         bus.inject(
             signals::KEYFOB_4_ZONE,
-            SignalValue::String("DriverDoor".into()),
+            SignalValue::String("LeftFront".into()),
         );
         tokio::task::yield_now().await;
         tokio::task::yield_now().await;
