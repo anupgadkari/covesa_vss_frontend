@@ -101,8 +101,8 @@ pub const WELCOME_HOLD_SECS: u64 = 30;
 fn has_lf(zone: Zone) -> bool {
     matches!(
         zone,
-        Zone::DriverDoor
-            | Zone::PassengerDoor
+        Zone::LeftFront
+            | Zone::RightFront
             | Zone::Hood
             | Zone::Trunk
             | Zone::TrunkInside

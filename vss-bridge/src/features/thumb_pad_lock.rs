@@ -16,7 +16,7 @@
 //! # PEPS-presence gate (REQ-PL-002)
 //!
 //! The lock fires only when **at least one paired PEPS device is in a
-//! zone outside the cabin** (DriverDoor / PassengerDoor / Hood / Trunk /
+//! zone outside the cabin** (LeftFront / RightFront / Hood / Trunk /
 //! Approach).  This is the canonical "keys-in-vehicle" guard: a child
 //! inside the cabin can't accidentally lock the keys in the vehicle by
 //! pressing the thumb pad through the open door, because the only
@@ -60,13 +60,13 @@ const DEBOUNCE: Duration = Duration::from_millis(500);
 
 /// Returns true if `zone` represents "outside the cabin" — i.e. the
 /// device is somewhere a person who's exiting the vehicle would have
-/// it (DriverDoor / PassengerDoor / Hood / Trunk / Approach).  Inside-
+/// it (LeftFront / RightFront / Hood / Trunk / Approach).  Inside-
 /// cabin zones (Cabin, TrunkInside) and beyond-range zones (RfRange,
 /// OutOfRange) all return false.
 fn is_outside_cabin(zone: Zone) -> bool {
     matches!(
         zone,
-        Zone::DriverDoor | Zone::PassengerDoor | Zone::Hood | Zone::Trunk | Zone::Approach
+        Zone::LeftFront | Zone::RightFront | Zone::Hood | Zone::Trunk | Zone::Approach
     )
 }
 
@@ -462,14 +462,14 @@ mod tests {
         );
     }
 
-    /// Paired phone in `DriverDoor` (proximity zone) → lock fires.
+    /// Paired phone in `LeftFront` (proximity zone) → lock fires.
     /// Phones go through the same gate as fobs.
     #[tokio::test(start_paused = true)]
     async fn phone_in_driver_door_zone_passes_gate() {
         let (bus, _h) = setup_no_paired_device_outside().await;
         bus.inject(
             "Body.PEPS.Plant.BlePhone.1.Zone",
-            SignalValue::String("DriverDoor".into()),
+            SignalValue::String("LeftFront".into()),
         );
         tokio::task::yield_now().await;
         tokio::task::yield_now().await;
@@ -485,7 +485,7 @@ mod tests {
         assert!(
             h.iter().any(|(s, v)| *s == "Body.Doors.CentralLock.Command"
                 && *v == SignalValue::String("lock_all".into())),
-            "expected lock_all with phone in DriverDoor zone: {h:?}"
+            "expected lock_all with phone in LeftFront zone: {h:?}"
         );
     }
 }

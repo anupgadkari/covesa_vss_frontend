@@ -106,22 +106,18 @@ struct Door {
     proximity_zone: Zone,
     /// Friendly tag for logging.
     name: &'static str,
-    /// True for the driver door — controls stage-1 vs stage-2 routing.
-    is_driver: bool,
 }
 
 const DOORS: [Door; 4] = [
     Door {
         handle_signal: "Body.Doors.Row1.Left.Handle.Outside.IsPulled",
-        proximity_zone: Zone::DriverDoor,
+        proximity_zone: Zone::LeftFront,
         name: "Row1.Left",
-        is_driver: true,
     },
     Door {
         handle_signal: "Body.Doors.Row1.Right.Handle.Outside.IsPulled",
-        proximity_zone: Zone::PassengerDoor,
+        proximity_zone: Zone::RightFront,
         name: "Row1.Right",
-        is_driver: false,
     },
     Door {
         handle_signal: "Body.Doors.Row2.Left.Handle.Outside.IsPulled",
@@ -131,17 +127,27 @@ const DOORS: [Door; 4] = [
         // the cabin LF perimeter).  Passive-entry features used in
         // production typically go further and fence rear-door auth on
         // a successful primary stage 2 — easy to add later.
-        proximity_zone: Zone::PassengerDoor,
+        proximity_zone: Zone::RightFront,
         name: "Row2.Left",
-        is_driver: false,
     },
     Door {
         handle_signal: "Body.Doors.Row2.Right.Handle.Outside.IsPulled",
-        proximity_zone: Zone::PassengerDoor,
+        proximity_zone: Zone::RightFront,
         name: "Row2.Right",
-        is_driver: false,
     },
 ];
+
+/// True if this physical door is the driver door under the current
+/// `dealer.driver_door_side` cal.  RHD swaps Row1.Left ↔ Row1.Right
+/// for stage-1 / passenger-bypass routing; rear doors (Row2.*) are
+/// never the driver door.
+fn is_driver_door(door: &Door, cfg: &PlatformConfig) -> bool {
+    use crate::config::DriverDoorSide;
+    match cfg.dealer_config().driver_door_side {
+        DriverDoorSide::Left => door.name == "Row1.Left",
+        DriverDoorSide::Right => door.name == "Row1.Right",
+    }
+}
 
 /// Paired-device record carried internally — one per fob slot or phone
 /// slot.  Built from `PlatformConfig` at startup; secrets come from the
@@ -461,10 +467,11 @@ impl<B: SignalBus + Send + Sync + 'static> PassiveEntry<B> {
         // and there is no reason to leave the doors they're physically
         // standing next to locked.  Same OEM behaviour as a Tesla /
         // VW / most modern PEPS implementations.
+        let driver_side = is_driver_door(door, &self.config);
         let stage_two = if !two_stage_enabled {
             // Two-stage disabled → every successful auth unlocks all.
             true
-        } else if !door.is_driver {
+        } else if !driver_side {
             // Passenger-side handle pulled with passenger-zone auth:
             // unlock all, regardless of two-stage cal or any pending
             // stage-1 timer.
@@ -624,6 +631,55 @@ mod tests {
         bus
     }
 
+    /// RHD variant of `setup()` — same stack but with
+    /// `dealer.driver_door_side = Right`, so Row1.Right is the driver
+    /// door and Row1.Left is the passenger door.  The plant model
+    /// also gets the cfg via `with_cfg` so `unlock_driver` resolves
+    /// to the correct physical door.
+    async fn setup_rhd() -> Arc<MockBus> {
+        use crate::config::DriverDoorSide;
+
+        let bus = Arc::new(MockBus::new());
+        let (arb, ack_tx, arb_fut) = door_lock_arbiter(Arc::clone(&bus));
+        tokio::spawn(arb_fut);
+        let arb = Arc::new(arb);
+
+        let config = PlatformConfig::load();
+        let mut dc = config.dealer_config();
+        dc.driver_door_side = DriverDoorSide::Right;
+        config.update_dealer_config(dc);
+
+        let dlpm =
+            DoorLockPlantModel::with_ack_tx(Arc::clone(&bus), ack_tx).with_cfg(Arc::clone(&config));
+        tokio::spawn(dlpm.run());
+
+        let plant = PepsPlantModel::new(Arc::clone(&bus));
+        tokio::spawn(plant.run());
+
+        let mut paired = Vec::new();
+        for i in 1u8..=4 {
+            paired.push(PairedDevice {
+                kind: DeviceKind::Fob,
+                slot: (i - 1) as usize,
+                secret: default_secret(b'F', i),
+            });
+        }
+
+        let pe = PassiveEntry::new(Arc::clone(&bus), arb, Arc::clone(&config), paired);
+        tokio::spawn(pe.run());
+
+        for _ in 0..32 {
+            tokio::task::yield_now().await;
+        }
+        bus.publish("Body.Doors.Row1.Left.IsLocked", SignalValue::Bool(true))
+            .await
+            .unwrap();
+        bus.publish("Body.Doors.Row1.Right.IsLocked", SignalValue::Bool(true))
+            .await
+            .unwrap();
+        bus
+    }
+
     /// Mirror of plant model's default_secret formula — keeps tests
     /// independent of the plant module's private constants.
     fn default_secret(device_type: u8, index: u8) -> SharedSecret {
@@ -658,16 +714,16 @@ mod tests {
         })
     }
 
-    /// 1. Driver-door handle pull with paired fob in DriverDoor zone →
+    /// 1. Driver-door handle pull with paired fob in LeftFront zone →
     ///    UnlockDriver dispatched (stage 1 with default two-stage cal).
     #[tokio::test]
     async fn driver_handle_pull_with_fob_in_zone_unlocks_driver() {
         let bus = setup().await;
 
-        // Place fob 1 in DriverDoor zone.
+        // Place fob 1 in LeftFront zone.
         bus.inject(
             peps_signals::KEYFOB_1_ZONE,
-            SignalValue::String("DriverDoor".into()),
+            SignalValue::String("LeftFront".into()),
         );
         drain().await;
 
@@ -689,7 +745,7 @@ mod tests {
     }
 
     /// 2. Driver-door handle pull with paired fob ONLY in Approach zone
-    ///    (not the DriverDoor proximity zone) → no unlock.  Approach
+    ///    (not the LeftFront proximity zone) → no unlock.  Approach
     ///    zone supports RSSI but NOT challenge-response.
     #[tokio::test]
     async fn handle_pull_with_fob_in_approach_only_does_not_unlock() {
@@ -730,14 +786,14 @@ mod tests {
         assert_eq!(last_command(&bus), None);
     }
 
-    /// 4. Two-stage unlock honoured.  First pull with fob in DriverDoor
+    /// 4. Two-stage unlock honoured.  First pull with fob in LeftFront
     ///    → UnlockDriver.  Second pull within window → UnlockAll.
     #[tokio::test]
     async fn two_stage_unlock_first_press_driver_second_press_all() {
         let bus = setup().await;
         bus.inject(
             peps_signals::KEYFOB_1_ZONE,
-            SignalValue::String("DriverDoor".into()),
+            SignalValue::String("LeftFront".into()),
         );
         drain().await;
         bus.clear_history();
@@ -783,7 +839,7 @@ mod tests {
         let bus = setup().await;
         bus.inject(
             peps_signals::KEYFOB_1_ZONE,
-            SignalValue::String("PassengerDoor".into()),
+            SignalValue::String("RightFront".into()),
         );
         drain().await;
         bus.clear_history();
@@ -808,7 +864,7 @@ mod tests {
         let bus = setup().await;
         bus.inject(
             peps_signals::KEYFOB_1_ZONE,
-            SignalValue::String("PassengerDoor".into()),
+            SignalValue::String("RightFront".into()),
         );
         drain().await;
         bus.clear_history();
@@ -821,8 +877,102 @@ mod tests {
         assert_eq!(last_command(&bus), Some("unlock_all".into()));
     }
 
+    // ── RHD support ─────────────────────────────────────────────────────
+    //
+    // On RHD vehicles, Row1.Right is the driver door and Row1.Left is
+    // the passenger door.  The two-stage / passenger-bypass routing
+    // must follow the dealer cal, not the physical-position default.
+
+    /// RHD: pulling the driver-side handle (Row1.Right) with two-stage
+    /// enabled → stage 1 = UnlockDriver.
+    #[tokio::test]
+    async fn rhd_driver_pull_first_press_is_unlock_driver() {
+        let bus = setup_rhd().await;
+        bus.inject(
+            peps_signals::KEYFOB_1_ZONE,
+            SignalValue::String("RightFront".into()),
+        );
+        drain().await;
+        bus.clear_history();
+
+        bus.inject(
+            "Body.Doors.Row1.Right.Handle.Outside.IsPulled",
+            SignalValue::Bool(true),
+        );
+        drain().await;
+        assert_eq!(
+            last_command(&bus),
+            Some("unlock_driver".into()),
+            "RHD: Row1.Right is the driver door — first pull must be stage-1 UnlockDriver"
+        );
+    }
+
+    /// RHD: a second pull within the window on Row1.Right escalates to
+    /// UnlockAll (stage 2), same as LHD on Row1.Left.
+    #[tokio::test]
+    async fn rhd_driver_pull_second_press_within_window_is_unlock_all() {
+        let bus = setup_rhd().await;
+        bus.inject(
+            peps_signals::KEYFOB_1_ZONE,
+            SignalValue::String("RightFront".into()),
+        );
+        drain().await;
+
+        // Stage 1.
+        bus.inject(
+            "Body.Doors.Row1.Right.Handle.Outside.IsPulled",
+            SignalValue::Bool(true),
+        );
+        drain().await;
+        assert_eq!(last_command(&bus), Some("unlock_driver".into()));
+
+        // Release + re-pull within the window.
+        bus.inject(
+            "Body.Doors.Row1.Right.Handle.Outside.IsPulled",
+            SignalValue::Bool(false),
+        );
+        drain().await;
+        bus.inject(
+            "Body.Doors.Row1.Right.Handle.Outside.IsPulled",
+            SignalValue::Bool(true),
+        );
+        drain().await;
+        assert_eq!(
+            last_command(&bus),
+            Some("unlock_all".into()),
+            "RHD: second driver-door pull within window must escalate to UnlockAll"
+        );
+    }
+
+    /// RHD: pulling Row1.Left (the passenger door on RHD) bypasses
+    /// two-stage and unlocks all doors directly.  Mirror image of the
+    /// LHD passenger-side bypass test.
+    #[tokio::test]
+    async fn rhd_passenger_pull_unlocks_all_even_with_two_stage() {
+        let bus = setup_rhd().await;
+        bus.inject(
+            peps_signals::KEYFOB_1_ZONE,
+            SignalValue::String("LeftFront".into()),
+        );
+        drain().await;
+        bus.clear_history();
+
+        bus.inject(
+            "Body.Doors.Row1.Left.Handle.Outside.IsPulled",
+            SignalValue::Bool(true),
+        );
+        drain().await;
+        assert_eq!(
+            last_command(&bus),
+            Some("unlock_all".into()),
+            "RHD: Row1.Left is the passenger door — must bypass two-stage and UnlockAll"
+        );
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+
     /// 6. Wrong-key device in zone → response mismatches; no unlock.
-    /// Simulated by placing an unpaired fob (slot 5) in DriverDoor.
+    /// Simulated by placing an unpaired fob (slot 5) in LeftFront.
     #[tokio::test]
     async fn unpaired_fob_in_zone_does_not_unlock() {
         let bus = setup().await;
@@ -830,7 +980,7 @@ mod tests {
         // Slot index 4 = fob 5 (unpaired in default plant config).
         bus.inject(
             peps_signals::KEYFOB_5_ZONE,
-            SignalValue::String("DriverDoor".into()),
+            SignalValue::String("LeftFront".into()),
         );
         drain().await;
         bus.clear_history();
@@ -847,14 +997,14 @@ mod tests {
         assert_eq!(last_command(&bus), None);
     }
 
-    /// 7. Phone in DriverDoor zone authenticates and unlocks.
+    /// 7. Phone in LeftFront zone authenticates and unlocks.
     #[tokio::test]
     async fn phone_in_driver_zone_unlocks() {
         let bus = setup().await;
 
         bus.inject(
             peps_signals::PHONE_1_ZONE,
-            SignalValue::String("DriverDoor".into()),
+            SignalValue::String("LeftFront".into()),
         );
         drain().await;
         bus.clear_history();

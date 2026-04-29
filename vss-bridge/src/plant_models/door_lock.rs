@@ -80,16 +80,6 @@ const ROW2_RIGHT: usize = 3;
 /// All door indices — used for commands that affect every door.
 const ALL_DOORS: [usize; 4] = [ROW1_LEFT, ROW1_RIGHT, ROW2_LEFT, ROW2_RIGHT];
 
-/// Driver door index — Row 1 Left by default (dealer-configurable in production).
-/// Used for two-stage unlock stage 1: only this door is released on first press.
-const DRIVER_DOOR: usize = ROW1_LEFT;
-
-/// The three doors that are NOT the driver door.
-/// When a double-locked vehicle receives `unlock_driver`, these doors stay
-/// locked but their superlock is downgraded to normal lock — the security
-/// perimeter is broken the moment the driver door is opened.
-const PASSENGER_DOORS: [usize; 3] = [ROW1_RIGHT, ROW2_LEFT, ROW2_RIGHT];
-
 /// Door lock plant model. Spawn with `.run()`.
 ///
 /// In production the M7 Classic AUTOSAR Locking SWC sends a `LockAck`
@@ -114,6 +104,10 @@ pub struct DoorLockPlantModel<B: SignalBus> {
     /// the doors come back in the same state after a power cycle.
     /// Tests that don't care about persistence pass `None` (via `new`).
     nvm: Option<crate::nvm::NvmStore>,
+    /// Optional `PlatformConfig` — when present, `unlock_driver` resolves
+    /// the driver-door index from `dealer.driver_door_side` at runtime.
+    /// `None` (the default for tests) means LHD: Row1.Left is the driver.
+    cfg: Option<Arc<crate::config::PlatformConfig>>,
 }
 
 impl<B: SignalBus + Send + Sync + 'static> DoorLockPlantModel<B> {
@@ -126,6 +120,7 @@ impl<B: SignalBus + Send + Sync + 'static> DoorLockPlantModel<B> {
             locked: [false; 4],
             double_locked: [false; 4],
             event_number: 0,
+            cfg: None,
             nvm: None,
         }
     }
@@ -141,6 +136,7 @@ impl<B: SignalBus + Send + Sync + 'static> DoorLockPlantModel<B> {
             locked,
             double_locked,
             event_number: 0,
+            cfg: None,
             nvm: None,
         }
     }
@@ -158,6 +154,7 @@ impl<B: SignalBus + Send + Sync + 'static> DoorLockPlantModel<B> {
             locked: [false; 4],
             double_locked: [false; 4],
             event_number: 0,
+            cfg: None,
             nvm: None,
         }
     }
@@ -182,7 +179,43 @@ impl<B: SignalBus + Send + Sync + 'static> DoorLockPlantModel<B> {
             locked: persisted.locked,
             double_locked: persisted.double_locked,
             event_number: 0,
+            cfg: None,
             nvm: Some(nvm),
+        }
+    }
+
+    /// Builder — attach a `PlatformConfig` so this plant resolves the
+    /// driver-door index from `dealer.driver_door_side` at runtime.
+    /// Without this, the plant defaults to LHD (Row1.Left).
+    pub fn with_cfg(mut self, cfg: Arc<crate::config::PlatformConfig>) -> Self {
+        self.cfg = Some(cfg);
+        self
+    }
+
+    /// Index of the driver door per the current dealer cal.  Defaults
+    /// to Row1.Left when no `PlatformConfig` is attached (LHD / tests).
+    fn driver_door_idx(&self) -> usize {
+        use crate::config::DriverDoorSide;
+        match self
+            .cfg
+            .as_ref()
+            .map(|c| c.dealer_config().driver_door_side)
+        {
+            Some(DriverDoorSide::Right) => ROW1_RIGHT,
+            _ => ROW1_LEFT,
+        }
+    }
+
+    /// The three doors that are NOT the driver door.  When a
+    /// double-locked vehicle receives `unlock_driver`, these doors stay
+    /// locked but their superlock is downgraded to normal lock — the
+    /// security perimeter is broken the moment the driver door is
+    /// opened.
+    fn passenger_door_idxs(&self) -> [usize; 3] {
+        match self.driver_door_idx() {
+            ROW1_LEFT => [ROW1_RIGHT, ROW2_LEFT, ROW2_RIGHT],
+            ROW1_RIGHT => [ROW1_LEFT, ROW2_LEFT, ROW2_RIGHT],
+            _ => unreachable!("driver_door_idx is constrained to ROW1_LEFT or ROW1_RIGHT"),
         }
     }
 
@@ -327,16 +360,23 @@ impl<B: SignalBus + Send + Sync + 'static> DoorLockPlantModel<B> {
                     match token {
                         "unlock_driver" => {
                             // Stage-1 two-stage unlock: driver door only.
-                            self.apply_lock_cmd(DRIVER_DOOR, false).await;
+                            // Driver door index is resolved at runtime from
+                            // `dealer.driver_door_side` so the same plant code
+                            // serves LHD and RHD vehicles.
+                            let driver_idx = self.driver_door_idx();
+                            self.apply_lock_cmd(driver_idx, false).await;
                             // If the vehicle was double-locked, downgrade the remaining
                             // 3 doors from superlock to normal lock. The security
                             // perimeter is broken once the driver door is released —
                             // keeping superlock on the other doors would block interior
                             // release handles, which is a safety violation.
-                            for door in PASSENGER_DOORS {
+                            for door in self.passenger_door_idxs() {
                                 self.apply_double_lock_cmd(door, false).await;
                             }
-                            tracing::info!("DoorLock plant: unlock_driver (superlock downgraded on passenger doors)");
+                            tracing::info!(
+                                driver_idx,
+                                "DoorLock plant: unlock_driver (superlock downgraded on passenger doors)"
+                            );
                             self.send_ack().await;
                         }
                         "unlock_all" => {
@@ -561,6 +601,53 @@ mod tests {
         assert!(
             unlocked[0].0.contains("Row1.Left"),
             "driver door is Row1.Left"
+        );
+
+        handle.abort();
+        let _ = handle.await;
+    }
+
+    /// RHD: with `dealer.driver_door_side = Right`, `unlock_driver`
+    /// must unlock Row1.Right (the RHD driver door), not Row1.Left.
+    #[tokio::test]
+    async fn unlock_driver_rhd_releases_row1_right() {
+        use crate::config::DriverDoorSide;
+        let bus = Arc::new(MockBus::new());
+        let cfg = crate::config::PlatformConfig::load();
+        let mut dc = cfg.dealer_config();
+        dc.driver_door_side = DriverDoorSide::Right;
+        cfg.update_dealer_config(dc);
+
+        let model = DoorLockPlantModel::new(Arc::clone(&bus)).with_cfg(Arc::clone(&cfg));
+        let handle = tokio::spawn(model.run());
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        cmd(&bus, "lock_all");
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        bus.clear_history();
+        cmd(&bus, "unlock_driver");
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        let history = bus.history();
+        let unlocked: Vec<_> = history
+            .iter()
+            .filter(|(p, v)| {
+                p.contains("IsLocked") && !p.contains("Double") && *v == SignalValue::Bool(false)
+            })
+            .collect();
+        assert_eq!(
+            unlocked.len(),
+            1,
+            "only the RHD driver door should be unlocked"
+        );
+        assert!(
+            unlocked[0].0.contains("Row1.Right"),
+            "RHD driver door is Row1.Right; got {}",
+            unlocked[0].0
         );
 
         handle.abort();

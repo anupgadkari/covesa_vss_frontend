@@ -157,6 +157,12 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     // DRIVER_UNLOCKED | LOCKED | DOUBLE_LOCKED) — published by the
     // door-lock arbiter on every accepted command, NVM-persisted.
     "Cabin.LockStatus",
+    // Companion signals to Cabin.LockStatus — published by the
+    // door-lock arbiter on every accepted command.  AutoRelock
+    // subscribes; HMI displays them as a small "last lock event"
+    // chip useful for forensics / debugging.
+    "Cabin.LockStatus.LastRequestor",
+    "Cabin.LockStatus.EventNum",
     "Body.Doors.Row1.Left.IsLocked",
     "Body.Doors.Row1.Right.IsLocked",
     "Body.Doors.Row2.Left.IsLocked",
