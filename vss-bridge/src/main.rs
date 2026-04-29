@@ -23,6 +23,7 @@ use vss_bridge::features::follow_me_home::FollowMeHome;
 use vss_bridge::features::hazard_lighting::HazardLighting;
 use vss_bridge::features::lock_feedback::LockFeedback;
 use vss_bridge::features::manual_lighting::ManualLighting;
+use vss_bridge::features::mirror_adjust::MirrorAdjust;
 use vss_bridge::features::mirror_fold::MirrorFold;
 use vss_bridge::features::panic_alarm::PanicAlarm;
 use vss_bridge::features::passive_entry::{DeviceKind, PairedDevice, PassiveEntry};
@@ -37,6 +38,7 @@ use vss_bridge::nvm::NvmStore;
 use vss_bridge::plant_models::blink_relay::BlinkRelay;
 use vss_bridge::plant_models::door_handle::DoorHandlePlantModel;
 use vss_bridge::plant_models::door_lock::DoorLockPlantModel;
+use vss_bridge::plant_models::mirror_adjust::MirrorAdjustPlantModel;
 use vss_bridge::plant_models::mirror_fold::MirrorFoldPlantModel;
 use vss_bridge::plant_models::peps::PepsPlantModel;
 use vss_bridge::plant_models::trunk::TrunkPlantModel;
@@ -282,7 +284,12 @@ async fn main() -> anyhow::Result<()> {
         MirrorFold::with_nvm(Arc::clone(&bus), Arc::clone(&_platform_config), nvm.clone()).run(),
     );
 
-    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome, MirrorFold");
+    // MirrorAdjust — routes the joystick (Body.Switches.Mirror.{Select,
+    // Direction}) to per-side AdjustCmd consumed by the
+    // MirrorAdjustPlantModel.  Stateless feature, no NVM.
+    tokio::spawn(MirrorAdjust::new(Arc::clone(&bus)).run());
+
+    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome, MirrorFold, MirrorAdjust");
 
     // ── Plant Models ────────────────────────────────────────────────
     // Simulate physical lamp behavior the M7 / smart actuator firmware
@@ -295,6 +302,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(DoorHandlePlantModel::new(Arc::clone(&bus)).run());
     tokio::spawn(TrunkPlantModel::with_nvm(Arc::clone(&bus), nvm.clone()).run());
     tokio::spawn(MirrorFoldPlantModel::with_nvm(Arc::clone(&bus), nvm.clone()).run());
+    tokio::spawn(MirrorAdjustPlantModel::new(Arc::clone(&bus)).run());
     tokio::spawn(
         PepsPlantModel::new(Arc::clone(&bus))
             // 10 ms × slot index — fob 1 = 10 ms, fob 6 = 60 ms.

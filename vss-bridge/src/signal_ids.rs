@@ -59,17 +59,23 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Body.Mirror.Left.IsFolded" => Some(0x0004_0001),
         "Body.Mirror.Left.IsHeatingOn" => Some(0x0004_0002),
         "Body.Mirror.Left.Tilt" => Some(0x0004_0003),
-        "Body.Mirror.Left.Pan" => Some(0x0004_0004),
+        "Body.Mirror.Left.Yaw" => Some(0x0004_0004),
         "Body.Mirror.Right.IsFolded" => Some(0x0004_0005),
         "Body.Mirror.Right.IsHeatingOn" => Some(0x0004_0006),
         "Body.Mirror.Right.Tilt" => Some(0x0004_0007),
-        "Body.Mirror.Right.Pan" => Some(0x0004_0008),
+        "Body.Mirror.Right.Yaw" => Some(0x0004_0008),
         // Mirror fold motor commands — issued by the MirrorFold feature
         // and consumed by the MirrorFoldPlantModel.  Bool: true=fold,
         // false=unfold.  Per-side because Option-A mismatch handling
         // commands only one side at a time.
         "Body.Mirror.Left.FoldCmd" => Some(0x0004_0009),
         "Body.Mirror.Right.FoldCmd" => Some(0x0004_000A),
+        // Mirror adjust direction command — issued by MirrorAdjust
+        // feature, consumed by MirrorAdjustPlantModel.  String enum:
+        // 'NONE','UP','DOWN','LEFT','RIGHT'.  Per-side because Select
+        // routes Direction to exactly one side at a time.
+        "Body.Mirror.Left.AdjustCmd" => Some(0x0004_000B),
+        "Body.Mirror.Right.AdjustCmd" => Some(0x0004_000C),
 
         // Doors Row1 Left
         "Body.Doors.Row1.Left.IsOpen" => Some(0x0005_0001),
@@ -397,13 +403,15 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Body.Mirror.Left.IsFolded", 0x0004_0001),
     ("Body.Mirror.Left.IsHeatingOn", 0x0004_0002),
     ("Body.Mirror.Left.Tilt", 0x0004_0003),
-    ("Body.Mirror.Left.Pan", 0x0004_0004),
+    ("Body.Mirror.Left.Yaw", 0x0004_0004),
     ("Body.Mirror.Right.IsFolded", 0x0004_0005),
     ("Body.Mirror.Right.IsHeatingOn", 0x0004_0006),
     ("Body.Mirror.Right.Tilt", 0x0004_0007),
-    ("Body.Mirror.Right.Pan", 0x0004_0008),
+    ("Body.Mirror.Right.Yaw", 0x0004_0008),
     ("Body.Mirror.Left.FoldCmd", 0x0004_0009),
     ("Body.Mirror.Right.FoldCmd", 0x0004_000A),
+    ("Body.Mirror.Left.AdjustCmd", 0x0004_000B),
+    ("Body.Mirror.Right.AdjustCmd", 0x0004_000C),
     ("Body.Doors.Row1.Left.IsOpen", 0x0005_0001),
     ("Body.Doors.Row1.Left.IsLocked", 0x0005_0002),
     ("Body.Doors.Row1.Left.LatchStatus", 0x0005_0003),

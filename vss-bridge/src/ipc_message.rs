@@ -135,6 +135,7 @@ pub enum FeatureId {
     PanicAlarm = 0x18,
     PassiveEntry = 0x19,
     MirrorFold = 0x1A,
+    MirrorAdjust = 0x1B,
 }
 
 impl FeatureId {
@@ -166,6 +167,7 @@ impl FeatureId {
             0x18 => Some(Self::PanicAlarm),
             0x19 => Some(Self::PassiveEntry),
             0x1A => Some(Self::MirrorFold),
+            0x1B => Some(Self::MirrorAdjust),
             _ => None,
         }
     }
