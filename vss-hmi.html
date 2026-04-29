@@ -436,12 +436,28 @@ function getDevicePos(zone, idx, total){
 }
 
 function hitTestZone(x,y){
-  // Front hood (now lengthened to y=-50..80 to match trunk).
-  if(x>=60&&x<=300&&y>=-50&&y<80) return 'Hood';
-  // Inside vehicle body bounds (60–300 x, 80–580 y)
+  // Hood — both the lengthened front-fascia ON the vehicle (y=-50..80)
+  // AND the slab ahead of the bumper (y=-120..-50) where chips park
+  // (Hood pos y=-66).
+  if(x>=60&&x<=300&&y>=-120&&y<80) return 'Hood';
+  // Trunk — slab behind the rear bumper (y=585..645) where chips park
+  // (Trunk pos y=600).  Tested before the in-body checks so it doesn't
+  // collide with the in-body Trunk zone (y=495..544).
+  if(x>=60&&x<=300&&y>=580&&y<=650) return 'Trunk';
+  // Outboard side slabs — where the device chips actually park
+  // (DriverDoor pos x=32, PassengerDoor pos x=328).  Tested before
+  // body bounds so a chip dropped just OUTBOARD of the door also
+  // registers as the door zone.
+  if(x>=5  &&x<60 &&y>=125&&y<=430) return 'DriverDoor';
+  if(x>300&&x<=360&&y>=125&&y<=430) return 'PassengerDoor';
+  // Inside vehicle body bounds (60–300 x, 80–580 y).
+  // Trunk-cargo area inside the body is the entire y=440..580 band
+  // (the visible "cargo / trunk area" rect spans y=440..560 plus the
+  // liftgate band y=560..580).  Map all of it to 'TrunkInside' — the
+  // outboard 'Trunk' slab handles drops behind the rear bumper.
   if(x>=60&&x<=300&&y>=80&&y<=580){
     if(y<=140) return 'Hood';
-    if(y>=495) return y>=545?'TrunkInside':'Trunk';
+    if(y>=440) return 'TrunkInside';
     if(x<=112) return 'DriverDoor';
     if(x>=248) return 'PassengerDoor';
     return 'Cabin';
@@ -733,22 +749,6 @@ function CombinedView({s,set,onDeviceSelect}){
     {/* Windshield */}
     <rect x="70" y="78" width="220" height="45" rx="3" fill="#152840" stroke="#1E3650" strokeWidth="0.5" opacity=".85"/>
     {wf&&<text x="180" y="103" textAnchor="middle" fill="#4A9EF5" fontSize="9" className="blinks">〰〰</text>}
-
-    {/* Door zones — highlight drop target */}
-    {['DriverDoor','PassengerDoor','Hood','Trunk','TrunkInside','Cabin'].map(z=>{
-      if(dropZone!==z) return null;
-      const rects={
-        DriverDoor:   {x:60, y:125,w:55,h:305},
-        PassengerDoor:{x:245,y:125,w:55,h:305},
-        Hood:         {x:60, y:-50,w:240,h:130},
-        Trunk:        {x:60, y:480,w:240,h:100},
-        TrunkInside:  {x:65, y:440,w:230,h:100},
-        Cabin:        {x:115,y:125,w:130,h:305},
-      }[z];
-      if(!rects) return null;
-      return <rect key={z} x={rects.x} y={rects.y} width={rects.w} height={rects.h}
-        fill="rgba(16,217,138,0.1)" stroke="#10D98A" strokeWidth="1.5" rx="3" opacity="0.7"/>;
-    })}
 
     {/* Doors */}
     {doorsData.map(({pfx,open,cx,cy,dx,rx,ry,rw,rh,handleSide})=>{
@@ -1048,6 +1048,31 @@ function CombinedView({s,set,onDeviceSelect}){
 
     <text x="180" y="-58" textAnchor="middle" fill="#1E2C3C" fontSize="8" fontFamily="Share Tech Mono" fontWeight="bold">▲ FRONT</text>
     <text x="180" y="605" textAnchor="middle" fill="#1E2C3C" fontSize="8" fontFamily="Share Tech Mono" fontWeight="bold">REAR ▼</text>
+
+    {/* Drop-zone highlight — drawn AFTER all vehicle bodywork so
+        zones whose slab sits inside the body (Cabin, TrunkInside) are
+        visible instead of being covered by the door / cargo fills.
+        Uses pointer-events:none so it doesn't intercept drag. */}
+    {['DriverDoor','PassengerDoor','Hood','Trunk','TrunkInside','Cabin'].map(z=>{
+      if(dropZone!==z) return null;
+      const rects={
+        // Outboard side slabs — chips park at x=32 / x=328.
+        DriverDoor:   {x:5,  y:125,w:55, h:305},
+        PassengerDoor:{x:300,y:125,w:55, h:305},
+        // Hood / Trunk slabs sit OUTSIDE the vehicle body — Hood ahead
+        // of the front bumper (chip parks at y=-66), Trunk behind the
+        // rear bumper (chip parks at y=600).
+        Hood:         {x:60, y:-110,w:240,h:60},
+        Trunk:        {x:60, y:585, w:240,h:55},
+        // TrunkInside fills the cargo volume inside the body.
+        TrunkInside:  {x:65, y:440, w:230,h:140},
+        Cabin:        {x:115,y:125, w:130,h:305},
+      }[z];
+      if(!rects) return null;
+      return <rect key={z} x={rects.x} y={rects.y} width={rects.w} height={rects.h}
+        fill="rgba(16,217,138,0.18)" stroke="#10D98A" strokeWidth="2"
+        rx="3" opacity="0.9" style={{pointerEvents:'none'}}/>;
+    })}
 
     {/* ── PEPS Device icons ── */}
     {allDevices.map(device=>{
