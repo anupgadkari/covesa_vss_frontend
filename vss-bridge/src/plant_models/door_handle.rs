@@ -130,6 +130,14 @@ impl<B: SignalBus + Send + Sync + 'static> DoorHandlePlantModel<B> {
         let mut double_locked = false;
         let mut is_latched = true;
         let mut is_open = false;
+        // Currently-held state — true while the user is holding the
+        // handle.  Tracked so a lock→unlock transition (e.g. from
+        // PassiveEntry's auth) immediately opens the door if the
+        // user is still pulling, matching real-vehicle behaviour
+        // where you hold the handle and the latch releases under
+        // your hand.
+        let mut outside_held = false;
+        let mut inside_held = false;
 
         // Publish initial latch state (ajar is already false by default).
         let _ = bus
@@ -146,8 +154,34 @@ impl<B: SignalBus + Send + Sync + 'static> DoorHandlePlantModel<B> {
                 // ── Track lock state from DoorLockPlantModel / arbiter ──────
                 Some(val) = is_locked_rx.next() => {
                     if let SignalValue::Bool(b) = val {
+                        let was_locked = locked;
                         locked = b;
                         tracing::debug!(door = label, locked, "DoorHandle: tracked IsLocked");
+
+                        // Lock → unlock transition while the user is still
+                        // holding a handle: release the latch under their hand.
+                        // This is the canonical PassiveEntry flow:
+                        //   1. user pulls outside handle on a locked door
+                        //   2. PassiveEntry runs auth, dispatches Unlock
+                        //   3. DoorLockPlantModel publishes IsLocked = false
+                        //   4. (us) → if outside_held, open the door now
+                        if was_locked && !locked && !double_locked && !is_open
+                            && (outside_held || inside_held)
+                        {
+                            is_latched = false;
+                            is_open = true;
+                            let _ = bus
+                                .publish(LATCH_SIGNALS[door], SignalValue::Bool(false))
+                                .await;
+                            let _ = bus
+                                .publish(AJAR_SIGNALS[door], SignalValue::Bool(true))
+                                .await;
+                            tracing::info!(
+                                door = label,
+                                via = if outside_held { "outside" } else { "inside" },
+                                "DoorHandle: door opened on lock release while handle held"
+                            );
+                        }
                     }
                 }
 
@@ -176,6 +210,7 @@ impl<B: SignalBus + Send + Sync + 'static> DoorHandlePlantModel<B> {
                 // ── Inside handle ────────────────────────────────────────────
                 Some(val) = inside_rx.next() => {
                     if let SignalValue::Bool(pulled) = val {
+                        inside_held = pulled;
                         if pulled {
                             if double_locked {
                                 // Interior linkage disconnected — completely blocked.
@@ -222,11 +257,15 @@ impl<B: SignalBus + Send + Sync + 'static> DoorHandlePlantModel<B> {
                 // ── Outside handle ───────────────────────────────────────────
                 Some(val) = outside_rx.next() => {
                     if let SignalValue::Bool(pulled) = val {
+                        outside_held = pulled;
                         if pulled {
                             if locked {
-                                // Completely blocked when locked (any level).
+                                // Locked: don't open now, but the held
+                                // state is recorded so a subsequent
+                                // unlock-while-pulled (PassiveEntry) opens
+                                // the door under the user's hand.
                                 tracing::debug!(door = label,
-                                    "DoorHandle: outside handle blocked (door is locked)");
+                                    "DoorHandle: outside handle held on locked door (deferred — will open on unlock)");
                             } else {
                                 // Unlocked: door opens.
                                 is_latched = false;
@@ -599,6 +638,88 @@ mod tests {
                 i
             );
         }
+
+        handle.abort();
+        let _ = handle.await;
+    }
+
+    /// Hold the outside handle on a LOCKED door, then unlock — door
+    /// should open under the user's hand (PassiveEntry flow).
+    #[tokio::test]
+    async fn outside_handle_held_when_unlocked_opens_door() {
+        let (bus, handle) = setup().await;
+
+        // Lock Row1.Left, then start holding the outside handle.
+        bus.inject(IS_LOCKED_SIGNALS[0], SignalValue::Bool(true));
+        for _ in 0..4 {
+            tokio::task::yield_now().await;
+        }
+        bus.inject(OUTSIDE_HANDLE_SIGNALS[0], SignalValue::Bool(true));
+        for _ in 0..4 {
+            tokio::task::yield_now().await;
+        }
+        // Door should NOT be open yet — locked.
+        assert!(
+            !bus.history()
+                .iter()
+                .any(|(p, v)| *p == AJAR_SIGNALS[0] && *v == SignalValue::Bool(true)),
+            "door must NOT open while locked, even with handle held"
+        );
+
+        // Now unlock — PassiveEntry would fire this normally.
+        bus.clear_history();
+        bus.inject(IS_LOCKED_SIGNALS[0], SignalValue::Bool(false));
+        for _ in 0..8 {
+            tokio::task::yield_now().await;
+        }
+
+        // Door should NOW be open — handle was still being held when
+        // the unlock arrived.
+        let h = bus.history();
+        assert!(
+            h.iter()
+                .any(|(p, v)| *p == AJAR_SIGNALS[0] && *v == SignalValue::Bool(true)),
+            "door should open when held outside handle is still pulled at unlock time, history: {:?}",
+            h
+        );
+
+        handle.abort();
+        let _ = handle.await;
+    }
+
+    /// Pull-and-release on a locked door, THEN unlock — door must NOT
+    /// open (the user already let go).
+    #[tokio::test]
+    async fn outside_handle_released_before_unlock_does_not_open() {
+        let (bus, handle) = setup().await;
+
+        bus.inject(IS_LOCKED_SIGNALS[0], SignalValue::Bool(true));
+        for _ in 0..4 {
+            tokio::task::yield_now().await;
+        }
+        // Pull then release.
+        bus.inject(OUTSIDE_HANDLE_SIGNALS[0], SignalValue::Bool(true));
+        for _ in 0..4 {
+            tokio::task::yield_now().await;
+        }
+        bus.inject(OUTSIDE_HANDLE_SIGNALS[0], SignalValue::Bool(false));
+        for _ in 0..4 {
+            tokio::task::yield_now().await;
+        }
+
+        // Now unlock.
+        bus.clear_history();
+        bus.inject(IS_LOCKED_SIGNALS[0], SignalValue::Bool(false));
+        for _ in 0..8 {
+            tokio::task::yield_now().await;
+        }
+
+        let h = bus.history();
+        assert!(
+            !h.iter()
+                .any(|(p, v)| *p == AJAR_SIGNALS[0] && *v == SignalValue::Bool(true)),
+            "door must NOT open when handle was released before unlock"
+        );
 
         handle.abort();
         let _ = handle.await;

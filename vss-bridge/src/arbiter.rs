@@ -13,6 +13,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use futures::stream::StreamExt;
 use tokio::sync::mpsc;
 use tracing;
 
@@ -46,6 +47,30 @@ pub struct AllowEntry {
 }
 
 // ---------------------------------------------------------------------------
+// PhysicalGate — runtime suppression of a target signal based on another
+// signal's state.  Models hardware constraints that no feature should have
+// to know about (e.g. puddle lamps live inside the side mirror housing,
+// so when the mirror is folded the lamp can't physically project onto
+// the ground regardless of which feature is requesting it).
+// ---------------------------------------------------------------------------
+
+/// A physical-layer suppression rule.  When the bus value of `gate_signal`
+/// equals `suppress_when`, the arbiter forces `target` to `Bool(false)`
+/// regardless of which feature is currently winning.  When the gate
+/// re-opens, the arbiter re-resolves and publishes the highest-priority
+/// active claim normally.
+///
+/// Use this for *physical* constraints (mirror folded, hood up, charge port
+/// open) rather than feature-level gating.  Feature priority remains the
+/// way to express *policy* contention between features.
+#[derive(Debug, Clone)]
+pub struct PhysicalGate {
+    pub target: VssPath,
+    pub gate_signal: VssPath,
+    pub suppress_when: SignalValue,
+}
+
+// ---------------------------------------------------------------------------
 // DomainArbiter — one per actuator domain
 // ---------------------------------------------------------------------------
 
@@ -74,6 +99,14 @@ enum ArbiterMsg {
         signal: VssPath,
         feature_id: FeatureId,
     },
+    /// A physical gate's source value updated.  `target` is the signal
+    /// being gated (not the gate signal itself); `closed` is true when
+    /// the gate is currently suppressing (i.e. the source value matches
+    /// `suppress_when`).
+    GateChanged {
+        target: VssPath,
+        closed: bool,
+    },
 }
 
 impl DomainArbiter {
@@ -86,7 +119,46 @@ impl DomainArbiter {
         allow_list: Vec<AllowEntry>,
         bus: Arc<B>,
     ) -> (Self, impl std::future::Future<Output = ()>) {
+        Self::new_with_gates(name, allow_list, Vec::new(), bus)
+    }
+
+    /// Like `new`, but with one or more `PhysicalGate` entries that
+    /// suppress specific target signals based on a runtime gate-signal
+    /// value.  See `PhysicalGate` for semantics.
+    pub fn new_with_gates<B: SignalBus>(
+        name: &'static str,
+        allow_list: Vec<AllowEntry>,
+        gates: Vec<PhysicalGate>,
+        bus: Arc<B>,
+    ) -> (Self, impl std::future::Future<Output = ()>) {
         let (tx, rx) = mpsc::channel::<ArbiterMsg>(256);
+
+        // Spawn one watcher per gate that subscribes to the gate signal
+        // and forwards GateChanged messages into the arbiter loop.  This
+        // keeps the arbiter loop's select! footprint bounded — the loop
+        // only ever reads from a single mpsc.
+        for gate in &gates {
+            let bus = Arc::clone(&bus);
+            let tx = tx.clone();
+            let target = gate.target;
+            let gate_signal = gate.gate_signal;
+            let suppress_when = gate.suppress_when.clone();
+            let domain = name;
+            tokio::spawn(async move {
+                let mut stream = bus.subscribe(gate_signal).await;
+                while let Some(value) = stream.next().await {
+                    let closed = value == suppress_when;
+                    tracing::debug!(domain, target, gate_signal, closed, "physical gate update");
+                    if tx
+                        .send(ArbiterMsg::GateChanged { target, closed })
+                        .await
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
+            });
+        }
 
         let arbiter = Self { name, tx };
         let loop_fut = arbiter_loop(name, allow_list, bus, rx);
@@ -142,6 +214,9 @@ async fn arbiter_loop<B: SignalBus>(
     let mut claims: HashMap<VssPath, HashMap<FeatureId, Claim>> = HashMap::new();
     // Last value published per signal — used to suppress duplicate publishes.
     let mut last_published: HashMap<VssPath, SignalValue> = HashMap::new();
+    // Per-target gate state.  Absent or `false` ⇒ gate open (claims pass
+    // through normally); `true` ⇒ gate closed (force `Bool(false)`).
+    let mut gates_closed: HashMap<VssPath, bool> = HashMap::new();
     let mut next_seq: u64 = 0;
 
     tracing::info!(domain = name, signals = allow_list.len(), "arbiter started");
@@ -188,7 +263,15 @@ async fn arbiter_loop<B: SignalBus>(
                     .or_default()
                     .insert(req.feature_id, claim);
 
-                publish_resolved(name, req.signal, &claims, &mut last_published, &bus).await;
+                publish_resolved(
+                    name,
+                    req.signal,
+                    &claims,
+                    &gates_closed,
+                    &mut last_published,
+                    &bus,
+                )
+                .await;
             }
             ArbiterMsg::Release { signal, feature_id } => {
                 let removed = claims
@@ -203,7 +286,35 @@ async fn arbiter_loop<B: SignalBus>(
                         signal,
                         "arbiter: release"
                     );
-                    publish_resolved(name, signal, &claims, &mut last_published, &bus).await;
+                    publish_resolved(
+                        name,
+                        signal,
+                        &claims,
+                        &gates_closed,
+                        &mut last_published,
+                        &bus,
+                    )
+                    .await;
+                }
+            }
+            ArbiterMsg::GateChanged { target, closed } => {
+                let prev = gates_closed.insert(target, closed).unwrap_or(false);
+                if prev != closed {
+                    tracing::info!(
+                        domain = name,
+                        target,
+                        closed,
+                        "physical gate state changed — re-resolving target"
+                    );
+                    publish_resolved(
+                        name,
+                        target,
+                        &claims,
+                        &gates_closed,
+                        &mut last_published,
+                        &bus,
+                    )
+                    .await;
                 }
             }
         }
@@ -221,17 +332,27 @@ async fn publish_resolved<B: SignalBus>(
     name: &'static str,
     signal: VssPath,
     claims: &HashMap<VssPath, HashMap<FeatureId, Claim>>,
+    gates_closed: &HashMap<VssPath, bool>,
     last_published: &mut HashMap<VssPath, SignalValue>,
     bus: &Arc<B>,
 ) {
-    let resolved = claims
-        .get(signal)
-        .and_then(|sc| {
-            sc.values()
-                .max_by_key(|c| (c.priority as u8, c.seq))
-                .map(|c| c.value.clone())
-        })
-        .unwrap_or(SignalValue::Bool(false));
+    // Physical gate forces the target to default-off regardless of any
+    // active claims.  This models hardware constraints (mirror folded,
+    // etc.) that no feature should have to know about.
+    let gated = gates_closed.get(signal).copied().unwrap_or(false);
+
+    let resolved = if gated {
+        SignalValue::Bool(false)
+    } else {
+        claims
+            .get(signal)
+            .and_then(|sc| {
+                sc.values()
+                    .max_by_key(|c| (c.priority as u8, c.seq))
+                    .map(|c| c.value.clone())
+            })
+            .unwrap_or(SignalValue::Bool(false))
+    };
 
     let changed = last_published.get(signal) != Some(&resolved);
     if !changed {
@@ -500,6 +621,21 @@ impl DoorLockArbiter {
         mpsc::Sender<LockAck>,
         impl std::future::Future<Output = ()>,
     ) {
+        Self::new_with_nvm(allow_list, bus, None)
+    }
+
+    /// Like `new`, but with an `NvmStore` for persisting `Cabin.LockStatus`
+    /// across power cycles.  Use this in production wiring; tests can use
+    /// `new` to get a transient arbiter.
+    pub fn new_with_nvm<B: SignalBus>(
+        allow_list: Vec<DoorLockAllowEntry>,
+        bus: Arc<B>,
+        nvm: Option<crate::nvm::NvmStore>,
+    ) -> (
+        Self,
+        mpsc::Sender<LockAck>,
+        impl std::future::Future<Output = ()>,
+    ) {
         let (cmd_tx, cmd_rx) = mpsc::channel::<DoorLockMsg>(64);
         let ack_tx = {
             let cmd_tx_clone = cmd_tx.clone();
@@ -520,7 +656,7 @@ impl DoorLockArbiter {
         let arbiter = Self {
             cmd_tx: cmd_tx.clone(),
         };
-        let loop_fut = door_lock_loop(allow_list, bus, cmd_rx);
+        let loop_fut = door_lock_loop(allow_list, bus, cmd_rx, nvm);
 
         (arbiter, ack_tx, loop_fut)
     }
@@ -539,11 +675,33 @@ async fn door_lock_loop<B: SignalBus>(
     allow_list: Vec<DoorLockAllowEntry>,
     bus: Arc<B>,
     mut rx: mpsc::Receiver<DoorLockMsg>,
+    nvm: Option<crate::nvm::NvmStore>,
 ) {
     // Queue state
     let mut active: Option<DoorLockRequest> = None;
     let mut pending: Option<DoorLockRequest> = None;
     let mut crash_lockout_until: Option<tokio::time::Instant> = None;
+
+    // Boot-time republish of persisted `Cabin.LockStatus`.  Subscribers
+    // (MirrorFold AUTO, future security features) need to see this on
+    // boot; a fresh broadcast subscription would otherwise wait for
+    // the next command before getting any value.
+    let mut last_status: String = if let Some(ref nvm) = nvm {
+        let st = nvm.load_cabin_lock_status();
+        if let Err(e) = bus
+            .publish(CABIN_LOCK_STATUS, SignalValue::String(st.status.clone()))
+            .await
+        {
+            tracing::warn!(error = %e, "DoorLock: failed to republish CabinLockStatus on boot");
+        } else {
+            tracing::info!(status = %st.status, "DoorLock: restored CabinLockStatus from NVM");
+        }
+        st.status
+    } else {
+        // No NVM (test wiring) — start from "UNLOCKED" but don't publish
+        // until a command arrives.
+        "UNLOCKED".into()
+    };
 
     tracing::info!("DoorLock arbiter started");
 
@@ -585,7 +743,7 @@ async fn door_lock_loop<B: SignalBus>(
                         command = ?req.command,
                         "DoorLock: dispatching immediately (idle)"
                     );
-                    dispatch_lock_command(&req, &bus).await;
+                    dispatch_lock_command(&req, &bus, &nvm, &mut last_status).await;
 
                     // Start crash lockout if this is a CrashUnlock
                     if req.feature_id == FeatureId::CrashUnlock {
@@ -633,7 +791,7 @@ async fn door_lock_loop<B: SignalBus>(
                         command = ?next.command,
                         "DoorLock: promoting pending to active"
                     );
-                    dispatch_lock_command(&next, &bus).await;
+                    dispatch_lock_command(&next, &bus, &nvm, &mut last_status).await;
 
                     if next.feature_id == FeatureId::CrashUnlock {
                         crash_lockout_until =
@@ -671,7 +829,28 @@ pub const CENTRAL_LOCK_CMD: VssPath = "Body.Doors.CentralLock.Command";
 pub const FEEDBACK_REQUEST: VssPath = "Body.Doors.CentralLock.FeedbackRequest";
 
 /// Dispatch a lock command to the SignalBus as a single high-level token.
-async fn dispatch_lock_command<B: SignalBus>(req: &DoorLockRequest, bus: &Arc<B>) {
+/// Vehicle-level central lock status — published by the door-lock
+/// arbiter on every accepted command.  Many features subscribe.
+pub const CABIN_LOCK_STATUS: VssPath = "Cabin.LockStatus";
+
+/// Map a `LockCommand` to its `Cabin.LockStatus` enum value.
+fn lock_status_for(cmd: LockCommand) -> &'static str {
+    match cmd {
+        LockCommand::UnlockAll => "UNLOCKED",
+        LockCommand::UnlockDriver => "DRIVER_UNLOCKED",
+        LockCommand::LockAll => "LOCKED",
+        LockCommand::DoubleLockAll => "DOUBLE_LOCKED",
+        // Demoting double-lock returns the vehicle to plain LOCKED.
+        LockCommand::ReleaseDouble => "LOCKED",
+    }
+}
+
+async fn dispatch_lock_command<B: SignalBus>(
+    req: &DoorLockRequest,
+    bus: &Arc<B>,
+    nvm: &Option<crate::nvm::NvmStore>,
+    last_status: &mut String,
+) {
     let token = match req.command {
         LockCommand::UnlockDriver => "unlock_driver",
         LockCommand::UnlockAll => "unlock_all",
@@ -685,17 +864,33 @@ async fn dispatch_lock_command<B: SignalBus>(req: &DoorLockRequest, bus: &Arc<B>
     {
         tracing::error!(token, error = %e, "DoorLock: failed to dispatch command");
     }
+
+    // Update vehicle-level lock status — published on every command,
+    // NVM-persisted so it survives a power cycle.  Features (MirrorFold
+    // AUTO triggers etc.) subscribe to this rather than per-door
+    // IsLocked, because soldier-knob movements don't reflect a
+    // commanded state change.
+    let new_status = lock_status_for(req.command);
+    if new_status != last_status.as_str() {
+        if let Err(e) = bus
+            .publish(CABIN_LOCK_STATUS, SignalValue::String(new_status.into()))
+            .await
+        {
+            tracing::error!(status = new_status, error = %e, "DoorLock: failed to publish CabinLockStatus");
+        }
+        *last_status = new_status.into();
+        if let Some(nvm) = nvm {
+            nvm.save_cabin_lock_status(&crate::nvm::CabinLockStatusState {
+                status: new_status.into(),
+            });
+        }
+    }
 }
 
-/// Create the DoorLock arbiter with all authorized lock requestors.
-pub fn door_lock_arbiter<B: SignalBus>(
-    bus: Arc<B>,
-) -> (
-    DoorLockArbiter,
-    mpsc::Sender<LockAck>,
-    impl std::future::Future<Output = ()>,
-) {
-    let allow_list = vec![
+/// Allow-list for the DoorLock arbiter.  Extracted into a function
+/// so `door_lock_arbiter` and `door_lock_arbiter_with_nvm` share it.
+fn door_lock_allow_list() -> Vec<DoorLockAllowEntry> {
+    vec![
         DoorLockAllowEntry {
             feature_id: FeatureId::KeyfobPeps,
         },
@@ -735,9 +930,36 @@ pub fn door_lock_arbiter<B: SignalBus>(
         DoorLockAllowEntry {
             feature_id: FeatureId::DoubleLockRelease,
         },
-    ];
+        DoorLockAllowEntry {
+            feature_id: FeatureId::PassiveEntry,
+        },
+    ]
+}
 
-    DoorLockArbiter::new(allow_list, bus)
+/// Create the DoorLock arbiter with all authorized lock requestors —
+/// transient (no NVM).  For tests / scenarios where `Cabin.LockStatus`
+/// persistence is not required.
+pub fn door_lock_arbiter<B: SignalBus>(
+    bus: Arc<B>,
+) -> (
+    DoorLockArbiter,
+    mpsc::Sender<LockAck>,
+    impl std::future::Future<Output = ()>,
+) {
+    DoorLockArbiter::new(door_lock_allow_list(), bus)
+}
+
+/// Production variant of `door_lock_arbiter` — persists `Cabin.LockStatus`
+/// across power cycles via the supplied `NvmStore`.
+pub fn door_lock_arbiter_with_nvm<B: SignalBus>(
+    bus: Arc<B>,
+    nvm: crate::nvm::NvmStore,
+) -> (
+    DoorLockArbiter,
+    mpsc::Sender<LockAck>,
+    impl std::future::Future<Output = ()>,
+) {
+    DoorLockArbiter::new_with_nvm(door_lock_allow_list(), bus, Some(nvm))
 }
 
 /// Create the Horn domain arbiter.
@@ -769,6 +991,85 @@ pub fn comfort_arbiter<B: SignalBus>(
     let allow_list = vec![];
 
     DomainArbiter::new("Comfort", allow_list, bus)
+}
+
+/// Create the Courtesy domain arbiter.
+///
+/// Today this covers the **interior dome light** only.  Exterior
+/// puddle lamps moved to their own dedicated `puddle_arbiter` because
+/// they're a distinct contention surface (Welcome today; Farewell,
+/// PerimeterAlarm, future "puddle on door open" all want them).
+///
+/// Adding a new shared interior-courtesy actuator (cabin ambient,
+/// glove-box, vanity mirror lamps) means just adding an allow entry
+/// here.
+pub fn courtesy_arbiter<B: SignalBus>(
+    bus: Arc<B>,
+) -> (DomainArbiter, impl std::future::Future<Output = ()>) {
+    let allow_list = vec![AllowEntry {
+        feature_id: FeatureId::Welcome,
+        signal: "Cabin.Lights.IsDomeOn",
+        priority: Priority::Medium,
+    }];
+
+    DomainArbiter::new("Courtesy", allow_list, bus)
+}
+
+/// Create the Puddle domain arbiter.
+///
+/// Dedicated arbiter for the under-mirror exterior puddle lamps
+/// (`Body.Lights.Puddle.{Left,Right}.IsOn`).  Multiple features will
+/// want to claim these:
+///
+/// | Feature | When | Priority |
+/// |---|---|---|
+/// | **Welcome** (today) | Any paired PEPS device enters LF coverage | MEDIUM |
+/// | **Farewell** (planned) | Driver opens door after ignition OFF | MEDIUM |
+/// | **DoorOpenAssist** (planned) | Any door opens at night | LOW |
+/// | **PerimeterAlarm** (planned) | Intrusion event — pulse pattern as attention-grabber | HIGH |
+///
+/// Splitting puddle onto its own arbiter (rather than rolling into
+/// `courtesy_arbiter`) keeps the contention surface explicit so each
+/// future feature can pick the right priority without a global
+/// renumbering, and so a future security claim can pre-empt courtesy
+/// claims cleanly.
+pub fn puddle_arbiter<B: SignalBus>(
+    bus: Arc<B>,
+) -> (DomainArbiter, impl std::future::Future<Output = ()>) {
+    let allow_list = vec![
+        AllowEntry {
+            feature_id: FeatureId::Welcome,
+            signal: "Body.Lights.Puddle.Left.IsOn",
+            priority: Priority::Medium,
+        },
+        AllowEntry {
+            feature_id: FeatureId::Welcome,
+            signal: "Body.Lights.Puddle.Right.IsOn",
+            priority: Priority::Medium,
+        },
+    ];
+
+    // Physical gates: the puddle lamp is *inside* the side mirror
+    // housing.  When the mirror is folded the lamp would project into
+    // the door skin, so the arbiter forces it off regardless of which
+    // feature is currently winning.  This belongs at the actuator
+    // layer, not in any individual feature — Welcome, Farewell,
+    // PerimeterAlarm, and any future puddle claimant all benefit
+    // automatically.
+    let gates = vec![
+        PhysicalGate {
+            target: "Body.Lights.Puddle.Left.IsOn",
+            gate_signal: "Body.Mirror.Left.IsFolded",
+            suppress_when: SignalValue::Bool(true),
+        },
+        PhysicalGate {
+            target: "Body.Lights.Puddle.Right.IsOn",
+            gate_signal: "Body.Mirror.Right.IsFolded",
+            suppress_when: SignalValue::Bool(true),
+        },
+    ];
+
+    DomainArbiter::new_with_gates("Puddle", allow_list, gates, bus)
 }
 
 // ---------------------------------------------------------------------------
@@ -1223,8 +1524,17 @@ mod tests {
             .unwrap();
         tokio::task::yield_now().await;
 
-        // Only the first command (PEPS unlock) should be dispatched
-        assert_eq!(bus.history().len(), 1);
+        // Only the first command (PEPS unlock) should be dispatched.
+        // Filter to CENTRAL_LOCK_CMD only — the arbiter also publishes
+        // Cabin.LockStatus on each accepted command, which we don't
+        // care about here.
+        let cmd_history = |bus: &MockBus| -> Vec<(VssPath, SignalValue)> {
+            bus.history()
+                .into_iter()
+                .filter(|(s, _)| *s == CENTRAL_LOCK_CMD)
+                .collect()
+        };
+        assert_eq!(cmd_history(&bus).len(), 1);
 
         // ACK the first operation → pending promotes to active
         ack_tx
@@ -1237,7 +1547,7 @@ mod tests {
         tokio::task::yield_now().await;
 
         // Now 2 commands: unlock_all + lock_all
-        let history = bus.history();
+        let history = cmd_history(&bus);
         assert_eq!(history.len(), 2);
         assert_eq!(history[1].1, SignalValue::String("lock_all".into()));
     }
@@ -1286,7 +1596,11 @@ mod tests {
             .unwrap();
         tokio::task::yield_now().await;
 
-        let history = bus.history();
+        let history: Vec<_> = bus
+            .history()
+            .into_iter()
+            .filter(|(s, _)| *s == CENTRAL_LOCK_CMD)
+            .collect();
         // 1 unlock + 1 double-lock
         assert_eq!(history.len(), 2);
         // Double-lock token
@@ -1329,7 +1643,12 @@ mod tests {
         tokio::task::yield_now().await;
 
         // Only 1 command (PEPS lock). CrashUnlock is pending, AutoLock was rejected.
-        assert_eq!(bus.history().len(), 1);
+        let cmd_count = bus
+            .history()
+            .into_iter()
+            .filter(|(s, _)| *s == CENTRAL_LOCK_CMD)
+            .count();
+        assert_eq!(cmd_count, 1);
     }
 
     #[tokio::test]
@@ -1381,6 +1700,150 @@ mod tests {
             bus.history().len(),
             0,
             "unauthorized request should not dispatch"
+        );
+    }
+
+    // ─── PhysicalGate (puddle / mirror-fold) ─────────────────────────────
+
+    /// Helper: spawn the puddle arbiter on a MockBus and yield enough
+    /// for the gate-watcher tasks to subscribe.
+    async fn setup_puddle() -> (DomainArbiter, Arc<MockBus>) {
+        let bus = Arc::new(MockBus::new());
+        let (arbiter, loop_fut) = puddle_arbiter(Arc::clone(&bus));
+        tokio::spawn(loop_fut);
+        for _ in 0..16 {
+            tokio::task::yield_now().await;
+        }
+        (arbiter, bus)
+    }
+
+    async fn yield_settle() {
+        for _ in 0..16 {
+            tokio::task::yield_now().await;
+        }
+    }
+
+    #[tokio::test]
+    async fn physical_gate_blocks_claim_when_already_closed() {
+        let (arbiter, bus) = setup_puddle().await;
+
+        // Mirror is folded BEFORE Welcome claims.
+        bus.inject("Body.Mirror.Left.IsFolded", SignalValue::Bool(true));
+        yield_settle().await;
+
+        arbiter
+            .request(ActuatorRequest {
+                signal: "Body.Lights.Puddle.Left.IsOn",
+                value: SignalValue::Bool(true),
+                priority: Priority::Medium,
+                feature_id: FeatureId::Welcome,
+            })
+            .await
+            .unwrap();
+        yield_settle().await;
+
+        // Claim resolved against the closed gate → published as off.
+        assert_eq!(
+            bus.latest_value("Body.Lights.Puddle.Left.IsOn"),
+            Some(SignalValue::Bool(false)),
+            "gate closed at claim time → arbiter must publish off"
+        );
+    }
+
+    #[tokio::test]
+    async fn physical_gate_closing_mid_claim_releases_target() {
+        let (arbiter, bus) = setup_puddle().await;
+
+        // Mirror starts unfolded; Welcome claims; puddle goes ON.
+        bus.inject("Body.Mirror.Right.IsFolded", SignalValue::Bool(false));
+        yield_settle().await;
+        arbiter
+            .request(ActuatorRequest {
+                signal: "Body.Lights.Puddle.Right.IsOn",
+                value: SignalValue::Bool(true),
+                priority: Priority::Medium,
+                feature_id: FeatureId::Welcome,
+            })
+            .await
+            .unwrap();
+        yield_settle().await;
+        assert_eq!(
+            bus.latest_value("Body.Lights.Puddle.Right.IsOn"),
+            Some(SignalValue::Bool(true))
+        );
+
+        // Mirror folds → arbiter forces off without any feature action.
+        bus.inject("Body.Mirror.Right.IsFolded", SignalValue::Bool(true));
+        yield_settle().await;
+        assert_eq!(
+            bus.latest_value("Body.Lights.Puddle.Right.IsOn"),
+            Some(SignalValue::Bool(false)),
+            "gate closing mid-claim must publish off"
+        );
+    }
+
+    #[tokio::test]
+    async fn physical_gate_opening_restores_active_claim() {
+        let (arbiter, bus) = setup_puddle().await;
+
+        // Pre-fold the mirror, then claim — claim is suppressed.
+        bus.inject("Body.Mirror.Left.IsFolded", SignalValue::Bool(true));
+        yield_settle().await;
+        arbiter
+            .request(ActuatorRequest {
+                signal: "Body.Lights.Puddle.Left.IsOn",
+                value: SignalValue::Bool(true),
+                priority: Priority::Medium,
+                feature_id: FeatureId::Welcome,
+            })
+            .await
+            .unwrap();
+        yield_settle().await;
+
+        // Unfold the mirror — the existing claim should now win.
+        bus.inject("Body.Mirror.Left.IsFolded", SignalValue::Bool(false));
+        yield_settle().await;
+        assert_eq!(
+            bus.latest_value("Body.Lights.Puddle.Left.IsOn"),
+            Some(SignalValue::Bool(true)),
+            "gate opening must let the active claim through"
+        );
+    }
+
+    #[tokio::test]
+    async fn physical_gate_only_affects_its_own_target() {
+        let (arbiter, bus) = setup_puddle().await;
+
+        // Fold ONLY the left mirror.
+        bus.inject("Body.Mirror.Left.IsFolded", SignalValue::Bool(true));
+        yield_settle().await;
+
+        // Claim BOTH puddles.
+        for sig in [
+            "Body.Lights.Puddle.Left.IsOn",
+            "Body.Lights.Puddle.Right.IsOn",
+        ] {
+            arbiter
+                .request(ActuatorRequest {
+                    signal: sig,
+                    value: SignalValue::Bool(true),
+                    priority: Priority::Medium,
+                    feature_id: FeatureId::Welcome,
+                })
+                .await
+                .unwrap();
+        }
+        yield_settle().await;
+
+        assert_eq!(
+            bus.latest_value("Body.Lights.Puddle.Left.IsOn"),
+            Some(SignalValue::Bool(false)),
+            "left puddle suppressed by left-mirror gate"
+        );
+        assert_eq!(
+            bus.latest_value("Body.Lights.Puddle.Right.IsOn"),
+            Some(SignalValue::Bool(true)),
+            "right puddle unaffected by left-mirror gate"
         );
     }
 }

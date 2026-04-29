@@ -23,17 +23,21 @@ use vss_bridge::features::follow_me_home::FollowMeHome;
 use vss_bridge::features::hazard_lighting::HazardLighting;
 use vss_bridge::features::lock_feedback::LockFeedback;
 use vss_bridge::features::manual_lighting::ManualLighting;
+use vss_bridge::features::mirror_fold::MirrorFold;
 use vss_bridge::features::panic_alarm::PanicAlarm;
+use vss_bridge::features::passive_entry::{DeviceKind, PairedDevice, PassiveEntry};
 use vss_bridge::features::rke::{PairedFob, RkeFeature};
 use vss_bridge::features::thumb_pad_lock::ThumbPadLock;
 use vss_bridge::features::turn_indicator::TurnIndicator;
 use vss_bridge::features::walk_away_lock::WalkAwayLock;
+use vss_bridge::features::welcome::Welcome;
 use vss_bridge::ipc_message::SignalValue;
 use vss_bridge::kuksa_sync;
 use vss_bridge::nvm::NvmStore;
 use vss_bridge::plant_models::blink_relay::BlinkRelay;
 use vss_bridge::plant_models::door_handle::DoorHandlePlantModel;
 use vss_bridge::plant_models::door_lock::DoorLockPlantModel;
+use vss_bridge::plant_models::mirror_fold::MirrorFoldPlantModel;
 use vss_bridge::plant_models::peps::PepsPlantModel;
 use vss_bridge::plant_models::trunk::TrunkPlantModel;
 use vss_bridge::signal_bus::SignalBus;
@@ -86,20 +90,26 @@ async fn main() -> anyhow::Result<()> {
     let (lighting_arb, lighting_fut) = arbiter::lighting_arbiter(Arc::clone(&bus));
     let (low_beam_arb, low_beam_fut) = arbiter::low_beam_arbiter(Arc::clone(&bus));
     let (door_lock_arb, door_lock_ack_tx, door_lock_fut) =
-        arbiter::door_lock_arbiter(Arc::clone(&bus));
+        arbiter::door_lock_arbiter_with_nvm(Arc::clone(&bus), nvm.clone());
     let (horn_arb, horn_fut) = arbiter::horn_arbiter(Arc::clone(&bus));
     let (_comfort_arb, comfort_fut) = arbiter::comfort_arbiter(Arc::clone(&bus));
+    let (courtesy_arb, courtesy_fut) = arbiter::courtesy_arbiter(Arc::clone(&bus));
+    let (puddle_arb, puddle_fut) = arbiter::puddle_arbiter(Arc::clone(&bus));
 
     tokio::spawn(lighting_fut);
     tokio::spawn(low_beam_fut);
     tokio::spawn(door_lock_fut);
     tokio::spawn(horn_fut);
     tokio::spawn(comfort_fut);
+    tokio::spawn(courtesy_fut);
+    tokio::spawn(puddle_fut);
 
     let lighting_arb = Arc::new(lighting_arb);
     let low_beam_arb = Arc::new(low_beam_arb);
     let door_lock_arb = Arc::new(door_lock_arb);
     let horn_arb = Arc::new(horn_arb);
+    let courtesy_arb = Arc::new(courtesy_arb);
+    let puddle_arb = Arc::new(puddle_arb);
 
     // ── Feature Business Logic ──────────────────────────────────────
     let lux_threshold = _platform_config.vehicle_line.auto_headlamp_lux_threshold;
@@ -205,7 +215,74 @@ async fn main() -> anyhow::Result<()> {
         .run(),
     );
 
-    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm, AutoRelock");
+    // PassiveEntry — handle-pull authenticated unlock for the four
+    // outside doors.  Subscribes to handle pulls + paired-device zone
+    // signals; on a pull, issues an LF + BLE challenge, verifies the
+    // first response, dispatches UnlockDriver / UnlockAll via the
+    // door-lock arbiter (two-stage cal shared with RKE).
+    let pe_devices: Vec<PairedDevice> = {
+        // Same secret-derivation formula as the RKE wiring above + the
+        // PEPS plant model's default_secret().  Four paired fobs and
+        // two paired phones.
+        fn secret(device_type: u8, index: u8) -> [u8; 16] {
+            let mut key = [0u8; 16];
+            key[0] = device_type;
+            key[1] = index;
+            for (k, byte) in key.iter_mut().enumerate().skip(2) {
+                *byte = (device_type.wrapping_mul(17))
+                    .wrapping_add(index.wrapping_mul(31).wrapping_add(k as u8));
+            }
+            key
+        }
+        let mut v = Vec::new();
+        for i in 1u8..=4 {
+            v.push(PairedDevice {
+                kind: DeviceKind::Fob,
+                slot: (i - 1) as usize,
+                secret: secret(b'F', i),
+            });
+        }
+        for i in 1u8..=2 {
+            v.push(PairedDevice {
+                kind: DeviceKind::Phone,
+                slot: (i - 1) as usize,
+                secret: secret(b'P', i),
+            });
+        }
+        v
+    };
+    tokio::spawn(
+        PassiveEntry::new(
+            Arc::clone(&bus),
+            Arc::clone(&door_lock_arb),
+            Arc::clone(&_platform_config),
+            pe_devices,
+        )
+        .run(),
+    );
+    // Welcome — exterior puddle + dome courtesy lights when any
+    // paired PEPS device enters LF coverage (Approach or proximity).
+    // 30 s hold by default; releases early on ignition ON or when
+    // all devices leave LF.
+    tokio::spawn(
+        Welcome::new(
+            Arc::clone(&bus),
+            Arc::clone(&courtesy_arb),
+            Arc::clone(&puddle_arb),
+        )
+        .run(),
+    );
+
+    // MirrorFold — handles `Body.Switches.Mirror.Fold` momentary press
+    // and (when dealer cal `mirror_fold_mode = AUTO`) auto-folds on
+    // central-lock state edges.  Publishes per-side `FoldCmd` to the
+    // MirrorFoldPlantModel.  Persists `last_fold_cmd` in NVM so the
+    // toggle direction stays consistent across power cycles.
+    tokio::spawn(
+        MirrorFold::with_nvm(Arc::clone(&bus), Arc::clone(&_platform_config), nvm.clone()).run(),
+    );
+
+    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome, MirrorFold");
 
     // ── Plant Models ────────────────────────────────────────────────
     // Simulate physical lamp behavior the M7 / smart actuator firmware
@@ -217,7 +294,16 @@ async fn main() -> anyhow::Result<()> {
     );
     tokio::spawn(DoorHandlePlantModel::new(Arc::clone(&bus)).run());
     tokio::spawn(TrunkPlantModel::with_nvm(Arc::clone(&bus), nvm.clone()).run());
-    tokio::spawn(PepsPlantModel::new(Arc::clone(&bus)).run());
+    tokio::spawn(MirrorFoldPlantModel::with_nvm(Arc::clone(&bus), nvm.clone()).run());
+    tokio::spawn(
+        PepsPlantModel::new(Arc::clone(&bus))
+            // 10 ms × slot index — fob 1 = 10 ms, fob 6 = 60 ms.
+            // Stops concurrent same-zone devices from all responding
+            // on the same scheduler tick and lets PassiveEntry pick
+            // a deterministic "first responder wins".
+            .with_response_stagger_ms(vss_bridge::plant_models::peps::PRODUCTION_STAGGER_MS)
+            .run(),
+    );
     tracing::info!("plant models spawned: BlinkRelay, DoorLockPlantModel, DoorHandlePlantModel, TrunkPlantModel, PepsPlantModel");
 
     // ── WebSocket bridge for L6 HMI ─────────────────────────────────

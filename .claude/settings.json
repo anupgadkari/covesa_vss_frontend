@@ -4,7 +4,19 @@
       "mcp__Claude_Preview__preview_screenshot",
       "mcp__Claude_Preview__preview_snapshot",
       "mcp__Claude_Preview__preview_console_logs",
-      "mcp__ccd_session__mark_chapter"
+      "mcp__Claude_Preview__preview_start",
+      "mcp__Claude_Preview__preview_list",
+      "mcp__ccd_session__mark_chapter",
+      "Bash(cargo test --lib)",
+      "Bash(cargo test --lib *)",
+      "Bash(cargo test --test *)",
+      "Bash(cargo test --bin *)",
+      "Bash(cargo clippy --tests)",
+      "Bash(cargo clippy --all-targets)",
+      "Bash(cargo build)",
+      "Bash(cargo build --release)",
+      "Bash(cargo fmt)",
+      "Bash(cargo fmt --check)"
     ]
   }
 }

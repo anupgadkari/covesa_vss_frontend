@@ -61,12 +61,30 @@ fn default_secret(device_type: u8, index: u8) -> crypto::SharedSecret {
     key
 }
 
+/// Per-fob staggering applied to challenge / RSSI responses in
+/// production so concurrent devices in the same zone don't all publish
+/// on the same scheduler tick — features collecting responses can
+/// then deterministically pick "first responder wins" without race.
+///
+/// Final delay for slot `i` (0-indexed) is `(i + 1) * stagger_ms` ms,
+/// e.g. with the production default of 10 ms: fob 1 = 10 ms,
+/// fob 2 = 20 ms, …, fob 6 = 60 ms.
+///
+/// **Default in `PepsPlantModel::new` is 0 (instant response)** — this
+/// preserves the existing unit-test invariants which assert on
+/// response presence without any latency.  The production `main.rs`
+/// opts in via `.with_response_stagger_ms(PRODUCTION_STAGGER_MS)`.
+pub const PRODUCTION_STAGGER_MS: u64 = 10;
+
 /// The PEPS plant model orchestrator.
 pub struct PepsPlantModel<B: SignalBus> {
     bus: Arc<B>,
     pub fobs: Vec<KeyFob>,
     pub phones: Vec<BlePhone>,
     pub nfc_cards: Vec<NfcCard>,
+    /// Per-slot response stagger in milliseconds; see
+    /// `RESPONSE_STAGGER_MS_PER_SLOT` doc.
+    response_stagger_ms: u64,
 }
 
 impl<B: SignalBus> PepsPlantModel<B> {
@@ -95,7 +113,19 @@ impl<B: SignalBus> PepsPlantModel<B> {
             fobs,
             phones,
             nfc_cards,
+            // Default 0 (instant) preserves test semantics; production
+            // wiring opts in via `.with_response_stagger_ms(...)`.
+            response_stagger_ms: 0,
         }
+    }
+
+    /// Override the per-slot response stagger.  Pass `0` for instant
+    /// responses (legacy behaviour, used by older unit tests that
+    /// assert on response presence without needing inter-device
+    /// ordering).  Production wiring keeps the default 10 ms stagger.
+    pub fn with_response_stagger_ms(mut self, ms: u64) -> Self {
+        self.response_stagger_ms = ms;
+        self
     }
 
     /// Move a key fob to a new zone.
@@ -202,10 +232,14 @@ impl<B: SignalBus> PepsPlantModel<B> {
     }
 
     /// Handle an LF challenge from the vehicle. All fobs and phones in
-    /// challenge-response-capable zones respond.
+    /// challenge-response-capable zones respond, staggered by
+    /// `(slot+1) * response_stagger_ms` ms to avoid same-tick
+    /// publication races on the bus.  See `RESPONSE_STAGGER_MS_PER_SLOT`
+    /// for the rationale.
     pub async fn handle_lf_challenge(&self, nonce: &crypto::Challenge) {
         for (i, fob) in self.fobs.iter().enumerate() {
             if let Some(response) = fob.respond_to_challenge(nonce) {
+                self.stagger(i).await;
                 let signal = signals::KEYFOB_CHALLENGE_RESPS[i];
                 let hex: String = response.iter().map(|b| format!("{b:02x}")).collect();
                 if let Err(e) = self.bus.publish(signal, SignalValue::String(hex)).await {
@@ -219,6 +253,7 @@ impl<B: SignalBus> PepsPlantModel<B> {
     pub async fn handle_ble_challenge(&self, nonce: &crypto::Challenge) {
         for (i, phone) in self.phones.iter().enumerate() {
             if let Some(response) = phone.respond_to_challenge(nonce) {
+                self.stagger(i).await;
                 let signal = signals::PHONE_CHALLENGE_RESPS[i];
                 let hex: String = response.iter().map(|b| format!("{b:02x}")).collect();
                 if let Err(e) = self.bus.publish(signal, SignalValue::String(hex)).await {
@@ -226,6 +261,16 @@ impl<B: SignalBus> PepsPlantModel<B> {
                 }
             }
         }
+    }
+
+    /// Sleep `(slot+1) * response_stagger_ms` ms.  No-op when
+    /// stagger is 0 (test override).
+    async fn stagger(&self, slot: usize) {
+        if self.response_stagger_ms == 0 {
+            return;
+        }
+        let ms = self.response_stagger_ms.saturating_mul(slot as u64 + 1);
+        tokio::time::sleep(std::time::Duration::from_millis(ms)).await;
     }
 
     /// Handle an NFC challenge. All NFC cards at reader positions respond.

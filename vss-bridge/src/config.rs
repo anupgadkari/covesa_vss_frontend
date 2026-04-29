@@ -416,6 +416,28 @@ pub struct DealerConfig {
     /// DID 0xF196. Determines which door is unlocked on first press of
     /// RKE UNLOCK in two-stage mode.
     pub driver_door_side: DriverDoorSide,
+
+    /// Side-mirror fold mode.
+    /// DID 0xF197. Per-vehicle-line / trim cal.
+    /// - `MANUAL` (default): fold switch toggles, no AUTO.
+    /// - `AUTO`: switch toggles AND mirrors fold/unfold on lock-state edges.
+    /// - `OFF`: feature inert (no switch handling, no AUTO).
+    pub mirror_fold_mode: MirrorFoldMode,
+}
+
+/// Side-mirror fold mode (per vehicle line).  See `DealerConfig::mirror_fold_mode`.
+#[derive(Debug, Clone, Copy, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum MirrorFoldMode {
+    /// Switch press toggles fold state.  No automatic behaviour.
+    #[default]
+    Manual,
+    /// Switch press toggles fold state AND mirrors auto-fold on lock,
+    /// auto-unfold on driver/all unlock.
+    Auto,
+    /// Feature fully inert — no switch handling, no AUTO behaviour.
+    /// Used on trims that ship without the fold motor / switch.
+    Off,
 }
 
 /// Which side of the vehicle has the driver door.
@@ -438,6 +460,7 @@ impl Default for DealerConfig {
             remote_start_max_minutes: 10,
             two_stage_unlock: true,
             driver_door_side: DriverDoorSide::Left,
+            mirror_fold_mode: MirrorFoldMode::Manual,
         }
     }
 }

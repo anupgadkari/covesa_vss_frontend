@@ -241,8 +241,8 @@ const INIT_STATE={
   'Body.Windshield.Front.Wiping.Mode':'OFF','Body.Windshield.Front.Wiping.Intensity':0,'Body.Windshield.Front.Washing.IsActive':false,
   'Body.Windshield.Rear.Wiping.Mode':'OFF','Body.Windshield.Rear.Washing.IsActive':false,
   // Mirrors
-  'Body.Mirrors.Left.IsFolded':false,'Body.Mirrors.Left.IsHeatingOn':false,'Body.Mirrors.Left.Tilt':0,'Body.Mirrors.Left.Pan':0,
-  'Body.Mirrors.Right.IsFolded':false,'Body.Mirrors.Right.IsHeatingOn':false,'Body.Mirrors.Right.Tilt':0,'Body.Mirrors.Right.Pan':0,
+  'Body.Mirror.Left.IsFolded':false,'Body.Mirror.Left.IsHeatingOn':false,'Body.Mirror.Left.Tilt':0,'Body.Mirror.Left.Pan':0,
+  'Body.Mirror.Right.IsFolded':false,'Body.Mirror.Right.IsHeatingOn':false,'Body.Mirror.Right.Tilt':0,'Body.Mirror.Right.Pan':0,
   // Cabin
   'Cabin.Lights.IsDomeOn':false,'Cabin.Lights.IsGloveBoxOn':false,'Cabin.Lights.Ambient.Intensity':0,'Cabin.Lights.Ambient.Color':'#3B82F6',
   // HVAC
@@ -328,7 +328,10 @@ function DoorCard({label,pfx,s,set}){
 /* ══════ COMBINED TOP + PEPS VIEW ══════ */
 // Vehicle body center — midpoint of front panel (y=30) and rear bumper (y=580).
 // Stadiums are centred here so they symmetrically enclose the car top and bottom.
-const VCX=180, VCY=305;
+// VCY shifted from 305 to 265 to track the lengthened front hood
+// (now y=-50 to y=580, mid-line = 265).  Stadium shapes recentre
+// here so they remain visually symmetric around the vehicle.
+const VCX=180, VCY=265;
 
 // Stadium (discorectangle) hit-test.
 // halfW    — half the total width of the stadium (= semicircle radius = rx).
@@ -347,29 +350,31 @@ function getDevicePos(zone, idx, total){
   switch(zone){
     case 'RfRange':{
       // Trace devices around an ellipse that approximates the RF stadium boundary.
-      // halfW=245, vertical semi-axis = straightH(100) + halfW(245) = 345.
+      // halfW=340, vertical semi-axis = straightH(100) + halfW(340) = 440.
       const a=(idx/Math.max(total,1))*2*Math.PI-Math.PI/2;
-      return {x:VCX+245*Math.cos(a), y:VCY+345*Math.sin(a)};
+      return {x:VCX+340*Math.cos(a), y:VCY+440*Math.sin(a)};
     }
     case 'Approach':{
-      // halfW=225, vertical semi-axis = 100+225 = 325.
+      // halfW=300, vertical semi-axis = 100+300 = 400.
       const a=(idx/Math.max(total,1))*2*Math.PI-Math.PI/2;
-      return {x:VCX+225*Math.cos(a), y:VCY+325*Math.sin(a)};
+      return {x:VCX+300*Math.cos(a), y:VCY+400*Math.sin(a)};
     }
     // All interior/near-body zones use absolute SVG coords so they
     // stay glued to the car regardless of VCY.
     case 'DriverDoor':   return {x:32,        y:300+idx*30}; // left of car body (x=60)
     case 'PassengerDoor':return {x:328,       y:300+idx*30}; // right of car body (x=300)
-    case 'Hood':         return {x:VCX+off,   y:14};         // above front panel (y=30)
+    case 'Hood':         return {x:VCX+off,   y:-66};        // above lengthened front panel (y=-50)
     case 'Trunk':        return {x:VCX+off,   y:600};        // below rear bumper (y=580)
     case 'TrunkInside':  return {x:VCX+off,   y:550};        // inside trunk rect (y=440–560)
     case 'Cabin':        return {x:VCX+off,   y:330};        // mid-cabin
-    case 'OutOfRange':   return {x:-150+idx*52, y:-112};
-    default:             return {x:-150+idx*52, y:-112};
+    case 'OutOfRange':   return {x:-150+idx*52, y:755};
+    default:             return {x:-150+idx*52, y:755};
   }
 }
 
 function hitTestZone(x,y){
+  // Front hood (now lengthened to y=-50..80 to match trunk).
+  if(x>=60&&x<=300&&y>=-50&&y<80) return 'Hood';
   // Inside vehicle body bounds (60–300 x, 80–580 y)
   if(x>=60&&x<=300&&y>=80&&y<=580){
     if(y<=140) return 'Hood';
@@ -378,8 +383,8 @@ function hitTestZone(x,y){
     if(x>=248) return 'PassengerDoor';
     return 'Cabin';
   }
-  if(inStadium(x,y,225)) return 'Approach';
-  if(inStadium(x,y,245)) return 'RfRange';
+  if(inStadium(x,y,300)) return 'Approach';
+  if(inStadium(x,y,340)) return 'RfRange';
   return 'OutOfRange';
 }
 
@@ -495,8 +500,17 @@ function CombinedView({s,set,onDeviceSelect}){
   const tlo=brake?.95:lo||hi||park?.75:.08;
   const rlc=back?'#FFFFFF':'#1A1A2A';
   const hood=s['Body.Hood.IsOpen'],trunk=s['Body.Trunk.IsOpen'];
-  const mlf=s['Body.Mirrors.Left.IsFolded'],mrf=s['Body.Mirrors.Right.IsFolded'];
+  const mlf=s['Body.Mirror.Left.IsFolded'],mrf=s['Body.Mirror.Right.IsFolded'];
   const wf=s['Body.Windshield.Front.Wiping.Mode']!=='OFF';
+  // Exterior puddle lamps — driven by Welcome (and future Farewell /
+  // PerimeterAlarm) via the courtesy arbiter.  Rendered as soft blue
+  // ovals projected on the ground outboard of each side mirror.
+  const puddleL=s['Body.Lights.Puddle.Left.IsOn'];
+  const puddleR=s['Body.Lights.Puddle.Right.IsOn'];
+  // Interior dome / overhead courtesy lamp — claimed by Welcome via
+  // the courtesy arbiter.  Rendered as a soft warm glow over the
+  // front-cabin headliner area in the top view.
+  const dome=s['Cabin.Lights.IsDomeOn'];
 
   const doorsData=[
     {pfx:'Body.Doors.Row1.Left',  open:s['Body.Doors.Row1.Left.IsOpen'],  cx:85,cy:207,dx:-65,rx:60, ry:125,rw:50,rh:165,handleSide:'left'},
@@ -514,13 +528,13 @@ function CombinedView({s,set,onDeviceSelect}){
   // Zone label positions
   const ZONE_LABELS=[
     // Labels at top-right corner of each stadium (just inside the rounded cap)
-    {zone:'RfRange',    x:VCX+140, y:VCY-370, color:'#4A9EF5'},
-    {zone:'Approach',   x:VCX+110, y:VCY-348, color:'#F59E0B'},
-    {zone:'OutOfRange', x:-150,    y:-52,      color:'#2E3E55'},
+    {zone:'RfRange',    x:VCX+140, y:VCY-425, color:'#4A9EF5'},
+    {zone:'Approach',   x:VCX+110, y:VCY-385, color:'#F59E0B'},
+    {zone:'OutOfRange', x:-150,    y:755,      color:'#2E3E55'},
   ];
 
   return <svg ref={svgRef}
-    viewBox="-200 -140 760 920"
+    viewBox="-220 -200 800 1020"
     style={{maxHeight:'70vh',height:'100%',userSelect:'none',touchAction:'none',cursor:drag?'grabbing':'default'}}
     onPointerMove={onMove}
     onPointerUp={onDrop}
@@ -547,45 +561,54 @@ function CombinedView({s,set,onDeviceSelect}){
         <stop offset="100%" stopColor="#FCD34D" stopOpacity="0"/>
       </linearGradient>
     </defs>
-    <rect x="-200" y="-140" width="760" height="920" fill="url(#cg)" opacity="0.07"/>
+    <rect x="-220" y="-200" width="800" height="1020" fill="url(#cg)" opacity="0.07"/>
 
-    {/* OutOfRange tray */}
-    <rect x="-195" y="-132" width="750" height="50"
+    {/* OutOfRange tray — positioned BELOW the vehicle, just outside
+        the RfRange stadium's rear cap (which now ends at y≈705).
+        Devices dragged here are released from the vehicle's PEPS
+        zones entirely. */}
+    <rect x="-215" y="730" width="790" height="50"
       fill={dropZone==='OutOfRange'?'rgba(46,62,85,0.25)':'none'}
       stroke={dropZone==='OutOfRange'?'#4A9EF5':'#2E3E55'} strokeWidth={dropZone==='OutOfRange'?1.5:1}
       strokeDasharray="5,3" rx="4"/>
-    <text x="-160" y="-112" fill={dropZone==='OutOfRange'?'#4A9EF5':'#2E3E55'} fontSize="9" fontFamily="Share Tech Mono" fontWeight="600">OUT OF RANGE — drag here to remove from vehicle</text>
+    <text x="-180" y="760" fill={dropZone==='OutOfRange'?'#4A9EF5':'#2E3E55'} fontSize="9" fontFamily="Share Tech Mono" fontWeight="600">OUT OF RANGE — drag here to remove from vehicle</text>
 
-    {/* RF Range stadium — halfW=245, straightH=100, centred at (VCX, 305)
-         rect: x=VCX-245, y=305-100-245, width=490, height=690, rx=245 */}
-    <rect x={VCX-245} y={305-100-245} width={490} height={690} rx={245}
+    {/* RF Range stadium — halfW=340, straightH=100, centred at (VCX, VCY=265)
+         rect: x=VCX-340, y=VCY-100-340, width=680, height=880, rx=340.
+         Vertical extent y=-175..705 — enclosing the lengthened
+         vehicle (hood front y=-50 to liftgate y=580) with ~125 px
+         margin top/bottom. */}
+    <rect x={VCX-340} y={VCY-100-340} width={680} height={880} rx={340}
       fill={dropZone==='RfRange'?'rgba(74,158,245,0.07)':'none'}
       stroke="#4A9EF5" strokeWidth={dropZone==='RfRange'?2:1}
       opacity={dropZone==='RfRange'?0.6:0.2} strokeDasharray="8,4"/>
-    <text x={VCX+140} y={305-100-245+20} fill="#4A9EF5" fontSize="9" fontFamily="Share Tech Mono" opacity={dropZone==='RfRange'?0.8:0.4}>RF RANGE</text>
+    <text x={VCX+140} y={VCY-100-340+20} fill="#4A9EF5" fontSize="9" fontFamily="Share Tech Mono" opacity={dropZone==='RfRange'?0.8:0.4}>RF RANGE</text>
 
-    {/* Approach stadium — halfW=225, straightH=100, centred at (VCX, 305)
-         rect: x=VCX-225, y=305-100-225, width=450, height=650, rx=225 */}
-    <rect x={VCX-225} y={305-100-225} width={450} height={650} rx={225}
+    {/* Approach stadium — halfW=300, straightH=100, centred at (VCX, VCY).
+         40 px gap from RfRange both horizontally and vertically so
+         the two boundaries stay clearly distinct. */}
+    <rect x={VCX-300} y={VCY-100-300} width={600} height={800} rx={300}
       fill={dropZone==='Approach'?'rgba(245,158,11,0.07)':'none'}
       stroke="#F59E0B" strokeWidth={dropZone==='Approach'?2:1}
       opacity={dropZone==='Approach'?0.6:0.2} strokeDasharray="5,3"/>
-    <text x={VCX+110} y={305-100-225+20} fill="#F59E0B" fontSize="9" fontFamily="Share Tech Mono" opacity={dropZone==='Approach'?0.8:0.4}>APPROACH</text>
+    <text x={VCX+110} y={VCY-100-300+20} fill="#F59E0B" fontSize="9" fontFamily="Share Tech Mono" opacity={dropZone==='Approach'?0.8:0.4}>APPROACH</text>
 
     {/* ── Vehicle top view ── */}
-    {/* Headlamp beam cones — fan forward from each headlight in top view */}
+    {/* Headlamp beam cones — fan forward from each headlight in top
+        view.  Shifted up 80 px (headlight at y=-35) to track the
+        lengthened hood. */}
     {(drl||lo||hi)&&<>
       <path d={hi
-        ? "M 78,45 L 25,-95 L 148,-95 Z"
+        ? "M 78,-35 L 25,-175 L 148,-175 Z"
         : lo
-        ? "M 78,45 L 12,-52 L 158,-52 Z"
-        : "M 78,45 L 42,2 L 122,2 Z"}
+        ? "M 78,-35 L 12,-132 L 158,-132 Z"
+        : "M 78,-35 L 42,-78 L 122,-78 Z"}
         fill="url(#headBeamTop)" opacity={hi?0.58:lo?0.40:0.16}/>
       <path d={hi
-        ? "M 282,45 L 212,-95 L 335,-95 Z"
+        ? "M 282,-35 L 212,-175 L 335,-175 Z"
         : lo
-        ? "M 282,45 L 202,-52 L 348,-52 Z"
-        : "M 282,45 L 238,2 L 318,2 Z"}
+        ? "M 282,-35 L 202,-132 L 348,-132 Z"
+        : "M 282,-35 L 238,-78 L 318,-78 Z"}
         fill="url(#headBeamTop)" opacity={hi?0.58:lo?0.40:0.16}/>
     </>}
 
@@ -595,47 +618,52 @@ function CombinedView({s,set,onDeviceSelect}){
     <line x1="60" y1="290" x2="300" y2="290" stroke="#182030" strokeWidth="1" opacity=".6"/>
     <line x1="60" y1="430" x2="300" y2="430" stroke="#182030" strokeWidth="1" opacity=".6"/>
 
-    {/* Front section */}
-    <rect x="60" y="30" width="240" height="50" fill="#0D1628" stroke="#1A2838" strokeWidth="1" rx="4"/>
-    {hood&&<rect x="70" y="35" width="220" height="8" fill="#F59E0B" opacity=".4"/>}
-    <rect x="70" y="40" width="220" height="40" fill="#09111E" stroke="#182030" strokeWidth="0.5"/>
+    {/* Front section / hood — extended forward so the hood length
+        (~130 px from y=-50 to y=80) matches the trunk length, giving
+        the side-mirror positions visual sense at the A-pillar /
+        beltline junction.  All front-fascia lamps shift up by 80 px
+        to stay anchored at the front bumper. */}
+    <rect x="60" y="-50" width="240" height="130" fill="#0D1628" stroke="#1A2838" strokeWidth="1" rx="4"/>
+    {hood&&<rect x="70" y="-45" width="220" height="8" fill="#F59E0B" opacity=".4"/>}
+    <rect x="70" y="-40" width="220" height="120" fill="#09111E" stroke="#182030" strokeWidth="0.5"/>
 
     {/* Headlights */}
     <g><title>{`Left headlight — ${hi?'HIGH BEAM':lo?'LOW BEAM':drl?'DRL':park?'PARKING':'off'}`}</title>
-      <rect x="70" y="45" width="30" height="28" rx="3" fill={hlc} opacity={hlo/1.5}/>
-      <text x="85" y="65" textAnchor="middle" fill={hlc} fontSize="10" fontWeight="bold" opacity={hlo}>{lo?'●':'○'}</text>
+      <rect x="70" y="-35" width="30" height="28" rx="3" fill={hlc} opacity={hlo/1.5}/>
+      <text x="85" y="-15" textAnchor="middle" fill={hlc} fontSize="10" fontWeight="bold" opacity={hlo}>{lo?'●':'○'}</text>
     </g>
     <g><title>{`Right headlight — ${hi?'HIGH BEAM':lo?'LOW BEAM':drl?'DRL':park?'PARKING':'off'}`}</title>
-      <rect x="260" y="45" width="30" height="28" rx="3" fill={hlc} opacity={hlo/1.5}/>
-      <text x="275" y="65" textAnchor="middle" fill={hlc} fontSize="10" fontWeight="bold" opacity={hlo}>{lo?'●':'○'}</text>
+      <rect x="260" y="-35" width="30" height="28" rx="3" fill={hlc} opacity={hlo/1.5}/>
+      <text x="275" y="-15" textAnchor="middle" fill={hlc} fontSize="10" fontWeight="bold" opacity={hlo}>{lo?'●':'○'}</text>
     </g>
 
-    {/* Turn indicators front */}
-    <rect x="65" y="75" width="32" height="10" rx="2" fill={li?'#F59E0B':'#1A1208'} opacity={li?1:.25}>
+    {/* Turn indicators front — outboard of the headlights at the
+        bumper corners. */}
+    <rect x="65" y="-5" width="32" height="10" rx="2" fill={li?'#F59E0B':'#1A1208'} opacity={li?1:.25}>
       <title>{li?'Left front turn indicator — signaling':'Left front turn indicator — off'}</title>
     </rect>
-    <rect x="263" y="75" width="32" height="10" rx="2" fill={ri?'#F59E0B':'#1A1208'} opacity={ri?1:.25}>
+    <rect x="263" y="-5" width="32" height="10" rx="2" fill={ri?'#F59E0B':'#1A1208'} opacity={ri?1:.25}>
       <title>{ri?'Right front turn indicator — signaling':'Right front turn indicator — off'}</title>
     </rect>
 
     {/* Front fog — indicator strip centred inside each headlight assembly (well clear of edges) */}
-    <rect x="78" y="50" width="6" height="20" rx="2" fill={ffog?'#BAD6FE':'#0A1828'} opacity={ffog?0.90:.30}>
+    <rect x="78" y="-30" width="6" height="20" rx="2" fill={ffog?'#BAD6FE':'#0A1828'} opacity={ffog?0.90:.30}>
       <title>{ffog?'Left front fog lamp — on':'Left front fog lamp — off'}</title>
     </rect>
-    <rect x="272" y="50" width="6" height="20" rx="2" fill={ffog?'#BAD6FE':'#0A1828'} opacity={ffog?0.90:.30}>
+    <rect x="272" y="-30" width="6" height="20" rx="2" fill={ffog?'#BAD6FE':'#0A1828'} opacity={ffog?0.90:.30}>
       <title>{ffog?'Right front fog lamp — on':'Right front fog lamp — off'}</title>
     </rect>
     {/* Front fog beams — short wide cones projecting forward, apex at fog strip centre */}
     {ffog&&<>
-      <path d="M 81,50 L 10,-18 L 152,-18 Z" fill="url(#fogBeamTop)" opacity="0.72"/>
-      <path d="M 275,50 L 204,-18 L 346,-18 Z" fill="url(#fogBeamTop)" opacity="0.72"/>
+      <path d="M 81,-30 L 10,-98 L 152,-98 Z" fill="url(#fogBeamTop)" opacity="0.72"/>
+      <path d="M 275,-30 L 204,-98 L 346,-98 Z" fill="url(#fogBeamTop)" opacity="0.72"/>
     </>}
 
     {/* Parking corners front */}
-    <circle cx="65" cy="35" r="4" fill={park?'#F59E0B':'#1A1208'} opacity={park?0.9:.3}>
+    <circle cx="65" cy="-45" r="4" fill={park?'#F59E0B':'#1A1208'} opacity={park?0.9:.3}>
       <title>{park?'Left front parking light — on':'Left front parking light — off'}</title>
     </circle>
-    <circle cx="295" cy="35" r="4" fill={park?'#F59E0B':'#1A1208'} opacity={park?0.9:.3}>
+    <circle cx="295" cy="-45" r="4" fill={park?'#F59E0B':'#1A1208'} opacity={park?0.9:.3}>
       <title>{park?'Right front parking light — on':'Right front parking light — off'}</title>
     </circle>
 
@@ -649,7 +677,7 @@ function CombinedView({s,set,onDeviceSelect}){
       const rects={
         DriverDoor:   {x:60, y:125,w:55,h:305},
         PassengerDoor:{x:245,y:125,w:55,h:305},
-        Hood:         {x:60, y:30, w:240,h:80},
+        Hood:         {x:60, y:-50,w:240,h:130},
         Trunk:        {x:60, y:480,w:240,h:100},
         TrunkInside:  {x:65, y:440,w:230,h:100},
         Cabin:        {x:115,y:125,w:130,h:305},
@@ -671,7 +699,13 @@ function CombinedView({s,set,onDeviceSelect}){
       const isRow2=pfx.includes('Row2');
       const hInX=isLeft?rx+rw-10:rx+4;
       const hOutX=isLeft?rx+4:rx+rw-10;
-      const hY=ry+Math.floor(rh*0.45);
+      // Inside handle stays near the middle of the door panel
+      // (where a seated occupant naturally reaches).
+      const hInY=ry+Math.floor(rh*0.45);
+      // Outside handle is near the door's trailing edge (B-pillar
+      // for front doors, C-pillar for rear doors) — that's where
+      // it lives on real production vehicles.
+      const hOutY=ry+Math.floor(rh*0.82);
       // Soldier sill-pin: narrow vertical rect on inner window-sill edge
       // dblLock takes priority over locked in colour
       const soldW=4, soldH=16;
@@ -683,40 +717,113 @@ function CombinedView({s,set,onDeviceSelect}){
       const clX=isLeft?rx+rw-7:rx+7;
       const clY=ry+Math.floor(rh*0.82);
       return <g key={pfx}>
-        {/* Door body — subtle red tint on border when locked */}
+        {/* Door body — purely visual (fill + stroke).  Clicks are
+            handled by an explicit transparent click-catcher below
+            so we don't have to fight pointer-events propagation
+            through stacked rects. */}
         <rect x={rx} y={ry} width={rw} height={rh}
           fill="#0E1825"
           stroke={open?'#F59E0B':dblLock?'rgba(168,85,247,0.5)':locked?'rgba(239,68,68,0.4)':'#1A2838'}
           strokeWidth={open?2:locked||dblLock?1.5:1} rx="2"
-          style={{cursor:open?'pointer':'default'}}
-          onClick={open?()=>set(pfx+'.CloseCmd',true):undefined}/>
-        <rect x={rx+2} y={ry+2} width={rw-4} height={rh-4} fill="#08111f"/>
+          style={{pointerEvents:'none'}}/>
+        <rect x={rx+2} y={ry+2} width={rw-4} height={rh-4} fill="#08111f"
+          style={{pointerEvents:'none'}}/>
         {open&&<>
-          <path d={`M ${cx+dx*0.2},${cy} L ${cx+dx},${cy}`} stroke="#F59E0B" strokeWidth="2" opacity=".6" strokeDasharray="3,2"/>
-          <text x={cx} y={ry+rh+12} textAnchor="middle" fill="#F59E0B" fontSize="6" fontWeight="bold">▣ TAP</text>
+          <path d={`M ${cx+dx*0.2},${cy} L ${cx+dx},${cy}`}
+            stroke="#F59E0B" strokeWidth="2" opacity=".6" strokeDasharray="3,2"
+            style={{pointerEvents:'none'}}/>
+          <text x={cx} y={ry+rh+12} textAnchor="middle"
+            fill="#F59E0B" fontSize="6" fontWeight="bold"
+            style={{pointerEvents:'none'}}>▣ TAP</text>
         </>}
-        {/* Outer handle — when door open: click to close; when closed: drag to pull */}
-        <rect x={hOutX} y={hY-4} width="6" height="8" rx="1"
-          fill={open?'#0DC8C8':outPulled?'#38BDF8':dblLock?'#4B2020':locked?'#3A2A0A':'#1E4060'}
-          stroke={open?'#5EEAD4':outPulled?'#7DD3FC':'#2A5070'} strokeWidth="0.5"
-          style={{cursor:open?'pointer':dblLock||locked?'not-allowed':'pointer'}}
-          onClick={open?()=>set(pfx+'.CloseCmd',true):undefined}
-          onMouseDown={open||dblLock||locked?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',true)}
-          onMouseUp={open||dblLock||locked?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',false)}
-          onMouseLeave={open||dblLock||locked?undefined:()=>set(pfx+'.Handle.Outside.IsPulled',false)}>
-          <title>{open?'Outside handle — click to close door':dblLock?'Outside handle — double-locked, cannot pull':locked?'Outside handle — locked, cannot pull':'Outside handle — hold to pull open'}</title>
+        {/* Click-catcher — covers the entire door body.  Renders
+            BEFORE the handle hit-areas / soldier pin so those are
+            on top and capture their own events first.  This rect
+            is the close-door affordance: clicking anywhere on the
+            door (except on a handle / soldier) fires CloseCmd while
+            the door is open.  When the door is closed, the rect is
+            inert so handle hit-areas / soldier pin still work. */}
+        <rect x={rx} y={ry} width={rw} height={rh} rx="2"
+          fill="transparent" pointerEvents={open?'all':'none'}
+          style={{cursor:open?'pointer':'default'}}
+          onClick={open?()=>set(pfx+'.CloseCmd',true):undefined}>
+          {open && <title>Door is open · click anywhere on the door body to close</title>}
         </rect>
-        {/* Inner handle — when door open: click to close; when closed: drag to pull */}
-        <rect x={hInX} y={hY-4} width="6" height="8" rx="1"
-          fill={open?'#0DC8C8':inPulled?'#34D399':dblLock?'#4B2020':'#1E3A28'}
-          stroke={open?'#5EEAD4':inPulled?'#6EE7B7':'#2A5040'} strokeWidth="0.5"
-          style={{cursor:open?'pointer':dblLock?'not-allowed':'pointer'}}
-          onClick={open?()=>set(pfx+'.CloseCmd',true):undefined}
-          onMouseDown={open||dblLock?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',true)}
-          onMouseUp={open||dblLock?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',false)}
-          onMouseLeave={open||dblLock?undefined:()=>set(pfx+'.Handle.Inside.IsPulled',false)}>
-          <title>{open?'Inside handle — click to close door':dblLock?'Inside handle — double-locked, cannot pull':'Inside handle — hold to pull open'}</title>
-        </rect>
+        {/* Outer handle — physically pullable in any state.  When the
+            door is locked the pull won't open the door (plant model
+            decides), but it still triggers PassiveEntry auth, so the
+            HMI must let the user pull regardless of lock state.  A
+            small red 🔒 badge above the handle warns "won't open"
+            when locked.  When open, click to close. */}
+        {/* Outer handle.  The visible rect is small (6×8 px); to make
+            press-and-hold reliable in spite of mouse jitter, an
+            invisible padded hit-area rect (16×18 px) absorbs the
+            pointer events on top.  `pointer-events:visible` on the
+            invisible rect ensures it still registers clicks despite
+            having `fill: transparent`. */}
+        <g>
+          <rect x={hOutX} y={hOutY-4} width="6" height="8" rx="1"
+            fill={open?'#0DC8C8':outPulled?'#7DD3FC':'#1E4060'}
+            stroke={open?'#5EEAD4':outPulled?'#FFFFFF':'#2A5070'}
+            strokeWidth={outPulled?'0.9':'0.5'}
+            style={{pointerEvents:'none'}}/>
+          {/* Pulled-state glow indicator — sits next to the visual
+              handle when held.  Pointer-events:none so it doesn't
+              steal the hit area. */}
+          {outPulled && (
+            <rect x={isLeft?hOutX-3:hOutX+7} y={hOutY-4} width="2" height="8"
+              rx="1" fill="#7DD3FC" opacity="0.85"
+              style={{pointerEvents:'none'}}/>
+          )}
+          {!open && (locked || dblLock) && (
+            <text x={hOutX+3} y={hOutY-6} textAnchor="middle"
+              fill={dblLock?'#FCA5A5':'#F87171'} fontSize="6" fontWeight="bold"
+              style={{pointerEvents:'none'}}>🔒</text>
+          )}
+          {/* Invisible hit area — much larger than the visual handle
+              so press-and-hold survives mouse jitter (essential for the
+              PassiveEntry challenge-response window of ~80 ms). */}
+          {/* Hit-area is unconditional press-and-hold.  Do NOT register
+              onClick here — when a press-and-hold opens the door
+              mid-press (PassiveEntry), the trailing click event would
+              otherwise fire CloseCmd and immediately re-close the
+              just-opened door.  To close an open door, click the
+              door body itself (it carries the "▣ TAP" close hint). */}
+          <rect x={hOutX-5} y={hOutY-9} width="16" height="18" rx="2"
+            fill="transparent" pointerEvents="all"
+            style={{cursor:'pointer'}}
+            onMouseDown={()=>set(pfx+'.Handle.Outside.IsPulled',true)}
+            onMouseUp={()=>set(pfx+'.Handle.Outside.IsPulled',false)}
+            onMouseLeave={()=>set(pfx+'.Handle.Outside.IsPulled',false)}>
+            <title>{open?'Outside handle — door is open · click door body to close':dblLock?'Outside handle — door is double-locked; pull will not open':locked?'Outside handle — door is locked; pull will not open (PassiveEntry may unlock if a paired device is in proximity zone)':'Outside handle — hold to pull open'}</title>
+          </rect>
+        </g>
+        {/* Inner handle — same padded-hit-area approach. */}
+        <g>
+          <rect x={hInX} y={hInY-4} width="6" height="8" rx="1"
+            fill={open?'#0DC8C8':inPulled?'#6EE7B7':'#1E3A28'}
+            stroke={open?'#5EEAD4':inPulled?'#FFFFFF':'#2A5040'}
+            strokeWidth={inPulled?'0.9':'0.5'}
+            style={{pointerEvents:'none'}}/>
+          {inPulled && (
+            <rect x={isLeft?hInX+7:hInX-3} y={hInY-4} width="2" height="8"
+              rx="1" fill="#6EE7B7" opacity="0.85"
+              style={{pointerEvents:'none'}}/>
+          )}
+          {!open && dblLock && (
+            <text x={hInX+3} y={hInY-6} textAnchor="middle"
+              fill="#FCA5A5" fontSize="6" fontWeight="bold"
+              style={{pointerEvents:'none'}}>🔒</text>
+          )}
+          <rect x={hInX-5} y={hInY-9} width="16" height="18" rx="2"
+            fill="transparent" pointerEvents="all"
+            style={{cursor:'pointer'}}
+            onMouseDown={()=>set(pfx+'.Handle.Inside.IsPulled',true)}
+            onMouseUp={()=>set(pfx+'.Handle.Inside.IsPulled',false)}
+            onMouseLeave={()=>set(pfx+'.Handle.Inside.IsPulled',false)}>
+            <title>{open?'Inside handle — door is open · click door body to close':dblLock?'Inside handle — double-locked; interior linkage physically disconnected, pull will not open':'Inside handle — hold to pull open'}</title>
+          </rect>
+        </g>
         {/* Soldier sill-pin — vertical rect, inner window-sill edge */}
         <rect x={soldX} y={soldY} width={soldW} height={soldH} rx="1"
           fill={lockFill} stroke={lockStroke} strokeWidth="0.8"
@@ -724,9 +831,12 @@ function CombinedView({s,set,onDeviceSelect}){
           onClick={dblLock?undefined:()=>set(pfx+'.Soldier.IsUnlocked',locked)}>
           <title>{dblLock?'Sill pin — double-locked, release via RKE first':locked?'Sill pin — locked · click to unlock':'Sill pin — unlocked · click to lock'}</title>
         </rect>
-        {/* Latch indicator — leading edge of door */}
+        {/* Latch indicator — leading edge of door.  Decorative only —
+            pointer-events:none so it doesn't absorb clicks meant for
+            the close-door body. */}
         <rect x={isLeft?rx:rx+rw-3} y={ry+Math.floor(rh*0.6)} width="3" height="6" rx="1"
-          fill={latched?'#22C55E':'#F59E0B'} opacity="0.8"/>
+          fill={latched?'#22C55E':'#F59E0B'} opacity="0.8"
+          pointerEvents="none"/>
         {/* Child lock indicator — inner edge, lower portion, Row 2 + when active */}
         {childLock&&<g style={{cursor:'default'}}>
           <circle cx={clX} cy={clY} r="4.5" fill="rgba(168,85,247,0.18)" stroke="#A855F7" strokeWidth="0.8"/>
@@ -801,30 +911,80 @@ function CombinedView({s,set,onDeviceSelect}){
     </circle>
 
 
-    {/* Mirrors — top view (elongated housing + trailing-edge turn indicator) */}
-    {!mlf
-      ?<g>
-        <title>Left side mirror</title>
-        <rect x="38" y="194" width="16" height="12" rx="2" fill="#0F1A28" stroke="#1A2838" strokeWidth="0.5"/>
-        <rect x="38" y="198" width="5" height="6" rx="1" fill={li?'#F59E0B':'#1A1208'} opacity={li?0.95:.28}>
-          <title>{li?'Left mirror turn indicator — signaling':'Left mirror turn indicator — off'}</title>
-        </rect>
+    {/* Exterior puddle lamps — under-mirror courtesy lamps that
+        project a pool of light onto the ground outboard of each
+        front door.  Driven by the Welcome feature on PEPS approach
+        entry.  Rendered as soft blue ovals offset outward from the
+        mirror centres so they read as ground projection. */}
+    <defs>
+      <radialGradient id="puddleGlow" cx="50%" cy="50%" r="50%">
+        <stop offset="0%"  stopColor="#7CC8FF" stopOpacity="0.85"/>
+        <stop offset="60%" stopColor="#3D85C6" stopOpacity="0.45"/>
+        <stop offset="100%" stopColor="#3D85C6" stopOpacity="0"/>
+      </radialGradient>
+    </defs>
+    {puddleL && (
+      <g>
+        <title>Left puddle lamp — on</title>
+        <ellipse cx="24" cy="210" rx="20" ry="12" fill="url(#puddleGlow)"/>
+        <ellipse cx="24" cy="210" rx="6" ry="3" fill="#BAD6FE" opacity="0.95"/>
       </g>
-      :<rect x="49" y="198" width="5" height="4" rx="1" fill="#0D1320"><title>Left mirror — folded</title></rect>}
-    {!mrf
-      ?<g>
-        <title>Right side mirror</title>
-        <rect x="306" y="194" width="16" height="12" rx="2" fill="#0F1A28" stroke="#1A2838" strokeWidth="0.5"/>
-        <rect x="317" y="198" width="5" height="6" rx="1" fill={ri?'#F59E0B':'#1A1208'} opacity={ri?0.95:.28}>
-          <title>{ri?'Right mirror turn indicator — signaling':'Right mirror turn indicator — off'}</title>
-        </rect>
+    )}
+    {puddleR && (
+      <g>
+        <title>Right puddle lamp — on</title>
+        <ellipse cx="336" cy="210" rx="20" ry="12" fill="url(#puddleGlow)"/>
+        <ellipse cx="336" cy="210" rx="6" ry="3" fill="#BAD6FE" opacity="0.95"/>
       </g>
-      :<rect x="306" y="198" width="5" height="4" rx="1" fill="#0D1320"><title>Right mirror — folded</title></rect>}
-    {s['Body.Mirrors.Left.IsHeatingOn']&&<circle cx="46" cy="200" r="10" fill="none" stroke="#FF4040" strokeWidth="1" opacity=".6" className="pulse"><title>Left mirror heating — active</title></circle>}
-    {s['Body.Mirrors.Right.IsHeatingOn']&&<circle cx="314" cy="200" r="10" fill="none" stroke="#FF4040" strokeWidth="1" opacity=".6" className="pulse"><title>Right mirror heating — active</title></circle>}
+    )}
 
-    <text x="180" y="22"  textAnchor="middle" fill="#1E2C3C" fontSize="8" fontFamily="Share Tech Mono" fontWeight="bold">▲ FRONT</text>
-    <text x="180" y="755" textAnchor="middle" fill="#1E2C3C" fontSize="8" fontFamily="Share Tech Mono" fontWeight="bold">REAR ▼</text>
+    {/* Interior dome / overhead courtesy lamp — claimed by Welcome
+        on PEPS approach (and by manual switch).  Rendered as a warm
+        amber glow over the front-cabin headliner area, centered
+        between the two front seats. */}
+    <defs>
+      <radialGradient id="domeGlow" cx="50%" cy="50%" r="50%">
+        <stop offset="0%"  stopColor="#FFF6C8" stopOpacity="1"/>
+        <stop offset="40%" stopColor="#FCD34D" stopOpacity="0.85"/>
+        <stop offset="80%" stopColor="#F59E0B" stopOpacity="0.35"/>
+        <stop offset="100%" stopColor="#F59E0B" stopOpacity="0"/>
+      </radialGradient>
+    </defs>
+    {dome && (
+      <g style={{pointerEvents:'none'}}>
+        <title>Dome / overhead courtesy lamp — on</title>
+        <ellipse cx="180" cy="240" rx="48" ry="32" fill="url(#domeGlow)"/>
+        <rect x="172" y="234" width="16" height="10" rx="2" fill="#FFF3C4" stroke="#B45309" strokeWidth="0.6" opacity="0.98"/>
+      </g>
+    )}
+
+    {/* Mirrors — top view (elongated housing + trailing-edge turn
+        indicator).  Fold pivots at the housing's inboard-rearward
+        corner — (54, 206) for left, (306, 206) for right.  This
+        keeps the entire rotation arc strictly outboard of the body
+        skin (x ≤ 60 left / x ≥ 300 right) at every interpolated
+        angle, matching the way real fold motors swing the housing
+        rearward against the door without the mirror appearing to
+        cross through the cabin. */}
+    <g transform={mlf?'rotate(-60 54 206)':undefined} style={{transition:'transform 0.6s ease'}}>
+      <title>{mlf?'Left side mirror — folded':'Left side mirror'}</title>
+      <rect x="38" y="194" width="16" height="12" rx="2" fill="#0F1A28" stroke="#1A2838" strokeWidth="0.5"/>
+      <rect x="38" y="198" width="5" height="6" rx="1" fill={li?'#F59E0B':'#1A1208'} opacity={(mlf?0:1)*(li?0.95:.28)}>
+        <title>{li?'Left mirror turn indicator — signaling':'Left mirror turn indicator — off'}</title>
+      </rect>
+    </g>
+    <g transform={mrf?'rotate(60 306 206)':undefined} style={{transition:'transform 0.6s ease'}}>
+      <title>{mrf?'Right side mirror — folded':'Right side mirror'}</title>
+      <rect x="306" y="194" width="16" height="12" rx="2" fill="#0F1A28" stroke="#1A2838" strokeWidth="0.5"/>
+      <rect x="317" y="198" width="5" height="6" rx="1" fill={ri?'#F59E0B':'#1A1208'} opacity={(mrf?0:1)*(ri?0.95:.28)}>
+        <title>{ri?'Right mirror turn indicator — signaling':'Right mirror turn indicator — off'}</title>
+      </rect>
+    </g>
+    {s['Body.Mirror.Left.IsHeatingOn']&&<circle cx="46" cy="200" r="10" fill="none" stroke="#FF4040" strokeWidth="1" opacity=".6" className="pulse"><title>Left mirror heating — active</title></circle>}
+    {s['Body.Mirror.Right.IsHeatingOn']&&<circle cx="314" cy="200" r="10" fill="none" stroke="#FF4040" strokeWidth="1" opacity=".6" className="pulse"><title>Right mirror heating — active</title></circle>}
+
+    <text x="180" y="-58" textAnchor="middle" fill="#1E2C3C" fontSize="8" fontFamily="Share Tech Mono" fontWeight="bold">▲ FRONT</text>
+    <text x="180" y="605" textAnchor="middle" fill="#1E2C3C" fontSize="8" fontFamily="Share Tech Mono" fontWeight="bold">REAR ▼</text>
 
     {/* ── PEPS Device icons ── */}
     {allDevices.map(device=>{
@@ -842,8 +1002,8 @@ function CombinedView({s,set,onDeviceSelect}){
     {/* Drag ghost follows pointer */}
     {drag&&<DeviceChip device={drag} pos={{x:drag.x,y:drag.y}} dimmed={false}/>}
 
-    {/* Legend */}
-    <g transform="translate(-175,760)">
+    {/* Legend — below the OutOfRange tray (which is at y=730..780). */}
+    <g transform="translate(-175,800)">
       <rect x={0} y={-4} width={18} height={11} rx={3} fill="#F59E0B" opacity={.85}/>
       <text x={22} y={5} fill="#6B7E99" fontSize="9" fontFamily="Share Tech Mono">Fob</text>
       <rect x={62} y={-7} width={10} height={17} rx={2} fill="#4A9EF5" opacity={.85}/>
@@ -881,8 +1041,12 @@ function SideView({s,set}){
   const wf=s['Body.Windshield.Front.Wiping.Mode']!=='OFF';
   const sr=s['Body.Sunroof.Position'];
   // Mirror — read from the visible side
-  const mlf=s[`Body.Mirrors.${side}.IsFolded`];
-  const mheat=s[`Body.Mirrors.${side}.IsHeatingOn`];
+  const mlf=s[`Body.Mirror.${side}.IsFolded`];
+  const mheat=s[`Body.Mirror.${side}.IsHeatingOn`];
+  // Puddle lamp on the visible side — Welcome / Farewell drive these
+  // via the puddle arbiter.  Rendered as a soft cone projecting down
+  // from the mirror housing onto the ground.
+  const puddleSide=s[`Body.Lights.Puddle.${side}.IsOn`];
   const hlc=hi?'#FFF':lo?'#FCD34D':drl?'#C0C8D0':park?'#FEF3C7':'#0A1420';
   const hlo=hi?.95:lo?.85:drl?.45:park?.2:.06;
   const tlc=brake?'#FF2222':lo||hi||park?'#EF4444':'#1A0808';
@@ -971,28 +1135,56 @@ function SideView({s,set}){
       stroke={d2?'#F59E0B':'#1A2838'} strokeWidth={d2?2.5:1.2} rx="2"/>
     {d2&&<text x="680" y="322" textAnchor="middle" fill="#F59E0B" fontSize="8" fontWeight="bold">DOOR OPEN</text>}
 
-    {/* ── Door handles — interactive pull-bars mapped to visible side ── */}
+    {/* ── Door handles — always pullable.  When the door is locked the
+         pull won't open the door (plant model decides), but it still
+         triggers PassiveEntry auth, so the HMI must allow it
+         regardless of lock state.  A small red 🔒 badge to the left
+         of the handle warns "won't open" when locked. ── */}
+    {/* Handles sit near the trailing edge of each door panel — front
+        door handle by the B-pillar, rear door handle by the C-pillar
+        — to match how production vehicles are laid out.  Front-door
+        panel spans 430→565 (135 wide) and rear-door panel spans
+        589→772 (183 wide); the 38 px handle is parked ~10 px inboard
+        of the trailing edge. */}
     {[
-      {pfx:r1pfx, x:458, open:d1, locked:r1locked, dbl:r1dbl, pulled:r1pulled, label:'Row 1'},
-      {pfx:r2pfx, x:616, open:d2, locked:r2locked, dbl:r2dbl, pulled:r2pulled, label:'Row 2'},
+      {pfx:r1pfx, x:520, open:d1, locked:r1locked, dbl:r1dbl, pulled:r1pulled, label:'Row 1'},
+      {pfx:r2pfx, x:723, open:d2, locked:r2locked, dbl:r2dbl, pulled:r2pulled, label:'Row 2'},
     ].map(({pfx,x,open,locked,dbl,pulled,label})=>{
-      const canPull=set&&!open&&!locked&&!dbl;
       const tip=open?`${label} outside handle — door is open`
-               :dbl ?`${label} outside handle — double-locked, cannot pull`
-               :locked?`${label} outside handle — locked, cannot pull`
+               :dbl ?`${label} outside handle — door is double-locked; pull will not open`
+               :locked?`${label} outside handle — door is locked; pull will not open (PassiveEntry may unlock if a paired device is in proximity zone)`
                :pulled?`${label} outside handle — pulling…`
                :`${label} outside handle — hold to pull open`;
-      const hfill=pulled?'#4A9EF5':locked||dbl?'#3A1818':'#1E3250';
-      const hstroke=pulled?'#6BB8FF':locked||dbl?'#6A2222':'#2A4468';
-      const kfill=pulled?'#6BB8FF':locked||dbl?'#5A2222':'#253A58';
-      return <g key={pfx} fill={hfill} stroke={hstroke} strokeWidth="0.8"
-        style={canPull?{cursor:'pointer'}:{cursor:locked||dbl?'not-allowed':'default'}}
-        onMouseDown={canPull?()=>set(pfx+'.Handle.Outside.IsPulled',true):undefined}
-        onMouseUp={canPull?()=>set(pfx+'.Handle.Outside.IsPulled',false):undefined}
-        onMouseLeave={canPull?()=>set(pfx+'.Handle.Outside.IsPulled',false):undefined}>
-        <title>{tip}</title>
-        <rect x={x}   y="276" width="38" height="9" rx="3"/>
-        <rect x={x}   y="276" width="5"  height="9" rx="2" fill={kfill}/>
+      const hfill=pulled?'#4A9EF5':'#1E3250';
+      const hstroke=pulled?'#6BB8FF':'#2A4468';
+      const kfill=pulled?'#6BB8FF':'#253A58';
+      return <g key={pfx}>
+        {/* Hit target stays in fixed position — a translate transform
+            would push the rect out from under the cursor and trigger
+            an immediate onMouseLeave, breaking the PassiveEntry
+            hold-and-unlock flow.  Visual cue is fill/stroke change
+            plus a small "pulled" indicator chip beside the handle. */}
+        <g fill={hfill} stroke={hstroke} strokeWidth={pulled?'1.2':'0.8'}
+          style={{cursor:'pointer'}}
+          onMouseDown={()=>set(pfx+'.Handle.Outside.IsPulled',true)}
+          onMouseUp={()=>set(pfx+'.Handle.Outside.IsPulled',false)}
+          onMouseLeave={()=>set(pfx+'.Handle.Outside.IsPulled',false)}>
+          <title>{tip}</title>
+          <rect x={x}   y="276" width="38" height="9" rx="3"/>
+          <rect x={x}   y="276" width="5"  height="9" rx="2" fill={kfill}/>
+        </g>
+        {pulled && (
+          /* Trailing chip indicating the handle is being held.  Uses
+             pointer-events:none so it can't steal mouseleave events. */
+          <rect x={x+40} y="277" width="3" height="7" rx="1"
+            fill="#6BB8FF" opacity="0.9"
+            style={{pointerEvents:'none'}}/>
+        )}
+        {!open && (locked || dbl) && (
+          <text x={x-6} y="284" textAnchor="middle"
+            fill={dbl?'#FCA5A5':'#F87171'} fontSize="9" fontWeight="bold"
+            style={{pointerEvents:'none'}}>🔒</text>
+        )}
       </g>;
     })}
 
@@ -1064,22 +1256,52 @@ function SideView({s,set}){
       <title>License plate lamp — on</title>
     </rect>}
 
-    {/* ── Side mirror — tracks visible side ── */}
-    {!mlf
-      ?<g>
-        <title>{side} side mirror</title>
-        {/* Mirror arm from A-pillar base outward */}
-        <line x1="268" y1="225" x2="248" y2="218" stroke="#1A2838" strokeWidth="2.5"/>
-        {/* Mirror head — horizontal teardrop just ahead of A-pillar */}
-        <ellipse cx="238" cy="215" rx="18" ry="11" fill="#0F1A28" stroke="#1A2838" strokeWidth="1"/>
-        <rect x="228" y="222" width="18" height="3" rx="1" fill={li?'#F59E0B':'#1A1208'} opacity={li?.95:.25}>
-          <title>{li?'Mirror turn indicator — signaling':'Mirror turn indicator — off'}</title>
-        </rect>
-      </g>
-      :<circle cx="258" cy="220" r="5" fill="#0F1A28"><title>{side} mirror — folded</title></circle>}
+    {/* ── Side mirror — tracks visible side.  When folded, the whole
+         arm + head group rotates around the body-side anchor (268,
+         225) so the mirror swings rearward against the front door
+         skin — the side-view equivalent of the top-view fold. ── */}
+    <g transform={mlf?'rotate(60 268 225)':undefined} style={{transition:'transform 0.6s ease'}}>
+      <title>{mlf?`${side} side mirror — folded`:`${side} side mirror`}</title>
+      {/* Mirror arm from A-pillar base outward */}
+      <line x1="268" y1="225" x2="248" y2="218" stroke="#1A2838" strokeWidth="2.5"/>
+      {/* Mirror head — horizontal teardrop just ahead of A-pillar */}
+      <ellipse cx="238" cy="215" rx="18" ry="11" fill="#0F1A28" stroke="#1A2838" strokeWidth="1"/>
+      <rect x="228" y="222" width="18" height="3" rx="1" fill={li?'#F59E0B':'#1A1208'} opacity={(mlf?0:1)*(li?.95:.25)}>
+        <title>{li?'Mirror turn indicator — signaling':'Mirror turn indicator — off'}</title>
+      </rect>
+    </g>
     {mheat&&<circle cx="238" cy="215" r="14" fill="none" stroke="#FF4040" strokeWidth="1.2" opacity=".7" className="pulse">
       <title>Mirror heating — active</title>
     </circle>}
+
+    {/* ── Puddle lamp beam — projects down from mirror housing onto
+         the ground when Welcome / Farewell claim the puddle lamp on
+         this side.  Trapezoid for the beam cone + bright pool ellipse
+         at ground level. ── */}
+    <defs>
+      <linearGradient id="puddleBeamSide" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%"  stopColor="#BAD6FE" stopOpacity="0.55"/>
+        <stop offset="60%" stopColor="#7CC8FF" stopOpacity="0.30"/>
+        <stop offset="100%" stopColor="#3D85C6" stopOpacity="0.05"/>
+      </linearGradient>
+      <radialGradient id="puddleGroundSide" cx="50%" cy="50%" r="50%">
+        <stop offset="0%"  stopColor="#BAD6FE" stopOpacity="0.85"/>
+        <stop offset="60%" stopColor="#3D85C6" stopOpacity="0.40"/>
+        <stop offset="100%" stopColor="#3D85C6" stopOpacity="0"/>
+      </radialGradient>
+    </defs>
+    {puddleSide && !mlf && (
+      <g style={{pointerEvents:'none'}}>
+        <title>{side} puddle lamp — on</title>
+        {/* Beam cone: narrow at mirror underside (~238, 222),
+            spreading to a ~80 px pool at ground level (y≈445). */}
+        <path d="M 230,224 L 200,448 L 276,448 L 246,224 Z"
+          fill="url(#puddleBeamSide)"/>
+        {/* Bright ground pool */}
+        <ellipse cx="238" cy="448" rx="38" ry="6" fill="url(#puddleGroundSide)"/>
+        <ellipse cx="238" cy="448" rx="10" ry="2" fill="#E0EEFF" opacity="0.85"/>
+      </g>
+    )}
 
     {/* ── Wheels ── */}
     <circle cx="180" cy="400" r="55" fill="#07101A" stroke="#161E2C" strokeWidth="2.2"/>
@@ -1509,12 +1731,30 @@ function ControlPanelContent({s,set,anyDoor,anyLight,lux}){
         <BR label="Rear washer" k="Body.Windshield.Rear.Washing.IsActive" s={s} set={set} c="b"/>
       </SG>
 
-      <SG title="Mirrors" vss="Body.Mirrors">
+      <SG title="Mirror" vss="Body.Mirror">
+        {/* Fold momentary press — drives Body.Switches.Mirror.Fold.
+            The MirrorFold feature treats each false→true edge as a
+            press and toggles `intended_fold_state` (= !last_fold_cmd).
+            Per-side IsFolded readouts below are read-only feedback
+            from the MirrorFoldPlantModel (plant owns those signals
+            now; HMI cannot write them directly). */}
+        <div className="dcr" style={{marginBottom:6}}>
+          <span className="dcl">Fold switch</span>
+          <button onMouseDown={()=>{set('Body.Switches.Mirror.Fold',true);setTimeout(()=>set('Body.Switches.Mirror.Fold',false),60);}}
+                  style={{padding:'4px 14px',borderRadius:4,border:'1px solid var(--bdr2)',background:'var(--s3)',color:'var(--white)',fontFamily:'var(--fm)',fontSize:9,fontWeight:700,cursor:'pointer'}}>
+            ↻ FOLD / UNFOLD
+          </button>
+        </div>
         <div style={{display:'flex',gap:6}}>
-          {[['Left','Body.Mirrors.Left'],['Right','Body.Mirrors.Right']].map(([side,pfx])=>(
+          {[['Left','Body.Mirror.Left'],['Right','Body.Mirror.Right']].map(([side,pfx])=>(
             <div key={side} style={{flex:1,background:'var(--s2)',borderRadius:'var(--r6)',padding:'6px 8px',border:'1px solid var(--bdr)',display:'flex',flexDirection:'column',gap:3}}>
               <div className="dctitle">{side.toUpperCase()}</div>
-              <div className="dcr"><span className="dcl">Fold</span><Tog val={s[`${pfx}.IsFolded`]} on={()=>set(`${pfx}.IsFolded`,!s[`${pfx}.IsFolded`])} c="a"/></div>
+              <div className="dcr">
+                <span className="dcl">Fold status</span>
+                <span style={{fontFamily:'var(--fm)',fontSize:9,fontWeight:700,color:s[`${pfx}.IsFolded`]?'var(--amber)':'var(--dim)'}}>
+                  {s[`${pfx}.IsFolded`]?'◀▶ FOLDED':'OUT'}
+                </span>
+              </div>
               <div className="dcr"><span className="dcl">Heat</span><Tog val={s[`${pfx}.IsHeatingOn`]} on={()=>set(`${pfx}.IsHeatingOn`,!s[`${pfx}.IsHeatingOn`])} c="r"/></div>
               <SlR label="Tilt" k={`${pfx}.Tilt`} s={s} set={set} min={-10} max={10} step={1} unit="°"/>
               <SlR label="Pan"  k={`${pfx}.Pan`}  s={s} set={set} min={-10} max={10} step={1} unit="°"/>
@@ -1598,7 +1838,7 @@ const INIT_CONFIG={
   dealer:{
     auto_relock_enabled:true, horn_chirp_on_lock:true,
     courtesy_light_timeout_secs:30, remote_start_max_minutes:10,
-    two_stage_unlock:true, driver_door_side:'Left',
+    two_stage_unlock:true, driver_door_side:'Left', mirror_fold_mode:'MANUAL',
   },
   variant:{
     auto_lock_speed_kmh:20, double_lock_enabled:false,
@@ -1686,6 +1926,9 @@ function ConfigView({cfg, onSet}){
       </CfgRow>
       <CfgRow label="Remote start max duration" hint="Engine/climate pre-conditioning limit (min)">
         <CfgNum val={d.remote_start_max_minutes} min={1} max={60} onChange={v=>onSet('dealer.remote_start_max_minutes',v)}/>
+      </CfgRow>
+      <CfgRow label="Mirror fold mode" hint="MANUAL=switch only, AUTO=switch + lock-edge auto-fold, OFF=feature inert">
+        <CfgSelect val={d.mirror_fold_mode||'MANUAL'} opts={['MANUAL','AUTO','OFF']} onChange={v=>onSet('dealer.mirror_fold_mode',v)}/>
       </CfgRow>
     </CfgSection>
 

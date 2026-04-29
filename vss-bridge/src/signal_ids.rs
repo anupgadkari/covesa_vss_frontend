@@ -24,6 +24,11 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Body.Lights.Brake.IsActive" => Some(0x0002_0007),
         "Body.Lights.Backup.IsActive" => Some(0x0002_0008),
         "Body.Lights.LicensePlate.IsOn" => Some(0x0002_0009),
+        // Exterior puddle lamps — under-mirror courtesy lamps that
+        // illuminate the ground next to the front doors.  Driven by
+        // Welcome / Farewell / PerimeterAlarm via the courtesy arbiter.
+        "Body.Lights.Puddle.Left.IsOn" => Some(0x0002_0019),
+        "Body.Lights.Puddle.Right.IsOn" => Some(0x0002_001A),
         "Body.Lights.DirectionIndicator.Left.IsSignaling" => Some(0x0002_000A),
         "Body.Lights.DirectionIndicator.Right.IsSignaling" => Some(0x0002_000B),
         "Body.Lights.Hazard.IsSignaling" => Some(0x0002_000C),
@@ -51,14 +56,20 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Body.Windshield.Rear.Washing.IsActive" => Some(0x0003_0005),
 
         // Mirrors
-        "Body.Mirrors.Left.IsFolded" => Some(0x0004_0001),
-        "Body.Mirrors.Left.IsHeatingOn" => Some(0x0004_0002),
-        "Body.Mirrors.Left.Tilt" => Some(0x0004_0003),
-        "Body.Mirrors.Left.Pan" => Some(0x0004_0004),
-        "Body.Mirrors.Right.IsFolded" => Some(0x0004_0005),
-        "Body.Mirrors.Right.IsHeatingOn" => Some(0x0004_0006),
-        "Body.Mirrors.Right.Tilt" => Some(0x0004_0007),
-        "Body.Mirrors.Right.Pan" => Some(0x0004_0008),
+        "Body.Mirror.Left.IsFolded" => Some(0x0004_0001),
+        "Body.Mirror.Left.IsHeatingOn" => Some(0x0004_0002),
+        "Body.Mirror.Left.Tilt" => Some(0x0004_0003),
+        "Body.Mirror.Left.Pan" => Some(0x0004_0004),
+        "Body.Mirror.Right.IsFolded" => Some(0x0004_0005),
+        "Body.Mirror.Right.IsHeatingOn" => Some(0x0004_0006),
+        "Body.Mirror.Right.Tilt" => Some(0x0004_0007),
+        "Body.Mirror.Right.Pan" => Some(0x0004_0008),
+        // Mirror fold motor commands — issued by the MirrorFold feature
+        // and consumed by the MirrorFoldPlantModel.  Bool: true=fold,
+        // false=unfold.  Per-side because Option-A mismatch handling
+        // commands only one side at a time.
+        "Body.Mirror.Left.FoldCmd" => Some(0x0004_0009),
+        "Body.Mirror.Right.FoldCmd" => Some(0x0004_000A),
 
         // Doors Row1 Left
         "Body.Doors.Row1.Left.IsOpen" => Some(0x0005_0001),
@@ -163,6 +174,16 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Body.Switches.Fog.Front.IsEngaged" => Some(0x000D_0005),
         "Body.Switches.Fog.Rear.IsEngaged" => Some(0x000D_0006),
         "Body.Switches.Panic.IsEngaged" => Some(0x000D_0007),
+        // Mirror control switches (project extension — VSS does not
+        // define mirror movement controls).
+        // - Fold: bool, momentary (false→true edge = press).
+        // - Select: enum, picks which side mirror responds to Direction.
+        //   Allowed values: 'NONE','LEFT','RIGHT'.
+        // - Direction: enum, joystick output. 'NONE' on release.
+        //   Allowed values: 'NONE','UP','DOWN','LEFT','RIGHT'.
+        "Body.Switches.Mirror.Fold" => Some(0x000D_0010),
+        "Body.Switches.Mirror.Select" => Some(0x000D_0011),
+        "Body.Switches.Mirror.Direction" => Some(0x000D_0012),
 
         // Anti-theft alarm status (project extension — not in standard VSS v4.0)
         "Vehicle.Body.Alarm.IsActive" => Some(0x0006_0009),
@@ -267,6 +288,13 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // Central lock command — published by arbiter; HMI diagnostic override also
         // uses this path to send lock_double / release_double directly to plant model.
         "Body.Doors.CentralLock.Command" => Some(0x0014_0004),
+        // Vehicle-level central lock status — published by the door-lock
+        // arbiter on every accepted command and persisted in NVM.  Many
+        // features subscribe (MirrorFold AUTO trigger today; future
+        // walk-away-cancel, security-alarm-arm, etc.).  Soldier-knob
+        // moves do NOT update this — it reflects the *commanded* state.
+        // Allowed values: 'UNLOCKED','DRIVER_UNLOCKED','LOCKED','DOUBLE_LOCKED'.
+        "Cabin.LockStatus" => Some(0x0014_0005),
 
         // Ambient light sensor (OEM custom — not in standard VSS v4.x).
         // Used by ManualLighting AUTO mode to gate low-beam activation.
@@ -302,6 +330,8 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Body.Lights.Brake.IsActive", 0x0002_0007),
     ("Body.Lights.Backup.IsActive", 0x0002_0008),
     ("Body.Lights.LicensePlate.IsOn", 0x0002_0009),
+    ("Body.Lights.Puddle.Left.IsOn", 0x0002_0019),
+    ("Body.Lights.Puddle.Right.IsOn", 0x0002_001A),
     (
         "Body.Lights.DirectionIndicator.Left.IsSignaling",
         0x0002_000A,
@@ -364,14 +394,16 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Body.Windshield.Front.Washing.IsActive", 0x0003_0003),
     ("Body.Windshield.Rear.Wiping.Mode", 0x0003_0004),
     ("Body.Windshield.Rear.Washing.IsActive", 0x0003_0005),
-    ("Body.Mirrors.Left.IsFolded", 0x0004_0001),
-    ("Body.Mirrors.Left.IsHeatingOn", 0x0004_0002),
-    ("Body.Mirrors.Left.Tilt", 0x0004_0003),
-    ("Body.Mirrors.Left.Pan", 0x0004_0004),
-    ("Body.Mirrors.Right.IsFolded", 0x0004_0005),
-    ("Body.Mirrors.Right.IsHeatingOn", 0x0004_0006),
-    ("Body.Mirrors.Right.Tilt", 0x0004_0007),
-    ("Body.Mirrors.Right.Pan", 0x0004_0008),
+    ("Body.Mirror.Left.IsFolded", 0x0004_0001),
+    ("Body.Mirror.Left.IsHeatingOn", 0x0004_0002),
+    ("Body.Mirror.Left.Tilt", 0x0004_0003),
+    ("Body.Mirror.Left.Pan", 0x0004_0004),
+    ("Body.Mirror.Right.IsFolded", 0x0004_0005),
+    ("Body.Mirror.Right.IsHeatingOn", 0x0004_0006),
+    ("Body.Mirror.Right.Tilt", 0x0004_0007),
+    ("Body.Mirror.Right.Pan", 0x0004_0008),
+    ("Body.Mirror.Left.FoldCmd", 0x0004_0009),
+    ("Body.Mirror.Right.FoldCmd", 0x0004_000A),
     ("Body.Doors.Row1.Left.IsOpen", 0x0005_0001),
     ("Body.Doors.Row1.Left.IsLocked", 0x0005_0002),
     ("Body.Doors.Row1.Left.LatchStatus", 0x0005_0003),
@@ -458,6 +490,9 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Body.Switches.Fog.Front.IsEngaged", 0x000D_0005),
     ("Body.Switches.Fog.Rear.IsEngaged", 0x000D_0006),
     ("Body.Switches.Panic.IsEngaged", 0x000D_0007),
+    ("Body.Switches.Mirror.Fold", 0x000D_0010),
+    ("Body.Switches.Mirror.Select", 0x000D_0011),
+    ("Body.Switches.Mirror.Direction", 0x000D_0012),
     // Chassis / Powertrain
     ("Chassis.Brake.PedalPosition", 0x000C_0001),
     ("Powertrain.Transmission.CurrentGear", 0x000C_0002),
@@ -549,6 +584,7 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
         0x0014_0003,
     ),
     ("Body.Doors.CentralLock.Command", 0x0014_0004),
+    ("Cabin.LockStatus", 0x0014_0005),
     ("Body.Lights.AmbientLightSensor.Illuminance", 0x0015_0001),
     ("Vehicle.ADAS.HighBeam.OncomingVehicleDetected", 0x0016_0001),
 ];

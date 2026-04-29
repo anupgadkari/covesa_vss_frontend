@@ -180,10 +180,10 @@ const INIT_STATE={
   'Body.Windshield.Rear.Wiping.Mode':'OFF',
   'Body.Windshield.Rear.Washing.IsActive':false,
   // Mirrors
-  'Body.Mirrors.Left.IsFolded':false,'Body.Mirrors.Left.IsHeatingOn':false,
-  'Body.Mirrors.Left.Tilt':0,'Body.Mirrors.Left.Pan':0,
-  'Body.Mirrors.Right.IsFolded':false,'Body.Mirrors.Right.IsHeatingOn':false,
-  'Body.Mirrors.Right.Tilt':0,'Body.Mirrors.Right.Pan':0,
+  'Body.Mirror.Left.IsFolded':false,'Body.Mirror.Left.IsHeatingOn':false,
+  'Body.Mirror.Left.Tilt':0,'Body.Mirror.Left.Pan':0,
+  'Body.Mirror.Right.IsFolded':false,'Body.Mirror.Right.IsHeatingOn':false,
+  'Body.Mirror.Right.Tilt':0,'Body.Mirror.Right.Pan':0,
   // Doors Row1
   'Body.Doors.Row1.Left.IsOpen':false,'Body.Doors.Row1.Left.IsLocked':false,
   'Body.Doors.Row1.Left.LatchStatus':'FULL_LATCHED','Body.Doors.Row1.Left.IsChildLockActive':false,
@@ -394,7 +394,7 @@ function TopView({s, set}){
      rx:250, ry:295, rw:50, rh:135, handleSide:'right'},
   ];
   const hood=s['Body.Hood.IsOpen'],trunk=s['Body.Trunk.IsOpen'];
-  const mlf=s['Body.Mirrors.Left.IsFolded'],mrf=s['Body.Mirrors.Right.IsFolded'];
+  const mlf=s['Body.Mirror.Left.IsFolded'],mrf=s['Body.Mirror.Right.IsFolded'];
   const horn=s['Body.Horn.IsActive'];
   const sr=s['Body.Sunroof.Position'];
   const fuel=s['Body.FuelLid.IsOpen'];
@@ -661,8 +661,8 @@ function TopView({s, set}){
       </g>
       :<circle cx="310" cy="200" r="3" fill="#0F1A28"/>}
 
-    {s['Body.Mirrors.Left.IsHeatingOn']&&<circle cx="50" cy="200" r="7" fill="none" stroke="#FF4040" strokeWidth="1" opacity=".6" className="pulse"/>}
-    {s['Body.Mirrors.Right.IsHeatingOn']&&<circle cx="310" cy="200" r="7" fill="none" stroke="#FF4040" strokeWidth="1" opacity=".6" className="pulse"/>}
+    {s['Body.Mirror.Left.IsHeatingOn']&&<circle cx="50" cy="200" r="7" fill="none" stroke="#FF4040" strokeWidth="1" opacity=".6" className="pulse"/>}
+    {s['Body.Mirror.Right.IsHeatingOn']&&<circle cx="310" cy="200" r="7" fill="none" stroke="#FF4040" strokeWidth="1" opacity=".6" className="pulse"/>}
 
     {/* Direction labels */}
     <text x="180" y="20" textAnchor="middle" fill="#1E2C3C" fontSize="8" fontFamily="Share Tech Mono" fontWeight="bold">▲ FRONT</text>
@@ -684,7 +684,7 @@ function SideView({s}){
   const wr=s['Body.Windshield.Rear.Wiping.Mode']!=='OFF';
   const sr=s['Body.Sunroof.Position'];
   const fuel=s['Body.FuelLid.IsOpen'];
-  const mlf=s['Body.Mirrors.Left.IsFolded'],mrf=s['Body.Mirrors.Right.IsFolded'];
+  const mlf=s['Body.Mirror.Left.IsFolded'],mrf=s['Body.Mirror.Right.IsFolded'];
   const hlc=hi?'#FFF':lo?'#FCD34D':drl?'#C0C8D0':park?'#FEF3C7':'#0A1420';
   const hlo=hi?.95:lo?.85:drl?.45:park?.2:.06;
   const tlc=brake?'#FF2222':lo||hi||park?'#EF4444':'#1A0808';
@@ -819,14 +819,14 @@ function SideView({s}){
       </rect>
     </g>
     :<circle cx="78" cy="210" r="5" fill="#0F1A28"/>}
-    {s['Body.Mirrors.Left.IsHeatingOn']&&<circle cx="75" cy="210" r="16" fill="none" stroke="#FF4040" strokeWidth="1.2" opacity=".7" className="pulse"/>}
+    {s['Body.Mirror.Left.IsHeatingOn']&&<circle cx="75" cy="210" r="16" fill="none" stroke="#FF4040" strokeWidth="1.2" opacity=".7" className="pulse"/>}
 
     {!mrf?<g>
       <ellipse cx="925" cy="210" rx="12" ry="18" fill="#0F1A28" stroke="#1A2838" strokeWidth="1"/>
       <ellipse cx="923" cy="213" rx="8" ry="13" fill="#18304A" opacity=".7"/>
     </g>
     :<circle cx="922" cy="210" r="5" fill="#0F1A28"/>}
-    {s['Body.Mirrors.Right.IsHeatingOn']&&<circle cx="925" cy="210" r="16" fill="none" stroke="#FF4040" strokeWidth="1.2" opacity=".7" className="pulse"/>}
+    {s['Body.Mirror.Right.IsHeatingOn']&&<circle cx="925" cy="210" r="16" fill="none" stroke="#FF4040" strokeWidth="1.2" opacity=".7" className="pulse"/>}
 
     {/* WHEELS - Large SUV wheels */}
     {/* Front wheel */}
@@ -1302,7 +1302,7 @@ function ControlPanel({s,set}){
 
       <SG title="Mirrors" vss="Body.Mirrors">
         <div style={{display:'flex',gap:6}}>
-          {[['Left','Body.Mirrors.Left'],['Right','Body.Mirrors.Right']].map(([side,pfx])=>(
+          {[['Left','Body.Mirror.Left'],['Right','Body.Mirror.Right']].map(([side,pfx])=>(
             <div key={side} style={{flex:1,background:'var(--s2)',borderRadius:'var(--r6)',padding:'6px 8px',border:'1px solid var(--bdr)',display:'flex',flexDirection:'column',gap:3}}>
               <div className="dctitle">{side.toUpperCase()}</div>
               <div className="dcr"><span className="dcl">Fold</span><Tog val={s[`${pfx}.IsFolded`]} on={()=>set(`${pfx}.IsFolded`,!s[`${pfx}.IsFolded`])} c="a"/></div>
