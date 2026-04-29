@@ -241,8 +241,9 @@ const INIT_STATE={
   'Body.Windshield.Front.Wiping.Mode':'OFF','Body.Windshield.Front.Wiping.Intensity':0,'Body.Windshield.Front.Washing.IsActive':false,
   'Body.Windshield.Rear.Wiping.Mode':'OFF','Body.Windshield.Rear.Washing.IsActive':false,
   // Mirrors
-  'Body.Mirror.Left.IsFolded':false,'Body.Mirror.Left.IsHeatingOn':false,'Body.Mirror.Left.Tilt':0,'Body.Mirror.Left.Pan':0,
-  'Body.Mirror.Right.IsFolded':false,'Body.Mirror.Right.IsHeatingOn':false,'Body.Mirror.Right.Tilt':0,'Body.Mirror.Right.Pan':0,
+  'Body.Mirror.Left.IsFolded':false,'Body.Mirror.Left.IsHeatingOn':false,'Body.Mirror.Left.Tilt':0,'Body.Mirror.Left.Yaw':0,
+  'Body.Mirror.Right.IsFolded':false,'Body.Mirror.Right.IsHeatingOn':false,'Body.Mirror.Right.Tilt':0,'Body.Mirror.Right.Yaw':0,
+  'Body.Switches.Mirror.Fold':false,'Body.Switches.Mirror.Select':'NONE','Body.Switches.Mirror.Direction':'NONE',
   // Cabin
   'Cabin.Lights.IsDomeOn':false,'Cabin.Lights.IsGloveBoxOn':false,'Cabin.Lights.Ambient.Intensity':0,'Cabin.Lights.Ambient.Color':'#3B82F6',
   // HVAC
@@ -280,6 +281,68 @@ function EnumR({label,k,s,set,opts}){
     <span className="cn">{label}</span>
     <div className="ebrow">
       {opts.map(o=><button key={o} className={`eb ${s[k]===o?'on':''}`} onClick={()=>set(k,o)}>{o}</button>)}
+    </div>
+  </div>;
+}
+/* MirrorAdjustControls — Side selector + 4-way DPad driving the
+   stateful Body.Switches.Mirror.{Select,Direction} signals.  Press
+   sets Direction to the matching enum value; release sets it back to
+   NONE.  The plant model integrates while non-NONE. */
+function MirrorAdjustControls({s,set}){
+  const sel=s['Body.Switches.Mirror.Select']||'NONE';
+  const setSel=v=>set('Body.Switches.Mirror.Select', v===sel?'NONE':v);
+  const dir=s['Body.Switches.Mirror.Direction']||'NONE';
+  const press=v=>set('Body.Switches.Mirror.Direction', v);
+  const release=()=>set('Body.Switches.Mirror.Direction', 'NONE');
+  // dpadBtnStyle factored out so each pad button is identical except
+  // for grid placement.
+  const padBtn={width:32,height:32,padding:0,borderRadius:6,
+    border:'1px solid var(--bdr2)',background:'var(--s3)',
+    color:'var(--white)',fontFamily:'var(--fm)',fontSize:14,
+    fontWeight:700,cursor:sel==='NONE'?'not-allowed':'pointer',
+    opacity:sel==='NONE'?0.4:1,userSelect:'none',touchAction:'none'};
+  const lit=v=>dir===v?{background:'var(--amber2)',color:'var(--amber)',
+    borderColor:'rgba(245,158,11,0.6)'}:{};
+  const sideBtn=(v)=>{
+    const active=sel===v;
+    return <button onClick={()=>setSel(v)}
+      style={{flex:1,padding:'5px 0',borderRadius:4,
+        border:'1px solid '+(active?'rgba(245,158,11,0.6)':'var(--bdr2)'),
+        background:active?'var(--amber2)':'var(--s3)',
+        color:active?'var(--amber)':'var(--dim)',
+        fontFamily:'var(--fm)',fontSize:9,fontWeight:700,cursor:'pointer'}}>
+      {v}
+    </button>;
+  };
+  // Wire mouse + touch events to the same press/release handlers so
+  // the pad behaves consistently on desktop and tablet.
+  const padHandlers=v=>sel==='NONE'?{}:{
+    onMouseDown:()=>press(v), onMouseUp:release, onMouseLeave:()=>{if(dir===v)release();},
+    onTouchStart:e=>{e.preventDefault();press(v);},
+    onTouchEnd:e=>{e.preventDefault();release();},
+  };
+  return <div style={{marginTop:8,padding:'8px',background:'var(--s2)',
+    borderRadius:'var(--r6)',border:'1px solid var(--bdr)'}}>
+    <div className="dctitle" style={{marginBottom:6}}>ADJUST</div>
+    <div style={{display:'flex',gap:6,marginBottom:8}}>
+      <span className="dcl" style={{flex:'0 0 auto',alignSelf:'center'}}>Side</span>
+      {sideBtn('LEFT')}
+      {sideBtn('RIGHT')}
+    </div>
+    <div style={{display:'grid',gridTemplateColumns:'32px 32px 32px',
+      gridTemplateRows:'32px 32px 32px',gap:3,justifyContent:'center'}}>
+      <div/>
+      <button style={{...padBtn,...lit('UP')}} {...padHandlers('UP')}>▲</button>
+      <div/>
+      <button style={{...padBtn,...lit('LEFT')}} {...padHandlers('LEFT')}>◀</button>
+      <div style={{...padBtn,opacity:0.2,cursor:'default',display:'flex',
+        alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:700}}>
+        {sel==='NONE'?'—':sel[0]}
+      </div>
+      <button style={{...padBtn,...lit('RIGHT')}} {...padHandlers('RIGHT')}>▶</button>
+      <div/>
+      <button style={{...padBtn,...lit('DOWN')}} {...padHandlers('DOWN')}>▼</button>
+      <div/>
     </div>
   </div>;
 }
@@ -1756,11 +1819,25 @@ function ControlPanelContent({s,set,anyDoor,anyLight,lux}){
                 </span>
               </div>
               <div className="dcr"><span className="dcl">Heat</span><Tog val={s[`${pfx}.IsHeatingOn`]} on={()=>set(`${pfx}.IsHeatingOn`,!s[`${pfx}.IsHeatingOn`])} c="r"/></div>
-              <SlR label="Tilt" k={`${pfx}.Tilt`} s={s} set={set} min={-10} max={10} step={1} unit="°"/>
-              <SlR label="Pan"  k={`${pfx}.Pan`}  s={s} set={set} min={-10} max={10} step={1} unit="°"/>
+              {/* Tilt / Yaw are now plant-owned — read-only display.
+                  Adjust them via the Side selector + DPad below. */}
+              <div className="dcr"><span className="dcl">Tilt</span>
+                <span style={{fontFamily:'var(--fm)',fontSize:9,fontWeight:700,color:'var(--dim)'}}>
+                  {(s[`${pfx}.Tilt`]??0)}%
+                </span>
+              </div>
+              <div className="dcr"><span className="dcl">Yaw</span>
+                <span style={{fontFamily:'var(--fm)',fontSize:9,fontWeight:700,color:'var(--dim)'}}>
+                  {(s[`${pfx}.Yaw`]??0)}%
+                </span>
+              </div>
             </div>
           ))}
         </div>
+        {/* Adjust controls — Side selector picks which mirror responds,
+            then the DPad drives Body.Switches.Mirror.Direction while
+            held.  Plant model integrates at 50%/sec to ±100. */}
+        <MirrorAdjustControls s={s} set={set}/>
       </SG>
 
       <SG title="Sunroof" vss="Body.Sunroof">

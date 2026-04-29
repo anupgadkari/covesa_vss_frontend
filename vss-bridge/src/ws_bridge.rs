@@ -147,6 +147,12 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     // for visualization; puddle arbiter's PhysicalGate also reads it.
     "Body.Mirror.Left.IsFolded",
     "Body.Mirror.Right.IsFolded",
+    // Mirror tilt / yaw position feedback (i8 -100..100) — owned by
+    // MirrorAdjustPlantModel.  HMI shows these as read-only display.
+    "Body.Mirror.Left.Tilt",
+    "Body.Mirror.Left.Yaw",
+    "Body.Mirror.Right.Tilt",
+    "Body.Mirror.Right.Yaw",
     // Vehicle-level central lock status (string enum: UNLOCKED |
     // DRIVER_UNLOCKED | LOCKED | DOUBLE_LOCKED) — published by the
     // door-lock arbiter on every accepted command, NVM-persisted.

@@ -8,6 +8,7 @@ pub mod follow_me_home;
 pub mod hazard_lighting;
 pub mod lock_feedback;
 pub mod manual_lighting;
+pub mod mirror_adjust;
 pub mod mirror_fold;
 pub mod panic_alarm;
 pub mod passive_entry;
