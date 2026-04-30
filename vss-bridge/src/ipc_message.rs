@@ -136,6 +136,8 @@ pub enum FeatureId {
     PassiveEntry = 0x19,
     MirrorFold = 0x1A,
     MirrorAdjust = 0x1B,
+    Farewell = 0x1C,
+    DoorOpenAssist = 0x1D,
 }
 
 impl std::fmt::Display for FeatureId {
@@ -180,6 +182,8 @@ impl FeatureId {
             0x19 => Some(Self::PassiveEntry),
             0x1A => Some(Self::MirrorFold),
             0x1B => Some(Self::MirrorAdjust),
+            0x1C => Some(Self::Farewell),
+            0x1D => Some(Self::DoorOpenAssist),
             _ => None,
         }
     }
