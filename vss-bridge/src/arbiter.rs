@@ -1062,11 +1062,18 @@ pub fn comfort_arbiter<B: SignalBus>(
 pub fn courtesy_arbiter<B: SignalBus>(
     bus: Arc<B>,
 ) -> (DomainArbiter, impl std::future::Future<Output = ()>) {
-    let allow_list = vec![AllowEntry {
-        feature_id: FeatureId::Welcome,
-        signal: "Cabin.Lights.IsDomeOn",
-        priority: Priority::Medium,
-    }];
+    let allow_list = vec![
+        AllowEntry {
+            feature_id: FeatureId::Welcome,
+            signal: "Cabin.Lights.IsDomeOn",
+            priority: Priority::Medium,
+        },
+        AllowEntry {
+            feature_id: FeatureId::Farewell,
+            signal: "Cabin.Lights.IsDomeOn",
+            priority: Priority::Medium,
+        },
+    ];
 
     DomainArbiter::new("Courtesy", allow_list, bus)
 }
@@ -1102,6 +1109,26 @@ pub fn puddle_arbiter<B: SignalBus>(
             feature_id: FeatureId::Welcome,
             signal: "Body.Lights.Puddle.Right.IsOn",
             priority: Priority::Medium,
+        },
+        AllowEntry {
+            feature_id: FeatureId::Farewell,
+            signal: "Body.Lights.Puddle.Left.IsOn",
+            priority: Priority::Medium,
+        },
+        AllowEntry {
+            feature_id: FeatureId::Farewell,
+            signal: "Body.Lights.Puddle.Right.IsOn",
+            priority: Priority::Medium,
+        },
+        AllowEntry {
+            feature_id: FeatureId::DoorOpenAssist,
+            signal: "Body.Lights.Puddle.Left.IsOn",
+            priority: Priority::Low,
+        },
+        AllowEntry {
+            feature_id: FeatureId::DoorOpenAssist,
+            signal: "Body.Lights.Puddle.Right.IsOn",
+            priority: Priority::Low,
         },
     ];
 

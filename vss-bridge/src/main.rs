@@ -17,7 +17,9 @@ use vss_bridge::config;
 use vss_bridge::features::auto_high_beam::AutoHighBeam;
 use vss_bridge::features::auto_relock::AutoRelock;
 use vss_bridge::features::brake_reverse_lamps::BrakeReverseLamps;
+use vss_bridge::features::door_open_assist::DoorOpenAssist;
 use vss_bridge::features::double_lock_release::DoubleLockRelease;
+use vss_bridge::features::farewell::Farewell;
 use vss_bridge::features::fog_lamps::FogLamps;
 use vss_bridge::features::follow_me_home::FollowMeHome;
 use vss_bridge::features::hazard_lighting::HazardLighting;
@@ -289,7 +291,32 @@ async fn main() -> anyhow::Result<()> {
     // MirrorAdjustPlantModel.  Stateless feature, no NVM.
     tokio::spawn(MirrorAdjust::new(Arc::clone(&bus)).run());
 
-    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome, MirrorFold, MirrorAdjust");
+    // Farewell — companion to Welcome.  After the driver turns the
+    // ignition OFF and opens a door (typical step-out), claim the
+    // puddle + dome lamps for `dealer.farewell_hold_secs` (default
+    // 20 s).  Releases early on lock command or ignition-back-on.
+    {
+        let hold =
+            std::time::Duration::from_secs(_platform_config.dealer_config().farewell_hold_secs);
+        tokio::spawn(
+            Farewell::new(
+                Arc::clone(&bus),
+                Arc::clone(&courtesy_arb),
+                Arc::clone(&puddle_arb),
+            )
+            .with_hold(hold)
+            .run(),
+        );
+    }
+
+    // DoorOpenAssist — low-priority puddle claim whenever a door is
+    // open at night.  Preempts cleanly to Welcome / Farewell /
+    // PerimeterAlarm at higher priorities.
+    tokio::spawn(
+        DoorOpenAssist::new(Arc::clone(&bus), Arc::clone(&puddle_arb), &_platform_config).run(),
+    );
+
+    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome, MirrorFold, MirrorAdjust, Farewell, DoorOpenAssist");
 
     // ── Plant Models ────────────────────────────────────────────────
     // Simulate physical lamp behavior the M7 / smart actuator firmware

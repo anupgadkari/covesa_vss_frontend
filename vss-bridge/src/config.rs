@@ -423,6 +423,12 @@ pub struct DealerConfig {
     /// - `AUTO`: switch toggles AND mirrors fold/unfold on lock-state edges.
     /// - `OFF`: feature inert (no switch handling, no AUTO).
     pub mirror_fold_mode: MirrorFoldMode,
+
+    /// Farewell courtesy-light hold duration after the driver steps
+    /// out (ignition ON|START → OFF followed by a door open).  20 s
+    /// is the typical OEM value — long enough to walk to the front
+    /// door of a house.  DID 0xF198.
+    pub farewell_hold_secs: u64,
 }
 
 /// Side-mirror fold mode (per vehicle line).  See `DealerConfig::mirror_fold_mode`.
@@ -461,6 +467,7 @@ impl Default for DealerConfig {
             two_stage_unlock: true,
             driver_door_side: DriverDoorSide::Left,
             mirror_fold_mode: MirrorFoldMode::Manual,
+            farewell_hold_secs: 20,
         }
     }
 }
