@@ -18,6 +18,7 @@ use std::time::Duration;
 
 use futures::{SinkExt, StreamExt};
 use serde_json::{json, Value};
+use tempfile::TempDir;
 use tokio::time::{sleep, timeout, Instant};
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
@@ -41,6 +42,11 @@ fn free_port() -> u16 {
 struct BridgeProcess {
     child: Child,
     port: u16,
+    // Held for the lifetime of the bridge so the per-test NVM dir is
+    // cleaned up on Drop.  Each test gets its own clean NVM so persisted
+    // state from one test (door lock, cabin lock status, mirror fold,
+    // trunk) cannot bleed into another running in parallel.
+    _nvm_dir: TempDir,
 }
 
 impl BridgeProcess {
@@ -50,13 +56,24 @@ impl BridgeProcess {
         // (3000) is the developer-facing HMI port and would collide
         // when cargo runs integration tests in parallel.
         let http_port = free_port();
+        // And its own NVM directory.  Without this, every parallel
+        // test bridge reads/writes vss-bridge/nvm/ and pollutes each
+        // other's persisted state — which manifests as flaky failures
+        // when, e.g., a previous test left IsLocked=true persisted
+        // and the next test asserts IsLocked has not become true.
+        let nvm_dir = tempfile::tempdir().expect("failed to create per-test NVM tempdir");
         let child = Command::new(env!("CARGO_BIN_EXE_vss-bridge"))
             .env("RUST_LOG", "warn")
             .env("VSS_BRIDGE_WS_PORT", port.to_string())
             .env("VSS_BRIDGE_HTTP_PORT", http_port.to_string())
+            .env("VSS_BRIDGE_NVM_PATH", nvm_dir.path())
             .spawn()
             .expect("failed to start vss-bridge");
-        Self { child, port }
+        Self {
+            child,
+            port,
+            _nvm_dir: nvm_dir,
+        }
     }
 
     fn ws_url(&self) -> String {
