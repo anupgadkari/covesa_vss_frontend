@@ -111,7 +111,30 @@ struct Door {
     name: &'static str,
 }
 
-const DOORS: [Door; 4] = [
+/// Front-only door table.
+///
+/// Real-vehicle PEPS architecture wires capacitive touch sensors only
+/// on the driver and front-passenger door handles — rear handles are
+/// purely mechanical, with no LF antenna and no challenge-initiating
+/// circuitry.  Modelling that here:
+///
+/// - **Front handles** (Row1.Left / Row1.Right) trigger the LF
+///   challenge / response handshake.  A successful pull dispatches
+///   `UnlockDriver` (stage 1) or `UnlockAll` (stage 2 / passenger
+///   bypass / two-stage-disabled).
+/// - **Rear handles** (Row2.*) are not subscribed here.  They are
+///   plain mechanical pulls handled by `DoorHandlePlantModel`: if
+///   the door is already unlocked (e.g. after a stage-2 unlock from
+///   the front), the rear pull opens the door; if locked, the pull
+///   does nothing.
+///
+/// Net effect for the user: walking up to a parked, locked vehicle
+/// and pulling a rear handle does nothing.  The driver authenticates
+/// at a front handle first, all doors unlock, and only then can a
+/// rear handle physically open its door.  This is the gating that
+/// the post-PEPS backlog item #5 set out to add — implemented at
+/// the hardware boundary rather than as a software timer fence.
+const DOORS: [Door; 2] = [
     Door {
         handle_signal: "Body.Doors.Row1.Left.Handle.Outside.IsPulled",
         proximity_zone: Zone::LeftFront,
@@ -121,22 +144,6 @@ const DOORS: [Door; 4] = [
         handle_signal: "Body.Doors.Row1.Right.Handle.Outside.IsPulled",
         proximity_zone: Zone::RightFront,
         name: "Row1.Right",
-    },
-    Door {
-        handle_signal: "Body.Doors.Row2.Left.Handle.Outside.IsPulled",
-        // Real vehicles split the proximity antenna pattern symmetrically;
-        // for now we treat any paired device in driver/passenger LF
-        // coverage as eligible to unlock a rear door (rear doors share
-        // the cabin LF perimeter).  Passive-entry features used in
-        // production typically go further and fence rear-door auth on
-        // a successful primary stage 2 — easy to add later.
-        proximity_zone: Zone::RightFront,
-        name: "Row2.Left",
-    },
-    Door {
-        handle_signal: "Body.Doors.Row2.Right.Handle.Outside.IsPulled",
-        proximity_zone: Zone::RightFront,
-        name: "Row2.Right",
     },
 ];
 
@@ -1018,12 +1025,20 @@ mod tests {
         );
     }
 
-    /// Same rule for rear passenger-side doors — Row2.{Left,Right}
-    /// share the passenger-side LF perimeter and therefore behave the
-    /// same as the front passenger handle.
+    /// Rear handles are mechanical-only — no capacitive sensor and
+    /// no LF antenna in the real-vehicle wiring this models.  A rear
+    /// handle pull must NOT trigger PassiveEntry, regardless of fob
+    /// proximity.  The user has to authenticate at a front handle
+    /// first; once stage-2 unlocks all doors, the mechanical rear
+    /// pull (handled by `DoorHandlePlantModel`) opens the door
+    /// directly.
     #[tokio::test]
-    async fn rear_handle_pull_unlocks_all_even_with_two_stage() {
+    async fn rear_handle_pull_does_not_trigger_passive_entry() {
         let bus = setup().await;
+        // Place a paired fob in a zone that *would* match a rear
+        // handle if it were sensed — the test is asserting that the
+        // rear pull is invisible to PassiveEntry, not that the fob
+        // is in the wrong place.
         bus.inject(
             peps_signals::KEYFOB_1_ZONE,
             SignalValue::String("RightFront".into()),
@@ -1031,12 +1046,29 @@ mod tests {
         drain().await;
         bus.clear_history();
 
-        bus.inject(
+        for handle in [
+            "Body.Doors.Row2.Left.Handle.Outside.IsPulled",
             "Body.Doors.Row2.Right.Handle.Outside.IsPulled",
-            SignalValue::Bool(true),
-        );
+        ] {
+            bus.inject(handle, SignalValue::Bool(true));
+        }
         drain().await;
-        assert_eq!(last_command(&bus), Some("unlock_all".into()));
+
+        assert_eq!(
+            last_command(&bus),
+            None,
+            "rear-handle pulls must not produce any door-lock command — \
+             rear handles are mechanical-only, not capacitive PEPS triggers"
+        );
+        // And no LF challenge — auth never even started.
+        let challenge_fired = bus
+            .history()
+            .into_iter()
+            .any(|(s, _)| s == peps_signals::PEPS_LF_CHALLENGE);
+        assert!(
+            !challenge_fired,
+            "rear-handle pull must not fire an LF challenge"
+        );
     }
 
     // ── RHD support ─────────────────────────────────────────────────────
