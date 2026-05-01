@@ -1020,17 +1020,33 @@ pub fn door_lock_arbiter_with_nvm<B: SignalBus>(
 
 /// Create the Horn domain arbiter.
 ///
-/// PanicAlarm is the first feature to register — it pulses Body.Horn.IsActive
-/// in sync with the indicator blink.  Future features (e.g. ManualHorn for
-/// the steering-wheel push, AntiTheftIntrusion) would register here too.
+/// Writers, in priority order:
+///
+/// | Feature      | Priority | When                                       |
+/// |--------------|----------|--------------------------------------------|
+/// | `PanicAlarm` | High     | Pulsing in sync with the indicator blink   |
+/// | `ManualHorn` | Medium   | Driver pressing the steering-wheel pad     |
+///
+/// `High` over `Medium` means a panic-alarm pulse can override a
+/// driver press — desired behaviour: the alarm pattern wins.  When
+/// the alarm releases, the driver's claim resumes if still held.
+/// Future writers (anti-theft chirp, lock-feedback chirp) slot in
+/// at `Medium` or `Low` as appropriate.
 pub fn horn_arbiter<B: SignalBus>(
     bus: Arc<B>,
 ) -> (DomainArbiter, impl std::future::Future<Output = ()>) {
-    let allow_list = vec![AllowEntry {
-        feature_id: FeatureId::PanicAlarm,
-        signal: "Body.Horn.IsActive",
-        priority: Priority::High,
-    }];
+    let allow_list = vec![
+        AllowEntry {
+            feature_id: FeatureId::PanicAlarm,
+            signal: "Body.Horn.IsActive",
+            priority: Priority::High,
+        },
+        AllowEntry {
+            feature_id: FeatureId::ManualHorn,
+            signal: "Body.Horn.IsActive",
+            priority: Priority::Medium,
+        },
+    ];
 
     DomainArbiter::new("Horn", allow_list, bus)
 }
@@ -1189,6 +1205,11 @@ pub fn trunk_arbiter<B: SignalBus>(
         },
         AllowEntry {
             feature_id: FeatureId::PassiveEntry,
+            signal: TRUNK_OPEN_CMD,
+            priority: Priority::Medium,
+        },
+        AllowEntry {
+            feature_id: FeatureId::CabinTrunkRelease,
             signal: TRUNK_OPEN_CMD,
             priority: Priority::Medium,
         },

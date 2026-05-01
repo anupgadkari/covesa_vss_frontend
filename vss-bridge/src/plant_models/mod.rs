@@ -13,7 +13,9 @@
 pub mod blink_relay;
 pub mod door_handle;
 pub mod door_lock;
+pub mod hood;
 pub mod mirror_adjust;
 pub mod mirror_fold;
 pub mod peps;
+pub mod sunroof;
 pub mod trunk;

@@ -17,6 +17,7 @@ use vss_bridge::config;
 use vss_bridge::features::auto_high_beam::AutoHighBeam;
 use vss_bridge::features::auto_relock::AutoRelock;
 use vss_bridge::features::brake_reverse_lamps::BrakeReverseLamps;
+use vss_bridge::features::cabin_trunk_release::CabinTrunkRelease;
 use vss_bridge::features::door_open_assist::DoorOpenAssist;
 use vss_bridge::features::double_lock_release::DoubleLockRelease;
 use vss_bridge::features::exterior_trunk_button::ExteriorTrunkButton;
@@ -25,6 +26,7 @@ use vss_bridge::features::fog_lamps::FogLamps;
 use vss_bridge::features::follow_me_home::FollowMeHome;
 use vss_bridge::features::hazard_lighting::HazardLighting;
 use vss_bridge::features::lock_feedback::LockFeedback;
+use vss_bridge::features::manual_horn::ManualHorn;
 use vss_bridge::features::manual_lighting::ManualLighting;
 use vss_bridge::features::mirror_adjust::MirrorAdjust;
 use vss_bridge::features::mirror_fold::MirrorFold;
@@ -41,9 +43,11 @@ use vss_bridge::nvm::NvmStore;
 use vss_bridge::plant_models::blink_relay::BlinkRelay;
 use vss_bridge::plant_models::door_handle::DoorHandlePlantModel;
 use vss_bridge::plant_models::door_lock::DoorLockPlantModel;
+use vss_bridge::plant_models::hood::HoodPlantModel;
 use vss_bridge::plant_models::mirror_adjust::MirrorAdjustPlantModel;
 use vss_bridge::plant_models::mirror_fold::MirrorFoldPlantModel;
 use vss_bridge::plant_models::peps::PepsPlantModel;
+use vss_bridge::plant_models::sunroof::SunroofPlantModel;
 use vss_bridge::plant_models::trunk::TrunkPlantModel;
 use vss_bridge::signal_bus::SignalBus;
 use vss_bridge::signal_ids;
@@ -322,6 +326,17 @@ async fn main() -> anyhow::Result<()> {
         DoorOpenAssist::new(Arc::clone(&bus), Arc::clone(&puddle_arb), &_platform_config).run(),
     );
 
+    // ManualHorn — steering-wheel horn pad.  Claims Body.Horn.IsActive
+    // at Medium priority while pressed.  PanicAlarm at High preempts.
+    tokio::spawn(ManualHorn::new(Arc::clone(&bus), Arc::clone(&horn_arb)).run());
+
+    // CabinTrunkRelease — interior push-button / pull-handle in the
+    // cabin (typical placement: low on the dash or driver footwell).
+    // Pulses Body.Trunk.OpenCmd through the trunk arbiter on press.
+    // No lock-state or auth gate — privileged interior control.
+    // Valet mode is enforced at the arbiter's ValetGate.
+    tokio::spawn(CabinTrunkRelease::new(Arc::clone(&bus), Arc::clone(&trunk_arb)).run());
+
     // ExteriorTrunkButton — capacitive button above the rear license
     // plate.  Routes presses to the trunk arbiter:
     //   • cabin UNLOCKED / DRIVER_UNLOCKED → direct pulse here
@@ -330,7 +345,7 @@ async fn main() -> anyhow::Result<()> {
     // Cabin lock state is never mutated.
     tokio::spawn(ExteriorTrunkButton::new(Arc::clone(&bus), Arc::clone(&trunk_arb)).run());
 
-    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome, MirrorFold, MirrorAdjust, Farewell, DoorOpenAssist, ExteriorTrunkButton");
+    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome, MirrorFold, MirrorAdjust, Farewell, DoorOpenAssist, ExteriorTrunkButton, CabinTrunkRelease, ManualHorn");
 
     // ── Plant Models ────────────────────────────────────────────────
     // Simulate physical lamp behavior the M7 / smart actuator firmware
@@ -344,6 +359,8 @@ async fn main() -> anyhow::Result<()> {
     );
     tokio::spawn(DoorHandlePlantModel::new(Arc::clone(&bus)).run());
     tokio::spawn(TrunkPlantModel::with_nvm(Arc::clone(&bus), nvm.clone()).run());
+    tokio::spawn(HoodPlantModel::with_nvm(Arc::clone(&bus), nvm.clone()).run());
+    tokio::spawn(SunroofPlantModel::with_nvm(Arc::clone(&bus), nvm.clone()).run());
     tokio::spawn(MirrorFoldPlantModel::with_nvm(Arc::clone(&bus), nvm.clone()).run());
     tokio::spawn(MirrorAdjustPlantModel::new(Arc::clone(&bus)).run());
     tokio::spawn(
@@ -355,7 +372,7 @@ async fn main() -> anyhow::Result<()> {
             .with_response_stagger_ms(vss_bridge::plant_models::peps::PRODUCTION_STAGGER_MS)
             .run(),
     );
-    tracing::info!("plant models spawned: BlinkRelay, DoorLockPlantModel, DoorHandlePlantModel, TrunkPlantModel, PepsPlantModel");
+    tracing::info!("plant models spawned: BlinkRelay, DoorLockPlantModel, DoorHandlePlantModel, TrunkPlantModel, HoodPlantModel, SunroofPlantModel, PepsPlantModel");
 
     // ── WebSocket bridge for L6 HMI ─────────────────────────────────
     // Port is overridable via VSS_BRIDGE_WS_PORT for integration tests

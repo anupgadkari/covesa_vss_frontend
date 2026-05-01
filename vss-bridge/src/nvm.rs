@@ -74,6 +74,47 @@ pub struct TrunkState {
     pub is_open: bool,
 }
 
+/// Persisted state for the hood plant model.
+///
+/// Hoods have a tri-state latch in real vehicles:
+/// - `LATCHED` — primary latch engaged, hood mechanically locked.
+/// - `HALF_LATCHED` — primary released (dash lever double-pull) but
+///   safety catch still holds the hood closed.
+/// - `OPEN` — fully open.
+///
+/// The user must double-pull the dash release lever within a 3 s
+/// window to go LATCHED → HALF_LATCHED, then click the hood in the
+/// top view to go HALF_LATCHED → OPEN, then click again to drop
+/// closed.  HALF_LATCHED → LATCHED directly is impossible (real
+/// hoods need a gravity drop from the open position to engage both
+/// pawls).
+///
+/// Stored as a string for human-readable JSON and stable wire format
+/// across enum reordering.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HoodState {
+    pub latch_state: String,
+}
+
+impl Default for HoodState {
+    fn default() -> Self {
+        Self {
+            latch_state: "LATCHED".into(),
+        }
+    }
+}
+
+/// Persisted state for the sunroof plant model — physical positions
+/// of the glass panel and the shade.  Both are u8 percentages
+/// `[0..=100]` (0 = fully closed, 100 = fully open).
+///
+/// Cold boot (no file) = factory: both fully closed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct SunroofState {
+    pub position: u8,
+    pub shade_position: u8,
+}
+
 /// Persisted vehicle-level central lock status.
 ///
 /// Reflects the *commanded* state set by the door-lock arbiter (RKE,
@@ -212,6 +253,26 @@ impl NvmStore {
     /// Atomically persist `TrunkState` to disk.
     pub fn save_trunk(&self, state: &TrunkState) {
         self.save("trunk.json", state);
+    }
+
+    /// Load `HoodState` from disk.  Factory default = closed.
+    pub fn load_hood(&self) -> HoodState {
+        self.load("hood.json")
+    }
+
+    /// Atomically persist `HoodState` to disk.
+    pub fn save_hood(&self, state: &HoodState) {
+        self.save("hood.json", state);
+    }
+
+    /// Load `SunroofState` from disk.  Factory default = both closed (0%).
+    pub fn load_sunroof(&self) -> SunroofState {
+        self.load("sunroof.json")
+    }
+
+    /// Atomically persist `SunroofState` to disk.
+    pub fn save_sunroof(&self, state: &SunroofState) {
+        self.save("sunroof.json", state);
     }
 
     /// Load central lock status from disk.  Factory default = UNLOCKED.

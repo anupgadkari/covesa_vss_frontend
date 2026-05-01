@@ -131,6 +131,22 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
 
         // Body misc
         "Body.Hood.IsOpen" => Some(0x0006_0001),
+        // Hood — HoodPlantModel runs a tri-state latch FSM
+        // (LATCHED / HALF_LATCHED / OPEN), publishes both the
+        // tri-state on `Body.Hood.LatchState` and the convenience
+        // `Body.Hood.IsOpen` (true iff fully OPEN), persists the
+        // tri-state in NVM.  Inputs:
+        //   • Body.Switches.Hood.Release.IsPulled — dash release
+        //     lever momentary; double-pull within 3 s while LATCHED
+        //     → HALF_LATCHED.
+        //   • Body.Hood.OpenCmd  — top-view click while HALF_LATCHED
+        //     → OPEN.
+        //   • Body.Hood.CloseCmd — top-view click while OPEN
+        //     → LATCHED.  Ignored from HALF_LATCHED (real hoods need
+        //     a gravity drop from open to engage both pawls).
+        "Body.Hood.OpenCmd" => Some(0x0006_000B),
+        "Body.Hood.CloseCmd" => Some(0x0006_000C),
+        "Body.Hood.LatchState" => Some(0x0006_000D),
         "Body.Trunk.IsOpen" => Some(0x0006_0002),
         "Body.Trunk.IsLocked" => Some(0x0006_0003),
         "Body.Horn.IsActive" => Some(0x0006_0004),
@@ -150,6 +166,15 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // Sunroof
         "Body.Sunroof.Position" => Some(0x0007_0001),
         "Body.Sunroof.Shade.Position" => Some(0x0007_0002),
+        // Sunroof command signals — string enum, allowed values:
+        //   "OPEN"  — drive toward Position=100 (or Shade=100) at 20%/sec
+        //   "CLOSE" — drive toward Position=0   (or Shade=0)   at 20%/sec
+        //   "STOP"  — halt immediately, freeze at current position
+        // Press-and-hold UX: HMI publishes "OPEN" on mousedown of the
+        // open button and "STOP" on mouseup.  SunroofPlantModel
+        // integrates Position over time and persists settled values.
+        "Body.Sunroof.MoveCmd" => Some(0x0007_0003),
+        "Body.Sunroof.Shade.MoveCmd" => Some(0x0007_0004),
 
         // Cabin Lights
         "Cabin.Lights.IsDomeOn" => Some(0x0008_0001),
@@ -198,6 +223,22 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Body.Switches.Mirror.Fold" => Some(0x000D_0010),
         "Body.Switches.Mirror.Select" => Some(0x000D_0011),
         "Body.Switches.Mirror.Direction" => Some(0x000D_0012),
+        // Hood release lever (under the dash) — momentary pull.  Two
+        // pulls within 3 s while LATCHED → HALF_LATCHED via the
+        // HoodPlantModel state machine.
+        "Body.Switches.Hood.Release.IsPulled" => Some(0x000D_0020),
+        // Cabin trunk release switch — typical placement is a
+        // push-button low on the dash or a pull handle in the
+        // driver footwell.  Privileged interior control: no lock-
+        // state or auth gate.  Valet mode is enforced at the trunk
+        // arbiter's `ValetGate` (same chokepoint as RKE TrunkRelease
+        // and the exterior button).
+        "Body.Switches.Trunk.Release.IsPressed" => Some(0x000D_0021),
+        // Steering-wheel horn pad — momentary press.  ManualHorn
+        // feature claims Body.Horn.IsActive at Medium priority while
+        // pressed; releases on release.  PanicAlarm at High preempts
+        // when the alarm is engaged.
+        "Body.Switches.Horn.IsPressed" => Some(0x000D_0022),
 
         // Anti-theft alarm status (project extension — not in standard VSS v4.0)
         "Vehicle.Body.Alarm.IsActive" => Some(0x0006_0009),
@@ -499,10 +540,15 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Body.ChargeLid.IsOpen", 0x0006_0006),
     ("Vehicle.Body.Alarm.IsActive", 0x0006_0009),
     ("Body.Trunk.ExteriorButton.IsPressed", 0x0006_000A),
+    ("Body.Hood.OpenCmd", 0x0006_000B),
+    ("Body.Hood.CloseCmd", 0x0006_000C),
+    ("Body.Hood.LatchState", 0x0006_000D),
     ("Body.Doors.AutoRelock.IsArmed", 0x000A_0040),
     ("Body.Doors.AutoRelock.TimeoutSeconds", 0x000A_0041),
     ("Body.Sunroof.Position", 0x0007_0001),
     ("Body.Sunroof.Shade.Position", 0x0007_0002),
+    ("Body.Sunroof.MoveCmd", 0x0007_0003),
+    ("Body.Sunroof.Shade.MoveCmd", 0x0007_0004),
     ("Cabin.Lights.IsDomeOn", 0x0008_0001),
     ("Cabin.Lights.IsGloveBoxOn", 0x0008_0002),
     ("Cabin.Lights.Ambient.Intensity", 0x0008_0003),
@@ -535,6 +581,9 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Body.Switches.Mirror.Fold", 0x000D_0010),
     ("Body.Switches.Mirror.Select", 0x000D_0011),
     ("Body.Switches.Mirror.Direction", 0x000D_0012),
+    ("Body.Switches.Hood.Release.IsPulled", 0x000D_0020),
+    ("Body.Switches.Trunk.Release.IsPressed", 0x000D_0021),
+    ("Body.Switches.Horn.IsPressed", 0x000D_0022),
     // Chassis / Powertrain
     ("Chassis.Brake.PedalPosition", 0x000C_0001),
     ("Powertrain.Transmission.CurrentGear", 0x000C_0002),

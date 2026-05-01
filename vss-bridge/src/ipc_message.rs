@@ -139,6 +139,8 @@ pub enum FeatureId {
     Farewell = 0x1C,
     DoorOpenAssist = 0x1D,
     ExteriorTrunkButton = 0x1E,
+    CabinTrunkRelease = 0x1F,
+    ManualHorn = 0x20,
 }
 
 impl std::fmt::Display for FeatureId {
@@ -186,6 +188,8 @@ impl FeatureId {
             0x1C => Some(Self::Farewell),
             0x1D => Some(Self::DoorOpenAssist),
             0x1E => Some(Self::ExteriorTrunkButton),
+            0x1F => Some(Self::CabinTrunkRelease),
+            0x20 => Some(Self::ManualHorn),
             _ => None,
         }
     }

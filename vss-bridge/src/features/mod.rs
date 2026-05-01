@@ -2,6 +2,7 @@
 pub mod auto_high_beam;
 pub mod auto_relock;
 pub mod brake_reverse_lamps;
+pub mod cabin_trunk_release;
 pub mod door_open_assist;
 pub mod double_lock_release;
 pub mod exterior_trunk_button;
@@ -10,6 +11,7 @@ pub mod fog_lamps;
 pub mod follow_me_home;
 pub mod hazard_lighting;
 pub mod lock_feedback;
+pub mod manual_horn;
 pub mod manual_lighting;
 pub mod mirror_adjust;
 pub mod mirror_fold;
