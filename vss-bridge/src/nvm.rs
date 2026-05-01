@@ -76,13 +76,32 @@ pub struct TrunkState {
 
 /// Persisted state for the hood plant model.
 ///
-/// Same simulation rationale as `TrunkState` — in a real vehicle the
-/// hood's position is read from a hall-effect / latch-position sensor
-/// at boot.  We persist it so "parked with hood open, restart, hood
-/// is still open" is reproducible.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+/// Hoods have a tri-state latch in real vehicles:
+/// - `LATCHED` — primary latch engaged, hood mechanically locked.
+/// - `HALF_LATCHED` — primary released (dash lever double-pull) but
+///   safety catch still holds the hood closed.
+/// - `OPEN` — fully open.
+///
+/// The user must double-pull the dash release lever within a 3 s
+/// window to go LATCHED → HALF_LATCHED, then click the hood in the
+/// top view to go HALF_LATCHED → OPEN, then click again to drop
+/// closed.  HALF_LATCHED → LATCHED directly is impossible (real
+/// hoods need a gravity drop from the open position to engage both
+/// pawls).
+///
+/// Stored as a string for human-readable JSON and stable wire format
+/// across enum reordering.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HoodState {
-    pub is_open: bool,
+    pub latch_state: String,
+}
+
+impl Default for HoodState {
+    fn default() -> Self {
+        Self {
+            latch_state: "LATCHED".into(),
+        }
+    }
 }
 
 /// Persisted state for the sunroof plant model — physical positions

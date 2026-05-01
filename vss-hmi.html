@@ -232,7 +232,7 @@ const INIT_STATE={
   // ── Body — HMI-owned inputs only ─────────────────────────────────────
   // Body.Trunk.IsOpen, Body.Trunk.IsLocked, Body.Horn.IsActive are
   // bridge-owned (TrunkPlantModel + Horn arbiter) and likewise omitted.
-  'Body.Hood.IsOpen':false,'Body.FuelLid.IsOpen':false,'Body.ChargeLid.IsOpen':false,
+  'Body.Hood.IsOpen':false,'Body.Hood.LatchState':'LATCHED','Body.FuelLid.IsOpen':false,'Body.ChargeLid.IsOpen':false,
   // Anti-theft alarm + auto-relock status (project extensions) — bridge-owned,
   // omitted.  PanicAlarm and AutoRelock features publish them.
   // Sunroof
@@ -265,6 +265,95 @@ function BR({label,k,s,set,c=''}){
   return <div className="cr">
     <span className={`cn ${s[k]?'on':''}`}>{label}</span>
     <Tog val={s[k]} on={()=>set(k,!s[k])} c={c}/>
+  </div>;
+}
+/* CmdToggleRow — bool-state row driven by a pair of momentary
+   commands (e.g. OpenCmd / CloseCmd into a plant model).  Reads
+   `stateKey` for the visual on/off, click sends the matching cmd
+   based on current state.  Whole row is clickable so the affordance
+   is obvious. */
+function CmdToggleRow({label,stateKey,openCmd,closeCmd,s,set,c=''}){
+  const on = !!s[stateKey];
+  const click = ()=>set(on ? closeCmd : openCmd, true);
+  return <div className="cr" onClick={click} style={{cursor:'pointer'}}>
+    <span className={`cn ${on?'on':''}`}>{label}</span>
+    <Tog val={on} on={click} c={c}/>
+  </div>;
+}
+/* CabinTrunkReleaseRow — interior trunk-release push-button.
+   Single press pulses Body.Switches.Trunk.Release.IsPressed.  The
+   bridge feature routes through the trunk arbiter (valet gate
+   applies).  Status pill shows the live trunk state from the plant
+   model so the user can see the round-trip. */
+function CabinTrunkReleaseRow({s,set}){
+  const open = !!s['Body.Trunk.IsOpen'];
+  const valet = !!s['Cabin.ValetMode.IsActive'];
+  const pillColor = valet ? 'var(--red)' : open ? 'var(--amber)' : 'var(--dim)';
+  const pillText = valet ? 'VALET' : open ? 'OPEN' : 'CLOSED';
+  const hint = valet
+    ? 'Valet mode active — release suppressed at the arbiter'
+    : open
+      ? 'Trunk is open — click trunk in top view to close'
+      : 'Press to open the trunk (no auth needed inside the cabin)';
+  return <div style={{display:'flex',flexDirection:'column',gap:3}}>
+    <div className="cr">
+      <span className={`cn ${open?'on':''}`}>Trunk release (cabin)</span>
+      <span style={{
+        fontFamily:'var(--fm)',fontSize:9,fontWeight:700,color:pillColor,
+        padding:'2px 6px',border:`1px solid ${pillColor}`,borderRadius:9
+      }}>{pillText}</span>
+    </div>
+    <div className="ebrow">
+      <button className="eb"
+        onMouseDown={()=>set('Body.Switches.Trunk.Release.IsPressed',true)}
+        onMouseUp={()=>set('Body.Switches.Trunk.Release.IsPressed',false)}
+        onMouseLeave={()=>set('Body.Switches.Trunk.Release.IsPressed',false)}
+        style={{cursor:'pointer',userSelect:'none',touchAction:'none'}}>
+        ▼ Press trunk release
+      </button>
+    </div>
+    <div style={{fontFamily:'var(--fm)',fontSize:9,color:'var(--dim)',marginTop:1}}>
+      {hint}
+    </div>
+  </div>;
+}
+/* HoodReleaseRow — dash-mounted hood-release lever.  Each press
+   pulses Body.Switches.Hood.Release.IsPulled.  HoodPlantModel runs
+   the double-pull-within-3-s state machine; the row also shows the
+   current LatchState as a coloured pill so the user can see what
+   the next click will (or won't) do.  Pressing while OPEN /
+   HALF_LATCHED is a no-op at the plant model — but we still send
+   the pull so the engineer can verify it gets ignored as expected. */
+function HoodReleaseRow({s,set}){
+  const latch = s['Body.Hood.LatchState'] || 'LATCHED';
+  const pillColor = latch==='OPEN' ? 'var(--amber)'
+                  : latch==='HALF_LATCHED' ? '#FCD34D'
+                  : 'var(--dim)';
+  const hint = latch==='LATCHED'
+    ? 'Pull twice within 3 s to pop'
+    : latch==='HALF_LATCHED'
+      ? 'Half-latched — click hood in top view to open'
+      : 'Hood is open — click hood in top view to close';
+  return <div style={{display:'flex',flexDirection:'column',gap:3}}>
+    <div className="cr">
+      <span className={`cn ${latch!=='LATCHED'?'on':''}`}>Hood release</span>
+      <span style={{
+        fontFamily:'var(--fm)',fontSize:9,fontWeight:700,color:pillColor,
+        padding:'2px 6px',border:`1px solid ${pillColor}`,borderRadius:9
+      }}>{latch}</span>
+    </div>
+    <div className="ebrow">
+      <button className="eb"
+        onMouseDown={()=>set('Body.Switches.Hood.Release.IsPulled',true)}
+        onMouseUp={()=>set('Body.Switches.Hood.Release.IsPulled',false)}
+        onMouseLeave={()=>set('Body.Switches.Hood.Release.IsPulled',false)}
+        style={{cursor:'pointer',userSelect:'none',touchAction:'none'}}>
+        ▼ Pull hood release
+      </button>
+    </div>
+    <div style={{fontFamily:'var(--fm)',fontSize:9,color:'var(--dim)',marginTop:1}}>
+      {hint}
+    </div>
   </div>;
 }
 function SlR({label,k,s,set,min=0,max=100,step=1,unit='%'}){
@@ -616,6 +705,10 @@ function CombinedView({s,set,onDeviceSelect}){
   const tlo=brake?.95:lo||hi||park?.75:.08;
   const rlc=back?'#FFFFFF':'#1A1A2A';
   const hood=s['Body.Hood.IsOpen'],trunk=s['Body.Trunk.IsOpen'];
+  // Hood tri-state latch (LATCHED / HALF_LATCHED / OPEN).
+  // Top-view click logic uses this to gate the OpenCmd / CloseCmd dispatch.
+  const hoodLatch = s['Body.Hood.LatchState'] || 'LATCHED';
+  const hoodHalf  = hoodLatch === 'HALF_LATCHED';
 
   // Exterior trunk button — would-it-open indicator.  Mirrors the
   // bridge-side ExteriorTrunkButton + PassiveEntry decision so the
@@ -759,9 +852,35 @@ function CombinedView({s,set,onDeviceSelect}){
         the side-mirror positions visual sense at the A-pillar /
         beltline junction.  All front-fascia lamps shift up by 80 px
         to stay anchored at the front bumper. */}
-    <rect x="60" y="-50" width="240" height="130" fill="#0D1628" stroke="#1A2838" strokeWidth="1" rx="4"/>
+    {/* Hood — tri-state click target.  HALF_LATCHED → OpenCmd;
+        OPEN → CloseCmd; LATCHED → no-op (must double-pull dash lever
+        first).  Stroke + fill change with state so the user can see
+        the popped-but-still-closed condition. */}
+    <rect x="60" y="-50" width="240" height="130" rx="4"
+      fill={hood?'#1A2838':hoodHalf?'#1A2230':'#0D1628'}
+      stroke={hood?'#F59E0B':hoodHalf?'#F59E0B':'#1A2838'}
+      strokeWidth={hood||hoodHalf?2:1}
+      style={{cursor:(hoodHalf||hood)?'pointer':'default'}}
+      onClick={hood
+        ? ()=>set('Body.Hood.CloseCmd',true)
+        : hoodHalf
+          ? ()=>set('Body.Hood.OpenCmd',true)
+          : undefined}>
+      <title>{hood
+        ? 'Hood OPEN — click to close'
+        : hoodHalf
+          ? 'Hood HALF-LATCHED — click to fully open'
+          : 'Hood LATCHED — pull the dash hood-release lever twice within 3 s to pop'}</title>
+    </rect>
     {hood&&<rect x="70" y="-45" width="220" height="8" fill="#F59E0B" opacity=".4"/>}
-    <rect x="70" y="-40" width="220" height="120" fill="#09111E" stroke="#182030" strokeWidth="0.5"/>
+    {/* Half-latched visual cue — narrow popped gap at the front edge. */}
+    {hoodHalf&&!hood&&<rect x="70" y="-50" width="220" height="2" fill="#F59E0B" opacity=".7"/>}
+    <rect x="70" y="-40" width="220" height="120" fill="#09111E" stroke="#182030" strokeWidth="0.5"
+      style={{pointerEvents:'none'}}/>
+    {hoodHalf&&!hood&&<text x="180" y="40" textAnchor="middle" fill="#F59E0B" fontSize="6" fontWeight="bold"
+      style={{pointerEvents:'none'}}>▣ TAP TO OPEN HOOD</text>}
+    {hood&&<text x="180" y="40" textAnchor="middle" fill="#F59E0B" fontSize="6" fontWeight="bold"
+      style={{pointerEvents:'none'}}>▣ TAP TO CLOSE HOOD</text>}
 
     {/* Headlights */}
     <g><title>{`Left headlight — ${hi?'HIGH BEAM':lo?'LOW BEAM':drl?'DRL':park?'PARKING':'off'}`}</title>
@@ -1234,6 +1353,10 @@ function SideView({s,set}){
   const r1pulled=s[r1pfx+'.Handle.Outside.IsPulled'];
   const r2pulled=s[r2pfx+'.Handle.Outside.IsPulled'];
   const hood=s['Body.Hood.IsOpen'],trunk=s['Body.Trunk.IsOpen'];
+  // Hood tri-state latch (LATCHED / HALF_LATCHED / OPEN).
+  // Top-view click logic uses this to gate the OpenCmd / CloseCmd dispatch.
+  const hoodLatch = s['Body.Hood.LatchState'] || 'LATCHED';
+  const hoodHalf  = hoodLatch === 'HALF_LATCHED';
   const wf=s['Body.Windshield.Front.Wiping.Mode']!=='OFF';
   const sr=s['Body.Sunroof.Position'];
   // Mirror — read from the visible side
@@ -1842,12 +1965,26 @@ function ControlPanelContent({s,set,anyDoor,anyLight,lux}){
         </div>
       </SG>
 
-      <SG title="Turn & Hazard" vss="Body.Switches">
+      <SG title="Turn / Hazard / Horn" vss="Body.Switches">
         <div className="cr">
           <span className="cn">Hazard</span>
           <Tog val={s['Body.Switches.Hazard.IsEngaged']} on={()=>set('Body.Switches.Hazard.IsEngaged',!s['Body.Switches.Hazard.IsEngaged'])} c="a"/>
         </div>
         <EnumR label="Turn Stalk" k="Body.Switches.TurnIndicator.Direction" s={s} set={set} opts={['OFF','LEFT','RIGHT']}/>
+        {/* Steering-wheel horn pad — press-and-hold.  Goes through
+            ManualHorn → horn_arbiter at Medium priority; PanicAlarm
+            at High still wins if it's running.  Body.Horn.IsActive
+            output drives the horn icon at the bottom of the dash. */}
+        <div className="cr" style={{marginTop:2}}>
+          <span className={`cn ${s['Body.Horn.IsActive']?'on':''}`}>Horn</span>
+          <button className={`eb ${s['Body.Horn.IsActive']?'on':''}`}
+            onMouseDown={()=>set('Body.Switches.Horn.IsPressed',true)}
+            onMouseUp={()=>set('Body.Switches.Horn.IsPressed',false)}
+            onMouseLeave={()=>set('Body.Switches.Horn.IsPressed',false)}
+            style={{cursor:'pointer',userSelect:'none',touchAction:'none'}}>
+            🔊 Press & hold
+          </button>
+        </div>
       </SG>
 
       <SG title="Braking & Transmission" vss="Chassis">
@@ -1927,20 +2064,19 @@ function ControlPanelContent({s,set,anyDoor,anyLight,lux}){
       </SG>
 
       <SG title="Body" vss="Body">
-        {/* Hood — momentary OpenCmd / CloseCmd into HoodPlantModel,
-            which owns Body.Hood.IsOpen and persists in NVM.  Toggle
-            click flips the appropriate command based on current state. */}
-        <div className="cr">
-          <span className={`cn ${s['Body.Hood.IsOpen']?'on':''}`}>Hood open</span>
-          <Tog val={s['Body.Hood.IsOpen']}
-            on={()=>set(s['Body.Hood.IsOpen']?'Body.Hood.CloseCmd':'Body.Hood.OpenCmd', true)}
-            c="a"/>
-        </div>
-        <BR label="Trunk open"       k="Body.Trunk.IsOpen"      s={s} set={set} c="a"/>
-        <BR label="Trunk locked"     k="Body.Trunk.IsLocked"    s={s} set={set} c="r"/>
+        {/* Hood — dash-mounted release lever.  Two pulls within 3 s
+            while LATCHED → HALF_LATCHED.  Status pill shows the
+            current LatchState; a press-here-to-open prompt appears
+            on the hood rectangle in the top view once half-latched. */}
+        <HoodReleaseRow s={s} set={set}/>
+        {/* Cabin trunk release — push-button / pull-handle inside the
+            cabin (low on the dash or in driver footwell).  Routes
+            through the trunk arbiter so the valet gate applies.
+            No lock-state or auth check — the user is already in the
+            cabin.  Result is visible in the top view via Body.Trunk.IsOpen. */}
+        <CabinTrunkReleaseRow s={s} set={set}/>
         <BR label="Fuel lid open"    k="Body.FuelLid.IsOpen"    s={s} set={set} c="a"/>
         <BR label="Charge lid open"  k="Body.ChargeLid.IsOpen"  s={s} set={set} c="t"/>
-        <BR label="Horn active"      k="Body.Horn.IsActive"     s={s} set={set} c="r"/>
       </SG>
 
       <SG title="Wipers & Washers" vss="Body.Windshield">

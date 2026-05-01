@@ -1383,18 +1383,58 @@ function ControlPanel({s,set}){
       </SG>
 
       <SG title="Body Actuators" vss="Body">
-        {/* Hood: HMI sends OpenCmd / CloseCmd; HoodPlantModel owns IsOpen + NVM. */}
+        {/* Hood — tri-state latch FSM in HoodPlantModel.  Dash release
+            lever pulled twice within 3 s (LATCHED → HALF_LATCHED), then
+            top-view click opens / closes (HALF_LATCHED → OPEN → LATCHED).
+            Pill shows current LatchState. */}
         <div className="cr">
-          <span className={`cn ${s['Body.Hood.IsOpen']?'on':''}`}>Hood open</span>
-          <Tog val={s['Body.Hood.IsOpen']}
-            on={()=>set(s['Body.Hood.IsOpen']?'Body.Hood.CloseCmd':'Body.Hood.OpenCmd', true)}
-            c="a"/>
+          <span className={`cn ${(s['Body.Hood.LatchState']||'LATCHED')!=='LATCHED'?'on':''}`}>Hood</span>
+          <span style={{
+            fontFamily:'var(--fm)',fontSize:9,fontWeight:700,
+            color:(s['Body.Hood.LatchState']==='OPEN'?'var(--amber)':
+                   s['Body.Hood.LatchState']==='HALF_LATCHED'?'#FCD34D':'var(--dim)'),
+            padding:'2px 6px',
+            border:`1px solid ${s['Body.Hood.LatchState']==='OPEN'?'var(--amber)':
+                                 s['Body.Hood.LatchState']==='HALF_LATCHED'?'#FCD34D':'var(--dim)'}`,
+            borderRadius:9
+          }}>{s['Body.Hood.LatchState']||'LATCHED'}</span>
         </div>
-        <BR label="Trunk / tailgate open" k="Body.Trunk.IsOpen" s={s} set={set} c="a"/>
-        <BR label="Trunk locked" k="Body.Trunk.IsLocked" s={s} set={set} c="r"/>
+        <div className="cr" style={{marginTop:2}}>
+          <button className="eb"
+            onMouseDown={()=>set('Body.Switches.Hood.Release.IsPulled',true)}
+            onMouseUp={()=>set('Body.Switches.Hood.Release.IsPulled',false)}
+            onMouseLeave={()=>set('Body.Switches.Hood.Release.IsPulled',false)}
+            style={{cursor:'pointer',userSelect:'none',touchAction:'none',width:'100%'}}>
+            ▼ Pull hood release (twice within 3 s to pop)
+          </button>
+        </div>
+        {/* Trunk release — interior push-button (cabin trunk release).
+            Routes through CabinTrunkRelease feature → trunk arbiter,
+            so the valet gate applies.  Status pill shows the plant
+            model's IsOpen for round-trip visibility. */}
+        <div className="cr">
+          <span className={`cn ${s['Body.Trunk.IsOpen']?'on':''}`}>Trunk</span>
+          <span style={{
+            fontFamily:'var(--fm)',fontSize:9,fontWeight:700,
+            color:(s['Cabin.ValetMode.IsActive']?'var(--red)':
+                   s['Body.Trunk.IsOpen']?'var(--amber)':'var(--dim)'),
+            padding:'2px 6px',
+            border:`1px solid ${s['Cabin.ValetMode.IsActive']?'var(--red)':
+                                 s['Body.Trunk.IsOpen']?'var(--amber)':'var(--dim)'}`,
+            borderRadius:9
+          }}>{s['Cabin.ValetMode.IsActive']?'VALET':s['Body.Trunk.IsOpen']?'OPEN':'CLOSED'}</span>
+        </div>
+        <div className="cr" style={{marginTop:2}}>
+          <button className="eb"
+            onMouseDown={()=>set('Body.Switches.Trunk.Release.IsPressed',true)}
+            onMouseUp={()=>set('Body.Switches.Trunk.Release.IsPressed',false)}
+            onMouseLeave={()=>set('Body.Switches.Trunk.Release.IsPressed',false)}
+            style={{cursor:'pointer',userSelect:'none',touchAction:'none',width:'100%'}}>
+            ▼ Press trunk release (cabin)
+          </button>
+        </div>
         <BR label="Fuel lid open" k="Body.FuelLid.IsOpen" s={s} set={set} c="a"/>
         <BR label="Charge lid open" k="Body.ChargeLid.IsOpen" s={s} set={set} c="t"/>
-        <BR label="Horn active" k="Body.Horn.IsActive" s={s} set={set} c="r"/>
       </SG>
 
       <SG title="Sunroof" vss="Body.Sunroof">
