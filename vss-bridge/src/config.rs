@@ -165,6 +165,30 @@ pub struct VehicleLineCal {
     /// Low beam activates when the ambient light sensor reads below this value.
     /// Typical dusk/dawn threshold: 200 lux (aligned with ECE R48 §6.1).
     pub auto_headlamp_lux_threshold: u16,
+
+    /// Whether the rear door handles have capacitive touch sensors
+    /// wired to the PEPS controller (i.e. can initiate a passive-
+    /// entry challenge in their own right).
+    ///
+    /// This is a **hardware-wiring** decision baked into the vehicle
+    /// line — the dealer cannot change it post-build because it
+    /// would require re-wiring the door modules.  Lives at vehicle-
+    /// line level so it can vary across trims sharing the same
+    /// platform but with different rear-handle wiring harnesses.
+    ///
+    /// - `false` (default, modern hardware): rear handles are
+    ///   mechanical only.  PassiveEntry ignores rear handle pulls;
+    ///   a locked rear pull does nothing.  Once the driver
+    ///   authenticates at a front handle and stage-2 unlocks all
+    ///   doors, the rear pull opens the door mechanically.  This
+    ///   is the typical real-vehicle wiring and gates a class of
+    ///   relay-attack-on-rear scenarios at the hardware boundary.
+    /// - `true` (legacy / older trims that wired the back doors):
+    ///   PassiveEntry subscribes to all four outside handles.  A
+    ///   rear pull on a locked vehicle with a paired fob in
+    ///   proximity initiates the challenge directly and unlocks the
+    ///   cabin on success.
+    pub peps_rear_capacitive_handles: bool,
 }
 
 impl Default for VehicleLineCal {
@@ -179,6 +203,10 @@ impl Default for VehicleLineCal {
             shutdown_grace_secs: 30,
             lane_change_flash_count: 3,
             auto_headlamp_lux_threshold: 200,
+            // Default reflects modern wiring: rear handles are
+            // mechanical only.  Set to `true` for legacy / older
+            // trim deployments.
+            peps_rear_capacitive_handles: false,
         }
     }
 }
@@ -557,6 +585,18 @@ impl PlatformConfig {
             lane_change_flash_count: count,
             ..VehicleLineCal::default()
         };
+        let (dealer_config_tx, dealer_config_rx) = watch::channel(DealerConfig::default());
+        Arc::new(Self {
+            vehicle_line: vl,
+            variant: std::sync::RwLock::new(VariantCal::default()),
+            dealer_config_tx,
+            dealer_config_rx,
+        })
+    }
+
+    /// Create with a custom `VehicleLineCal` (for unit tests that
+    /// need to override any vehicle-line cal at startup).
+    pub fn with_vehicle_line(vl: VehicleLineCal) -> Arc<Self> {
         let (dealer_config_tx, dealer_config_rx) = watch::channel(DealerConfig::default());
         Arc::new(Self {
             vehicle_line: vl,

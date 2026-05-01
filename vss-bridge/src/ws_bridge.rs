@@ -568,6 +568,7 @@ fn build_config_msg(cfg: &PlatformConfig) -> String {
                 "two_stage_unlock":           dealer.two_stage_unlock,
                 "driver_door_side":           format!("{:?}", dealer.driver_door_side),
                 "mirror_fold_mode":           format!("{:?}", dealer.mirror_fold_mode).to_uppercase(),
+                "farewell_hold_secs":         dealer.farewell_hold_secs,
             },
             "variant": {
                 "double_lock_enabled":  variant.double_lock_enabled,
@@ -587,6 +588,7 @@ fn build_config_msg(cfg: &PlatformConfig) -> String {
                 "welcome_light_duration_secs": vl.welcome_light_duration_secs,
                 "lane_change_flash_count":     vl.lane_change_flash_count,
                 "shutdown_grace_secs":         vl.shutdown_grace_secs,
+                "peps_rear_capacitive_handles":vl.peps_rear_capacitive_handles,
             }
         }
     });

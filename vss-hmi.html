@@ -2216,6 +2216,7 @@ const INIT_CONFIG={
     auto_relock_enabled:true, horn_chirp_on_lock:true,
     courtesy_light_timeout_secs:30, remote_start_max_minutes:10,
     two_stage_unlock:true, driver_door_side:'Left', mirror_fold_mode:'MANUAL',
+    farewell_hold_secs:20,
   },
   variant:{
     auto_lock_speed_kmh:20, double_lock_enabled:false,
@@ -2228,7 +2229,7 @@ const INIT_CONFIG={
     welcome_light_duration_secs:30, drl_brightness_pct:100,
     lock_feedback_blink_count:3, lock_feedback_blink_period_ms:400,
     shutdown_grace_secs:30, lane_change_flash_count:3,
-    auto_headlamp_lux_threshold:200,
+    auto_headlamp_lux_threshold:200, peps_rear_capacitive_handles:false,
   },
 };
 
@@ -2250,6 +2251,24 @@ function CfgNum({val, onChange, min=0, max=9999, step=1}){
             borderRadius:3,color:'var(--white)',fontFamily:'var(--fm)',fontSize:'10px',textAlign:'right'}}/>;
 }
 
+/* CfgReadOnly — typed display badge for vehicle-line / variant
+   parameters that are flashed-and-reboot, not runtime-mutable.  The
+   bridge has no `config_set` handler for these tiers; an editable
+   control would silently optimistic-update the HMI without ever
+   reaching the ECU.  Read-only badge makes the contract clear. */
+function CfgReadOnly({val, unit=''}){
+  const isBool = typeof val === 'boolean';
+  const display = isBool ? (val?'ON':'OFF') : `${val}${unit}`;
+  const color = isBool
+    ? (val?'var(--amber)':'var(--dim)')
+    : 'var(--white)';
+  return <span style={{
+    fontFamily:'var(--fm)',fontSize:10,fontWeight:700,color,
+    padding:'2px 8px',
+    border:`1px solid ${color}`,borderRadius:9,
+    minWidth:42,textAlign:'center',display:'inline-block'
+  }}>{display}</span>;
+}
 function CfgBool({val, onChange}){
   return <button onClick={()=>onChange(!val)}
     style={{padding:'3px 10px',borderRadius:3,fontFamily:'var(--fm)',fontSize:'9px',fontWeight:700,
@@ -2341,33 +2360,42 @@ function ConfigView({cfg, onSet}){
       </CfgRow>
     </CfgSection>
 
-    <CfgSection title="VEHICLE LINE CAL" badge="Tier 2 — vehicle_line.json">
+    {/* VEHICLE LINE CAL — Tier 2.  Flashed at the build line and
+        reboot-required to change (re-flash vehicle_line.json + restart
+        the Classic AUTOSAR + HPC stack).  All rows render read-only
+        so the HMI doesn't suggest a runtime-mutable control that the
+        bridge would silently drop. */}
+    <CfgSection title="VEHICLE LINE CAL" badge="Tier 2 — read-only · re-flash + reboot to change">
       <CfgRow label="Auto-relock timeout" hint="Seconds before re-locking after unlock (no door open)">
-        <CfgNum val={vl.auto_relock_timeout_secs} min={5} max={300} onChange={n=>onSet('vehicle_line.auto_relock_timeout_secs',n)}/>
+        <CfgReadOnly val={vl.auto_relock_timeout_secs} unit=" s"/>
       </CfgRow>
       <CfgRow label="PEPS LF window" hint="LF antenna transmit window after touch event (ms)">
-        <CfgNum val={vl.peps_lf_window_ms} min={500} max={10000} step={100} onChange={n=>onSet('vehicle_line.peps_lf_window_ms',n)}/>
+        <CfgReadOnly val={vl.peps_lf_window_ms} unit=" ms"/>
       </CfgRow>
       <CfgRow label="Welcome light duration" hint="Exterior lights on after PEPS unlock (s)">
-        <CfgNum val={vl.welcome_light_duration_secs} min={5} max={120} onChange={n=>onSet('vehicle_line.welcome_light_duration_secs',n)}/>
+        <CfgReadOnly val={vl.welcome_light_duration_secs} unit=" s"/>
       </CfgRow>
       <CfgRow label="DRL brightness" hint="Daytime running light intensity (0–100 %)">
-        <CfgNum val={vl.drl_brightness_pct} min={0} max={100} onChange={n=>onSet('vehicle_line.drl_brightness_pct',n)}/>
+        <CfgReadOnly val={vl.drl_brightness_pct} unit=" %"/>
       </CfgRow>
       <CfgRow label="Lock feedback blink count" hint="Indicator flashes on lock/unlock confirmation">
-        <CfgNum val={vl.lock_feedback_blink_count} min={1} max={10} onChange={n=>onSet('vehicle_line.lock_feedback_blink_count',n)}/>
+        <CfgReadOnly val={vl.lock_feedback_blink_count}/>
       </CfgRow>
       <CfgRow label="Lock feedback blink period" hint="One full on+off cycle duration (ms)">
-        <CfgNum val={vl.lock_feedback_blink_period_ms} min={100} max={2000} step={50} onChange={n=>onSet('vehicle_line.lock_feedback_blink_period_ms',n)}/>
+        <CfgReadOnly val={vl.lock_feedback_blink_period_ms} unit=" ms"/>
       </CfgRow>
       <CfgRow label="Lane-change comfort blinks" hint="Extra indicator cycles after stalk return (0 = off)">
-        <CfgNum val={vl.lane_change_flash_count} min={0} max={10} onChange={n=>onSet('vehicle_line.lane_change_flash_count',n)}/>
+        <CfgReadOnly val={vl.lane_change_flash_count}/>
       </CfgRow>
       <CfgRow label="Auto headlamp threshold" hint="Ambient lux below which AUTO mode activates low beam">
-        <CfgNum val={vl.auto_headlamp_lux_threshold} min={10} max={2000} step={10} onChange={n=>onSet('vehicle_line.auto_headlamp_lux_threshold',n)}/>
+        <CfgReadOnly val={vl.auto_headlamp_lux_threshold} unit=" lux"/>
       </CfgRow>
       <CfgRow label="Shutdown grace period" hint="A53 stay-alive after ignition OFF (s)">
-        <CfgNum val={vl.shutdown_grace_secs} min={5} max={120} onChange={n=>onSet('vehicle_line.shutdown_grace_secs',n)}/>
+        <CfgReadOnly val={vl.shutdown_grace_secs} unit=" s"/>
+      </CfgRow>
+      <CfgRow label="Rear handles capacitive"
+        hint="OFF: rear handles mechanical-only — must auth at front first. ON: legacy wiring, rear pull initiates PEPS.">
+        <CfgReadOnly val={!!vl.peps_rear_capacitive_handles}/>
       </CfgRow>
     </CfgSection>
 
