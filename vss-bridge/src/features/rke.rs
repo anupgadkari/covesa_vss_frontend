@@ -38,9 +38,12 @@ use tokio::select;
 use tokio::sync::watch;
 use tokio::time::sleep;
 
-use crate::arbiter::{DoorLockArbiter, DoorLockRequest, LockCommand, FEEDBACK_REQUEST};
+use crate::arbiter::{
+    ActuatorRequest, DomainArbiter, DoorLockArbiter, DoorLockRequest, LockCommand,
+    FEEDBACK_REQUEST, TRUNK_OPEN_CMD,
+};
 use crate::config::PlatformConfig;
-use crate::ipc_message::{FeatureId, SignalValue};
+use crate::ipc_message::{FeatureId, Priority, SignalValue};
 use crate::plant_models::peps::crypto::{aes_cmac_verify, SharedSecret};
 use crate::plant_models::peps::device::{build_mac_payload, FobButton, RfMessage};
 use crate::plant_models::peps::signals::KEYFOB_RF_MSGS;
@@ -238,6 +241,11 @@ struct PendingCombo {
 pub struct RkeFeature<B: SignalBus> {
     bus: Arc<B>,
     arbiter: Arc<DoorLockArbiter>,
+    /// Trunk-open arbiter — RKE TrunkRelease pulses `Body.Trunk.OpenCmd`
+    /// through here so the valet-mode `PhysicalGate` and any future
+    /// trunk policy gating apply uniformly across all trunk-open
+    /// writers (RKE, ExteriorTrunkButton, future phone app).
+    trunk_arb: Arc<DomainArbiter>,
     config: Arc<PlatformConfig>,
     /// Mutable dealer-config watch receiver (for runtime toggle support).
     dealer_rx: watch::Receiver<crate::config::DealerConfig>,
@@ -264,6 +272,7 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
     pub fn new(
         bus: Arc<B>,
         arbiter: Arc<DoorLockArbiter>,
+        trunk_arb: Arc<DomainArbiter>,
         config: Arc<PlatformConfig>,
         paired_fobs: Vec<PairedFob>,
     ) -> Self {
@@ -272,6 +281,7 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
         Self {
             bus,
             arbiter,
+            trunk_arb,
             config,
             dealer_rx,
             fobs,
@@ -545,13 +555,20 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
         if second_press {
             self.pending_trunk_release = None;
             tracing::info!(fob_id, "RKE: TRUNK_RELEASE double-press — opening trunk");
+            // Pulse `Body.Trunk.OpenCmd` through the trunk arbiter:
+            // request true, then release so the next press can fire
+            // again.  The arbiter's ValetGate will silently swallow
+            // the request if `Cabin.ValetMode.IsActive` is true.
             let _ = self
-                .bus
-                .publish(
-                    "Body.Trunk.OpenCmd",
-                    crate::ipc_message::SignalValue::Bool(true),
-                )
+                .trunk_arb
+                .request(ActuatorRequest {
+                    signal: TRUNK_OPEN_CMD,
+                    value: SignalValue::Bool(true),
+                    priority: Priority::Medium,
+                    feature_id: FEATURE_ID,
+                })
                 .await;
+            let _ = self.trunk_arb.release(TRUNK_OPEN_CMD, FEATURE_ID).await;
             // Trunk open is an external unlock — play unlock feedback and arm
             // the trunk-close lock feedback (handled by LockFeedback feature).
             let _ = self
@@ -945,7 +962,13 @@ mod tests {
         paired_fobs: Vec<PairedFob>,
     ) -> RkeFeature<crate::adapters::mock::MockBus> {
         let config = crate::config::PlatformConfig::defaults();
-        RkeFeature::new(bus, arbiter, config, paired_fobs)
+        // Spin up a trunk arbiter on the same bus so RKE TrunkRelease
+        // tests work without changing call sites.  No valet — the gate
+        // is open by default.
+        let (trunk_arb, trunk_fut) = crate::arbiter::trunk_arbiter(Arc::clone(&bus));
+        tokio::spawn(trunk_fut);
+        let trunk_arb = Arc::new(trunk_arb);
+        RkeFeature::new(bus, arbiter, trunk_arb, config, paired_fobs)
     }
 
     #[tokio::test]

@@ -19,6 +19,7 @@ use vss_bridge::features::auto_relock::AutoRelock;
 use vss_bridge::features::brake_reverse_lamps::BrakeReverseLamps;
 use vss_bridge::features::door_open_assist::DoorOpenAssist;
 use vss_bridge::features::double_lock_release::DoubleLockRelease;
+use vss_bridge::features::exterior_trunk_button::ExteriorTrunkButton;
 use vss_bridge::features::farewell::Farewell;
 use vss_bridge::features::fog_lamps::FogLamps;
 use vss_bridge::features::follow_me_home::FollowMeHome;
@@ -99,6 +100,7 @@ async fn main() -> anyhow::Result<()> {
     let (_comfort_arb, comfort_fut) = arbiter::comfort_arbiter(Arc::clone(&bus));
     let (courtesy_arb, courtesy_fut) = arbiter::courtesy_arbiter(Arc::clone(&bus));
     let (puddle_arb, puddle_fut) = arbiter::puddle_arbiter(Arc::clone(&bus));
+    let (trunk_arb, trunk_fut) = arbiter::trunk_arbiter(Arc::clone(&bus));
 
     tokio::spawn(lighting_fut);
     tokio::spawn(low_beam_fut);
@@ -107,6 +109,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(comfort_fut);
     tokio::spawn(courtesy_fut);
     tokio::spawn(puddle_fut);
+    tokio::spawn(trunk_fut);
 
     let lighting_arb = Arc::new(lighting_arb);
     let low_beam_arb = Arc::new(low_beam_arb);
@@ -114,6 +117,7 @@ async fn main() -> anyhow::Result<()> {
     let horn_arb = Arc::new(horn_arb);
     let courtesy_arb = Arc::new(courtesy_arb);
     let puddle_arb = Arc::new(puddle_arb);
+    let trunk_arb = Arc::new(trunk_arb);
 
     // ── Feature Business Logic ──────────────────────────────────────
     let lux_threshold = _platform_config.vehicle_line.auto_headlamp_lux_threshold;
@@ -165,6 +169,7 @@ async fn main() -> anyhow::Result<()> {
         RkeFeature::new(
             Arc::clone(&bus),
             Arc::clone(&door_lock_arb),
+            Arc::clone(&trunk_arb),
             Arc::clone(&_platform_config),
             rke_fobs,
         )
@@ -259,6 +264,7 @@ async fn main() -> anyhow::Result<()> {
         PassiveEntry::new(
             Arc::clone(&bus),
             Arc::clone(&door_lock_arb),
+            Arc::clone(&trunk_arb),
             Arc::clone(&_platform_config),
             pe_devices,
         )
@@ -316,7 +322,15 @@ async fn main() -> anyhow::Result<()> {
         DoorOpenAssist::new(Arc::clone(&bus), Arc::clone(&puddle_arb), &_platform_config).run(),
     );
 
-    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome, MirrorFold, MirrorAdjust, Farewell, DoorOpenAssist");
+    // ExteriorTrunkButton — capacitive button above the rear license
+    // plate.  Routes presses to the trunk arbiter:
+    //   • cabin UNLOCKED / DRIVER_UNLOCKED → direct pulse here
+    //   • cabin LOCKED / DOUBLE_LOCKED      → PassiveEntry's auth path
+    //   • valet mode active                  → silently denied
+    // Cabin lock state is never mutated.
+    tokio::spawn(ExteriorTrunkButton::new(Arc::clone(&bus), Arc::clone(&trunk_arb)).run());
+
+    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome, MirrorFold, MirrorAdjust, Farewell, DoorOpenAssist, ExteriorTrunkButton");
 
     // ── Plant Models ────────────────────────────────────────────────
     // Simulate physical lamp behavior the M7 / smart actuator firmware

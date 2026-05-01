@@ -246,6 +246,8 @@ const INIT_STATE={
   'Body.Switches.Mirror.Fold':false,'Body.Switches.Mirror.Select':'NONE','Body.Switches.Mirror.Direction':'NONE',
   // Cabin
   'Cabin.Lights.IsDomeOn':false,'Cabin.Lights.IsGloveBoxOn':false,'Cabin.Lights.Ambient.Intensity':0,'Cabin.Lights.Ambient.Color':'#3B82F6',
+  'Cabin.ValetMode.IsActive':false,
+  'Body.Trunk.ExteriorButton.IsPressed':false,
   // HVAC
   'Cabin.HVAC.IsAirConditioningActive':false,'Cabin.HVAC.IsRecirculationActive':false,'Cabin.HVAC.IsFrontDefrosterActive':false,'Cabin.HVAC.IsRearDefrosterActive':false,
   'Cabin.HVAC.Station.Row1.Left.Temperature':22,'Cabin.HVAC.Station.Row1.Left.FanSpeed':0,'Cabin.HVAC.Station.Row1.Left.AirDistribution':'DASHBOARD',
@@ -579,6 +581,26 @@ function CombinedView({s,set,onDeviceSelect}){
   const tlo=brake?.95:lo||hi||park?.75:.08;
   const rlc=back?'#FFFFFF':'#1A1A2A';
   const hood=s['Body.Hood.IsOpen'],trunk=s['Body.Trunk.IsOpen'];
+
+  // Exterior trunk button — would-it-open indicator.  Mirrors the
+  // bridge-side ExteriorTrunkButton + PassiveEntry decision so the
+  // dot reflects what an ACTUAL press would do right now:
+  //   • valet active → disabled
+  //   • cabin unlocked → enabled (direct path)
+  //   • cabin locked + paired fob in Trunk zone → enabled (auth path)
+  //   • cabin locked + no fob in Trunk zone → disabled
+  const trunkBtnLockStatus = s['Cabin.LockStatus'] ?? '';
+  const trunkBtnValet      = !!s['Cabin.ValetMode.IsActive'];
+  const trunkBtnFobInZone  =
+    [1,2,3,4,5,6].some(i => s[`Body.PEPS.Plant.KeyFob.${i}.Zone`] === 'Trunk') ||
+    [1,2].some(i => s[`Body.PEPS.Plant.BlePhone.${i}.Zone`] === 'Trunk');
+  const trunkBtnUnlocked   =
+    trunkBtnLockStatus === 'UNLOCKED' || trunkBtnLockStatus === 'DRIVER_UNLOCKED';
+  const trunkBtnLocked     =
+    trunkBtnLockStatus === 'LOCKED' || trunkBtnLockStatus === 'DOUBLE_LOCKED';
+  const trunkBtnEnabled =
+    !trunkBtnValet && (trunkBtnUnlocked || (trunkBtnLocked && trunkBtnFobInZone));
+
   const mlf=s['Body.Mirror.Left.IsFolded'],mrf=s['Body.Mirror.Right.IsFolded'];
   const wf=s['Body.Windshield.Front.Wiping.Mode']!=='OFF';
   // Exterior puddle lamps — driven by Welcome (and future Farewell /
@@ -917,14 +939,65 @@ function CombinedView({s,set,onDeviceSelect}){
     <rect x="60" y="560" width="240" height="20" fill="#0E1828" stroke="#1A2535" strokeWidth=".5" rx="2"
       style={{cursor:trunk?'pointer':'default'}}
       onClick={trunk?()=>set('Body.Trunk.CloseCmd',true):undefined}/>
-    <circle cx="180" cy="466" r="3.5" fill={s['Body.Trunk.IsLocked']?'#7F1D1D':'#1A3A28'}
-      stroke={s['Body.Trunk.IsLocked']?'#EF4444':'#22C55E'} strokeWidth="0.8"/>
+    {/* Exterior trunk-button enabled indicator.  Green = pressing the
+        button right now would open the trunk (cabin unlocked OR a
+        paired fob is in the Trunk zone, AND valet is off).  Red =
+        press would be silently denied by the bridge.  Tooltip
+        explains why. */}
+    <circle cx="180" cy="466" r="3.5"
+      fill={trunkBtnEnabled?'#1A3A28':'#3A1818'}
+      stroke={trunkBtnEnabled?'#22C55E':'#F87171'} strokeWidth="0.8">
+      <title>{
+        trunkBtnValet
+          ? 'Trunk button — DENIED (valet mode active)'
+          : trunkBtnEnabled
+            ? (trunkBtnUnlocked
+                ? 'Trunk button — enabled (cabin unlocked, direct open)'
+                : 'Trunk button — enabled (paired fob in Trunk zone, will authenticate)')
+            : (trunkBtnLocked
+                ? 'Trunk button — disabled (cabin locked, no paired fob in Trunk zone)'
+                : 'Trunk button — disabled (lock status unknown)')
+      }</title>
+    </circle>
     {trunk&&<text x="180" y="625" textAnchor="middle" fill="#F59E0B" fontSize="6" fontWeight="bold">▣ TAP TRUNK</text>}
 
     {/* License plate */}
     <rect x="160" y="575" width="40" height="8" rx="2" fill={lp?'#FFF8DC':'#0A0F18'} opacity={lp?0.85:.25}>
       <title>{lp?'License plate lamp — on':'License plate lamp — off'}</title>
     </rect>
+
+    {/* Exterior trunk-release button — capacitive pad just above the
+        licence plate.  Mousedown publishes Body.Trunk.ExteriorButton.IsPressed=true,
+        mouseup/leave publishes false.  The bridge-side ExteriorTrunkButton
+        feature decides what to do (direct pulse if cabin unlocked,
+        deferral to PassiveEntry if locked, silent deny if valet active). */}
+    <g opacity={trunkBtnEnabled?1:0.55}>
+      <rect x="172" y="566" width="16" height="6" rx="1.5"
+        fill={s['Body.Trunk.ExteriorButton.IsPressed']?'#0DC8C8':'#1E2D40'}
+        stroke={s['Body.Trunk.ExteriorButton.IsPressed']?'#5EEAD4':(trunkBtnEnabled?'#3A5570':'#5A2A2A')}
+        strokeWidth="0.6"
+        style={{pointerEvents:'none'}}/>
+      <text x="180" y="570.5" textAnchor="middle"
+        fill={s['Body.Trunk.ExteriorButton.IsPressed']?'#021A1A':(trunkBtnEnabled?'#7BB3D9':'#9A6060')}
+        fontSize="3" fontWeight="bold"
+        style={{pointerEvents:'none'}}>OPEN</text>
+      <rect x="170" y="563" width="20" height="11" rx="2"
+        fill="transparent" pointerEvents="all"
+        style={{cursor:'pointer'}}
+        onMouseDown={()=>set('Body.Trunk.ExteriorButton.IsPressed',true)}
+        onMouseUp={()=>set('Body.Trunk.ExteriorButton.IsPressed',false)}
+        onMouseLeave={()=>set('Body.Trunk.ExteriorButton.IsPressed',false)}>
+        <title>{
+          trunkBtnValet
+            ? 'Trunk button — DENIED (valet mode active)'
+            : trunkBtnEnabled
+              ? (trunkBtnUnlocked
+                  ? 'Trunk button — press to open (cabin unlocked, direct)'
+                  : 'Trunk button — press to open (paired fob in Trunk zone, auth)')
+              : 'Trunk button — press will be denied (cabin locked, no fob in Trunk zone)'
+        }</title>
+      </rect>
+    </g>
 
     {/* Taillights — narrowed to 26 px to leave room for backup lamp beside each */}
     <rect x="70"  y="568" width="26" height="10" rx="2" fill={tlc} opacity={tlo}>
@@ -1683,6 +1756,19 @@ function ControlPanelContent({s,set,anyDoor,anyLight,lux}){
           opts={['OFF','LOCK','ACC','ON','START']}/>
         <EnumR label="Powertrain" k="Vehicle.Powertrain.Type" s={s} set={set}
           opts={['COMBUSTION','HYBRID','ELECTRIC']}/>
+        {/* Valet mode — published by infotainment in production.
+            When ON, the trunk arbiter's ValetGate suppresses every
+            Body.Trunk.OpenCmd (RKE, exterior button, future phone
+            app).  Cabin doors and other features are unaffected. */}
+        <div style={{display:'flex',flexDirection:'column',gap:3}}>
+          <span className="cn">Valet Mode</span>
+          <div className="ebrow">
+            <button className={`eb ${!s['Cabin.ValetMode.IsActive']?'on':''}`}
+              onClick={()=>set('Cabin.ValetMode.IsActive',false)}>OFF</button>
+            <button className={`eb ${s['Cabin.ValetMode.IsActive']?'on':''}`}
+              onClick={()=>set('Cabin.ValetMode.IsActive',true)}>ON</button>
+          </div>
+        </div>
       </SG>
 
       <SG title="Light Control" vss="Body.Lights" lit={anyLight}>

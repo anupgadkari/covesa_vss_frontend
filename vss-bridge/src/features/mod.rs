@@ -4,6 +4,7 @@ pub mod auto_relock;
 pub mod brake_reverse_lamps;
 pub mod door_open_assist;
 pub mod double_lock_release;
+pub mod exterior_trunk_button;
 pub mod farewell;
 pub mod fog_lamps;
 pub mod follow_me_home;

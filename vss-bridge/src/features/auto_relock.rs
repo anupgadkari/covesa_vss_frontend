@@ -188,14 +188,20 @@ impl<B: SignalBus> AutoRelock<B> {
         .await;
         let mut lock_stream = futures::stream::select_all(lock_streams);
 
-        // Subscribe to all open signals — merge into a single stream
-        let open_streams = futures::future::join_all(
-            DEFAULT_OPEN_SIGNALS
-                .iter()
-                .map(|&sig| self.bus.subscribe(sig)),
-        )
-        .await;
-        let mut open_stream = futures::stream::select_all(open_streams);
+        // Subscribe to each door's IsOpen separately so we can keep a
+        // per-door open-state cache.  Crucial for the "don't relock
+        // while any door is open" gate at timer expiry — a merged
+        // stream would only let us see *transitions*, missing the case
+        // where a door is already open at Phase 2 entry.
+        let mut open_streams: Vec<futures::stream::BoxStream<'static, SignalValue>> =
+            Vec::with_capacity(DEFAULT_OPEN_SIGNALS.len());
+        for &sig in DEFAULT_OPEN_SIGNALS {
+            open_streams.push(self.bus.subscribe(sig).await);
+        }
+        // Per-door open-state cache.  Updated by *every* IsOpen event
+        // (both Phase 1 drain and Phase 2 branches) so a door opened
+        // before the timer starts is still visible at expiry time.
+        let mut door_open: [bool; 4] = [false; 4];
 
         // Arming triggers from the door-lock arbiter — published in
         // order on every accepted command:
@@ -260,8 +266,18 @@ impl<B: SignalBus> AutoRelock<B> {
                         // *during the timer*; backlog from before Phase 2
                         // started is noise.
                     }
-                    Some(_) = open_stream.next() => {
-                        // Drain (same reasoning).
+                    ((idx, opt), _, _) = futures::future::select_all(
+                        open_streams.iter_mut().enumerate().map(|(i, s)| {
+                            Box::pin(async move { (i, s.next().await) })
+                                as std::pin::Pin<Box<dyn std::future::Future<Output = _> + Send>>
+                        })
+                    ) => {
+                        // Update the per-door cache so a door opened
+                        // BEFORE the unlock press is visible to the
+                        // Phase 2 expiry gate.
+                        if let Some(SignalValue::Bool(b)) = opt {
+                            door_open[idx] = b;
+                        }
                     }
                     else => return, // bus closed
                 }
@@ -272,6 +288,23 @@ impl<B: SignalBus> AutoRelock<B> {
                 self.wait_for_power_cycle(&mut crash_stream, &mut power_stream)
                     .await;
                 continue; // Re-enter phase 1 in ENABLED mode
+            }
+
+            // Pre-arming gate: if a door is already open at the
+            // unlock event, don't even start the timer.  Real OEMs
+            // treat AutoRelock as inactive while the cabin isn't
+            // physically secured — and the HMI banner / countdown
+            // would otherwise display a 45 s relock that was never
+            // going to fire (the expiry-time `any_open` gate would
+            // suppress the LOCK).  Cleaner UX: stay in Phase 1 until
+            // a fresh qualifying unlock arrives AFTER doors are
+            // closed.
+            if door_open.iter().any(|b| *b) {
+                tracing::info!(
+                    door_open = ?door_open,
+                    "AutoRelock: unlock detected but a door is already open — not arming"
+                );
+                continue;
             }
 
             tracing::info!("AutoRelock: unlock detected, starting relock timer");
@@ -307,10 +340,18 @@ impl<B: SignalBus> AutoRelock<B> {
                                 break TimerOutcome::CrashDisable;
                             }
                         }
-                        Some(val) = open_stream.next() => {
-                            if val == SignalValue::Bool(true) {
-                                tracing::info!("AutoRelock: door opened, timer cancelled");
-                                break TimerOutcome::DoorOpened;
+                        ((idx, opt), _, _) = futures::future::select_all(
+                            open_streams.iter_mut().enumerate().map(|(i, s)| {
+                                Box::pin(async move { (i, s.next().await) })
+                                    as std::pin::Pin<Box<dyn std::future::Future<Output = _> + Send>>
+                            })
+                        ) => {
+                            if let Some(SignalValue::Bool(b)) = opt {
+                                door_open[idx] = b;
+                                if b {
+                                    tracing::info!(door_idx = idx, "AutoRelock: door opened, timer cancelled");
+                                    break TimerOutcome::DoorOpened;
+                                }
                             }
                         }
                         Some(val) = lock_stream.next() => {
@@ -372,22 +413,36 @@ impl<B: SignalBus> AutoRelock<B> {
 
             match timer_result {
                 TimerOutcome::Expired => {
-                    tracing::info!("AutoRelock: timeout expired, requesting LOCK");
-                    if let Err(e) = self
-                        .arbiter
-                        .request(DoorLockRequest {
-                            command: LockCommand::LockAll,
-                            feature_id: FeatureId::AutoRelock,
-                        })
-                        .await
-                    {
-                        tracing::error!(error = %e, "AutoRelock: failed to submit LOCK");
+                    // Final safety gate — never relock while any door
+                    // is open.  Catches the case where a door was
+                    // already open at Phase 2 entry (no fresh "opened"
+                    // transition fires inside the window, so the
+                    // Phase 2 cancellation branch alone wouldn't see
+                    // it).  Real OEMs treat AutoRelock as a no-op
+                    // while the cabin isn't physically secured.
+                    if door_open.iter().any(|b| *b) {
+                        tracing::info!(
+                            door_open = ?door_open,
+                            "AutoRelock: timeout expired but a door is still open — suppressing LOCK"
+                        );
+                    } else {
+                        tracing::info!("AutoRelock: timeout expired, requesting LOCK");
+                        if let Err(e) = self
+                            .arbiter
+                            .request(DoorLockRequest {
+                                command: LockCommand::LockAll,
+                                feature_id: FeatureId::AutoRelock,
+                            })
+                            .await
+                        {
+                            tracing::error!(error = %e, "AutoRelock: failed to submit LOCK");
+                        }
+                        // Auto-relock follows an external unlock — provide lock feedback.
+                        let _ = self
+                            .bus
+                            .publish(FEEDBACK_REQUEST, SignalValue::String("lock".into()))
+                            .await;
                     }
-                    // Auto-relock follows an external unlock — provide lock feedback.
-                    let _ = self
-                        .bus
-                        .publish(FEEDBACK_REQUEST, SignalValue::String("lock".into()))
-                        .await;
                 }
                 TimerOutcome::DoorOpened | TimerOutcome::AlreadyLocked => {
                     // Back to phase 1
@@ -540,6 +595,51 @@ mod tests {
             }),
             "expected AutoRelock to dispatch LOCK, history: {:?}",
             history
+        );
+    }
+
+    /// Regression: a door open BEFORE the unlock event (e.g. user
+    /// opens driver door, then RKE-unlocks while still standing
+    /// outside) must NOT arm the timer at all.  The HMI banner /
+    /// countdown is gated on `Body.Doors.AutoRelock.IsArmed` — if
+    /// we armed and then suppressed at expiry, the user would see a
+    /// fake 45 s countdown.  Cleaner: don't arm in the first place.
+    #[tokio::test]
+    async fn door_already_open_at_arming_suppresses_lock() {
+        let (bus, _arb, _handle) = setup(Duration::from_millis(200)).await;
+
+        // Open the driver door FIRST, before any unlock event.
+        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        tokio::task::yield_now().await;
+
+        // Now fire the qualifying unlock.  Per spec this must NOT arm.
+        bus.inject("Cabin.LockStatus", SignalValue::String("UNLOCKED".into()));
+        bus.inject(
+            "Cabin.LockStatus.LastRequestor",
+            SignalValue::String("KeyfobRke".into()),
+        );
+        tokio::task::yield_now().await;
+
+        // Wait past the expiry window.  No additional door transitions.
+        sleep(Duration::from_millis(350)).await;
+        tokio::task::yield_now().await;
+
+        let history = bus.history();
+        assert!(
+            !history.iter().any(|(sig, val)| {
+                *sig == "Body.Doors.CentralLock.Command"
+                    && *val == SignalValue::String("lock_all".into())
+            }),
+            "AutoRelock must NOT relock when a door was already open at arming, history: {:?}",
+            history
+        );
+        // And it must never have advertised IsArmed=true, so the HMI
+        // banner stays hidden.
+        assert!(
+            !history.iter().any(|(sig, val)| {
+                *sig == "Body.Doors.AutoRelock.IsArmed" && *val == SignalValue::Bool(true)
+            }),
+            "AutoRelock must not publish IsArmed=true while a door is already open"
         );
     }
 
