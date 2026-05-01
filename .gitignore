@@ -39,3 +39,10 @@ next-env.d.ts
 # Default location is ./nvm/ relative to the bridge's CWD; override with
 # the VSS_BRIDGE_NVM_PATH env var.
 nvm/
+
+# vss-bridge calibration files written by HMI "Apply & Reboot" — runtime
+# artifacts of the dev workflow, not source.  Production builds ship
+# these baked into the container image at /etc/vss-bridge/.  Override
+# the dev-write location with VSS_BRIDGE_CONFIG_PATH (we use ./config/
+# under vss-bridge/ during local development).
+vss-bridge/config/

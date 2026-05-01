@@ -2234,11 +2234,18 @@ const INIT_CONFIG={
 };
 
 // Helper renders one editable config row
-function CfgRow({label, hint, children}){
+function CfgRow({label, hint, children, dirty}){
   return <div style={{display:'flex',alignItems:'center',gap:8,padding:'5px 0',borderBottom:'1px solid var(--bdr)'}}>
-    <div style={{flex:1,minWidth:0}}>
-      <div style={{fontFamily:'var(--fm)',fontSize:'9px',color:'var(--white)',fontWeight:600}}>{label}</div>
-      {hint&&<div style={{fontFamily:'var(--fm)',fontSize:'7px',color:'var(--muted)',marginTop:1}}>{hint}</div>}
+    <div style={{flex:1,minWidth:0,display:'flex',alignItems:'center',gap:6}}>
+      {/* Dirty indicator — staged-but-not-yet-applied edit. */}
+      {dirty && <span style={{
+        width:6,height:6,borderRadius:'50%',background:'var(--amber)',
+        boxShadow:'0 0 4px rgba(245,158,11,.6)',flexShrink:0
+      }} title="Edit pending — Apply & Reboot to persist"/>}
+      <div style={{minWidth:0}}>
+        <div style={{fontFamily:'var(--fm)',fontSize:'9px',color:'var(--white)',fontWeight:600}}>{label}</div>
+        {hint&&<div style={{fontFamily:'var(--fm)',fontSize:'7px',color:'var(--muted)',marginTop:1}}>{hint}</div>}
+      </div>
     </div>
     <div style={{flexShrink:0}}>{children}</div>
   </div>;
@@ -2300,8 +2307,32 @@ function CfgSection({title, badge, children}){
   </div>;
 }
 
-function ConfigView({cfg, onSet}){
+function ConfigView({cfg, onSet, staged, setStaged, onApplyReboot}){
   const d=cfg.dealer, v=cfg.variant, vl=cfg.vehicle_line;
+  // Read a vehicle_line / variant value, preferring the staged value
+  // if the user has edited it, falling back to the running config.
+  const vlVal = (k) => (staged.vehicle_line && k in staged.vehicle_line)
+    ? staged.vehicle_line[k] : vl[k];
+  const vVal  = (k) => (staged.variant      && k in staged.variant)
+    ? staged.variant[k]      : v[k];
+  // Stage an edit: writes to `staged.<tier>[field]`.  Inline-set in
+  // place to avoid React-stale-closure issues when multiple fields
+  // are typed quickly.
+  const stageVL = (k, val) => setStaged(prev => ({
+    ...prev,
+    vehicle_line: {...prev.vehicle_line, [k]: val}
+  }));
+  const stageV = (k, val) => setStaged(prev => ({
+    ...prev,
+    variant: {...prev.variant, [k]: val}
+  }));
+  // Has any field been edited?  Drives the "Apply & Reboot" button's
+  // enabled state and the dirty indicator on each field.
+  const isVLDirty = k => staged.vehicle_line && k in staged.vehicle_line;
+  const isVDirty  = k => staged.variant      && k in staged.variant;
+  const hasAnyDirty = Object.keys(staged.vehicle_line||{}).length > 0
+                   || Object.keys(staged.variant||{}).length > 0;
+
   return <div style={{flex:1,overflowY:'auto',padding:'16px 24px',scrollbarWidth:'thin',scrollbarColor:'var(--bdr2) transparent'}}>
 
     <CfgSection title="DEALER CONFIG" badge="Tier 4 — UDS DID 0xF190+">
@@ -2328,76 +2359,100 @@ function ConfigView({cfg, onSet}){
       </CfgRow>
     </CfgSection>
 
-    <CfgSection title="VARIANT CAL" badge="Tier 3 — variant.json">
-      <CfgRow label="Double-lock (superlocking)" hint="Deadlocks interior handles — premium trim only">
-        <CfgBool val={v.double_lock_enabled} onChange={b=>onSet('variant.double_lock_enabled',b)}/>
+    {/* VARIANT CAL — Tier 3.  Flashed at the build line; persists to
+        variant.json on Apply & Reboot.  Edits are STAGED locally
+        (yellow dot indicator) until applied. */}
+    <CfgSection title="VARIANT CAL" badge="Tier 3 — staged · Apply & Reboot to write variant.json">
+      <CfgRow label="Double-lock (superlocking)" hint="Deadlocks interior handles — premium trim only" dirty={isVDirty('double_lock_enabled')}>
+        <CfgBool val={vVal('double_lock_enabled')} onChange={b=>stageV('double_lock_enabled',b)}/>
       </CfgRow>
-      <CfgRow label="NFC key" hint="NFC B-pillar reader hardware present">
-        <CfgBool val={v.nfc_enabled} onChange={b=>onSet('variant.nfc_enabled',b)}/>
+      <CfgRow label="NFC key" hint="NFC B-pillar reader hardware present" dirty={isVDirty('nfc_enabled')}>
+        <CfgBool val={vVal('nfc_enabled')} onChange={b=>stageV('nfc_enabled',b)}/>
       </CfgRow>
-      <CfgRow label="BLE digital key" hint="CCC/ICCE BLE stack available">
-        <CfgBool val={v.ble_key_enabled} onChange={b=>onSet('variant.ble_key_enabled',b)}/>
+      <CfgRow label="BLE digital key" hint="CCC/ICCE BLE stack available" dirty={isVDirty('ble_key_enabled')}>
+        <CfgBool val={vVal('ble_key_enabled')} onChange={b=>stageV('ble_key_enabled',b)}/>
       </CfgRow>
-      <CfgRow label="Remote lock (app)" hint="Telematics-connected remote lock/unlock">
-        <CfgBool val={v.remote_lock_enabled} onChange={b=>onSet('variant.remote_lock_enabled',b)}/>
+      <CfgRow label="Remote lock (app)" hint="Telematics-connected remote lock/unlock" dirty={isVDirty('remote_lock_enabled')}>
+        <CfgBool val={vVal('remote_lock_enabled')} onChange={b=>stageV('remote_lock_enabled',b)}/>
       </CfgRow>
-      <CfgRow label="Auto-lock speed" hint="Speed above which doors auto-lock (km/h)">
-        <CfgNum val={v.auto_lock_speed_kmh} min={0} max={200} onChange={n=>onSet('variant.auto_lock_speed_kmh',n)}/>
+      <CfgRow label="Auto-lock speed" hint="Speed above which doors auto-lock (km/h)" dirty={isVDirty('auto_lock_speed_kmh')}>
+        <CfgNum val={vVal('auto_lock_speed_kmh')} min={0} max={200} onChange={n=>stageV('auto_lock_speed_kmh',n)}/>
       </CfgRow>
-      <CfgRow label="Welcome light pattern" hint="Exterior light sequence on PEPS unlock">
-        <CfgSelect val={v.welcome_light_pattern} opts={['Simple','Sequential','Disabled']} onChange={p=>onSet('variant.welcome_light_pattern',p)}/>
-      </CfgRow>
-      <CfgRow label="Rear doors present" hint="Row 2 doors — false = 2-door coupe">
-        <div style={{display:'flex',gap:6}}>
-          <span style={{fontFamily:'var(--fm)',fontSize:'8px',color:'var(--muted)',alignSelf:'center'}}>L</span>
-          <CfgBool val={v.doors_row2_left}  onChange={b=>onSet('variant.doors_row2_left',b)}/>
-          <span style={{fontFamily:'var(--fm)',fontSize:'8px',color:'var(--muted)',alignSelf:'center'}}>R</span>
-          <CfgBool val={v.doors_row2_right} onChange={b=>onSet('variant.doors_row2_right',b)}/>
-        </div>
-      </CfgRow>
-      <CfgRow label="Removable doors" hint="Bronco/Wrangler-style door removal">
-        <CfgBool val={v.doors_removable} onChange={b=>onSet('variant.doors_removable',b)}/>
+      <CfgRow label="Welcome light pattern" hint="Exterior light sequence on PEPS unlock" dirty={isVDirty('welcome_light_pattern')}>
+        <CfgSelect val={vVal('welcome_light_pattern')} opts={['Simple','Sequential','Disabled']} onChange={p=>stageV('welcome_light_pattern',p)}/>
       </CfgRow>
     </CfgSection>
 
-    {/* VEHICLE LINE CAL — Tier 2.  Flashed at the build line and
-        reboot-required to change (re-flash vehicle_line.json + restart
-        the Classic AUTOSAR + HPC stack).  All rows render read-only
-        so the HMI doesn't suggest a runtime-mutable control that the
-        bridge would silently drop. */}
-    <CfgSection title="VEHICLE LINE CAL" badge="Tier 2 — read-only · re-flash + reboot to change">
-      <CfgRow label="Auto-relock timeout" hint="Seconds before re-locking after unlock (no door open)">
-        <CfgReadOnly val={vl.auto_relock_timeout_secs} unit=" s"/>
+    {/* VEHICLE LINE CAL — Tier 2.  Same model as Variant: edits are
+        staged locally, persisted to vehicle_line.json on Apply &
+        Reboot, and require a full bridge reboot to take effect
+        (which is what Apply & Reboot triggers — see the in-process
+        boot loop in main.rs). */}
+    <CfgSection title="VEHICLE LINE CAL" badge="Tier 2 — staged · Apply & Reboot to write vehicle_line.json">
+      <CfgRow label="Auto-relock timeout" hint="Seconds before re-locking after unlock (no door open)" dirty={isVLDirty('auto_relock_timeout_secs')}>
+        <CfgNum val={vlVal('auto_relock_timeout_secs')} min={5} max={300} onChange={n=>stageVL('auto_relock_timeout_secs',n)}/>
       </CfgRow>
-      <CfgRow label="PEPS LF window" hint="LF antenna transmit window after touch event (ms)">
-        <CfgReadOnly val={vl.peps_lf_window_ms} unit=" ms"/>
+      <CfgRow label="PEPS LF window" hint="LF antenna transmit window after touch event (ms)" dirty={isVLDirty('peps_lf_window_ms')}>
+        <CfgNum val={vlVal('peps_lf_window_ms')} min={500} max={10000} step={100} onChange={n=>stageVL('peps_lf_window_ms',n)}/>
       </CfgRow>
-      <CfgRow label="Welcome light duration" hint="Exterior lights on after PEPS unlock (s)">
-        <CfgReadOnly val={vl.welcome_light_duration_secs} unit=" s"/>
+      <CfgRow label="Welcome light duration" hint="Exterior lights on after PEPS unlock (s)" dirty={isVLDirty('welcome_light_duration_secs')}>
+        <CfgNum val={vlVal('welcome_light_duration_secs')} min={5} max={120} onChange={n=>stageVL('welcome_light_duration_secs',n)}/>
       </CfgRow>
-      <CfgRow label="DRL brightness" hint="Daytime running light intensity (0–100 %)">
-        <CfgReadOnly val={vl.drl_brightness_pct} unit=" %"/>
+      <CfgRow label="DRL brightness" hint="Daytime running light intensity (0–100 %)" dirty={isVLDirty('drl_brightness_pct')}>
+        <CfgNum val={vlVal('drl_brightness_pct')} min={0} max={100} onChange={n=>stageVL('drl_brightness_pct',n)}/>
       </CfgRow>
-      <CfgRow label="Lock feedback blink count" hint="Indicator flashes on lock/unlock confirmation">
-        <CfgReadOnly val={vl.lock_feedback_blink_count}/>
+      <CfgRow label="Lock feedback blink count" hint="Indicator flashes on lock/unlock confirmation" dirty={isVLDirty('lock_feedback_blink_count')}>
+        <CfgNum val={vlVal('lock_feedback_blink_count')} min={1} max={10} onChange={n=>stageVL('lock_feedback_blink_count',n)}/>
       </CfgRow>
-      <CfgRow label="Lock feedback blink period" hint="One full on+off cycle duration (ms)">
-        <CfgReadOnly val={vl.lock_feedback_blink_period_ms} unit=" ms"/>
+      <CfgRow label="Lock feedback blink period" hint="One full on+off cycle duration (ms)" dirty={isVLDirty('lock_feedback_blink_period_ms')}>
+        <CfgNum val={vlVal('lock_feedback_blink_period_ms')} min={100} max={2000} step={50} onChange={n=>stageVL('lock_feedback_blink_period_ms',n)}/>
       </CfgRow>
-      <CfgRow label="Lane-change comfort blinks" hint="Extra indicator cycles after stalk return (0 = off)">
-        <CfgReadOnly val={vl.lane_change_flash_count}/>
+      <CfgRow label="Lane-change comfort blinks" hint="Extra indicator cycles after stalk return (0 = off)" dirty={isVLDirty('lane_change_flash_count')}>
+        <CfgNum val={vlVal('lane_change_flash_count')} min={0} max={10} onChange={n=>stageVL('lane_change_flash_count',n)}/>
       </CfgRow>
-      <CfgRow label="Auto headlamp threshold" hint="Ambient lux below which AUTO mode activates low beam">
-        <CfgReadOnly val={vl.auto_headlamp_lux_threshold} unit=" lux"/>
+      <CfgRow label="Auto headlamp threshold" hint="Ambient lux below which AUTO mode activates low beam" dirty={isVLDirty('auto_headlamp_lux_threshold')}>
+        <CfgNum val={vlVal('auto_headlamp_lux_threshold')} min={10} max={2000} step={10} onChange={n=>stageVL('auto_headlamp_lux_threshold',n)}/>
       </CfgRow>
-      <CfgRow label="Shutdown grace period" hint="A53 stay-alive after ignition OFF (s)">
-        <CfgReadOnly val={vl.shutdown_grace_secs} unit=" s"/>
+      <CfgRow label="Shutdown grace period" hint="A53 stay-alive after ignition OFF (s)" dirty={isVLDirty('shutdown_grace_secs')}>
+        <CfgNum val={vlVal('shutdown_grace_secs')} min={5} max={120} onChange={n=>stageVL('shutdown_grace_secs',n)}/>
       </CfgRow>
-      <CfgRow label="Rear handles capacitive"
-        hint="OFF: rear handles mechanical-only — must auth at front first. ON: legacy wiring, rear pull initiates PEPS.">
-        <CfgReadOnly val={!!vl.peps_rear_capacitive_handles}/>
+      <CfgRow label="Rear handles capacitive" hint="OFF: rear handles mechanical-only — must auth at front first. ON: legacy wiring, rear pull initiates PEPS." dirty={isVLDirty('peps_rear_capacitive_handles')}>
+        <CfgBool val={!!vlVal('peps_rear_capacitive_handles')} onChange={b=>stageVL('peps_rear_capacitive_handles',b)}/>
       </CfgRow>
     </CfgSection>
+
+    {/* Apply & Reboot — persists staged Tier 2 + Tier 3 edits to
+        disk and triggers an in-process bridge reboot (simulates a
+        real ECU power cycle: NVM persists, all RAM state drops).
+        Also doubles as a "power cycle" affordance with no edits —
+        useful for testing NVM-restore flows. */}
+    <div style={{margin:'16px 4px',display:'flex',alignItems:'center',gap:12,padding:'12px 16px',
+      background:hasAnyDirty?'rgba(245,158,11,.08)':'var(--s2)',
+      border:`1px solid ${hasAnyDirty?'var(--amber)':'var(--bdr)'}`,
+      borderRadius:'var(--r6)'}}>
+      <div style={{flex:1}}>
+        <div style={{fontFamily:'var(--fd)',fontSize:11,fontWeight:700,letterSpacing:'.08em',color:'var(--white)'}}>
+          {hasAnyDirty?'PENDING CONFIG CHANGES':'POWER CYCLE'}
+        </div>
+        <div style={{fontFamily:'var(--fm)',fontSize:9,color:'var(--dim)',marginTop:2}}>
+          {hasAnyDirty
+            ? 'Persists vehicle_line.json + variant.json, then reboots the bridge so the new config takes effect.'
+            : 'No edits — Apply & Reboot will simulate a battery disconnect/reconnect (RAM state drops, NVM persists).'}
+        </div>
+      </div>
+      <button
+        onClick={onApplyReboot}
+        style={{
+          fontFamily:'var(--fm)',fontSize:11,fontWeight:700,letterSpacing:'.04em',
+          padding:'8px 16px',borderRadius:'var(--r4)',
+          background:hasAnyDirty?'var(--amber)':'var(--s3)',
+          color:hasAnyDirty?'#0A0F18':'var(--white)',
+          border:`1px solid ${hasAnyDirty?'var(--amber)':'var(--bdr2)'}`,
+          cursor:'pointer'
+        }}>
+        ⏻ APPLY &amp; REBOOT
+      </button>
+    </div>
 
   </div>;
 }
@@ -2413,6 +2468,14 @@ const VIEWS=[
 function App(){
   const [s,setS]=useState(INIT_STATE);
   const [cfg,setCfg]=useState(INIT_CONFIG);
+  // Staged Tier 2 / Tier 3 cal edits — persisted to disk and applied
+  // by the bridge boot loop on click of the "Apply & Reboot" button
+  // in the Config view.  Empty objects = no pending edits.
+  const [cfgStaged,setCfgStaged]=useState({vehicle_line:{},variant:{}});
+  // True from the moment the user clicks "Apply & Reboot" until the
+  // WS reconnects with a fresh boot snapshot.  Drives the rebooting
+  // overlay so the user sees feedback during the ~100 ms blackout.
+  const [rebooting,setRebooting]=useState(false);
   const [view,setView]=useState('top');
   const [time,setTime]=useState(new Date());
   const [wsConnected,setWsConnected]=useState(false);
@@ -2480,7 +2543,7 @@ function App(){
     function connect(){
       try{
         const ws=new WebSocket(`ws://${window.location.hostname||'localhost'}:8080`);
-        ws.onopen=()=>{setWsConnected(true);attemptsRef.current=0;
+        ws.onopen=()=>{setWsConnected(true);attemptsRef.current=0;setRebooting(false);
           // Reset HMI-owned defaults (e.g. fob-zone OUT, switches off);
           // bridge-owned signals come in the snapshot below.  wsHydrated
           // stays FALSE until that snapshot arrives.
@@ -2542,6 +2605,31 @@ function App(){
     }
   };
 
+  // Apply staged Tier 2 / Tier 3 cal edits and trigger an in-process
+  // bridge reboot.  Builds a single `{type:"reboot", ...}` message
+  // carrying the merged (current + staged) cal sections; the bridge
+  // persists them to disk via PlatformConfig::save_* and then bumps
+  // its boot loop.  WS connection drops, HMI auto-reconnects, the
+  // rebooting overlay clears when the fresh snapshot lands.
+  // Sending with no staged changes is also valid — it's a power-cycle
+  // simulation (NVM persists, all RAM state drops).
+  const applyAndReboot=()=>{
+    const msg={type:'reboot'};
+    const stagedVL=cfgStaged.vehicle_line||{};
+    const stagedV=cfgStaged.variant||{};
+    if(Object.keys(stagedVL).length>0){
+      msg.vehicle_line={...cfg.vehicle_line,...stagedVL};
+    }
+    if(Object.keys(stagedV).length>0){
+      msg.variant={...cfg.variant,...stagedV};
+    }
+    if(wsRef.current?.readyState===WebSocket.OPEN){
+      wsRef.current.send(JSON.stringify(msg));
+    }
+    setCfgStaged({vehicle_line:{},variant:{}});
+    setRebooting(true);
+  };
+
   const lo=s['Body.Lights.Beam.Low.IsOn'],hi=s['Body.Lights.Beam.High.IsOn'];
   const ffog=s['Body.Lights.Fog.Front.IsOn'],rfog=s['Body.Lights.Fog.Rear.IsOn'];
   const activeCount=Object.values(s).filter(v=>v===true).length;
@@ -2580,8 +2668,8 @@ function App(){
           <div className="hyd-overlay">
             <div className="hyd-card">
               <div className="dot"/>
-              <div>{wsConnected ? 'HYDRATING STATE…' : 'CONNECTING TO BRIDGE…'}</div>
-              <div className="sub">{wsConnected ? 'awaiting plant-model snapshot' : 'ws://localhost:8080'}</div>
+              <div>{rebooting ? 'BRIDGE REBOOTING…' : wsConnected ? 'HYDRATING STATE…' : 'CONNECTING TO BRIDGE…'}</div>
+              <div className="sub">{rebooting ? 'simulated power cycle — RAM cleared, NVM persists' : wsConnected ? 'awaiting plant-model snapshot' : 'ws://localhost:8080'}</div>
             </div>
           </div>
         )}
@@ -2609,7 +2697,8 @@ function App(){
           {view==='top'     &&<CombinedView s={s} set={set} onDeviceSelect={setSelDev}/>}
           {view==='side'    &&<SideView s={s} set={set}/>}
           {view==='cockpit' &&<CockpitView s={s} set={set}/>}
-          {view==='config'  &&<ConfigView cfg={cfg} onSet={setCfgKey}/>}
+          {view==='config'  &&<ConfigView cfg={cfg} onSet={setCfgKey}
+            staged={cfgStaged} setStaged={setCfgStaged} onApplyReboot={applyAndReboot}/>}
         </div>
         <div className="stbar">
           {[

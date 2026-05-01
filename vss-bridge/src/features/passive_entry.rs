@@ -148,9 +148,14 @@ const DOORS: [Door; 4] = [
     },
     Door {
         handle_signal: "Body.Doors.Row2.Left.Handle.Outside.IsPulled",
-        // Rear-side proximity sharing the cabin's LF perimeter when
-        // the vehicle-line cal enables capacitive rear handles.
-        proximity_zone: Zone::RightFront,
+        // Rear handle authenticates against the LF antenna on its own
+        // physical side.  Earlier revisions had both rear doors map
+        // to `RightFront` — a pre-existing carry-over from before the
+        // LHD driver-side mapping was introduced; the rear entries
+        // were never updated to match.  Per-side mapping is both
+        // more intuitive (fob near rear-left → Row2.Left works) and
+        // more accurate to typical real-vehicle PEPS antenna wiring.
+        proximity_zone: Zone::LeftFront,
         name: "Row2.Left",
     },
     Door {

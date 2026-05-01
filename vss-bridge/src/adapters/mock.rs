@@ -47,6 +47,22 @@ impl MockBus {
         self.history.lock().unwrap().clear();
     }
 
+    /// Drop all in-memory state — `latest` cache, history, and any
+    /// dangling broadcast channels.  Used by the in-process reboot
+    /// path to simulate a power cycle: NVM persists on disk, but
+    /// all RAM state goes away.  Existing subscribers' streams will
+    /// stay open but will receive no further events from the
+    /// dropped channels — features that re-spawn after reboot will
+    /// re-subscribe and start receiving fresh.
+    pub fn reset(&self) {
+        self.history.lock().unwrap().clear();
+        self.latest.lock().unwrap().clear();
+        // Dropping the channel map closes all broadcast senders;
+        // existing receivers see `Lagged`/`Closed`.  The post-reboot
+        // re-subscribe path creates fresh channels lazily.
+        self.channels.lock().unwrap().clear();
+    }
+
     /// Returns the most recently published value for a signal (survives
     /// `clear_history()`). Returns `None` if the signal was never published.
     pub fn latest_value(&self, signal: VssPath) -> Option<SignalValue> {

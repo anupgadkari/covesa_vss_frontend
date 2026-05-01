@@ -81,12 +81,32 @@
 //! into a single read-only view. Dealer config changes at runtime
 //! are propagated via a `tokio::sync::watch` channel.
 
-use std::path::Path;
+use std::fs;
+use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
+
+/// Default base directory for the static (Tier 2 / Tier 3) calibration
+/// JSON files when no env override is set.
+const DEFAULT_CONFIG_DIR: &str = "/etc/vss-bridge";
+
+/// Environment variable that overrides the calibration directory path.
+/// Set this to a writable, repo-local path during development (e.g.
+/// `VSS_BRIDGE_CONFIG_PATH=./config`) so the bridge can persist
+/// edited cals via the HMI's "Apply & Reboot" affordance without
+/// needing root.
+const ENV_CONFIG_PATH: &str = "VSS_BRIDGE_CONFIG_PATH";
+
+/// Resolve the calibration directory, honouring the env override.
+fn config_dir() -> PathBuf {
+    std::env::var(ENV_CONFIG_PATH)
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from(DEFAULT_CONFIG_DIR))
+}
 
 // ═══════════════════════════════════════════════════════════════════════
 // Tier 1 — Compile-time constants
@@ -122,8 +142,8 @@ pub const PRIORITY_HIGH: u8 = 3;
 // ═══════════════════════════════════════════════════════════════════════
 
 /// Calibration parameters common to an entire vehicle line.
-/// Loaded from `/etc/vss-bridge/vehicle_line.json`.
-#[derive(Debug, Clone, Deserialize)]
+/// Loaded from `<VSS_BRIDGE_CONFIG_PATH or /etc/vss-bridge>/vehicle_line.json`.
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default)]
 pub struct VehicleLineCal {
     /// Auto-relock timeout in seconds.
@@ -219,7 +239,7 @@ impl Default for VehicleLineCal {
 /// Loaded from `/etc/vss-bridge/variant.json`.
 /// This file is part of the BOM — flashed at the assembly plant or
 /// by reflash tool, survives OTA software updates.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default)]
 pub struct VariantCal {
     /// Auto-lock speed threshold in km/h.
@@ -254,7 +274,7 @@ pub struct VariantCal {
 /// removable. Features use this to determine which VSS door signals
 /// to monitor. A 2-door coupe only has Row1; a Bronco/Wrangler has
 /// all four doors but they are removable.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default)]
 pub struct DoorConfig {
     /// Front left door present (always true for any production vehicle).
@@ -380,7 +400,7 @@ impl DoorConfig {
 }
 
 /// Welcome light pattern options.
-#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
 pub enum WelcomeLightPattern {
     /// Simple on/off.
     #[default]
@@ -524,9 +544,15 @@ impl PlatformConfig {
     /// Missing files are not an error — defaults are used. This allows
     /// development without a full calibration file set.
     pub fn load() -> Arc<Self> {
-        let vehicle_line =
-            load_json_or_default::<VehicleLineCal>("/etc/vss-bridge/vehicle_line.json");
-        let variant = load_json_or_default::<VariantCal>("/etc/vss-bridge/variant.json");
+        let dir = config_dir();
+        let vehicle_line = load_json_or_default::<VehicleLineCal>(
+            dir.join("vehicle_line.json")
+                .to_str()
+                .unwrap_or("vehicle_line.json"),
+        );
+        let variant = load_json_or_default::<VariantCal>(
+            dir.join("variant.json").to_str().unwrap_or("variant.json"),
+        );
         let dealer = DealerConfig::default(); // M7 pushes real values at boot
 
         let (dealer_config_tx, dealer_config_rx) = watch::channel(dealer);
@@ -646,6 +672,25 @@ impl PlatformConfig {
         *self.variant.write().unwrap() = new_variant;
     }
 
+    // ── Tier 2 / 3 persistence ─────────────────────────────────────
+    //
+    // Save the current static cals to disk.  In production these
+    // files would be flashed at the build line and managed by a PLM
+    // system; for development the HMI can edit + persist them via
+    // the "Apply & Reboot" affordance.  Atomic temp+rename write so
+    // a crash mid-save can never leave a half-written file.
+
+    /// Persist a `VehicleLineCal` to disk under `<config_dir>/vehicle_line.json`.
+    /// Returns `Ok(path)` with the resolved path on success.
+    pub fn save_vehicle_line(vl: &VehicleLineCal) -> std::io::Result<PathBuf> {
+        save_json_atomic("vehicle_line.json", vl)
+    }
+
+    /// Persist a `VariantCal` to disk under `<config_dir>/variant.json`.
+    pub fn save_variant(v: &VariantCal) -> std::io::Result<PathBuf> {
+        save_json_atomic("variant.json", v)
+    }
+
     /// Whether a given feature is enabled for this variant.
     pub fn is_feature_enabled(&self, feature: &str) -> bool {
         let v = self.variant.read().unwrap();
@@ -750,6 +795,27 @@ fn load_json_or_default<T: Default + serde::de::DeserializeOwned>(path: &str) ->
             T::default()
         }
     }
+}
+
+/// Atomically write a JSON value to `<config_dir>/<file_name>`.  Uses
+/// the same temp-file-then-rename pattern as `NvmStore::save` so a
+/// crash mid-write cannot leave a partial file.
+fn save_json_atomic<T: Serialize>(file_name: &str, value: &T) -> std::io::Result<PathBuf> {
+    let dir = config_dir();
+    fs::create_dir_all(&dir)?;
+    let path = dir.join(file_name);
+    let tmp = dir.join(format!("{file_name}.tmp"));
+
+    let json = serde_json::to_string_pretty(value)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    {
+        let mut f = fs::File::create(&tmp)?;
+        f.write_all(json.as_bytes())?;
+        f.sync_all()?;
+    }
+    fs::rename(&tmp, &path)?;
+    tracing::info!(path = %path.display(), "config: persisted to disk");
+    Ok(path)
 }
 
 // ═══════════════════════════════════════════════════════════════════════
