@@ -96,6 +96,12 @@ const INPUT_SIGNALS: &[VssPath] = &[
     "Body.Doors.Row2.Right.CloseCmd",
     // Trunk close command — sent when user taps the open trunk in the HMI.
     "Body.Trunk.CloseCmd",
+    // Exterior trunk-release button — capacitive press above the licence
+    // plate.  Consumed by the ExteriorTrunkButton + PassiveEntry features.
+    "Body.Trunk.ExteriorButton.IsPressed",
+    // Valet mode toggle — published by infotainment in production.
+    // Gates the trunk arbiter's ValetGate `PhysicalGate`.
+    "Cabin.ValetMode.IsActive",
     // Diagnostic overrides (DoorCard direct-write).
     "Body.Doors.Row1.Left.IsOpen",
     "Body.Doors.Row1.Right.IsOpen",

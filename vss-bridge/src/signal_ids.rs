@@ -138,6 +138,14 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Body.Trunk.CloseCmd" => Some(0x0006_0008),
         "Body.FuelLid.IsOpen" => Some(0x0006_0005),
         "Body.ChargeLid.IsOpen" => Some(0x0006_0006),
+        // Exterior trunk-release button — capacitive press above the
+        // license plate.  HMI-publishable momentary input; consumed by
+        // the ExteriorTrunkButton feature.  Name is neutral on the
+        // pop-vs-power-open distinction so a future power-liftgate
+        // plant model can subscribe to the same trigger without a
+        // signal rename.  ID 0x0006_0009 is taken by the alarm signal,
+        // so this slots at 0x0006_000A.
+        "Body.Trunk.ExteriorButton.IsPressed" => Some(0x0006_000A),
 
         // Sunroof
         "Body.Sunroof.Position" => Some(0x0007_0001),
@@ -321,6 +329,16 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // Used by ManualLighting AUTO mode to gate low-beam activation.
         "Body.Lights.AmbientLightSensor.Illuminance" => Some(0x0015_0001),
 
+        // Valet mode (OEM custom — block 0x0017).  Published by the
+        // infotainment HMI when the user enters Valet via the
+        // touchscreen + secret code.  When true, the ExteriorTrunkButton
+        // feature short-circuits (locked path skips even the LF
+        // challenge) and the trunk_arbiter's ValetGate suppresses any
+        // Body.Trunk.OpenCmd from any source (RKE included).  Glove
+        // box and any future valet-gated actuators subscribe in the
+        // same way.
+        "Cabin.ValetMode.IsActive" => Some(0x0017_0001),
+
         // ADAS camera signals (OEM custom — block 0x0016).
         // OncomingVehicleDetected: true when forward camera sees oncoming headlights.
         "Vehicle.ADAS.HighBeam.OncomingVehicleDetected" => Some(0x0016_0001),
@@ -480,6 +498,7 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Body.FuelLid.IsOpen", 0x0006_0005),
     ("Body.ChargeLid.IsOpen", 0x0006_0006),
     ("Vehicle.Body.Alarm.IsActive", 0x0006_0009),
+    ("Body.Trunk.ExteriorButton.IsPressed", 0x0006_000A),
     ("Body.Doors.AutoRelock.IsArmed", 0x000A_0040),
     ("Body.Doors.AutoRelock.TimeoutSeconds", 0x000A_0041),
     ("Body.Sunroof.Position", 0x0007_0001),
@@ -608,8 +627,11 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ),
     ("Body.Doors.CentralLock.Command", 0x0014_0004),
     ("Cabin.LockStatus", 0x0014_0005),
+    ("Cabin.LockStatus.LastRequestor", 0x0014_0006),
+    ("Cabin.LockStatus.EventNum", 0x0014_0007),
     ("Body.Lights.AmbientLightSensor.Illuminance", 0x0015_0001),
     ("Vehicle.ADAS.HighBeam.OncomingVehicleDetected", 0x0016_0001),
+    ("Cabin.ValetMode.IsActive", 0x0017_0001),
 ];
 
 #[cfg(test)]

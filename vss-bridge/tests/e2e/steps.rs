@@ -195,6 +195,13 @@ impl VssWorld {
         let plant = PepsPlantModel::new(Arc::clone(&bus));
         self._tasks.push(tokio::spawn(plant.run()));
 
+        // TrunkArbiter — needed by PassiveEntry's exterior-trunk-button
+        // auth path.  Door scenarios never exercise the trunk path so
+        // the arbiter sits idle, but PassiveEntry::new() requires it.
+        let (tarb, tarb_fut) = arbiter::trunk_arbiter(Arc::clone(&bus));
+        self._tasks.push(tokio::spawn(tarb_fut));
+        let tarb = Arc::new(tarb);
+
         // Paired-device list — secrets match the plant's defaults so
         // challenge responses verify.  Mirror of
         // `passive_entry::tests::default_secret(...)`.
@@ -225,7 +232,7 @@ impl VssWorld {
             });
         }
 
-        let pe = PassiveEntry::new(Arc::clone(&bus), dlarb, Arc::clone(&cfg), paired);
+        let pe = PassiveEntry::new(Arc::clone(&bus), dlarb, tarb, Arc::clone(&cfg), paired);
         self._tasks.push(tokio::spawn(pe.run()));
 
         // Yield until every spawned task reaches its first

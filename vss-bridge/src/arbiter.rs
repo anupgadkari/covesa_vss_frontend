@@ -1155,6 +1155,60 @@ pub fn puddle_arbiter<B: SignalBus>(
     DomainArbiter::new_with_gates("Puddle", allow_list, gates, bus)
 }
 
+/// Trunk-open command signal — neutral on pop vs power-open so future
+/// power-liftgate plant models can replace the simple pop-latch
+/// `TrunkPlantModel` without any feature-side rename.
+pub const TRUNK_OPEN_CMD: VssPath = "Body.Trunk.OpenCmd";
+
+/// Create the Trunk domain arbiter.
+///
+/// All trunk-open writers route through here so a single
+/// `Cabin.ValetMode.IsActive` gate suppresses every path uniformly:
+/// RKE TrunkRelease, ExteriorTrunkButton (both unlocked-direct and
+/// PassiveEntry-authenticated paths), future phone-app trunk-open,
+/// future hands-free liftgate kick-sensor.  Cabin doors are unaffected
+/// — valet drives the car with cabin access, just not trunk/glovebox.
+///
+/// Priority is uniform `Medium` because there is no contention between
+/// these features today; they are alternative trigger sources for the
+/// same momentary `Body.Trunk.OpenCmd` edge.  The `PhysicalGate` is
+/// what does the policy work.
+pub fn trunk_arbiter<B: SignalBus>(
+    bus: Arc<B>,
+) -> (DomainArbiter, impl std::future::Future<Output = ()>) {
+    let allow_list = vec![
+        AllowEntry {
+            feature_id: FeatureId::KeyfobRke,
+            signal: TRUNK_OPEN_CMD,
+            priority: Priority::Medium,
+        },
+        AllowEntry {
+            feature_id: FeatureId::ExteriorTrunkButton,
+            signal: TRUNK_OPEN_CMD,
+            priority: Priority::Medium,
+        },
+        AllowEntry {
+            feature_id: FeatureId::PassiveEntry,
+            signal: TRUNK_OPEN_CMD,
+            priority: Priority::Medium,
+        },
+    ];
+
+    // Valet-mode gate: when `Cabin.ValetMode.IsActive` is true, force
+    // `Body.Trunk.OpenCmd` to false regardless of which feature is
+    // claiming.  Same `PhysicalGate` pattern as the puddle arbiter's
+    // mirror-fold suppression — the gate models a *policy* constraint
+    // (valet should not access the trunk) at the actuator boundary so
+    // every trunk-open writer inherits it for free.
+    let gates = vec![PhysicalGate {
+        target: TRUNK_OPEN_CMD,
+        gate_signal: "Cabin.ValetMode.IsActive",
+        suppress_when: SignalValue::Bool(true),
+    }];
+
+    DomainArbiter::new_with_gates("Trunk", allow_list, gates, bus)
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -1941,6 +1995,154 @@ mod tests {
             bus.latest_value("Body.Lights.Puddle.Right.IsOn"),
             Some(SignalValue::Bool(true)),
             "right puddle unaffected by left-mirror gate"
+        );
+    }
+
+    // ─── trunk_arbiter (valet gate) ──────────────────────────────────
+
+    async fn setup_trunk() -> (DomainArbiter, Arc<MockBus>) {
+        let bus = Arc::new(MockBus::new());
+        let (arbiter, loop_fut) = trunk_arbiter(Arc::clone(&bus));
+        tokio::spawn(loop_fut);
+        for _ in 0..16 {
+            tokio::task::yield_now().await;
+        }
+        (arbiter, bus)
+    }
+
+    /// Helper: pulse `Body.Trunk.OpenCmd` via the trunk arbiter as a
+    /// momentary edge — request true, then release so the next press
+    /// can fire again.
+    async fn pulse_trunk_open(arbiter: &DomainArbiter, feature_id: FeatureId) {
+        arbiter
+            .request(ActuatorRequest {
+                signal: TRUNK_OPEN_CMD,
+                value: SignalValue::Bool(true),
+                priority: Priority::Medium,
+                feature_id,
+            })
+            .await
+            .unwrap();
+        yield_settle().await;
+        arbiter.release(TRUNK_OPEN_CMD, feature_id).await.unwrap();
+        yield_settle().await;
+    }
+
+    #[tokio::test]
+    async fn trunk_arbiter_passes_open_cmd_when_valet_inactive() {
+        let (arbiter, bus) = setup_trunk().await;
+
+        // Default valet is unset (treated as gate open).
+        pulse_trunk_open(&arbiter, FeatureId::ExteriorTrunkButton).await;
+
+        // The bus history should show a true → false pulse.
+        let trues = bus
+            .history()
+            .iter()
+            .filter(|(p, v)| *p == TRUNK_OPEN_CMD && *v == SignalValue::Bool(true))
+            .count();
+        assert!(
+            trues >= 1,
+            "valet inactive: arbiter must publish OpenCmd=true on request"
+        );
+    }
+
+    #[tokio::test]
+    async fn trunk_arbiter_drops_open_cmd_when_valet_active() {
+        let (arbiter, bus) = setup_trunk().await;
+
+        // Activate valet BEFORE the press.
+        bus.inject("Cabin.ValetMode.IsActive", SignalValue::Bool(true));
+        yield_settle().await;
+
+        pulse_trunk_open(&arbiter, FeatureId::ExteriorTrunkButton).await;
+
+        // Gate forces false; no true ever reaches Body.Trunk.OpenCmd.
+        let trues = bus
+            .history()
+            .iter()
+            .filter(|(p, v)| *p == TRUNK_OPEN_CMD && *v == SignalValue::Bool(true))
+            .count();
+        assert_eq!(
+            trues, 0,
+            "valet active: arbiter must suppress OpenCmd=true on every request"
+        );
+    }
+
+    #[tokio::test]
+    async fn trunk_arbiter_valet_blocks_rke_path() {
+        let (arbiter, bus) = setup_trunk().await;
+
+        bus.inject("Cabin.ValetMode.IsActive", SignalValue::Bool(true));
+        yield_settle().await;
+
+        // RKE TrunkRelease routed through the same arbiter — the gate
+        // applies regardless of feature.
+        pulse_trunk_open(&arbiter, FeatureId::KeyfobRke).await;
+
+        let trues = bus
+            .history()
+            .iter()
+            .filter(|(p, v)| *p == TRUNK_OPEN_CMD && *v == SignalValue::Bool(true))
+            .count();
+        assert_eq!(
+            trues, 0,
+            "valet must gate RKE TrunkRelease the same as the exterior button"
+        );
+    }
+
+    #[tokio::test]
+    async fn trunk_arbiter_valet_does_not_close_already_open_trunk() {
+        // The gate is on `Body.Trunk.OpenCmd`, not `Body.Trunk.IsOpen`.
+        // Activating valet while the trunk is open must NOT publish a
+        // close command — IsOpen lives in the plant model and we never
+        // want to slam the lid shut.
+        let (_arbiter, bus) = setup_trunk().await;
+
+        // Pretend the trunk is already open (plant-model state).
+        bus.inject("Body.Trunk.IsOpen", SignalValue::Bool(true));
+        yield_settle().await;
+
+        // Activate valet.
+        bus.inject("Cabin.ValetMode.IsActive", SignalValue::Bool(true));
+        yield_settle().await;
+
+        // Body.Trunk.IsOpen unchanged; the arbiter has no business
+        // touching it — it only governs `Body.Trunk.OpenCmd`.
+        assert_eq!(
+            bus.latest_value("Body.Trunk.IsOpen"),
+            Some(SignalValue::Bool(true)),
+            "valet activation must not close an already-open trunk"
+        );
+    }
+
+    #[tokio::test]
+    async fn trunk_arbiter_valet_deactivation_allows_subsequent_press() {
+        let (arbiter, bus) = setup_trunk().await;
+
+        // Valet on → press blocked.
+        bus.inject("Cabin.ValetMode.IsActive", SignalValue::Bool(true));
+        yield_settle().await;
+        pulse_trunk_open(&arbiter, FeatureId::ExteriorTrunkButton).await;
+        let trues_blocked = bus
+            .history()
+            .iter()
+            .filter(|(p, v)| *p == TRUNK_OPEN_CMD && *v == SignalValue::Bool(true))
+            .count();
+        assert_eq!(trues_blocked, 0);
+
+        // Valet off → next press passes through.
+        bus.inject("Cabin.ValetMode.IsActive", SignalValue::Bool(false));
+        yield_settle().await;
+        pulse_trunk_open(&arbiter, FeatureId::ExteriorTrunkButton).await;
+        let trues_after = bus
+            .history()
+            .iter()
+            .filter(|(p, v)| *p == TRUNK_OPEN_CMD && *v == SignalValue::Bool(true))
+            .count();
+        assert!(
+            trues_after >= 1,
+            "valet deactivated: subsequent press must publish OpenCmd=true"
         );
     }
 }
