@@ -111,6 +111,30 @@ struct Door {
     name: &'static str,
 }
 
+/// All four outside handles, with the front pair always active and
+/// the rear pair gated at runtime by the vehicle-line cal
+/// `vehicle_line.peps_rear_capacitive_handles`.
+///
+/// We always subscribe to all four signals at startup so the cal
+/// can flip live without re-subscribing — the rear gate is applied
+/// per-event in [`PassiveEntry::run`] just before kicking off
+/// auth.  Compiles to a no-op extra branch when the cal is off,
+/// which is the default-modern-wiring case.
+///
+/// # Hardware-vs-software gating
+///
+/// Real-vehicle PEPS architecture typically wires capacitive touch
+/// sensors only on the driver and front-passenger door handles —
+/// rear handles are purely mechanical, with no LF antenna and no
+/// challenge-initiating circuitry.  That's what `peps_rear_capacitive_handles
+/// = false` (the default) models.  Some legacy / older trims wired
+/// all four handles; setting the cal to `true` matches that
+/// behaviour for regression testing or trim-specific deployments.
+///
+/// **Vehicle-line, not dealer.**  Whether the rear handles are
+/// wired with capacitive sensors is a hardware-build decision baked
+/// into the vehicle line — a dealer cannot flip it post-build
+/// because it would require re-wiring the door modules.
 const DOORS: [Door; 4] = [
     Door {
         handle_signal: "Body.Doors.Row1.Left.Handle.Outside.IsPulled",
@@ -124,12 +148,8 @@ const DOORS: [Door; 4] = [
     },
     Door {
         handle_signal: "Body.Doors.Row2.Left.Handle.Outside.IsPulled",
-        // Real vehicles split the proximity antenna pattern symmetrically;
-        // for now we treat any paired device in driver/passenger LF
-        // coverage as eligible to unlock a rear door (rear doors share
-        // the cabin LF perimeter).  Passive-entry features used in
-        // production typically go further and fence rear-door auth on
-        // a successful primary stage 2 — easy to add later.
+        // Rear-side proximity sharing the cabin's LF perimeter when
+        // the vehicle-line cal enables capacitive rear handles.
         proximity_zone: Zone::RightFront,
         name: "Row2.Left",
     },
@@ -139,6 +159,12 @@ const DOORS: [Door; 4] = [
         name: "Row2.Right",
     },
 ];
+
+/// Returns true if the door is a rear door (Row2.*) — used to gate
+/// rear-handle pulls behind the vehicle-line cal.
+fn is_rear_door(door: &Door) -> bool {
+    door.name.starts_with("Row2.")
+}
 
 /// True if this physical door is the driver door under the current
 /// `dealer.driver_door_side` cal.  RHD swaps Row1.Left ↔ Row1.Right
@@ -337,6 +363,20 @@ impl<B: SignalBus + Send + Sync + 'static> PassiveEntry<B> {
                     continue;
                 }
                 let door = &DOORS[idx];
+                // Rear-handle gate — see DOORS doc comment.  When the
+                // vehicle-line cal says rear handles are mechanical-
+                // only (default for modern wiring), we drop the event
+                // invisibly so PassiveEntry behaves exactly like a
+                // vehicle whose rear handles aren't wired to the PEPS
+                // controller.
+                if is_rear_door(door) && !self.config.vehicle_line.peps_rear_capacitive_handles {
+                    tracing::debug!(
+                        door = door.name,
+                        "PassiveEntry: rear handle pulled but capacitive sensing is \
+                         not wired on this vehicle line — ignoring"
+                    );
+                    continue;
+                }
                 self.try_unlock_for_door(door).await;
             } else if idx < trunk_idx {
                 // Zone update for paired_devices[idx - n_handles].
@@ -1018,11 +1058,11 @@ mod tests {
         );
     }
 
-    /// Same rule for rear passenger-side doors — Row2.{Left,Right}
-    /// share the passenger-side LF perimeter and therefore behave the
-    /// same as the front passenger handle.
+    /// Default behaviour: rear handles are mechanical-only — no
+    /// capacitive sensor, no LF antenna.  A rear handle pull must
+    /// NOT trigger PassiveEntry, regardless of fob proximity.
     #[tokio::test]
-    async fn rear_handle_pull_unlocks_all_even_with_two_stage() {
+    async fn rear_handle_pull_does_not_trigger_passive_entry_by_default() {
         let bus = setup().await;
         bus.inject(
             peps_signals::KEYFOB_1_ZONE,
@@ -1031,12 +1071,97 @@ mod tests {
         drain().await;
         bus.clear_history();
 
-        bus.inject(
+        for handle in [
+            "Body.Doors.Row2.Left.Handle.Outside.IsPulled",
+            "Body.Doors.Row2.Right.Handle.Outside.IsPulled",
+        ] {
+            bus.inject(handle, SignalValue::Bool(true));
+        }
+        drain().await;
+
+        assert_eq!(
+            last_command(&bus),
+            None,
+            "rear-handle pulls must not produce any door-lock command \
+             when peps_rear_capacitive_handles=false (the default)"
+        );
+        let challenge_fired = bus
+            .history()
+            .into_iter()
+            .any(|(s, _)| s == peps_signals::PEPS_LF_CHALLENGE);
+        assert!(
+            !challenge_fired,
+            "rear-handle pull must not fire an LF challenge in default mode"
+        );
+    }
+
+    /// Legacy behaviour: with `peps_rear_capacitive_handles = true`,
+    /// rear handles are wired to the PEPS controller and behave like
+    /// a passenger-side front pull (bypasses two-stage, unlocks all).
+    #[tokio::test]
+    async fn rear_handle_pull_unlocks_all_when_capacitive_enabled() {
+        // Build a side-channel test stack with a vehicle-line cal that
+        // wires the rear handles capacitively.
+        let vl = crate::config::VehicleLineCal {
+            peps_rear_capacitive_handles: true,
+            ..Default::default()
+        };
+        let cfg = PlatformConfig::with_vehicle_line(vl);
+
+        let bus2 = Arc::new(MockBus::new());
+        let (arb, ack_tx, arb_fut) = door_lock_arbiter(Arc::clone(&bus2));
+        tokio::spawn(arb_fut);
+        let arb = Arc::new(arb);
+        let dlpm = DoorLockPlantModel::with_ack_tx(Arc::clone(&bus2), ack_tx);
+        tokio::spawn(dlpm.run());
+        let plant = PepsPlantModel::new(Arc::clone(&bus2));
+        tokio::spawn(plant.run());
+        let (tarb, tarb_fut) = trunk_arbiter(Arc::clone(&bus2));
+        tokio::spawn(tarb_fut);
+        let tarb = Arc::new(tarb);
+        let mut paired = Vec::new();
+        for i in 1u8..=4 {
+            paired.push(PairedDevice {
+                kind: DeviceKind::Fob,
+                slot: (i - 1) as usize,
+                secret: default_secret(b'F', i),
+            });
+        }
+        let pe = PassiveEntry::new(Arc::clone(&bus2), arb, tarb, Arc::clone(&cfg), paired);
+        tokio::spawn(pe.run());
+        for _ in 0..32 {
+            tokio::task::yield_now().await;
+        }
+
+        // Place fob in the rear-zone equivalent and pull the rear
+        // handle — should unlock all (front-passenger-bypass-style
+        // path runs because Row2.* maps to RightFront proximity).
+        bus2.inject(
+            peps_signals::KEYFOB_1_ZONE,
+            SignalValue::String("RightFront".into()),
+        );
+        drain().await;
+        bus2.clear_history();
+
+        bus2.inject(
             "Body.Doors.Row2.Right.Handle.Outside.IsPulled",
             SignalValue::Bool(true),
         );
         drain().await;
-        assert_eq!(last_command(&bus), Some("unlock_all".into()));
+
+        let cmd = bus2.history().into_iter().rev().find_map(|(s, v)| {
+            if s == "Body.Doors.CentralLock.Command" {
+                if let SignalValue::String(c) = v {
+                    return Some(c);
+                }
+            }
+            None
+        });
+        assert_eq!(
+            cmd,
+            Some("unlock_all".into()),
+            "with peps_rear_capacitive_handles=true, rear pull must unlock all"
+        );
     }
 
     // ── RHD support ─────────────────────────────────────────────────────
