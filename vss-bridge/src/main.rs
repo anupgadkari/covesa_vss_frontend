@@ -3,8 +3,33 @@
 //! This binary runs on the A53 cluster under Android Automotive OS.
 //! It bridges the Safety Monitor (M7, RPmsg) with kuksa.val (gRPC)
 //! and the Web HMI (WebSocket).
+//!
+//! # Boot loop / in-process reboot
+//!
+//! `main` is a *boot loop*.  Each iteration constructs a fresh
+//! `MockBus`, loads `PlatformConfig` from disk, and spawns every
+//! arbiter, feature, plant model, and the WebSocket bridge into a
+//! single `JoinSet`.  When the HMI sends `{"type":"reboot"}` (after
+//! persisting any edited cals), the bridge bumps a `tokio::sync::watch`
+//! counter; the boot loop sees the change, aborts the entire JoinSet,
+//! drops the bus, and starts the next iteration with the freshly
+//! re-loaded config.  NVM persists on disk across the cycle, mimicking
+//! a real ECU power cycle.
+//!
+//! Things that DO survive a reboot:
+//!   • the HTTP file server (so `http://localhost:3000/vss-hmi.html`
+//!     stays loadable mid-reboot)
+//!   • on-disk state — NVM (`door_lock.json`, `trunk.json`, …) and
+//!     the calibration files themselves
+//!
+//! Things that DO NOT survive:
+//!   • everything in RAM — bus latest-cache, history, every feature's
+//!     internal state machines, every arbiter's claim table
+//!   • all WebSocket client connections (HMI auto-reconnects on the
+//!     next iteration's listener)
 
 use std::sync::Arc;
+use tokio::task::JoinSet;
 use tracing_subscriber::EnvFilter;
 
 use axum::Router;
@@ -13,7 +38,7 @@ use tower_http::set_header::SetResponseHeaderLayer;
 
 use vss_bridge::adapters::mock::MockBus;
 use vss_bridge::arbiter;
-use vss_bridge::config;
+use vss_bridge::config::PlatformConfig;
 use vss_bridge::features::auto_high_beam::AutoHighBeam;
 use vss_bridge::features::auto_relock::AutoRelock;
 use vss_bridge::features::brake_reverse_lamps::BrakeReverseLamps;
@@ -62,38 +87,133 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     // ── CLI flags ──────────────────────────────────────────────────
-    // `--reset-nvm` wipes persisted state on boot — used to simulate a
-    // factory-new vehicle for cold-boot test scenarios.  Anything more
-    // sophisticated should grow into clap; today we only have one flag.
     let args: Vec<String> = std::env::args().collect();
     let reset_nvm = args.iter().any(|a| a == "--reset-nvm");
 
     tracing::info!(reset_nvm, "vss-bridge starting");
 
-    // ── NVM store ──────────────────────────────────────────────────
-    // Path defaults to ./nvm/ (overridable via VSS_BRIDGE_NVM_PATH).
-    // Plant models that own persistent state load from / save to here.
-    // See docs/signal-ownership-and-state-hydration.md §3.
+    // ── NVM store (survives reboots) ───────────────────────────────
     let nvm = NvmStore::from_env();
     if reset_nvm {
         nvm.reset();
     }
 
-    // Platform configuration — four-tier system:
-    //   Tier 1: compile-time constants (config::IPC_MAGIC, etc.)
-    //   Tier 2: vehicle-line calibration (/etc/vss-bridge/vehicle_line.json)
-    //   Tier 3: variant/trim calibration (/etc/vss-bridge/variant.json)
-    //   Tier 4: dealer config (pushed by M7 via RPmsg at boot + runtime)
-    let _platform_config = config::PlatformConfig::load();
+    // ── Reboot signal — incremented by ws_bridge on `{type:reboot}` ─
+    // The boot loop awaits a change to this counter and rebuilds the
+    // entire simulation stack against fresh config + a fresh bus.
+    let (reboot_tx, mut reboot_rx) = tokio::sync::watch::channel(0u64);
 
-    // Transport adapter — swap this line to change transport:
-    //   let bus = Arc::new(RpmsgBus::new("/dev/rpmsg0", "/dev/rpmsg1").await?);
-    let bus = Arc::new(MockBus::new());
+    // ── HTTP file server (kept alive across reboots) ───────────────
+    let http_port: u16 = std::env::var("VSS_BRIDGE_HTTP_PORT")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(3000);
+    let hmi_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("repo root")
+        .to_path_buf();
+    let http_app = Router::new()
+        .nest_service("/", ServeDir::new(hmi_root))
+        .layer(SetResponseHeaderLayer::overriding(
+            axum::http::header::CACHE_CONTROL,
+            axum::http::HeaderValue::from_static("no-store"),
+        ));
+    let http_listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{http_port}")).await?;
+    tokio::spawn(async move {
+        if let Err(e) = axum::serve(http_listener, http_app).await {
+            tracing::error!(error = %e, "HTTP file server failed");
+        }
+    });
 
-    tracing::info!(
-        signals = signal_ids::ALL_SIGNALS.len(),
-        "signal catalog loaded"
-    );
+    // ── ctrl_c trigger — gracefully exit the boot loop ─────────────
+    let (shutdown_tx, mut shutdown_rx) = tokio::sync::watch::channel(false);
+    tokio::spawn(async move {
+        if tokio::signal::ctrl_c().await.is_ok() {
+            tracing::info!("ctrl_c received — exiting boot loop");
+            let _ = shutdown_tx.send(true);
+        }
+    });
+
+    // ── Boot loop ──────────────────────────────────────────────────
+    let mut boot_id: u64 = 0;
+    loop {
+        boot_id += 1;
+        tracing::info!(boot_id, "vss-bridge boot");
+
+        let cfg = PlatformConfig::load();
+        let bus = Arc::new(MockBus::new());
+
+        tracing::info!(
+            signals = signal_ids::ALL_SIGNALS.len(),
+            "signal catalog loaded"
+        );
+
+        let mut stack = boot_simulation_stack(
+            Arc::clone(&bus),
+            nvm.clone(),
+            Arc::clone(&cfg),
+            reboot_tx.clone(),
+        )
+        .await?;
+
+        if boot_id == 1 {
+            tracing::info!("vss-bridge ready");
+            tracing::info!("  HMI:             http://localhost:{http_port}/vss-hmi.html");
+            tracing::info!("  WebSocket:       ws://localhost:8080");
+            tracing::info!("  Press Ctrl+C to stop");
+        }
+
+        // Wait until either:
+        //   (a) reboot_rx ticks past `boot_id` (HMI requested reboot)
+        //   (b) shutdown_rx flips true (ctrl_c)
+        //   (c) the JoinSet drains (catastrophic — every task ended)
+        loop {
+            tokio::select! {
+                Ok(_) = reboot_rx.changed() => {
+                    let new = *reboot_rx.borrow();
+                    if new >= boot_id {
+                        tracing::info!(boot_id, new, "reboot signal received — tearing down stack");
+                        break;
+                    }
+                }
+                Ok(_) = shutdown_rx.changed() => {
+                    if *shutdown_rx.borrow() {
+                        tracing::info!("shutdown received — tearing down stack");
+                        stack.abort_all();
+                        while stack.join_next().await.is_some() {}
+                        return Ok(());
+                    }
+                }
+                Some(res) = stack.join_next() => {
+                    if let Err(e) = res {
+                        if !e.is_cancelled() {
+                            tracing::warn!(error = %e, "task in simulation stack ended unexpectedly");
+                        }
+                    }
+                }
+                else => break,
+            }
+        }
+
+        // Tear down the current stack.
+        stack.abort_all();
+        while stack.join_next().await.is_some() {}
+        bus.reset();
+        tracing::info!(boot_id, "stack torn down — looping for fresh boot");
+    }
+}
+
+/// Build and spawn the entire simulation stack (arbiters, features,
+/// plant models, WebSocket bridge) into a single `JoinSet`.  Returns
+/// the populated set; the caller drops/aborts it to tear everything
+/// down for an in-process reboot.
+async fn boot_simulation_stack(
+    bus: Arc<MockBus>,
+    nvm: NvmStore,
+    cfg: Arc<PlatformConfig>,
+    reboot_tx: tokio::sync::watch::Sender<u64>,
+) -> anyhow::Result<JoinSet<()>> {
+    let mut set: JoinSet<()> = JoinSet::new();
 
     // ── Domain Arbiters ─────────────────────────────────────────────
     let (lighting_arb, lighting_fut) = arbiter::lighting_arbiter(Arc::clone(&bus));
@@ -106,14 +226,14 @@ async fn main() -> anyhow::Result<()> {
     let (puddle_arb, puddle_fut) = arbiter::puddle_arbiter(Arc::clone(&bus));
     let (trunk_arb, trunk_fut) = arbiter::trunk_arbiter(Arc::clone(&bus));
 
-    tokio::spawn(lighting_fut);
-    tokio::spawn(low_beam_fut);
-    tokio::spawn(door_lock_fut);
-    tokio::spawn(horn_fut);
-    tokio::spawn(comfort_fut);
-    tokio::spawn(courtesy_fut);
-    tokio::spawn(puddle_fut);
-    tokio::spawn(trunk_fut);
+    set.spawn(lighting_fut);
+    set.spawn(low_beam_fut);
+    set.spawn(door_lock_fut);
+    set.spawn(horn_fut);
+    set.spawn(comfort_fut);
+    set.spawn(courtesy_fut);
+    set.spawn(puddle_fut);
+    set.spawn(trunk_fut);
 
     let lighting_arb = Arc::new(lighting_arb);
     let low_beam_arb = Arc::new(low_beam_arb);
@@ -124,40 +244,26 @@ async fn main() -> anyhow::Result<()> {
     let trunk_arb = Arc::new(trunk_arb);
 
     // ── Feature Business Logic ──────────────────────────────────────
-    let lux_threshold = _platform_config.vehicle_line.auto_headlamp_lux_threshold;
+    let lux_threshold = cfg.vehicle_line.auto_headlamp_lux_threshold;
 
-    // ManualLighting — switch-driven low/high/DRL/parking/license outputs via LowBeam arbiter.
-    tokio::spawn(
+    set.spawn(
         ManualLighting::new(Arc::clone(&low_beam_arb), Arc::clone(&bus), lux_threshold).run(),
     );
-
-    // FollowMeHome — activates low beam 45 s after ignition-off door open (dark only).
-    tokio::spawn(
-        FollowMeHome::new(Arc::clone(&low_beam_arb), Arc::clone(&bus), lux_threshold).run(),
-    );
-
-    // HazardLighting — no ignition gate, works in any power state
-    tokio::spawn(HazardLighting::new(Arc::clone(&lighting_arb), Arc::clone(&bus)).run());
-
-    // TurnIndicator — ignition-gated (ON/START only), with comfort blink
-    tokio::spawn(
+    set.spawn(FollowMeHome::new(Arc::clone(&low_beam_arb), Arc::clone(&bus), lux_threshold).run());
+    set.spawn(HazardLighting::new(Arc::clone(&lighting_arb), Arc::clone(&bus)).run());
+    set.spawn(
         TurnIndicator::with_config(
             Arc::clone(&lighting_arb),
             Arc::clone(&bus),
-            Arc::clone(&_platform_config),
+            Arc::clone(&cfg),
         )
         .run(),
     );
 
-    // RKE — Remote Keyless Entry.
-    // Provisioned fob secrets must match the PEPS plant model's default_secret().
-    // In production these come from key provisioning (not hard-coded here).
+    // RKE — paired fobs match the PEPS plant model's default secrets.
     let rke_fobs: Vec<PairedFob> = (1u8..=4)
         .map(|i| {
-            // Must match plant model's default_secret(b'F', index).
-            // Formula: key[0]=device_type, key[1]=index,
-            //          key[k] = device_type*17 + index*31 + k  (for k >= 2)
-            const DEVICE_TYPE: u8 = b'F'; // b'F' = 70, matches PepsPlantModel keyfob secrets
+            const DEVICE_TYPE: u8 = b'F';
             let mut key = [0u8; 16];
             key[0] = DEVICE_TYPE;
             key[1] = i;
@@ -169,44 +275,24 @@ async fn main() -> anyhow::Result<()> {
         })
         .collect();
 
-    tokio::spawn(
+    set.spawn(
         RkeFeature::new(
             Arc::clone(&bus),
             Arc::clone(&door_lock_arb),
             Arc::clone(&trunk_arb),
-            Arc::clone(&_platform_config),
+            Arc::clone(&cfg),
             rke_fobs,
         )
         .run(),
     );
-
-    // LockFeedback — plays direction-indicator flash patterns for external lock/unlock events.
-    tokio::spawn(LockFeedback::new(Arc::clone(&bus), Arc::clone(&lighting_arb)).run());
-
-    // DoubleLockRelease — clears superlock on ignition ON (no feedback, internal trigger).
-    tokio::spawn(DoubleLockRelease::new(Arc::clone(&bus), Arc::clone(&door_lock_arb)).run());
-
-    // WalkAwayLock — locks when all PEPS devices leave the approach zone.
-    tokio::spawn(WalkAwayLock::new(Arc::clone(&bus), Arc::clone(&door_lock_arb)).run());
-
-    // ThumbPadLock — Row 1 outside handle thumb pad, 500 ms debounce.
-    tokio::spawn(ThumbPadLock::new(Arc::clone(&bus), Arc::clone(&door_lock_arb)).run());
-
-    // AutoHighBeam — ADAS camera suppresses high beam when oncoming vehicle detected.
-    // Claims Beam.High.IsOn at High priority with Bool(false), overriding ManualLighting's
-    // Medium-priority claim. Releases when path is clear so manual high beam resumes.
-    tokio::spawn(AutoHighBeam::new(Arc::clone(&low_beam_arb), Arc::clone(&bus)).run());
-
-    // BrakeReverseLamps — pedal-driven stop lights, gear-driven backup lights.
-    tokio::spawn(BrakeReverseLamps::new(Arc::clone(&bus)).run());
-
-    // FogLamps — front and rear fog lamps, ignition-gated switch pass-through.
-    tokio::spawn(FogLamps::new(Arc::clone(&bus)).run());
-
-    // PanicAlarm — flashes both indicators + chirps horn while
-    // Body.Switches.Panic.IsEngaged is TRUE.  Triggered by RKE on a paired-
-    // keyfob PANIC press; ignition-independent (security feature).
-    tokio::spawn(
+    set.spawn(LockFeedback::new(Arc::clone(&bus), Arc::clone(&lighting_arb)).run());
+    set.spawn(DoubleLockRelease::new(Arc::clone(&bus), Arc::clone(&door_lock_arb)).run());
+    set.spawn(WalkAwayLock::new(Arc::clone(&bus), Arc::clone(&door_lock_arb)).run());
+    set.spawn(ThumbPadLock::new(Arc::clone(&bus), Arc::clone(&door_lock_arb)).run());
+    set.spawn(AutoHighBeam::new(Arc::clone(&low_beam_arb), Arc::clone(&bus)).run());
+    set.spawn(BrakeReverseLamps::new(Arc::clone(&bus)).run());
+    set.spawn(FogLamps::new(Arc::clone(&bus)).run());
+    set.spawn(
         PanicAlarm::new(
             Arc::clone(&lighting_arb),
             Arc::clone(&horn_arb),
@@ -214,29 +300,10 @@ async fn main() -> anyhow::Result<()> {
         )
         .run(),
     );
+    set.spawn(AutoRelock::from_config(Arc::clone(&door_lock_arb), Arc::clone(&bus), &cfg).run());
 
-    // AutoRelock — re-locks the vehicle ${auto_relock_timeout_secs} seconds
-    // after an unlock event if no door has been opened.  Cancelled if a
-    // door opens, the vehicle is re-locked manually, or a crash is
-    // detected (and stays disabled until full power-cycle in that case).
-    tokio::spawn(
-        AutoRelock::from_config(
-            Arc::clone(&door_lock_arb),
-            Arc::clone(&bus),
-            &_platform_config,
-        )
-        .run(),
-    );
-
-    // PassiveEntry — handle-pull authenticated unlock for the four
-    // outside doors.  Subscribes to handle pulls + paired-device zone
-    // signals; on a pull, issues an LF + BLE challenge, verifies the
-    // first response, dispatches UnlockDriver / UnlockAll via the
-    // door-lock arbiter (two-stage cal shared with RKE).
+    // PassiveEntry — handle-pull authenticated unlock.
     let pe_devices: Vec<PairedDevice> = {
-        // Same secret-derivation formula as the RKE wiring above + the
-        // PEPS plant model's default_secret().  Four paired fobs and
-        // two paired phones.
         fn secret(device_type: u8, index: u8) -> [u8; 16] {
             let mut key = [0u8; 16];
             key[0] = device_type;
@@ -264,21 +331,17 @@ async fn main() -> anyhow::Result<()> {
         }
         v
     };
-    tokio::spawn(
+    set.spawn(
         PassiveEntry::new(
             Arc::clone(&bus),
             Arc::clone(&door_lock_arb),
             Arc::clone(&trunk_arb),
-            Arc::clone(&_platform_config),
+            Arc::clone(&cfg),
             pe_devices,
         )
         .run(),
     );
-    // Welcome — exterior puddle + dome courtesy lights when any
-    // paired PEPS device enters LF coverage (Approach or proximity).
-    // 30 s hold by default; releases early on ignition ON or when
-    // all devices leave LF.
-    tokio::spawn(
+    set.spawn(
         Welcome::new(
             Arc::clone(&bus),
             Arc::clone(&courtesy_arb),
@@ -286,29 +349,11 @@ async fn main() -> anyhow::Result<()> {
         )
         .run(),
     );
-
-    // MirrorFold — handles `Body.Switches.Mirror.Fold` momentary press
-    // and (when dealer cal `mirror_fold_mode = AUTO`) auto-folds on
-    // central-lock state edges.  Publishes per-side `FoldCmd` to the
-    // MirrorFoldPlantModel.  Persists `last_fold_cmd` in NVM so the
-    // toggle direction stays consistent across power cycles.
-    tokio::spawn(
-        MirrorFold::with_nvm(Arc::clone(&bus), Arc::clone(&_platform_config), nvm.clone()).run(),
-    );
-
-    // MirrorAdjust — routes the joystick (Body.Switches.Mirror.{Select,
-    // Direction}) to per-side AdjustCmd consumed by the
-    // MirrorAdjustPlantModel.  Stateless feature, no NVM.
-    tokio::spawn(MirrorAdjust::new(Arc::clone(&bus)).run());
-
-    // Farewell — companion to Welcome.  After the driver turns the
-    // ignition OFF and opens a door (typical step-out), claim the
-    // puddle + dome lamps for `dealer.farewell_hold_secs` (default
-    // 20 s).  Releases early on lock command or ignition-back-on.
+    set.spawn(MirrorFold::with_nvm(Arc::clone(&bus), Arc::clone(&cfg), nvm.clone()).run());
+    set.spawn(MirrorAdjust::new(Arc::clone(&bus)).run());
     {
-        let hold =
-            std::time::Duration::from_secs(_platform_config.dealer_config().farewell_hold_secs);
-        tokio::spawn(
+        let hold = std::time::Duration::from_secs(cfg.dealer_config().farewell_hold_secs);
+        set.spawn(
             Farewell::new(
                 Arc::clone(&bus),
                 Arc::clone(&courtesy_arb),
@@ -318,88 +363,57 @@ async fn main() -> anyhow::Result<()> {
             .run(),
         );
     }
-
-    // DoorOpenAssist — low-priority puddle claim whenever a door is
-    // open at night.  Preempts cleanly to Welcome / Farewell /
-    // PerimeterAlarm at higher priorities.
-    tokio::spawn(
-        DoorOpenAssist::new(Arc::clone(&bus), Arc::clone(&puddle_arb), &_platform_config).run(),
-    );
-
-    // ManualHorn — steering-wheel horn pad.  Claims Body.Horn.IsActive
-    // at Medium priority while pressed.  PanicAlarm at High preempts.
-    tokio::spawn(ManualHorn::new(Arc::clone(&bus), Arc::clone(&horn_arb)).run());
-
-    // CabinTrunkRelease — interior push-button / pull-handle in the
-    // cabin (typical placement: low on the dash or driver footwell).
-    // Pulses Body.Trunk.OpenCmd through the trunk arbiter on press.
-    // No lock-state or auth gate — privileged interior control.
-    // Valet mode is enforced at the arbiter's ValetGate.
-    tokio::spawn(CabinTrunkRelease::new(Arc::clone(&bus), Arc::clone(&trunk_arb)).run());
-
-    // ExteriorTrunkButton — capacitive button above the rear license
-    // plate.  Routes presses to the trunk arbiter:
-    //   • cabin UNLOCKED / DRIVER_UNLOCKED → direct pulse here
-    //   • cabin LOCKED / DOUBLE_LOCKED      → PassiveEntry's auth path
-    //   • valet mode active                  → silently denied
-    // Cabin lock state is never mutated.
-    tokio::spawn(ExteriorTrunkButton::new(Arc::clone(&bus), Arc::clone(&trunk_arb)).run());
+    set.spawn(DoorOpenAssist::new(Arc::clone(&bus), Arc::clone(&puddle_arb), &cfg).run());
+    set.spawn(ManualHorn::new(Arc::clone(&bus), Arc::clone(&horn_arb)).run());
+    set.spawn(CabinTrunkRelease::new(Arc::clone(&bus), Arc::clone(&trunk_arb)).run());
+    set.spawn(ExteriorTrunkButton::new(Arc::clone(&bus), Arc::clone(&trunk_arb)).run());
 
     tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome, MirrorFold, MirrorAdjust, Farewell, DoorOpenAssist, ExteriorTrunkButton, CabinTrunkRelease, ManualHorn");
 
     // ── Plant Models ────────────────────────────────────────────────
-    // Simulate physical lamp behavior the M7 / smart actuator firmware
-    // would normally provide. Plant models bypass the arbiter and
-    // publish feedback signals (lamp on/off, defects) directly.
-    tokio::spawn(BlinkRelay::new(Arc::clone(&bus)).run());
-    tokio::spawn(
+    set.spawn(BlinkRelay::new(Arc::clone(&bus)).run());
+    set.spawn(
         DoorLockPlantModel::with_ack_and_nvm(Arc::clone(&bus), door_lock_ack_tx, nvm.clone())
-            .with_cfg(Arc::clone(&_platform_config))
+            .with_cfg(Arc::clone(&cfg))
             .run(),
     );
-    tokio::spawn(DoorHandlePlantModel::new(Arc::clone(&bus)).run());
-    tokio::spawn(TrunkPlantModel::with_nvm(Arc::clone(&bus), nvm.clone()).run());
-    tokio::spawn(HoodPlantModel::with_nvm(Arc::clone(&bus), nvm.clone()).run());
-    tokio::spawn(SunroofPlantModel::with_nvm(Arc::clone(&bus), nvm.clone()).run());
-    tokio::spawn(MirrorFoldPlantModel::with_nvm(Arc::clone(&bus), nvm.clone()).run());
-    tokio::spawn(MirrorAdjustPlantModel::new(Arc::clone(&bus)).run());
-    tokio::spawn(
+    set.spawn(DoorHandlePlantModel::new(Arc::clone(&bus)).run());
+    set.spawn(TrunkPlantModel::with_nvm(Arc::clone(&bus), nvm.clone()).run());
+    set.spawn(HoodPlantModel::with_nvm(Arc::clone(&bus), nvm.clone()).run());
+    set.spawn(SunroofPlantModel::with_nvm(Arc::clone(&bus), nvm.clone()).run());
+    set.spawn(MirrorFoldPlantModel::with_nvm(Arc::clone(&bus), nvm.clone()).run());
+    set.spawn(MirrorAdjustPlantModel::new(Arc::clone(&bus)).run());
+    set.spawn(
         PepsPlantModel::new(Arc::clone(&bus))
-            // 10 ms × slot index — fob 1 = 10 ms, fob 6 = 60 ms.
-            // Stops concurrent same-zone devices from all responding
-            // on the same scheduler tick and lets PassiveEntry pick
-            // a deterministic "first responder wins".
             .with_response_stagger_ms(vss_bridge::plant_models::peps::PRODUCTION_STAGGER_MS)
             .run(),
     );
     tracing::info!("plant models spawned: BlinkRelay, DoorLockPlantModel, DoorHandlePlantModel, TrunkPlantModel, HoodPlantModel, SunroofPlantModel, PepsPlantModel");
 
-    // ── WebSocket bridge for L6 HMI ─────────────────────────────────
-    // Port is overridable via VSS_BRIDGE_WS_PORT for integration tests
-    // (each test picks a free ephemeral port so it never collides with a
-    // developer's running bridge on the default 8080).
+    // ── WebSocket bridge ────────────────────────────────────────────
     let ws_port: u16 = std::env::var("VSS_BRIDGE_WS_PORT")
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(8080);
     let ws_addr = format!("0.0.0.0:{ws_port}").parse()?;
-    let ws_bridge = WsBridge::new(ws_addr, Arc::clone(&bus), Arc::clone(&_platform_config));
-    tokio::spawn(async move {
+    let ws_bridge = WsBridge::new(
+        ws_addr,
+        Arc::clone(&bus),
+        Arc::clone(&cfg),
+        reboot_tx.clone(),
+    );
+    set.spawn(async move {
         if let Err(e) = ws_bridge.run().await {
             tracing::error!(error = %e, "WebSocket bridge failed");
         }
     });
 
-    // ── Set initial vehicle state ───────────────────────────────────
-    // Default ignition OFF — HMI user can switch to ON to enable turn signals.
+    // ── Initial signal state ────────────────────────────────────────
     bus.publish(
         "Vehicle.LowVoltageSystemState",
         SignalValue::String("OFF".to_string()),
     )
     .await?;
-
-    // Panic alarm starts disengaged — keep the PanicAlarm feature's switch
-    // subscription primed so it sees the first FALSE→TRUE transition.
     bus.publish("Body.Switches.Panic.IsEngaged", SignalValue::Bool(false))
         .await?;
     bus.publish("Vehicle.Body.Alarm.IsActive", SignalValue::Bool(false))
@@ -407,46 +421,11 @@ async fn main() -> anyhow::Result<()> {
     bus.publish("Body.Doors.AutoRelock.IsArmed", SignalValue::Bool(false))
         .await?;
 
-    // gRPC client for kuksa.val databroker at L4 (optional — fails gracefully)
+    // ── kuksa.val sync (best-effort, retries forever) ───────────────
     let kuksa_endpoint =
         std::env::var("KUKSA_ENDPOINT").unwrap_or_else(|_| "http://localhost:55555".to_string());
     let kuksa = kuksa_sync::KuksaSync::new(&kuksa_endpoint, Arc::clone(&bus));
-    tokio::spawn(async move { kuksa.run().await });
+    set.spawn(async move { kuksa.run().await });
 
-    // ── Static HTTP server for HMI files ───────────────────────────
-    // Serves the repo root (HTML files) on port 3000 so the browser
-    // can open http://localhost:3000/vss-hmi-body-sensors.html instead
-    // of a file:// URL (which has CORS and caching quirks).
-    // Port is overridable via VSS_BRIDGE_HTTP_PORT.
-    let http_port: u16 = std::env::var("VSS_BRIDGE_HTTP_PORT")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(3000);
-    // Serve the directory one level above the vss-bridge crate (the repo root).
-    let hmi_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("repo root")
-        .to_path_buf();
-    let http_app = Router::new()
-        .nest_service("/", ServeDir::new(hmi_root))
-        .layer(SetResponseHeaderLayer::overriding(
-            axum::http::header::CACHE_CONTROL,
-            axum::http::HeaderValue::from_static("no-store"),
-        ));
-    let http_listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{http_port}")).await?;
-    tokio::spawn(async move {
-        if let Err(e) = axum::serve(http_listener, http_app).await {
-            tracing::error!(error = %e, "HTTP file server failed");
-        }
-    });
-
-    tracing::info!("vss-bridge ready");
-    tracing::info!("  HMI:             http://localhost:{http_port}/vss-hmi.html");
-    tracing::info!("  WebSocket:       ws://localhost:8080");
-    tracing::info!("  Press Ctrl+C to stop");
-
-    tokio::signal::ctrl_c().await?;
-    tracing::info!("vss-bridge shutting down");
-
-    Ok(())
+    Ok(set)
 }

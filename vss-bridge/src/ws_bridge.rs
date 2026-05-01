@@ -305,14 +305,23 @@ pub struct WsBridge<B: SignalBus> {
     bus: Arc<B>,
     addr: SocketAddr,
     platform_config: Arc<PlatformConfig>,
+    /// Bumped on `{"type":"reboot"}` from the HMI — `main`'s boot loop
+    /// awaits a change and rebuilds the entire simulation stack.
+    reboot_tx: tokio::sync::watch::Sender<u64>,
 }
 
 impl<B: SignalBus> WsBridge<B> {
-    pub fn new(addr: SocketAddr, bus: Arc<B>, platform_config: Arc<PlatformConfig>) -> Self {
+    pub fn new(
+        addr: SocketAddr,
+        bus: Arc<B>,
+        platform_config: Arc<PlatformConfig>,
+        reboot_tx: tokio::sync::watch::Sender<u64>,
+    ) -> Self {
         Self {
             bus,
             addr,
             platform_config,
+            reboot_tx,
         }
     }
 
@@ -433,6 +442,7 @@ impl<B: SignalBus> WsBridge<B> {
             let platform_config = Arc::clone(&self.platform_config);
             let config_tx2 = config_tx.clone();
             let ready_rx = ready_rx.clone();
+            let reboot_tx = self.reboot_tx.clone();
 
             tokio::spawn(async move {
                 if let Err(e) = handle_connection(
@@ -445,6 +455,7 @@ impl<B: SignalBus> WsBridge<B> {
                     platform_config,
                     peer,
                     ready_rx,
+                    reboot_tx,
                 )
                 .await
                 {
@@ -466,7 +477,19 @@ async fn handle_connection<B: SignalBus>(
     platform_config: Arc<PlatformConfig>,
     peer: SocketAddr,
     mut ready_rx: tokio::sync::watch::Receiver<bool>,
+    reboot_tx: tokio::sync::watch::Sender<u64>,
 ) -> anyhow::Result<()> {
+    // Each connection subscribes to the reboot watch channel so it can
+    // self-close cleanly when `main`'s boot loop tears down the
+    // simulation stack.  Per-connection handlers are spawned outside
+    // the JoinSet that holds the rest of the stack, so without this
+    // explicit cooperation they would survive the reboot, hold stale
+    // Bus / PlatformConfig references, and prevent the HMI from
+    // re-handshaking against the new boot's listener.
+    let mut reboot_watch = reboot_tx.subscribe();
+    // Mark the value we joined on as "seen" so .changed() only fires
+    // on subsequent bumps.
+    let _ = reboot_watch.borrow_and_update();
     let ws_stream = tokio_tungstenite::accept_async(stream).await?;
     let (mut ws_tx, mut ws_rx) = ws_stream.split();
 
@@ -502,6 +525,14 @@ async fn handle_connection<B: SignalBus>(
 
     loop {
         tokio::select! {
+            // Reboot signalled — close this connection so `main`'s
+            // boot-loop teardown is observed by the HMI as a clean
+            // disconnect.  The HMI's onclose reconnect timer fires
+            // and lands on the next iteration's listener.
+            Ok(_) = reboot_watch.changed() => {
+                tracing::info!(%peer, "reboot signalled — closing client connection");
+                break;
+            }
             // HMI → bridge: sensor or config input
             msg = ws_rx.next() => {
                 match msg {
@@ -517,6 +548,18 @@ async fn handle_connection<B: SignalBus>(
                                     let cfg_msg = build_config_msg(&platform_config);
                                     let _ = config_tx.send(cfg_msg);
                                 }
+                            }
+                            Some("reboot") => {
+                                // Persist any staged vehicle_line / variant
+                                // edits to disk, then bump the reboot signal
+                                // so `main`'s boot loop tears down the
+                                // simulation stack and rebuilds against the
+                                // freshly-loaded config.  NVM persists; all
+                                // RAM state is dropped — mimics a real ECU
+                                // power cycle (battery disconnect/reconnect).
+                                handle_reboot(&parsed, &reboot_tx, peer).await;
+                                // Don't break here — the JoinSet abort that
+                                // follows will drop this task naturally.
                             }
                             _ => {
                                 handle_hmi_message(&text, &bus).await;
@@ -759,6 +802,56 @@ fn handle_config_set(msg: &serde_json::Value, cfg: &PlatformConfig) -> bool {
 
     tracing::warn!(key, "config_set: unknown key");
     false
+}
+
+/// Handle a `{"type":"reboot", "vehicle_line": {...}, "variant": {...}}`
+/// message.  Persists any included vehicle_line / variant cal edits
+/// to disk, then bumps the reboot watch channel which `main`'s boot
+/// loop is waiting on.  The boot loop tears down the entire
+/// simulation stack (this connection included) and rebuilds against
+/// the freshly-loaded config.
+///
+/// Both `vehicle_line` and `variant` are optional — the HMI sends
+/// only the staged sections.  Missing or malformed entries log a
+/// warning but do not block the reboot itself; the user's intent
+/// to "cycle power" is honoured even if a config write fails (so a
+/// stuck on-disk file doesn't prevent recovery).
+async fn handle_reboot(
+    msg: &serde_json::Value,
+    reboot_tx: &tokio::sync::watch::Sender<u64>,
+    peer: SocketAddr,
+) {
+    if let Some(vl) = msg.get("vehicle_line") {
+        match serde_json::from_value::<crate::config::VehicleLineCal>(vl.clone()) {
+            Ok(parsed) => match PlatformConfig::save_vehicle_line(&parsed) {
+                Ok(path) => tracing::info!(%peer, path = %path.display(),
+                    "reboot: persisted vehicle_line.json"),
+                Err(e) => tracing::warn!(%peer, error = %e,
+                    "reboot: failed to persist vehicle_line.json — continuing anyway"),
+            },
+            Err(e) => tracing::warn!(%peer, error = %e,
+                "reboot: vehicle_line payload did not parse — skipping"),
+        }
+    }
+    if let Some(v) = msg.get("variant") {
+        match serde_json::from_value::<crate::config::VariantCal>(v.clone()) {
+            Ok(parsed) => match PlatformConfig::save_variant(&parsed) {
+                Ok(path) => tracing::info!(%peer, path = %path.display(),
+                    "reboot: persisted variant.json"),
+                Err(e) => tracing::warn!(%peer, error = %e,
+                    "reboot: failed to persist variant.json — continuing anyway"),
+            },
+            Err(e) => tracing::warn!(%peer, error = %e,
+                "reboot: variant payload did not parse — skipping"),
+        }
+    }
+
+    // Bump the reboot counter — the boot loop in `main` is awaiting
+    // a change.  After this returns, the JoinSet abort that follows
+    // will drop this connection along with everything else.
+    let new = reboot_tx.borrow().wrapping_add(1);
+    tracing::info!(%peer, new_boot_id = new, "reboot: signalling main boot loop");
+    let _ = reboot_tx.send(new);
 }
 
 /// Parse an HMI sensor message and inject into the SignalBus.
