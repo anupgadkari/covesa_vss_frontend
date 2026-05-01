@@ -983,10 +983,13 @@ mod tests {
         );
     }
 
-    // (Two-stage-disabled scenario is covered in the gherkin e2e suite,
-    // where the dealer config is set up via the bridge's normal config
-    // pipeline before the feature spawns.  Recreating that in a unit
-    // test is more setup than it's worth — left as e2e responsibility.)
+    // Two-stage-disabled coverage lives in the gherkin e2e suite —
+    // see `features/passive_entry.feature` scenarios:
+    //   • "Two-stage disabled — single pull unlocks all doors"
+    //   • "Passenger-side handle pull always unlocks all (bypasses two-stage)"
+    // (cucumber drives the dealer config through the same pipeline
+    // the bridge uses at runtime; recreating that here would be more
+    // scaffolding than it's worth.)
 
     /// Passenger-side handle pull bypasses two-stage and goes straight
     /// to UnlockAll, even when `two_stage_unlock` is enabled.  The user
