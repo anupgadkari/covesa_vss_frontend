@@ -280,6 +280,36 @@ function BR({label,k,s,set,c=''}){
     <Tog val={s[k]} on={()=>set(k,!s[k])} c={c}/>
   </div>;
 }
+/* SunroofRow — press-and-hold OPEN / CLOSE buttons drive the
+   SunroofPlantModel motor model.  Mouseup → STOP, freezing the
+   position.  Position bar reads plant-published value (closed loop). */
+function SunroofRow({label,cmd,posKey,s,set}){
+  const pos = s[posKey] ?? 0;
+  const send = v => set(cmd, v);
+  const hold = (text, dir) => (
+    <button className="eb"
+      onMouseDown={()=>send(dir)}
+      onMouseUp={()=>send('STOP')}
+      onMouseLeave={()=>send('STOP')}
+      style={{cursor:'pointer',userSelect:'none',touchAction:'none'}}>
+      {text}
+    </button>
+  );
+  return <div className="slrow">
+    <div className="slhdr">
+      <span className={`cn ${pos>0?'on':''}`}>{label}</span>
+      <span className="sv">{pos}%</span>
+    </div>
+    <div className="ebrow" style={{marginTop:2}}>
+      {hold('▼ Close','CLOSE')}
+      <button className="eb" onClick={()=>send('STOP')} style={{cursor:'pointer'}}>■ Stop</button>
+      {hold('▲ Open','OPEN')}
+    </div>
+    <div style={{marginTop:4,height:4,background:'var(--s2)',borderRadius:2,overflow:'hidden'}}>
+      <div style={{height:'100%',width:`${pos}%`,background:'var(--amber)'}}/>
+    </div>
+  </div>;
+}
 function SlR({label,k,s,set,min=0,max=100,step=1,unit='%',color='var(--amber)'}){
   const v=s[k];
   return <div className="slrow">
@@ -1353,7 +1383,13 @@ function ControlPanel({s,set}){
       </SG>
 
       <SG title="Body Actuators" vss="Body">
-        <BR label="Hood open" k="Body.Hood.IsOpen" s={s} set={set} c="a"/>
+        {/* Hood: HMI sends OpenCmd / CloseCmd; HoodPlantModel owns IsOpen + NVM. */}
+        <div className="cr">
+          <span className={`cn ${s['Body.Hood.IsOpen']?'on':''}`}>Hood open</span>
+          <Tog val={s['Body.Hood.IsOpen']}
+            on={()=>set(s['Body.Hood.IsOpen']?'Body.Hood.CloseCmd':'Body.Hood.OpenCmd', true)}
+            c="a"/>
+        </div>
         <BR label="Trunk / tailgate open" k="Body.Trunk.IsOpen" s={s} set={set} c="a"/>
         <BR label="Trunk locked" k="Body.Trunk.IsLocked" s={s} set={set} c="r"/>
         <BR label="Fuel lid open" k="Body.FuelLid.IsOpen" s={s} set={set} c="a"/>
@@ -1362,8 +1398,14 @@ function ControlPanel({s,set}){
       </SG>
 
       <SG title="Sunroof" vss="Body.Sunroof">
-        <SlR label="Roof position" k="Body.Sunroof.Position" s={s} set={set} min={0} max={100} step={5} unit="%"/>
-        <SlR label="Shade position" k="Body.Sunroof.Shade.Position" s={s} set={set} min={0} max={100} step={5} unit="%"/>
+        {/* SunroofPlantModel runs a 5 s full-travel motor on each
+            surface; press-and-hold OPEN / CLOSE drives it.  STOP
+            freezes wherever the user lets go.  Bar reads
+            plant-published Position (closed-loop UI). */}
+        <SunroofRow label="Roof position" cmd="Body.Sunroof.MoveCmd"
+          posKey="Body.Sunroof.Position" s={s} set={set}/>
+        <SunroofRow label="Shade position" cmd="Body.Sunroof.Shade.MoveCmd"
+          posKey="Body.Sunroof.Shade.Position" s={s} set={set}/>
       </SG>
 
       <SG title="Cabin Lighting" vss="Cabin.Lights">

@@ -102,6 +102,15 @@ const INPUT_SIGNALS: &[VssPath] = &[
     // Valet mode toggle — published by infotainment in production.
     // Gates the trunk arbiter's ValetGate `PhysicalGate`.
     "Cabin.ValetMode.IsActive",
+    // Hood commands — momentary inputs from HMI hood-release buttons.
+    // HoodPlantModel consumes them, owns Body.Hood.IsOpen, NVM-persists.
+    "Body.Hood.OpenCmd",
+    "Body.Hood.CloseCmd",
+    // Sunroof commands — string enum "OPEN" | "CLOSE" | "STOP".
+    // SunroofPlantModel runs a 5 s full-travel motor model and
+    // NVM-persists settled positions.
+    "Body.Sunroof.MoveCmd",
+    "Body.Sunroof.Shade.MoveCmd",
     // Diagnostic overrides (DoorCard direct-write).
     "Body.Doors.Row1.Left.IsOpen",
     "Body.Doors.Row1.Right.IsOpen",
@@ -214,6 +223,11 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     "Body.PEPS.Plant.BlePhone.2.RssiResponse",
     // Trunk plant model output — open/close state driven by RKE or CloseCmd.
     "Body.Trunk.IsOpen",
+    // Hood plant model output — owned IsOpen state, NVM-backed.
+    "Body.Hood.IsOpen",
+    // Sunroof plant model outputs — motor positions, NVM-backed.
+    "Body.Sunroof.Position",
+    "Body.Sunroof.Shade.Position",
     // Horn arbiter output — drives the HMI horn-pulse visualisation.
     "Body.Horn.IsActive",
     // Anti-theft alarm status (PanicAlarm direct publish).
@@ -259,6 +273,11 @@ const ESSENTIAL_BOOT_SIGNALS: &[VssPath] = &[
     "Body.Doors.Row2.Right.Soldier.IsUnlocked",
     // Trunk plant model — boots from NVM and publishes IsOpen on startup.
     "Body.Trunk.IsOpen",
+    // Hood plant model — boots from NVM and publishes IsOpen on startup.
+    "Body.Hood.IsOpen",
+    // Sunroof plant model — boots from NVM and publishes both Positions on startup.
+    "Body.Sunroof.Position",
+    "Body.Sunroof.Shade.Position",
     // Status flags published once at boot from main.rs.
     "Body.Switches.Panic.IsEngaged",
     "Vehicle.Body.Alarm.IsActive",

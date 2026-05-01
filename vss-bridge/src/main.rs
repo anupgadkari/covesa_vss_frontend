@@ -41,9 +41,11 @@ use vss_bridge::nvm::NvmStore;
 use vss_bridge::plant_models::blink_relay::BlinkRelay;
 use vss_bridge::plant_models::door_handle::DoorHandlePlantModel;
 use vss_bridge::plant_models::door_lock::DoorLockPlantModel;
+use vss_bridge::plant_models::hood::HoodPlantModel;
 use vss_bridge::plant_models::mirror_adjust::MirrorAdjustPlantModel;
 use vss_bridge::plant_models::mirror_fold::MirrorFoldPlantModel;
 use vss_bridge::plant_models::peps::PepsPlantModel;
+use vss_bridge::plant_models::sunroof::SunroofPlantModel;
 use vss_bridge::plant_models::trunk::TrunkPlantModel;
 use vss_bridge::signal_bus::SignalBus;
 use vss_bridge::signal_ids;
@@ -344,6 +346,8 @@ async fn main() -> anyhow::Result<()> {
     );
     tokio::spawn(DoorHandlePlantModel::new(Arc::clone(&bus)).run());
     tokio::spawn(TrunkPlantModel::with_nvm(Arc::clone(&bus), nvm.clone()).run());
+    tokio::spawn(HoodPlantModel::with_nvm(Arc::clone(&bus), nvm.clone()).run());
+    tokio::spawn(SunroofPlantModel::with_nvm(Arc::clone(&bus), nvm.clone()).run());
     tokio::spawn(MirrorFoldPlantModel::with_nvm(Arc::clone(&bus), nvm.clone()).run());
     tokio::spawn(MirrorAdjustPlantModel::new(Arc::clone(&bus)).run());
     tokio::spawn(
@@ -355,7 +359,7 @@ async fn main() -> anyhow::Result<()> {
             .with_response_stagger_ms(vss_bridge::plant_models::peps::PRODUCTION_STAGGER_MS)
             .run(),
     );
-    tracing::info!("plant models spawned: BlinkRelay, DoorLockPlantModel, DoorHandlePlantModel, TrunkPlantModel, PepsPlantModel");
+    tracing::info!("plant models spawned: BlinkRelay, DoorLockPlantModel, DoorHandlePlantModel, TrunkPlantModel, HoodPlantModel, SunroofPlantModel, PepsPlantModel");
 
     // ── WebSocket bridge for L6 HMI ─────────────────────────────────
     // Port is overridable via VSS_BRIDGE_WS_PORT for integration tests

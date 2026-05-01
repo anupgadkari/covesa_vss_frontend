@@ -131,6 +131,14 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
 
         // Body misc
         "Body.Hood.IsOpen" => Some(0x0006_0001),
+        // Hood command signals — momentary inputs from HMI (or future
+        // hood-release lever sensor).  HoodPlantModel consumes these,
+        // owns IsOpen, and persists in NVM.  Symmetric to the Trunk
+        // OpenCmd / CloseCmd / IsOpen triplet so a future power-hood
+        // (rare but exists on some prestige SUVs) is a plant-model
+        // swap with no feature-side change.
+        "Body.Hood.OpenCmd" => Some(0x0006_000B),
+        "Body.Hood.CloseCmd" => Some(0x0006_000C),
         "Body.Trunk.IsOpen" => Some(0x0006_0002),
         "Body.Trunk.IsLocked" => Some(0x0006_0003),
         "Body.Horn.IsActive" => Some(0x0006_0004),
@@ -150,6 +158,15 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // Sunroof
         "Body.Sunroof.Position" => Some(0x0007_0001),
         "Body.Sunroof.Shade.Position" => Some(0x0007_0002),
+        // Sunroof command signals — string enum, allowed values:
+        //   "OPEN"  — drive toward Position=100 (or Shade=100) at 20%/sec
+        //   "CLOSE" — drive toward Position=0   (or Shade=0)   at 20%/sec
+        //   "STOP"  — halt immediately, freeze at current position
+        // Press-and-hold UX: HMI publishes "OPEN" on mousedown of the
+        // open button and "STOP" on mouseup.  SunroofPlantModel
+        // integrates Position over time and persists settled values.
+        "Body.Sunroof.MoveCmd" => Some(0x0007_0003),
+        "Body.Sunroof.Shade.MoveCmd" => Some(0x0007_0004),
 
         // Cabin Lights
         "Cabin.Lights.IsDomeOn" => Some(0x0008_0001),
@@ -499,10 +516,14 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Body.ChargeLid.IsOpen", 0x0006_0006),
     ("Vehicle.Body.Alarm.IsActive", 0x0006_0009),
     ("Body.Trunk.ExteriorButton.IsPressed", 0x0006_000A),
+    ("Body.Hood.OpenCmd", 0x0006_000B),
+    ("Body.Hood.CloseCmd", 0x0006_000C),
     ("Body.Doors.AutoRelock.IsArmed", 0x000A_0040),
     ("Body.Doors.AutoRelock.TimeoutSeconds", 0x000A_0041),
     ("Body.Sunroof.Position", 0x0007_0001),
     ("Body.Sunroof.Shade.Position", 0x0007_0002),
+    ("Body.Sunroof.MoveCmd", 0x0007_0003),
+    ("Body.Sunroof.Shade.MoveCmd", 0x0007_0004),
     ("Cabin.Lights.IsDomeOn", 0x0008_0001),
     ("Cabin.Lights.IsGloveBoxOn", 0x0008_0002),
     ("Cabin.Lights.Ambient.Intensity", 0x0008_0003),

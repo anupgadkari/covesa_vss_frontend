@@ -74,6 +74,28 @@ pub struct TrunkState {
     pub is_open: bool,
 }
 
+/// Persisted state for the hood plant model.
+///
+/// Same simulation rationale as `TrunkState` — in a real vehicle the
+/// hood's position is read from a hall-effect / latch-position sensor
+/// at boot.  We persist it so "parked with hood open, restart, hood
+/// is still open" is reproducible.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct HoodState {
+    pub is_open: bool,
+}
+
+/// Persisted state for the sunroof plant model — physical positions
+/// of the glass panel and the shade.  Both are u8 percentages
+/// `[0..=100]` (0 = fully closed, 100 = fully open).
+///
+/// Cold boot (no file) = factory: both fully closed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct SunroofState {
+    pub position: u8,
+    pub shade_position: u8,
+}
+
 /// Persisted vehicle-level central lock status.
 ///
 /// Reflects the *commanded* state set by the door-lock arbiter (RKE,
@@ -212,6 +234,26 @@ impl NvmStore {
     /// Atomically persist `TrunkState` to disk.
     pub fn save_trunk(&self, state: &TrunkState) {
         self.save("trunk.json", state);
+    }
+
+    /// Load `HoodState` from disk.  Factory default = closed.
+    pub fn load_hood(&self) -> HoodState {
+        self.load("hood.json")
+    }
+
+    /// Atomically persist `HoodState` to disk.
+    pub fn save_hood(&self, state: &HoodState) {
+        self.save("hood.json", state);
+    }
+
+    /// Load `SunroofState` from disk.  Factory default = both closed (0%).
+    pub fn load_sunroof(&self) -> SunroofState {
+        self.load("sunroof.json")
+    }
+
+    /// Atomically persist `SunroofState` to disk.
+    pub fn save_sunroof(&self, state: &SunroofState) {
+        self.save("sunroof.json", state);
     }
 
     /// Load central lock status from disk.  Factory default = UNLOCKED.

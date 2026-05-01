@@ -278,6 +278,41 @@ function SlR({label,k,s,set,min=0,max=100,step=1,unit='%'}){
       onChange={e=>set(k,parseFloat(e.target.value))}/>
   </div>;
 }
+/* SunroofMotorRow — press-and-hold OPEN / CLOSE buttons + a STOP
+   button + a position readout.  Drives the SunroofPlantModel via
+   `Body.Sunroof.MoveCmd` (or `Body.Sunroof.Shade.MoveCmd`); the
+   plant integrates Position over time.  Mouseup releases the
+   button by sending STOP so the motor halts wherever the user
+   lets go.  Visual position bar reads the published Position
+   value — a true closed-loop UI.  */
+function SunroofMotorRow({label,cmd,posKey,s,set}){
+  const pos = s[posKey] ?? 0;
+  const send = v => set(cmd, v);
+  const btn = (text, onDown) => (
+    <button className="eb"
+      onMouseDown={()=>send(onDown)}
+      onMouseUp={()=>send('STOP')}
+      onMouseLeave={()=>send('STOP')}
+      style={{cursor:'pointer',userSelect:'none',touchAction:'none'}}>
+      {text}
+    </button>
+  );
+  return <div className="slrow">
+    <div className="slhdr">
+      <span className={`cn ${pos>0?'on':''}`}>{label}</span>
+      <span className="sv">{pos}%</span>
+    </div>
+    <div className="ebrow" style={{marginTop:2}}>
+      {btn('▼ Close','CLOSE')}
+      <button className="eb" onClick={()=>send('STOP')} style={{cursor:'pointer'}}>■ Stop</button>
+      {btn('▲ Open','OPEN')}
+    </div>
+    {/* Read-only position bar matching the slider visual width. */}
+    <div style={{marginTop:4,height:4,background:'var(--s2)',borderRadius:2,overflow:'hidden'}}>
+      <div style={{height:'100%',width:`${pos}%`,background:'var(--amber)'}}/>
+    </div>
+  </div>;
+}
 function EnumR({label,k,s,set,opts}){
   return <div style={{display:'flex',flexDirection:'column',gap:3}}>
     <span className="cn">{label}</span>
@@ -1892,7 +1927,15 @@ function ControlPanelContent({s,set,anyDoor,anyLight,lux}){
       </SG>
 
       <SG title="Body" vss="Body">
-        <BR label="Hood open"        k="Body.Hood.IsOpen"       s={s} set={set} c="a"/>
+        {/* Hood — momentary OpenCmd / CloseCmd into HoodPlantModel,
+            which owns Body.Hood.IsOpen and persists in NVM.  Toggle
+            click flips the appropriate command based on current state. */}
+        <div className="cr">
+          <span className={`cn ${s['Body.Hood.IsOpen']?'on':''}`}>Hood open</span>
+          <Tog val={s['Body.Hood.IsOpen']}
+            on={()=>set(s['Body.Hood.IsOpen']?'Body.Hood.CloseCmd':'Body.Hood.OpenCmd', true)}
+            c="a"/>
+        </div>
         <BR label="Trunk open"       k="Body.Trunk.IsOpen"      s={s} set={set} c="a"/>
         <BR label="Trunk locked"     k="Body.Trunk.IsLocked"    s={s} set={set} c="r"/>
         <BR label="Fuel lid open"    k="Body.FuelLid.IsOpen"    s={s} set={set} c="a"/>
@@ -1956,8 +1999,14 @@ function ControlPanelContent({s,set,anyDoor,anyLight,lux}){
       </SG>
 
       <SG title="Sunroof" vss="Body.Sunroof">
-        <SlR label="Roof position"  k="Body.Sunroof.Position"       s={s} set={set} min={0} max={100} step={5} unit="%"/>
-        <SlR label="Shade position" k="Body.Sunroof.Shade.Position"  s={s} set={set} min={0} max={100} step={5} unit="%"/>
+        {/* Press-and-hold OPEN / CLOSE buttons drive the sunroof
+            motor model (5 s full travel).  Mouseup → STOP, freezing
+            the position wherever it is.  SunroofPlantModel owns and
+            NVM-persists Position + Shade.Position. */}
+        <SunroofMotorRow label="Roof position"  cmd="Body.Sunroof.MoveCmd"
+          posKey="Body.Sunroof.Position" s={s} set={set}/>
+        <SunroofMotorRow label="Shade position" cmd="Body.Sunroof.Shade.MoveCmd"
+          posKey="Body.Sunroof.Shade.Position" s={s} set={set}/>
       </SG>
 
       <SG title="Cabin Lighting" vss="Cabin.Lights">
