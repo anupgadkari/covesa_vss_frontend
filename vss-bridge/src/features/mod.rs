@@ -17,6 +17,7 @@ pub mod mirror_adjust;
 pub mod mirror_fold;
 pub mod panic_alarm;
 pub mod passive_entry;
+pub mod perimeter_alarm;
 pub mod rke;
 pub mod thumb_pad_lock;
 pub mod turn_indicator;

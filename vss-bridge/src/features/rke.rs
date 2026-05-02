@@ -219,6 +219,18 @@ struct PendingTrunkRelease {
     fob_id: u32,
 }
 
+/// Pending panic-alarm engage when `panic_press_mode = DOUBLE` —
+/// waiting for a second PANIC press from the same fob within
+/// `PANIC_DOUBLE_PRESS_WINDOW_SECS`.
+#[derive(Debug)]
+struct PendingPanicDouble {
+    started: Instant,
+    fob_id: u32,
+}
+
+/// Window for the second press in `DOUBLE` panic-press mode.
+const PANIC_DOUBLE_PRESS_WINDOW_SECS: u64 = 3;
+
 /// Tracks the first half of a potential LOCK+UNLOCK combo.
 /// If the complementary action arrives within COMBO_WINDOW_MS, the combo
 /// fires (toggle two_stage_unlock) instead of the normal action.
@@ -262,6 +274,9 @@ pub struct RkeFeature<B: SignalBus> {
     /// Latched panic-alarm state.  Each authenticated PANIC press flips this
     /// and publishes the new value on Body.Switches.Panic.IsEngaged.
     panic_engaged: bool,
+    /// Pending first half of a DOUBLE panic press.  Only used when
+    /// `vehicle_line.panic_press_mode = Double`; ignored in `Single`.
+    pending_panic_double: Option<PendingPanicDouble>,
 }
 
 impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
@@ -290,6 +305,7 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
             pending_trunk_release: None,
             pending_combo: None,
             panic_engaged: false,
+            pending_panic_double: None,
         }
     }
 
@@ -589,16 +605,79 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
 
     /// Handle a PANIC press from a paired keyfob.
     ///
-    /// Each authenticated panic press toggles `Body.Switches.Panic.IsEngaged`.
-    /// Engaging the signal arms the PanicAlarm feature (synchronized
-    /// indicator blink + horn chirps); disengaging stops it.  This matches
-    /// typical OEM behaviour: press once to start, press again to cancel.
+    /// The activation gesture is selected by `vehicle_line.panic_press_mode`:
+    ///
+    /// - `SINGLE` (default): each press toggles `Body.Switches.Panic.IsEngaged`.
+    ///   Press once to start, press again to cancel.
+    /// - `DOUBLE`: two presses from the same fob within
+    ///   `PANIC_DOUBLE_PRESS_WINDOW_SECS` are required to engage.  A
+    ///   single press starts a pending window; if no second press
+    ///   arrives, the window expires silently.  Cancel of an
+    ///   already-engaged alarm is still a single press (the pending
+    ///   double-press path is only used for *engaging*).
+    /// - `LONG_PRESS`: not yet implemented at the plant-model layer
+    ///   (no press-down / press-up wire format on the fob).  Falls
+    ///   back to `Single` semantics with a warning.
     async fn handle_panic(&mut self, fob_id: u32) {
+        use crate::config::PanicPressMode;
+
+        let mode = self.config.vehicle_line.panic_press_mode;
+
+        // If the alarm is already engaged, every press is a cancel —
+        // mode-independent.  Real-vehicle UX never asks the panicked
+        // user to confirm with a second press just to stop the noise.
+        if self.panic_engaged {
+            self.toggle_panic(fob_id).await;
+            self.pending_panic_double = None;
+            return;
+        }
+
+        match mode {
+            PanicPressMode::Single => {
+                self.toggle_panic(fob_id).await;
+            }
+            PanicPressMode::Double => {
+                let now = Instant::now();
+                let window = Duration::from_secs(PANIC_DOUBLE_PRESS_WINDOW_SECS);
+                let second_press = matches!(
+                    &self.pending_panic_double,
+                    Some(p) if p.fob_id == fob_id && now.duration_since(p.started) < window
+                );
+                if second_press {
+                    self.pending_panic_double = None;
+                    tracing::info!(fob_id, "RKE: PANIC double-press confirmed — engaging");
+                    self.toggle_panic(fob_id).await;
+                } else {
+                    tracing::info!(
+                        fob_id,
+                        "RKE: PANIC first press — waiting for second within {} s",
+                        PANIC_DOUBLE_PRESS_WINDOW_SECS
+                    );
+                    self.pending_panic_double = Some(PendingPanicDouble {
+                        started: now,
+                        fob_id,
+                    });
+                }
+            }
+            PanicPressMode::LongPress => {
+                tracing::warn!(
+                    fob_id,
+                    "RKE: PANIC long-press mode selected but plant-model wiring \
+                     (press-down / press-up) is not yet implemented — falling back to Single"
+                );
+                self.toggle_panic(fob_id).await;
+            }
+        }
+    }
+
+    /// Toggle `panic_engaged` and publish — extracted helper so all
+    /// activation-gesture branches converge on one publish path.
+    async fn toggle_panic(&mut self, fob_id: u32) {
         self.panic_engaged = !self.panic_engaged;
         tracing::info!(
             fob_id,
             engaged = self.panic_engaged,
-            "RKE: PANIC press — toggling alarm engaged state"
+            "RKE: PANIC toggling alarm engaged state"
         );
         let _ = self
             .bus
@@ -646,6 +725,10 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
             let combo_deadline = self.pending_combo.as_ref().map(|p| {
                 Duration::from_millis(COMBO_WINDOW_MS).saturating_sub(p.started.elapsed())
             });
+            let panic_double_deadline = self.pending_panic_double.as_ref().map(|p| {
+                Duration::from_secs(PANIC_DOUBLE_PRESS_WINDOW_SECS)
+                    .saturating_sub(p.started.elapsed())
+            });
 
             // Sleep until the earliest pending window expires.
             let next_expiry = [
@@ -653,6 +736,7 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
                 double_lock_deadline,
                 trunk_deadline,
                 combo_deadline,
+                panic_double_deadline,
             ]
             .into_iter()
             .flatten()
@@ -726,6 +810,16 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
                         if now.duration_since(p.started) >= Duration::from_millis(COMBO_WINDOW_MS) {
                             tracing::debug!("RKE: combo window expired — treating first press as normal action");
                             self.pending_combo = None;
+                        }
+                    }
+                    if let Some(ref p) = self.pending_panic_double {
+                        if now.duration_since(p.started)
+                            >= Duration::from_secs(PANIC_DOUBLE_PRESS_WINDOW_SECS)
+                        {
+                            tracing::debug!(
+                                "RKE: PANIC double-press window expired — first press discarded"
+                            );
+                            self.pending_panic_double = None;
                         }
                     }
                 }
@@ -1059,6 +1153,196 @@ mod tests {
         assert!(
             feature.dealer_rx.borrow().two_stage_unlock,
             "second combo should restore two_stage_unlock to true"
+        );
+    }
+
+    // ── Panic activation gesture (vehicle_line.panic_press_mode) ────────
+
+    /// Helper to spin up an RkeFeature pinned to a config with a
+    /// specific `panic_press_mode`.  Mirrors `make_rke_feature` but
+    /// flips the cal at construction.
+    fn make_rke_with_panic_mode(
+        bus: Arc<crate::adapters::mock::MockBus>,
+        arbiter: Arc<DoorLockArbiter>,
+        paired_fobs: Vec<PairedFob>,
+        mode: crate::config::PanicPressMode,
+    ) -> RkeFeature<crate::adapters::mock::MockBus> {
+        let vl = crate::config::VehicleLineCal {
+            panic_press_mode: mode,
+            ..Default::default()
+        };
+        let config = crate::config::PlatformConfig::with_vehicle_line(vl);
+        let (trunk_arb, trunk_fut) = crate::arbiter::trunk_arbiter(Arc::clone(&bus));
+        tokio::spawn(trunk_fut);
+        let trunk_arb = Arc::new(trunk_arb);
+        RkeFeature::new(bus, arbiter, trunk_arb, config, paired_fobs)
+    }
+
+    /// SINGLE mode: one press toggles immediately.
+    #[tokio::test]
+    async fn panic_single_mode_toggles_on_first_press() {
+        let bus = Arc::new(crate::adapters::mock::MockBus::new());
+        let (arbiter, _ack_tx, _handle) = crate::arbiter::door_lock_arbiter(Arc::clone(&bus));
+        let arbiter = Arc::new(arbiter);
+        let secret: SharedSecret = [0xAA; 16];
+        let mut feature = make_rke_with_panic_mode(
+            Arc::clone(&bus),
+            arbiter,
+            vec![make_fob(1, secret)],
+            crate::config::PanicPressMode::Single,
+        );
+
+        feature.handle_authenticated(1, FobButton::PanicAlarm).await;
+        assert_eq!(
+            bus.latest_value("Body.Switches.Panic.IsEngaged"),
+            Some(SignalValue::Bool(true)),
+            "SINGLE mode: first press must engage immediately"
+        );
+
+        feature.handle_authenticated(1, FobButton::PanicAlarm).await;
+        assert_eq!(
+            bus.latest_value("Body.Switches.Panic.IsEngaged"),
+            Some(SignalValue::Bool(false)),
+            "SINGLE mode: second press must disengage"
+        );
+    }
+
+    /// DOUBLE mode: first press is held in pending; second press
+    /// within window confirms and engages.
+    #[tokio::test]
+    async fn panic_double_mode_first_press_does_not_engage() {
+        let bus = Arc::new(crate::adapters::mock::MockBus::new());
+        let (arbiter, _ack_tx, _handle) = crate::arbiter::door_lock_arbiter(Arc::clone(&bus));
+        let arbiter = Arc::new(arbiter);
+        let secret: SharedSecret = [0xAA; 16];
+        let mut feature = make_rke_with_panic_mode(
+            Arc::clone(&bus),
+            arbiter,
+            vec![make_fob(1, secret)],
+            crate::config::PanicPressMode::Double,
+        );
+
+        feature.handle_authenticated(1, FobButton::PanicAlarm).await;
+        // Single press alone must NOT publish PANIC=true.
+        assert!(
+            bus.history()
+                .iter()
+                .all(|(s, v)| !(*s == "Body.Switches.Panic.IsEngaged"
+                    && *v == SignalValue::Bool(true))),
+            "DOUBLE mode: first press alone must not engage"
+        );
+        assert!(feature.pending_panic_double.is_some());
+    }
+
+    #[tokio::test]
+    async fn panic_double_mode_two_presses_engage() {
+        let bus = Arc::new(crate::adapters::mock::MockBus::new());
+        let (arbiter, _ack_tx, _handle) = crate::arbiter::door_lock_arbiter(Arc::clone(&bus));
+        let arbiter = Arc::new(arbiter);
+        let secret: SharedSecret = [0xAA; 16];
+        let mut feature = make_rke_with_panic_mode(
+            Arc::clone(&bus),
+            arbiter,
+            vec![make_fob(1, secret)],
+            crate::config::PanicPressMode::Double,
+        );
+
+        feature.handle_authenticated(1, FobButton::PanicAlarm).await;
+        feature.handle_authenticated(1, FobButton::PanicAlarm).await;
+
+        assert_eq!(
+            bus.latest_value("Body.Switches.Panic.IsEngaged"),
+            Some(SignalValue::Bool(true)),
+            "DOUBLE mode: second press within window must engage"
+        );
+        assert!(feature.pending_panic_double.is_none());
+    }
+
+    #[tokio::test]
+    async fn panic_double_mode_cancel_is_single_press() {
+        // Once engaged, a single press is enough to cancel — even in
+        // DOUBLE mode.  A panicked driver shouldn't have to confirm
+        // with a second press to stop the alarm.
+        let bus = Arc::new(crate::adapters::mock::MockBus::new());
+        let (arbiter, _ack_tx, _handle) = crate::arbiter::door_lock_arbiter(Arc::clone(&bus));
+        let arbiter = Arc::new(arbiter);
+        let secret: SharedSecret = [0xAA; 16];
+        let mut feature = make_rke_with_panic_mode(
+            Arc::clone(&bus),
+            arbiter,
+            vec![make_fob(1, secret)],
+            crate::config::PanicPressMode::Double,
+        );
+
+        // Engage via two presses.
+        feature.handle_authenticated(1, FobButton::PanicAlarm).await;
+        feature.handle_authenticated(1, FobButton::PanicAlarm).await;
+        assert!(feature.panic_engaged);
+
+        // One press should disengage.
+        feature.handle_authenticated(1, FobButton::PanicAlarm).await;
+        assert!(!feature.panic_engaged);
+        assert_eq!(
+            bus.latest_value("Body.Switches.Panic.IsEngaged"),
+            Some(SignalValue::Bool(false)),
+            "DOUBLE mode: cancel must be a single press"
+        );
+    }
+
+    #[tokio::test]
+    async fn panic_double_mode_different_fobs_do_not_pair() {
+        // First press from fob 1 should not pair with second press
+        // from fob 2 — keeps the pairing tied to one device, like
+        // the existing trunk-release double-press logic.
+        let bus = Arc::new(crate::adapters::mock::MockBus::new());
+        let (arbiter, _ack_tx, _handle) = crate::arbiter::door_lock_arbiter(Arc::clone(&bus));
+        let arbiter = Arc::new(arbiter);
+        let s1: SharedSecret = [0xAA; 16];
+        let s2: SharedSecret = [0xBB; 16];
+        let mut feature = make_rke_with_panic_mode(
+            Arc::clone(&bus),
+            arbiter,
+            vec![make_fob(1, s1), make_fob(2, s2)],
+            crate::config::PanicPressMode::Double,
+        );
+
+        feature.handle_authenticated(1, FobButton::PanicAlarm).await;
+        feature.handle_authenticated(2, FobButton::PanicAlarm).await;
+
+        // Fob 2 wasn't a paired second press for fob 1's pending → its
+        // own first press just replaces the pending.  Neither fob has
+        // engaged.
+        assert!(!feature.panic_engaged);
+        assert!(feature.pending_panic_double.is_some());
+        assert!(
+            bus.history()
+                .iter()
+                .all(|(s, v)| !(*s == "Body.Switches.Panic.IsEngaged"
+                    && *v == SignalValue::Bool(true))),
+            "different-fob presses must not engage"
+        );
+    }
+
+    /// LONG_PRESS mode falls back to SINGLE today (plant-model wiring
+    /// for press-down/press-up not yet implemented).
+    #[tokio::test]
+    async fn panic_long_press_mode_falls_back_to_single() {
+        let bus = Arc::new(crate::adapters::mock::MockBus::new());
+        let (arbiter, _ack_tx, _handle) = crate::arbiter::door_lock_arbiter(Arc::clone(&bus));
+        let arbiter = Arc::new(arbiter);
+        let secret: SharedSecret = [0xAA; 16];
+        let mut feature = make_rke_with_panic_mode(
+            Arc::clone(&bus),
+            arbiter,
+            vec![make_fob(1, secret)],
+            crate::config::PanicPressMode::LongPress,
+        );
+
+        feature.handle_authenticated(1, FobButton::PanicAlarm).await;
+        assert_eq!(
+            bus.latest_value("Body.Switches.Panic.IsEngaged"),
+            Some(SignalValue::Bool(true)),
+            "LONG_PRESS fallback: behaves as SINGLE until plant-model wiring lands"
         );
     }
 }

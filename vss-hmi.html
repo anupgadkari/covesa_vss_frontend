@@ -2008,17 +2008,28 @@ function ControlPanelContent({s,set,anyDoor,anyLight,lux}){
         </div>
       </SG>
 
-      <SG title="Door Lock Sources" vss="Body.PEPS">
-        <div className="cr"><span className="cn">PEPS Key</span><Tog val={s['Body.PEPS.KeyPresent']} on={()=>set('Body.PEPS.KeyPresent',!s['Body.PEPS.KeyPresent'])} c="t"/></div>
-        <EnumR label="Keyfob RKE" k="Body.Switches.Keyfob.LockButton" s={s} set={set} opts={['IDLE','LOCK','UNLOCK','DOUBLE_LOCK']}/>
-        {[['Trim FL','Body.Switches.DoorTrim.Row1.Left.LockButton'],['Trim FR','Body.Switches.DoorTrim.Row1.Right.LockButton'],
-          ['Trim RL','Body.Switches.DoorTrim.Row2.Left.LockButton'],['Trim RR','Body.Switches.DoorTrim.Row2.Right.LockButton']].map(([l,k])=>(
-          <EnumR key={k} label={l} k={k} s={s} set={set} opts={['IDLE','LOCK','UNLOCK']}/>
-        ))}
-        <EnumR label="Phone App" k="Body.Connectivity.RemoteLock" s={s} set={set} opts={['IDLE','LOCK','UNLOCK']}/>
-        <EnumR label="BLE Key" k="Body.Connectivity.BleLock" s={s} set={set} opts={['IDLE','LOCK','UNLOCK']}/>
-        <div className="cr"><span className="cn">NFC Card</span><Tog val={s['Body.Connectivity.NfcCardPresent']} on={()=>set('Body.Connectivity.NfcCardPresent',!s['Body.Connectivity.NfcCardPresent'])} c="v"/></div>
-        <div className="cr"><span className="cn">NFC Phone</span><Tog val={s['Body.Connectivity.NfcPhonePresent']} on={()=>set('Body.Connectivity.NfcPhonePresent',!s['Body.Connectivity.NfcPhonePresent'])} c="v"/></div>
+      {/* Lock Status — read-only display of the door-lock arbiter's
+          published outputs.  The per-source interactors that used to
+          live here (Keyfob RKE, Trim buttons, Phone, BLE, NFC) all
+          have dedicated panels elsewhere now (PEPS plant cards,
+          fob-button row, etc.) — keeping them here would just be
+          duplicate UI driving the same input signals.  What's
+          *unique* to the arbiter is the published lock-state event
+          stream, which features like AutoRelock and PerimeterAlarm
+          gate on. */}
+      <SG title="Lock Status" vss="Cabin.LockStatus">
+        <div className="cr">
+          <span className="cn">LockStatus</span>
+          <CfgReadOnly val={s['Cabin.LockStatus']||'—'}/>
+        </div>
+        <div className="cr">
+          <span className="cn">LastRequestor</span>
+          <CfgReadOnly val={s['Cabin.LockStatus.LastRequestor']||'—'}/>
+        </div>
+        <div className="cr">
+          <span className="cn">EventNum</span>
+          <CfgReadOnly val={s['Cabin.LockStatus.EventNum']??'—'}/>
+        </div>
       </SG>
 
       <SG title="Safety" vss="Vehicle.Safety">
@@ -2230,6 +2241,7 @@ const INIT_CONFIG={
     lock_feedback_blink_count:3, lock_feedback_blink_period_ms:400,
     shutdown_grace_secs:30, lane_change_flash_count:3,
     auto_headlamp_lux_threshold:200, peps_rear_capacitive_handles:false,
+    panic_press_mode:'SINGLE',
   },
 };
 
@@ -2415,6 +2427,13 @@ function ConfigView({cfg, onSet, staged, setStaged, onApplyReboot}){
       </CfgRow>
       <CfgRow label="Shutdown grace period" hint="A53 stay-alive after ignition OFF (s)" dirty={isVLDirty('shutdown_grace_secs')}>
         <CfgNum val={vlVal('shutdown_grace_secs')} min={5} max={120} onChange={n=>stageVL('shutdown_grace_secs',n)}/>
+      </CfgRow>
+      <CfgRow label="Panic-button activation"
+        hint="SINGLE = one press toggles. DOUBLE = two presses within 3 s required to engage; cancel still 1 press. LONG_PRESS = falls back to SINGLE today (plant-model wiring TBD)."
+        dirty={isVLDirty('panic_press_mode')}>
+        <CfgSelect val={vlVal('panic_press_mode')||'SINGLE'}
+          opts={['SINGLE','DOUBLE','LONG_PRESS']}
+          onChange={p=>stageVL('panic_press_mode',p)}/>
       </CfgRow>
       <CfgRow label="Rear handles capacitive" hint="OFF: rear handles mechanical-only — must auth at front first. ON: legacy wiring, rear pull initiates PEPS." dirty={isVLDirty('peps_rear_capacitive_handles')}>
         <CfgBool val={!!vlVal('peps_rear_capacitive_handles')} onChange={b=>stageVL('peps_rear_capacitive_handles',b)}/>

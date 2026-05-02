@@ -57,6 +57,7 @@ use vss_bridge::features::mirror_adjust::MirrorAdjust;
 use vss_bridge::features::mirror_fold::MirrorFold;
 use vss_bridge::features::panic_alarm::PanicAlarm;
 use vss_bridge::features::passive_entry::{DeviceKind, PairedDevice, PassiveEntry};
+use vss_bridge::features::perimeter_alarm::PerimeterAlarm;
 use vss_bridge::features::rke::{PairedFob, RkeFeature};
 use vss_bridge::features::thumb_pad_lock::ThumbPadLock;
 use vss_bridge::features::turn_indicator::TurnIndicator;
@@ -300,6 +301,20 @@ async fn boot_simulation_stack(
         )
         .run(),
     );
+    // PerimeterAlarm — anti-intrusion alarm.  Arms when any door
+    // opens while the cabin is LOCKED / DOUBLE_LOCKED.  Disarms on
+    // an authenticated unlock (fob/PEPS/phone/NFC) or panic-button
+    // press.  Pulses horn for 30 s, lights/dome/puddle for 5 min.
+    set.spawn(
+        PerimeterAlarm::new(
+            Arc::clone(&bus),
+            Arc::clone(&lighting_arb),
+            Arc::clone(&horn_arb),
+            Arc::clone(&courtesy_arb),
+            Arc::clone(&puddle_arb),
+        )
+        .run(),
+    );
     set.spawn(AutoRelock::from_config(Arc::clone(&door_lock_arb), Arc::clone(&bus), &cfg).run());
 
     // PassiveEntry — handle-pull authenticated unlock.
@@ -368,7 +383,7 @@ async fn boot_simulation_stack(
     set.spawn(CabinTrunkRelease::new(Arc::clone(&bus), Arc::clone(&trunk_arb)).run());
     set.spawn(ExteriorTrunkButton::new(Arc::clone(&bus), Arc::clone(&trunk_arb)).run());
 
-    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome, MirrorFold, MirrorAdjust, Farewell, DoorOpenAssist, ExteriorTrunkButton, CabinTrunkRelease, ManualHorn");
+    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome, MirrorFold, MirrorAdjust, Farewell, DoorOpenAssist, ExteriorTrunkButton, CabinTrunkRelease, ManualHorn, PerimeterAlarm");
 
     // ── Plant Models ────────────────────────────────────────────────
     set.spawn(BlinkRelay::new(Arc::clone(&bus)).run());

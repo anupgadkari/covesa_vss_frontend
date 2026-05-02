@@ -134,6 +134,11 @@ const INPUT_SIGNALS: &[VssPath] = &[
     // IsDoubleLocked is an *output* (plant model owns it) and must NOT be in
     // INPUT_SIGNALS — direct writes bypass the plant model and break DoubleLockRelease.
     "Body.Doors.CentralLock.Command",
+    // Diagnostic override for the cabin lock status — used by
+    // ws_integration tests to simulate "vehicle is locked" without
+    // generating a full fob LOCK press.  In production the door-lock
+    // arbiter is the only writer; HMI side-channel is for testing.
+    "Cabin.LockStatus",
     // Thumb-pad lock inputs — Row 1 outside handle lock areas (HMI top-view).
     "Body.Doors.Row1.Left.Handle.Outside.LockPad.IsPressed",
     "Body.Doors.Row1.Right.Handle.Outside.LockPad.IsPressed",
@@ -632,6 +637,7 @@ fn build_config_msg(cfg: &PlatformConfig) -> String {
                 "lane_change_flash_count":     vl.lane_change_flash_count,
                 "shutdown_grace_secs":         vl.shutdown_grace_secs,
                 "peps_rear_capacitive_handles":vl.peps_rear_capacitive_handles,
+                "panic_press_mode":           format!("{:?}", vl.panic_press_mode).to_uppercase(),
             }
         }
     });

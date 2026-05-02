@@ -439,6 +439,23 @@ pub fn lighting_arbiter<B: SignalBus>(
             signal: "Body.Lights.DirectionIndicator.Right.IsSignaling",
             priority: Priority::High,
         },
+        // PerimeterAlarm — same blink pattern, triggered by an
+        // intrusion (door open while LOCKED / DOUBLE_LOCKED) instead
+        // of a panic-button press.  HIGH for the same reason as
+        // PanicAlarm; the two are mutually exclusive in practice
+        // (a panic press cancels the perimeter alarm, and the
+        // perimeter trigger only fires while the cabin is locked
+        // i.e. the user is not present).
+        AllowEntry {
+            feature_id: FeatureId::PerimeterAlarm,
+            signal: "Body.Lights.DirectionIndicator.Left.IsSignaling",
+            priority: Priority::High,
+        },
+        AllowEntry {
+            feature_id: FeatureId::PerimeterAlarm,
+            signal: "Body.Lights.DirectionIndicator.Right.IsSignaling",
+            priority: Priority::High,
+        },
         // Hazard master signal
         AllowEntry {
             feature_id: FeatureId::Hazard,
@@ -1042,6 +1059,11 @@ pub fn horn_arbiter<B: SignalBus>(
             priority: Priority::High,
         },
         AllowEntry {
+            feature_id: FeatureId::PerimeterAlarm,
+            signal: "Body.Horn.IsActive",
+            priority: Priority::High,
+        },
+        AllowEntry {
             feature_id: FeatureId::ManualHorn,
             signal: "Body.Horn.IsActive",
             priority: Priority::Medium,
@@ -1088,6 +1110,14 @@ pub fn courtesy_arbiter<B: SignalBus>(
             feature_id: FeatureId::Farewell,
             signal: "Cabin.Lights.IsDomeOn",
             priority: Priority::Medium,
+        },
+        // PerimeterAlarm pulses the dome at HIGH while the alarm is
+        // active.  Pre-empts Welcome / Farewell cleanly; on disarm
+        // the next-highest pending claim resumes.
+        AllowEntry {
+            feature_id: FeatureId::PerimeterAlarm,
+            signal: "Cabin.Lights.IsDomeOn",
+            priority: Priority::High,
         },
     ];
 
@@ -1145,6 +1175,19 @@ pub fn puddle_arbiter<B: SignalBus>(
             feature_id: FeatureId::DoorOpenAssist,
             signal: "Body.Lights.Puddle.Right.IsOn",
             priority: Priority::Low,
+        },
+        // PerimeterAlarm — visible attention-grabbing pulse on the
+        // exterior puddle lamps for the whole 5 min alarm window.
+        // HIGH pre-empts Welcome / Farewell / DoorOpenAssist.
+        AllowEntry {
+            feature_id: FeatureId::PerimeterAlarm,
+            signal: "Body.Lights.Puddle.Left.IsOn",
+            priority: Priority::High,
+        },
+        AllowEntry {
+            feature_id: FeatureId::PerimeterAlarm,
+            signal: "Body.Lights.Puddle.Right.IsOn",
+            priority: Priority::High,
         },
     ];
 
