@@ -1763,11 +1763,11 @@ function Btn({on,night,onClick,onMouseDown,onMouseUp,onMouseLeave,children,sz,pa
 
 // ISO/SAE-style headlamp telltale icons for the instrument cluster.
 //
-// All three share the same left-bulging semicircle "headlamp body"
-// (curve on the left, flat diameter on the right) plus 3 emanating
-// "beam" lines coming off the diameter to the right:
+// The lamp body points LEFT — curve on the right side, flat diameter
+// on the left, with 3 "beam" lines emanating leftward.  This matches
+// the standard ISO 2575 telltale orientation seen in real clusters.
 //
-//   kind="lo"  — beams slope down-and-right (low beam aim).
+//   kind="lo"  — beams slope down-and-out (low beam aim).
 //   kind="hi"  — beams are horizontal (high beam reach).
 //   kind="fog" — low-beam style + a vertical wavy line through the
 //                beams representing fog.
@@ -1779,13 +1779,14 @@ function HeadlampTelltale({cx, cy, kind, on, onColor, offColor='#1F2C40'}){
   const c = on ? onColor : offColor;
   const op = on ? 1 : 0.45;
   const sw = 1.6;
-  // Semicircle body — flat side on the right (x = cx+1), curve on
-  // the left.  Filled so it reads as a solid lamp lens.
-  const body = `M ${cx+1},${cy-7} A 7,7 0 0,0 ${cx+1},${cy+7} Z`;
-  // Three beam endpoints differ per kind.
+  // Semicircle body — flat side on the left (x = cx-1), curve on
+  // the right.  Filled so it reads as a solid lamp lens.
+  const body = `M ${cx-1},${cy-7} A 7,7 0 0,1 ${cx-1},${cy+7} Z`;
+  // Three beam endpoints differ per kind.  All beams start at the
+  // flat diameter on the left and extend further left.
   const beams = kind === 'hi'
-    ? [[cx-5,cy-4,cx+11,cy-4],[cx-5,cy,cx+11,cy],[cx-5,cy+4,cx+11,cy+4]]
-    : [[cx-4,cy-4,cx+11,cy-1],[cx-3,cy,cx+11,cy+3],[cx-2,cy+4,cx+11,cy+7]];
+    ? [[cx-1,cy-4,cx-13,cy-4],[cx-1,cy,cx-13,cy],[cx-1,cy+4,cx-13,cy+4]]
+    : [[cx-1,cy-4,cx-13,cy-1],[cx-1,cy,  cx-13,cy+3],[cx-1,cy+4,cx-13,cy+7]];
   return <g opacity={op}>
     <path d={body} fill={c} stroke={c} strokeWidth="0.6"/>
     {beams.map(([x1,y1,x2,y2],i)=>(
@@ -1794,7 +1795,7 @@ function HeadlampTelltale({cx, cy, kind, on, onColor, offColor='#1F2C40'}){
     ))}
     {kind === 'fog' && (
       // Wavy vertical line cutting across the 3 beams to indicate fog.
-      <path d={`M ${cx+4},${cy-7} Q ${cx+8},${cy-3.5} ${cx+4},${cy} T ${cx+4},${cy+7}`}
+      <path d={`M ${cx-7},${cy-7} Q ${cx-11},${cy-3.5} ${cx-7},${cy} T ${cx-7},${cy+7}`}
         fill="none" stroke={c} strokeWidth={sw} strokeLinecap="round"/>
     )}
   </g>;
