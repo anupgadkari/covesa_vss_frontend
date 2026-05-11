@@ -2089,7 +2089,6 @@ function CockpitView({s,set}){
           <Btn night={night} on={ffogSw} onClick={()=>set('Body.Switches.Fog.Front.IsEngaged',!ffogSw)} min={110}>FOG FRONT {ffogSw?'●':'○'}</Btn>
           <Btn night={night} on={rfogSw} onClick={()=>set('Body.Switches.Fog.Rear.IsEngaged',!rfogSw)} min={110}>FOG REAR {rfogSw?'●':'○'}</Btn>
           <Btn night={night} on={hazSw} onClick={()=>set('Body.Switches.Hazard.IsEngaged',!hazSw)} min={110}>⚠ HAZARD {hazSw?'●':'○'}</Btn>
-          <Btn night={night} on={domeSw!=='OFF'} onClick={()=>set('Cabin.Lights.Dome.SwitchPosition',DOME_CYCLE[domeSw]||'OFF')} min={110}>☼ DOME: {domeSw}</Btn>
           <Btn night={night} on={s['Body.Switches.Trunk.Release.IsPressed']}
                onMouseDown={()=>set('Body.Switches.Trunk.Release.IsPressed',true)}
                onMouseUp={()=>set('Body.Switches.Trunk.Release.IsPressed',false)}
