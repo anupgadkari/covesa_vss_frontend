@@ -1965,7 +1965,10 @@ function CockpitView({s,set}){
         {/* Real ISO-style headlamp telltales for LO / HI / front-FOG.
             Standard automotive colour cues: green = low beam,
             blue = high beam, amber = front fog. */}
-        <HeadlampTelltale cx={30}  cy={80} kind="lo"  on={lo}   onColor="#22C55E"/>
+        {/* When high beams are on the high-beam telltale takes
+            precedence; the low-beam telltale is suppressed even
+            though Beam.Low.IsOn may still be true. */}
+        <HeadlampTelltale cx={30}  cy={80} kind="lo"  on={lo && !hi} onColor="#22C55E"/>
         <HeadlampTelltale cx={90}  cy={80} kind="hi"  on={hi}   onColor="#4A9EF5"/>
         <HeadlampTelltale cx={150} cy={80} kind="fog" on={ffog} onColor="#F59E0B"/>
         {/* RFOG keeps the existing circular badge — distinct rear-fog
