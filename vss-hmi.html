@@ -2219,39 +2219,58 @@ function CockpitView({s,set}){
       </div>
     </CockpitZone>
 
-    {/* ── Duplicated door trim controls (driver door) ── */}
-    <CockpitZone title="DOOR TRIM (DRIVER)" subtitle="interior pulls · windows · locks · mirrors" night={night}>
-      <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
-        <button onMouseDown={()=>set('Body.Doors.Row1.Left.Handle.Inside.IsPulled',true)}
-                onMouseUp={()=>set('Body.Doors.Row1.Left.Handle.Inside.IsPulled',false)}
-                onMouseLeave={()=>set('Body.Doors.Row1.Left.Handle.Inside.IsPulled',false)}
-                style={{background:pullL?'#3A2C0A':'#0E1625',border:`1px solid ${pullL?'#F59E0B':'#1A2838'}`,
-                  color:pullL?'#F59E0B':txt,fontFamily:'Share Tech Mono',fontSize:9,
-                  padding:'10px 14px',borderRadius:4,cursor:'pointer',minWidth:130}}>
-          ⇲ DRV INSIDE PULL {pullL?'●':''}
-        </button>
-        <button onMouseDown={()=>set('Body.Doors.Row1.Right.Handle.Inside.IsPulled',true)}
-                onMouseUp={()=>set('Body.Doors.Row1.Right.Handle.Inside.IsPulled',false)}
-                onMouseLeave={()=>set('Body.Doors.Row1.Right.Handle.Inside.IsPulled',false)}
-                style={{background:pullR?'#3A2C0A':'#0E1625',border:`1px solid ${pullR?'#F59E0B':'#1A2838'}`,
-                  color:pullR?'#F59E0B':txt,fontFamily:'Share Tech Mono',fontSize:9,
-                  padding:'10px 14px',borderRadius:4,cursor:'pointer',minWidth:130}}>
-          ⇱ PAS INSIDE PULL {pullR?'●':''}
-        </button>
-      </div>
-      <div style={{display:'flex',gap:6,marginTop:8,flexWrap:'wrap'}}>
-        <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,alignSelf:'center',marginRight:4,letterSpacing:1}}>LOCK:</span>
-        <Btn night={night} on={!lockL&&!lockR} onClick={()=>set('Body.Switches.DoorTrim.Row1.Left.UnlockButton',true)}>UNLOCK ALL</Btn>
-        <Btn night={night} on={lockL&&lockR} onClick={()=>set('Body.Switches.DoorTrim.Row1.Left.LockButton',true)}>LOCK ALL {dblL?'⊕⊕':''}</Btn>
-        <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,alignSelf:'center',marginLeft:8,letterSpacing:1}}>MIRRORS:</span>
-        <Btn night={night} on={mirL&&mirR} onClick={()=>set('Body.Switches.Mirror.Fold',true)}>FOLD {(mirL&&mirR)?'●':'○'}</Btn>
-        <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,alignSelf:'center',marginLeft:8,letterSpacing:1}}>WINDOW:</span>
-        <Btn night={night} on={false} onClick={()=>{}}>DRV ⇧</Btn>
-        <Btn night={night} on={false} onClick={()=>{}}>DRV ⇩</Btn>
-        <Btn night={night} on={false} onClick={()=>{}}>PAS ⇧</Btn>
-        <Btn night={night} on={false} onClick={()=>{}}>PAS ⇩</Btn>
-      </div>
-    </CockpitZone>
+    {/* ── Row-1 door trim panels — left + right side-by-side ──
+         Each side carries its own inside pull, window switch, and
+         lock/unlock pad.  The driver side (left, in LHD) also owns
+         the mirror master controls — fold + select L/R — because
+         that's where they physically live on the door card.  Central-
+         locking is cabin-wide: pressing LOCK or UNLOCK on either
+         side feeds the same DoorTrimButton feature, which decides
+         to lock-all / unlock-driver / unlock-all per the configured
+         two-stage policy. */}
+    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+      <CockpitZone title="LEFT DOOR TRIM" subtitle="driver (LHD)" night={night}>
+        <div style={{display:'flex',flexDirection:'column',gap:6}}>
+          <Btn night={night} on={pullL}
+            onMouseDown={()=>set('Body.Doors.Row1.Left.Handle.Inside.IsPulled',true)}
+            onMouseUp={()=>set('Body.Doors.Row1.Left.Handle.Inside.IsPulled',false)}
+            onMouseLeave={()=>set('Body.Doors.Row1.Left.Handle.Inside.IsPulled',false)}
+            sz={10} pad={'8px 12px'}>⇲ INSIDE PULL {pullL?'●':''}</Btn>
+          <div style={{display:'flex',gap:6}}>
+            <Btn night={night} on={false} onClick={()=>{}} sz={9} pad={'6px 10px'} min={70}>WIN ⇧</Btn>
+            <Btn night={night} on={false} onClick={()=>{}} sz={9} pad={'6px 10px'} min={70}>WIN ⇩</Btn>
+          </div>
+          <div style={{display:'flex',gap:6}}>
+            <Btn night={night} on={!lockL&&!lockR} onClick={()=>set('Body.Switches.DoorTrim.Row1.Left.UnlockButton',true)} sz={9} pad={'6px 10px'} min={90}>UNLOCK</Btn>
+            <Btn night={night} on={lockL&&lockR} onClick={()=>set('Body.Switches.DoorTrim.Row1.Left.LockButton',true)} sz={9} pad={'6px 10px'} min={90}>LOCK {dblL?'⊕⊕':''}</Btn>
+          </div>
+          {/* Driver-side mirror controls — master fold + select. */}
+          <div style={{display:'flex',gap:6,alignItems:'center',marginTop:2}}>
+            <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1}}>MIRRORS:</span>
+            <Btn night={night} on={mirL&&mirR} onClick={()=>set('Body.Switches.Mirror.Fold',true)} sz={9} pad={'6px 10px'}>FOLD {(mirL&&mirR)?'●':'○'}</Btn>
+            <Btn night={night} on={false} onClick={()=>{}} sz={9} pad={'6px 8px'}>SEL L</Btn>
+            <Btn night={night} on={false} onClick={()=>{}} sz={9} pad={'6px 8px'}>SEL R</Btn>
+          </div>
+        </div>
+      </CockpitZone>
+      <CockpitZone title="RIGHT DOOR TRIM" subtitle="passenger (LHD)" night={night}>
+        <div style={{display:'flex',flexDirection:'column',gap:6}}>
+          <Btn night={night} on={pullR}
+            onMouseDown={()=>set('Body.Doors.Row1.Right.Handle.Inside.IsPulled',true)}
+            onMouseUp={()=>set('Body.Doors.Row1.Right.Handle.Inside.IsPulled',false)}
+            onMouseLeave={()=>set('Body.Doors.Row1.Right.Handle.Inside.IsPulled',false)}
+            sz={10} pad={'8px 12px'}>⇱ INSIDE PULL {pullR?'●':''}</Btn>
+          <div style={{display:'flex',gap:6}}>
+            <Btn night={night} on={false} onClick={()=>{}} sz={9} pad={'6px 10px'} min={70}>WIN ⇧</Btn>
+            <Btn night={night} on={false} onClick={()=>{}} sz={9} pad={'6px 10px'} min={70}>WIN ⇩</Btn>
+          </div>
+          <div style={{display:'flex',gap:6}}>
+            <Btn night={night} on={!lockL&&!lockR} onClick={()=>set('Body.Switches.DoorTrim.Row1.Right.UnlockButton',true)} sz={9} pad={'6px 10px'} min={90}>UNLOCK</Btn>
+            <Btn night={night} on={lockL&&lockR} onClick={()=>set('Body.Switches.DoorTrim.Row1.Right.LockButton',true)} sz={9} pad={'6px 10px'} min={90}>LOCK</Btn>
+          </div>
+        </div>
+      </CockpitZone>
+    </div>
 
     {/* ── Ambient / footwell lighting ── */}
     <CockpitZone title="AMBIENT LIGHTING" subtitle="footwell · console · door piping" night={night}>
