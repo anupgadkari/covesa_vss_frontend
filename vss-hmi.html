@@ -1734,6 +1734,25 @@ function SideView({s,set}){
  * the bus is in NIGHT mode (published by the DayNightModePlant from
  * `Body.Lights.Beam.Low.IsOn`).
  */
+// Module-scope so its component identity is stable across renders.
+// (If defined inside CockpitView it would be re-created on every state
+// update, causing React to unmount/remount every button — which made
+// the panel feel sluggish and could drop mouse-up events on
+// press-and-hold buttons such as the horn / hood release / inside
+// pulls.)
+const cockpitBtnSty=(on,night,opts={})=>({
+  background: on?(night?'#3A2C0A':'#1E3A52'):(night?'#0A1018':'#0E1625'),
+  border: `1px solid ${on?(night?'#F59E0B':'#4A9EF5'):(night?'#2A3A50':'#1A2838')}`,
+  color: on?(night?'#F59E0B':'#4A9EF5'):(night?'#D7A03A':'#3A5070'),
+  fontFamily:'Share Tech Mono',fontSize:opts.sz||9,fontWeight:600,
+  padding:opts.pad||'6px 10px',borderRadius:3,cursor:'pointer',
+  minWidth:opts.min||0,letterSpacing:.5,whiteSpace:'nowrap',
+});
+function Btn({on,night,onClick,onMouseDown,onMouseUp,onMouseLeave,children,sz,pad,min}){
+  return <button onClick={onClick} onMouseDown={onMouseDown} onMouseUp={onMouseUp}
+    onMouseLeave={onMouseLeave} style={cockpitBtnSty(on,night,{sz,pad,min})}>{children}</button>;
+}
+
 function CockpitZone({title,subtitle,night,children}){
   return <div style={{
     background: night?'#080F18':'#0A1320',
@@ -1803,19 +1822,11 @@ function CockpitView({s,set}){
 
   const txt = night?'#F59E0B':'#1C3050';
   const txtDim = night?'#8A6020':'#2A3A50';
-  // Compact button factory — keeps zone markup tidy.
-  const btnSty=(on,opts={})=>({
-    background: on?(night?'#3A2C0A':'#1E3A52'):(night?'#0A1018':'#0E1625'),
-    border: `1px solid ${on?(night?'#F59E0B':'#4A9EF5'):(night?'#2A3A50':'#1A2838')}`,
-    color: on?(night?'#F59E0B':'#4A9EF5'):(night?'#D7A03A':'#3A5070'),
-    fontFamily:'Share Tech Mono',fontSize:opts.sz||9,fontWeight:600,
-    padding:opts.pad||'6px 10px',borderRadius:3,cursor:'pointer',
-    minWidth:opts.min||0,letterSpacing:.5,whiteSpace:'nowrap',
-  });
-  const Btn=({on,onClick,onMouseDown,onMouseUp,onMouseLeave,children,sz,pad,min})=>(
-    <button onClick={onClick} onMouseDown={onMouseDown} onMouseUp={onMouseUp} onMouseLeave={onMouseLeave}
-            style={btnSty(on,{sz,pad,min})}>{children}</button>
-  );
+  // Btn is hoisted to module scope so its component identity is stable
+  // across renders (a locally-defined wrapper would be re-created each
+  // render and force React to unmount/remount every button, which
+  // dropped mouse-up events on press-and-hold buttons).  Pass
+  // `night={night}` at every call site.
   const WIPER_CYCLE={OFF:'INTERMITTENT',INTERMITTENT:'SLOW',SLOW:'MEDIUM',MEDIUM:'FAST',FAST:'OFF'};
   const LIGHT_CYCLE={OFF:'POSITION',POSITION:'DRL',DRL:'AUTO',AUTO:'BEAM',BEAM:'OFF'};
   const DIST_CYCLE={AUTO:'FACE',FACE:'FACE_FEET',FACE_FEET:'FEET',FEET:'FEET_DEF',FEET_DEF:'DEF',DEF:'AUTO'};
@@ -1897,9 +1908,9 @@ function CockpitView({s,set}){
         {/* Left stalk: turn signals + high-beam pull */}
         <div style={{display:'flex',flexDirection:'column',gap:5}}>
           <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1}}>LEFT STALK</span>
-          <Btn on={sigDir==='LEFT'} onClick={()=>set('Body.Switches.TurnIndicator.Direction', sigDir==='LEFT'?'OFF':'LEFT')}>◄ TURN L</Btn>
-          <Btn on={sigDir==='RIGHT'} onClick={()=>set('Body.Switches.TurnIndicator.Direction', sigDir==='RIGHT'?'OFF':'RIGHT')}>TURN R ►</Btn>
-          <Btn on={hbSw} onClick={()=>set('Body.Switches.HighBeam.IsEngaged',!hbSw)}>HI-BEAM {hbSw?'●':'○'}</Btn>
+          <Btn night={night} on={sigDir==='LEFT'} onClick={()=>set('Body.Switches.TurnIndicator.Direction', sigDir==='LEFT'?'OFF':'LEFT')}>◄ TURN L</Btn>
+          <Btn night={night} on={sigDir==='RIGHT'} onClick={()=>set('Body.Switches.TurnIndicator.Direction', sigDir==='RIGHT'?'OFF':'RIGHT')}>TURN R ►</Btn>
+          <Btn night={night} on={hbSw} onClick={()=>set('Body.Switches.HighBeam.IsEngaged',!hbSw)}>HI-BEAM {hbSw?'●':'○'}</Btn>
         </div>
         {/* Wheel SVG with embedded button pads */}
         <svg viewBox="0 0 240 200" style={{width:'100%',maxHeight:200}}>
@@ -1936,9 +1947,9 @@ function CockpitView({s,set}){
         {/* Right stalk: wiper + washer */}
         <div style={{display:'flex',flexDirection:'column',gap:5}}>
           <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1}}>WIPER STALK</span>
-          <Btn on={wf&&wf!=='OFF'} onClick={()=>set('Body.Windshield.Front.Wiping.Mode', WIPER_CYCLE[wf||'OFF']||'OFF')}>WIPE: {wf||'OFF'}</Btn>
-          <Btn on={false} onClick={()=>{}}>WASHER ⇣</Btn>
-          <Btn on={horn} onMouseDown={()=>set('Body.Horn.IsActive',true)} onMouseUp={()=>set('Body.Horn.IsActive',false)} onMouseLeave={()=>set('Body.Horn.IsActive',false)}>🔊 HORN</Btn>
+          <Btn night={night} on={wf&&wf!=='OFF'} onClick={()=>set('Body.Windshield.Front.Wiping.Mode', WIPER_CYCLE[wf||'OFF']||'OFF')}>WIPE: {wf||'OFF'}</Btn>
+          <Btn night={night} on={false} onClick={()=>{}}>WASHER ⇣</Btn>
+          <Btn night={night} on={horn} onMouseDown={()=>set('Body.Horn.IsActive',true)} onMouseUp={()=>set('Body.Horn.IsActive',false)} onMouseLeave={()=>set('Body.Horn.IsActive',false)}>🔊 HORN</Btn>
         </div>
       </div>
     </CockpitZone>
@@ -1969,15 +1980,15 @@ function CockpitView({s,set}){
         </div>
         {/* Switch column */}
         <div style={{display:'grid',gridTemplateColumns:'repeat(2,auto)',gap:6}}>
-          <Btn on={ffogSw} onClick={()=>set('Body.Switches.Fog.Front.IsEngaged',!ffogSw)} min={110}>FOG FRONT {ffogSw?'●':'○'}</Btn>
-          <Btn on={rfogSw} onClick={()=>set('Body.Switches.Fog.Rear.IsEngaged',!rfogSw)} min={110}>FOG REAR {rfogSw?'●':'○'}</Btn>
-          <Btn on={hazSw} onClick={()=>set('Body.Switches.Hazard.IsEngaged',!hazSw)} min={110}>⚠ HAZARD {hazSw?'●':'○'}</Btn>
-          <Btn on={dome} onClick={()=>set('Cabin.Lights.IsDomeOn',!dome)} min={110}>☼ INTERIOR {dome?'●':'○'}</Btn>
-          <Btn on={s['Body.Switches.Trunk.Release.IsPressed']}
+          <Btn night={night} on={ffogSw} onClick={()=>set('Body.Switches.Fog.Front.IsEngaged',!ffogSw)} min={110}>FOG FRONT {ffogSw?'●':'○'}</Btn>
+          <Btn night={night} on={rfogSw} onClick={()=>set('Body.Switches.Fog.Rear.IsEngaged',!rfogSw)} min={110}>FOG REAR {rfogSw?'●':'○'}</Btn>
+          <Btn night={night} on={hazSw} onClick={()=>set('Body.Switches.Hazard.IsEngaged',!hazSw)} min={110}>⚠ HAZARD {hazSw?'●':'○'}</Btn>
+          <Btn night={night} on={dome} onClick={()=>set('Cabin.Lights.IsDomeOn',!dome)} min={110}>☼ INTERIOR {dome?'●':'○'}</Btn>
+          <Btn night={night} on={s['Body.Switches.Trunk.Release.IsPressed']}
                onMouseDown={()=>set('Body.Switches.Trunk.Release.IsPressed',true)}
                onMouseUp={()=>set('Body.Switches.Trunk.Release.IsPressed',false)}
                onMouseLeave={()=>set('Body.Switches.Trunk.Release.IsPressed',false)} min={110}>TRUNK ⇧</Btn>
-          <Btn on={s['Body.Switches.Hood.Release.IsPulled']}
+          <Btn night={night} on={s['Body.Switches.Hood.Release.IsPulled']}
                onMouseDown={()=>set('Body.Switches.Hood.Release.IsPulled',true)}
                onMouseUp={()=>set('Body.Switches.Hood.Release.IsPulled',false)}
                onMouseLeave={()=>set('Body.Switches.Hood.Release.IsPulled',false)} min={110}>HOOD ⇧</Btn>
@@ -1999,52 +2010,52 @@ function CockpitView({s,set}){
         <div>
           <div style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,marginBottom:2}}>DRIVER</div>
           <div style={{display:'flex',alignItems:'center',gap:4}}>
-            <Btn on={false} onClick={()=>set('Cabin.HVAC.Station.Row1.Left.Temperature',Math.max(16,dT-1))} sz={11} pad={'4px 8px'}>−</Btn>
+            <Btn night={night} on={false} onClick={()=>set('Cabin.HVAC.Station.Row1.Left.Temperature',Math.max(16,dT-1))} sz={11} pad={'4px 8px'}>−</Btn>
             <span style={{fontFamily:'Orbitron',fontSize:22,fontWeight:600,color:'#F59E0B',minWidth:48,textAlign:'center'}}>{dT.toFixed(0)}°</span>
-            <Btn on={false} onClick={()=>set('Cabin.HVAC.Station.Row1.Left.Temperature',Math.min(30,dT+1))} sz={11} pad={'4px 8px'}>+</Btn>
+            <Btn night={night} on={false} onClick={()=>set('Cabin.HVAC.Station.Row1.Left.Temperature',Math.min(30,dT+1))} sz={11} pad={'4px 8px'}>+</Btn>
           </div>
         </div>
         {/* Passenger temp +/- */}
         <div>
           <div style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,marginBottom:2}}>PASSENGER</div>
           <div style={{display:'flex',alignItems:'center',gap:4}}>
-            <Btn on={false} onClick={()=>set('Cabin.HVAC.Station.Row1.Right.Temperature',Math.max(16,pT-1))} sz={11} pad={'4px 8px'}>−</Btn>
+            <Btn night={night} on={false} onClick={()=>set('Cabin.HVAC.Station.Row1.Right.Temperature',Math.max(16,pT-1))} sz={11} pad={'4px 8px'}>−</Btn>
             <span style={{fontFamily:'Orbitron',fontSize:22,fontWeight:600,color:'#F59E0B',minWidth:48,textAlign:'center'}}>{pT.toFixed(0)}°</span>
-            <Btn on={false} onClick={()=>set('Cabin.HVAC.Station.Row1.Right.Temperature',Math.min(30,pT+1))} sz={11} pad={'4px 8px'}>+</Btn>
+            <Btn night={night} on={false} onClick={()=>set('Cabin.HVAC.Station.Row1.Right.Temperature',Math.min(30,pT+1))} sz={11} pad={'4px 8px'}>+</Btn>
           </div>
         </div>
         {/* Fan +/- with bars */}
         <div>
           <div style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,marginBottom:2}}>FAN</div>
           <div style={{display:'flex',alignItems:'center',gap:4}}>
-            <Btn on={false} onClick={()=>set('Cabin.HVAC.Station.Row1.Left.FanSpeed',Math.max(0,fanL-1))} sz={11} pad={'4px 8px'}>−</Btn>
+            <Btn night={night} on={false} onClick={()=>set('Cabin.HVAC.Station.Row1.Left.FanSpeed',Math.max(0,fanL-1))} sz={11} pad={'4px 8px'}>−</Btn>
             <svg viewBox="0 0 84 24" style={{width:84,height:24}}>
               {Array.from({length:7},(_,i)=>(
                 <rect key={i} x={i*12} y={20-(i*2)} width={9} height={4+i*2} rx="1"
                   fill={i<fanL?'#3B82F6':(night?'#0F1726':'#101E30')} opacity={i<fanL?1:.55}/>
               ))}
             </svg>
-            <Btn on={false} onClick={()=>set('Cabin.HVAC.Station.Row1.Left.FanSpeed',Math.min(7,fanL+1))} sz={11} pad={'4px 8px'}>+</Btn>
+            <Btn night={night} on={false} onClick={()=>set('Cabin.HVAC.Station.Row1.Left.FanSpeed',Math.min(7,fanL+1))} sz={11} pad={'4px 8px'}>+</Btn>
           </div>
         </div>
         {/* Air distribution mode cycle */}
         <div>
           <div style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,marginBottom:2}}>MODE</div>
-          <Btn on={distL!=='AUTO'} onClick={()=>set('Cabin.HVAC.Station.Row1.Left.AirDistribution',DIST_CYCLE[distL]||'AUTO')} min={110}>{distL}</Btn>
+          <Btn night={night} on={distL!=='AUTO'} onClick={()=>set('Cabin.HVAC.Station.Row1.Left.AirDistribution',DIST_CYCLE[distL]||'AUTO')} min={110}>{distL}</Btn>
         </div>
       </div>
       <div style={{display:'flex',gap:6,marginBottom:8,flexWrap:'wrap'}}>
-        <Btn on={ac} onClick={()=>set('Cabin.HVAC.IsAirConditioningActive',!ac)}>A/C {ac?'●':'○'}</Btn>
-        <Btn on={recirc} onClick={()=>set('Cabin.HVAC.IsRecirculationActive',!recirc)}>RECIRC {recirc?'●':'○'}</Btn>
-        <Btn on={defF} onClick={()=>set('Cabin.HVAC.IsFrontDefrosterActive',!defF)}>DEF-FRONT {defF?'●':'○'}</Btn>
-        <Btn on={defR} onClick={()=>set('Cabin.HVAC.IsRearDefrosterActive',!defR)}>DEF-REAR {defR?'●':'○'}</Btn>
+        <Btn night={night} on={ac} onClick={()=>set('Cabin.HVAC.IsAirConditioningActive',!ac)}>A/C {ac?'●':'○'}</Btn>
+        <Btn night={night} on={recirc} onClick={()=>set('Cabin.HVAC.IsRecirculationActive',!recirc)}>RECIRC {recirc?'●':'○'}</Btn>
+        <Btn night={night} on={defF} onClick={()=>set('Cabin.HVAC.IsFrontDefrosterActive',!defF)}>DEF-FRONT {defF?'●':'○'}</Btn>
+        <Btn night={night} on={defR} onClick={()=>set('Cabin.HVAC.IsRearDefrosterActive',!defR)}>DEF-REAR {defR?'●':'○'}</Btn>
       </div>
       <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
         <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,alignSelf:'center',marginRight:4,letterSpacing:1}}>SEATS:</span>
-        <Btn on={heatL>0} onClick={()=>set('Cabin.Seat.Row1.Left.HeatingLevel',[3,0,1,2][heatL])}>DRV HEAT {heatL}</Btn>
-        <Btn on={heatR>0} onClick={()=>set('Cabin.Seat.Row1.Right.HeatingLevel',[3,0,1,2][heatR])}>PAS HEAT {heatR}</Btn>
-        <Btn on={vent1L} onClick={()=>set('Cabin.Seat.Row1.Left.IsVentilationOn',!vent1L)}>DRV VENT {vent1L?'●':'○'}</Btn>
-        <Btn on={vent1R} onClick={()=>set('Cabin.Seat.Row1.Right.IsVentilationOn',!vent1R)}>PAS VENT {vent1R?'●':'○'}</Btn>
+        <Btn night={night} on={heatL>0} onClick={()=>set('Cabin.Seat.Row1.Left.HeatingLevel',[3,0,1,2][heatL])}>DRV HEAT {heatL}</Btn>
+        <Btn night={night} on={heatR>0} onClick={()=>set('Cabin.Seat.Row1.Right.HeatingLevel',[3,0,1,2][heatR])}>PAS HEAT {heatR}</Btn>
+        <Btn night={night} on={vent1L} onClick={()=>set('Cabin.Seat.Row1.Left.IsVentilationOn',!vent1L)}>DRV VENT {vent1L?'●':'○'}</Btn>
+        <Btn night={night} on={vent1R} onClick={()=>set('Cabin.Seat.Row1.Right.IsVentilationOn',!vent1R)}>PAS VENT {vent1R?'●':'○'}</Btn>
       </div>
     </CockpitZone>
 
@@ -2062,18 +2073,18 @@ function CockpitView({s,set}){
           </div>
           <div style={{textAlign:'center',marginTop:8,color:'#F59E0B',fontSize:11,fontWeight:600}}>— No track —</div>
           <div style={{display:'flex',justifyContent:'center',gap:8,marginTop:8}}>
-            <Btn on={false} onClick={()=>{}} sz={10} pad={'3px 9px'}>⏮</Btn>
-            <Btn on={false} onClick={()=>{}} sz={10} pad={'3px 9px'}>▶</Btn>
-            <Btn on={false} onClick={()=>{}} sz={10} pad={'3px 9px'}>⏭</Btn>
+            <Btn night={night} on={false} onClick={()=>{}} sz={10} pad={'3px 9px'}>⏮</Btn>
+            <Btn night={night} on={false} onClick={()=>{}} sz={10} pad={'3px 9px'}>▶</Btn>
+            <Btn night={night} on={false} onClick={()=>{}} sz={10} pad={'3px 9px'}>⏭</Btn>
           </div>
         </div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:5}}>
-          <Btn on={false} onClick={()=>{}}>RADIO</Btn>
-          <Btn on={false} onClick={()=>{}}>MEDIA</Btn>
-          <Btn on={false} onClick={()=>{}}>PHONE</Btn>
-          <Btn on={false} onClick={()=>{}}>NAV</Btn>
-          <Btn on={false} onClick={()=>{}}>APPS</Btn>
-          <Btn on={false} onClick={()=>{}}>SETUP</Btn>
+          <Btn night={night} on={false} onClick={()=>{}}>RADIO</Btn>
+          <Btn night={night} on={false} onClick={()=>{}}>MEDIA</Btn>
+          <Btn night={night} on={false} onClick={()=>{}}>PHONE</Btn>
+          <Btn night={night} on={false} onClick={()=>{}}>NAV</Btn>
+          <Btn night={night} on={false} onClick={()=>{}}>APPS</Btn>
+          <Btn night={night} on={false} onClick={()=>{}}>SETUP</Btn>
         </div>
       </div>
     </CockpitZone>
@@ -2118,15 +2129,15 @@ function CockpitView({s,set}){
       </div>
       <div style={{display:'flex',gap:6,marginTop:8,flexWrap:'wrap'}}>
         <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,alignSelf:'center',marginRight:4,letterSpacing:1}}>LOCK:</span>
-        <Btn on={!lockL&&!lockR} onClick={()=>set('Body.Switches.DoorTrim.Row1.Left.UnlockButton',true)}>UNLOCK ALL</Btn>
-        <Btn on={lockL&&lockR} onClick={()=>set('Body.Switches.DoorTrim.Row1.Left.LockButton',true)}>LOCK ALL {dblL?'⊕⊕':''}</Btn>
+        <Btn night={night} on={!lockL&&!lockR} onClick={()=>set('Body.Switches.DoorTrim.Row1.Left.UnlockButton',true)}>UNLOCK ALL</Btn>
+        <Btn night={night} on={lockL&&lockR} onClick={()=>set('Body.Switches.DoorTrim.Row1.Left.LockButton',true)}>LOCK ALL {dblL?'⊕⊕':''}</Btn>
         <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,alignSelf:'center',marginLeft:8,letterSpacing:1}}>MIRRORS:</span>
-        <Btn on={mirL&&mirR} onClick={()=>set('Body.Switches.Mirror.Fold',true)}>FOLD {(mirL&&mirR)?'●':'○'}</Btn>
+        <Btn night={night} on={mirL&&mirR} onClick={()=>set('Body.Switches.Mirror.Fold',true)}>FOLD {(mirL&&mirR)?'●':'○'}</Btn>
         <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,alignSelf:'center',marginLeft:8,letterSpacing:1}}>WINDOW:</span>
-        <Btn on={false} onClick={()=>{}}>DRV ⇧</Btn>
-        <Btn on={false} onClick={()=>{}}>DRV ⇩</Btn>
-        <Btn on={false} onClick={()=>{}}>PAS ⇧</Btn>
-        <Btn on={false} onClick={()=>{}}>PAS ⇩</Btn>
+        <Btn night={night} on={false} onClick={()=>{}}>DRV ⇧</Btn>
+        <Btn night={night} on={false} onClick={()=>{}}>DRV ⇩</Btn>
+        <Btn night={night} on={false} onClick={()=>{}}>PAS ⇧</Btn>
+        <Btn night={night} on={false} onClick={()=>{}}>PAS ⇩</Btn>
       </div>
     </CockpitZone>
 
