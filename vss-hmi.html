@@ -201,7 +201,9 @@ const INIT_STATE={
   // Braking & transmission
   'Chassis.Brake.PedalPosition':0,
   'Chassis.ParkingBrake.IsEngaged':true,
-  'Powertrain.Transmission.CurrentGear':0,
+  // VSS encoding: 126=Park, -1=Reverse, 0=Neutral, 127=Drive, 128=Sport.
+  // Boot to Park to match a real vehicle at rest.
+  'Powertrain.Transmission.CurrentGear':126,
   // ADAS
   'Vehicle.ADAS.HighBeam.OncomingVehicleDetected':false,
   // Safety
@@ -1830,7 +1832,9 @@ function CockpitView({s,set}){
   const WIPER_CYCLE={OFF:'INTERMITTENT',INTERMITTENT:'SLOW',SLOW:'MEDIUM',MEDIUM:'FAST',FAST:'OFF'};
   const LIGHT_CYCLE={OFF:'POSITION',POSITION:'DRL',DRL:'AUTO',AUTO:'BEAM',BEAM:'OFF'};
   const DIST_CYCLE={AUTO:'FACE',FACE:'FACE_FEET',FACE_FEET:'FEET',FEET:'FEET_DEF',FEET_DEF:'DEF',DEF:'AUTO'};
-  const gearLabel=g=>g<0?'R':g===0?'N':g===1?'D':g===2?'S':'?';
+  // VSS Powertrain.Transmission.CurrentGear encoding:
+  //   126 = Park, -1 = Reverse, 0 = Neutral, 127 = Drive, 128 = Sport (custom).
+  const gearLabel=g=>g===126?'P':g===-1?'R':g===0?'N':g===127?'D':g===128?'S':'?';
   const placeholder=(label)=><div style={{
     fontFamily:'Share Tech Mono', fontSize:9, color:night?'#5A7090':'#2A3A50',
     fontStyle:'italic', padding:'14px 0', textAlign:'center',
@@ -2092,13 +2096,11 @@ function CockpitView({s,set}){
     {/* ── Gear shifter ── */}
     <CockpitZone title="GEAR SHIFTER" subtitle="Powertrain.Transmission.CurrentGear" night={night}>
       <div style={{display:'flex',gap:6,alignItems:'center'}}>
-        {[{lab:'P',g:0,parking:true},{lab:'R',g:-1},{lab:'N',g:0,neutral:true},{lab:'D',g:1},{lab:'S',g:2}].map(({lab,g,parking,neutral})=>{
-          // P and N both map to gear=0; pick based on the button identity using a second signal would be cleaner.
-          // Here we collapse to CurrentGear (Int16) and trust the gearLabel mapping.
-          const on=gearLabel(gear)===lab || (lab==='P'&&gear===0&&!neutral);
-          return <Btn key={lab} on={on} onClick={()=>set('Powertrain.Transmission.CurrentGear',g)}
-            sz={14} pad={'10px 18px'} min={50}>{lab}</Btn>;
-        })}
+        {[{lab:'P',g:126},{lab:'R',g:-1},{lab:'N',g:0},{lab:'D',g:127},{lab:'S',g:128}].map(({lab,g})=>(
+          <Btn night={night} key={lab} on={gearLabel(gear)===lab}
+            onClick={()=>set('Powertrain.Transmission.CurrentGear',g)}
+            sz={14} pad={'10px 18px'} min={50}>{lab}</Btn>
+        ))}
         <span style={{flex:1}}/>
         <div style={{fontFamily:'Orbitron',fontSize:24,fontWeight:700,color:'#F59E0B',
           border:`1px solid ${night?'#3A2A12':'#1A2838'}`,padding:'4px 18px',borderRadius:4,minWidth:60,textAlign:'center'}}>
