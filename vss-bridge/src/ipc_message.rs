@@ -142,6 +142,27 @@ pub enum FeatureId {
     CabinTrunkRelease = 0x1F,
     ManualHorn = 0x20,
     PerimeterAlarm = 0x21,
+    /// Slam-lock subsystem.  Used as the requestor identity for two
+    /// distinct flows that share the same trust class (deliberate user
+    /// action involving the trim Lock button while a door is open):
+    ///
+    /// 1. **US** (`vehicle_line.slam_lock_protect = false`):
+    ///    `DoorTrimButton` dispatches its `LockAll` as `SlamLock`
+    ///    instead of as itself.  The cabin physically locks, and when
+    ///    the door slams shut the perimeter alarm arms — `SlamLock`
+    ///    is in `EXTERNAL_LOCK_REQUESTORS`.
+    ///
+    /// 2. **EU** (`vehicle_line.slam_lock_protect = true`):
+    ///    `DoorTrimButton` dispatches `LockAll` as itself; then the
+    ///    `SlamLock` feature observes the trim press + door-open
+    ///    state and dispatches the corresponding unlock (driver-side
+    ///    respects two-stage; passenger-side is a pure UnlockAll
+    ///    bypass) as `SlamLock`.
+    ///
+    /// `SlamLock` is intentionally NOT in `EXTERNAL_AUTH_SOURCES` or
+    /// `INTERNAL_UNLOCK_SOURCES` — neither flow can disarm a running
+    /// alarm or trigger a tampering chime.
+    SlamLock = 0x22,
 }
 
 impl std::fmt::Display for FeatureId {
@@ -192,6 +213,7 @@ impl FeatureId {
             0x1F => Some(Self::CabinTrunkRelease),
             0x20 => Some(Self::ManualHorn),
             0x21 => Some(Self::PerimeterAlarm),
+            0x22 => Some(Self::SlamLock),
             _ => None,
         }
     }

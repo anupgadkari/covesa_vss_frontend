@@ -44,6 +44,7 @@ use vss_bridge::features::auto_relock::AutoRelock;
 use vss_bridge::features::brake_reverse_lamps::BrakeReverseLamps;
 use vss_bridge::features::cabin_trunk_release::CabinTrunkRelease;
 use vss_bridge::features::door_open_assist::DoorOpenAssist;
+use vss_bridge::features::door_trim_button::DoorTrimButton;
 use vss_bridge::features::double_lock_release::DoubleLockRelease;
 use vss_bridge::features::exterior_trunk_button::ExteriorTrunkButton;
 use vss_bridge::features::farewell::Farewell;
@@ -59,6 +60,7 @@ use vss_bridge::features::panic_alarm::PanicAlarm;
 use vss_bridge::features::passive_entry::{DeviceKind, PairedDevice, PassiveEntry};
 use vss_bridge::features::perimeter_alarm::PerimeterAlarm;
 use vss_bridge::features::rke::{PairedFob, RkeFeature};
+use vss_bridge::features::slam_lock::SlamLock;
 use vss_bridge::features::thumb_pad_lock::ThumbPadLock;
 use vss_bridge::features::turn_indicator::TurnIndicator;
 use vss_bridge::features::walk_away_lock::WalkAwayLock;
@@ -317,6 +319,28 @@ async fn boot_simulation_stack(
     set.spawn(DoubleLockRelease::new(Arc::clone(&bus), Arc::clone(&door_lock_arb)).run());
     set.spawn(WalkAwayLock::new(Arc::clone(&bus), Arc::clone(&door_lock_arb)).run());
     set.spawn(ThumbPadLock::new(Arc::clone(&bus), Arc::clone(&door_lock_arb)).run());
+    // Interior trim Lock / Unlock buttons on Row 1 doors.  No auth —
+    // occupant-operated; unlock works even with the alarm armed (egress
+    // safety) but PerimeterAlarm escalates on the resulting unlock
+    // event when LastRequestor = DoorTrimButton during the armed window.
+    set.spawn(
+        DoorTrimButton::new(
+            Arc::clone(&bus),
+            Arc::clone(&door_lock_arb),
+            Arc::clone(&cfg),
+        )
+        .run(),
+    );
+    // SlamLock — slam-lock-protect inversion for EU vehicle lines.
+    // No-op on US lines (cfg.vehicle_line.slam_lock_protect = false).
+    set.spawn(
+        SlamLock::new(
+            Arc::clone(&bus),
+            Arc::clone(&door_lock_arb),
+            Arc::clone(&cfg),
+        )
+        .run(),
+    );
     set.spawn(AutoHighBeam::new(Arc::clone(&low_beam_arb), Arc::clone(&bus)).run());
     set.spawn(BrakeReverseLamps::new(Arc::clone(&bus)).run());
     set.spawn(FogLamps::new(Arc::clone(&bus)).run());
