@@ -202,7 +202,10 @@ const INIT_STATE={
   'Chassis.Brake.PedalPosition':0,
   'Chassis.ParkingBrake.IsEngaged':true,
   // VSS encoding: 126=Park, -1=Reverse, 0=Neutral, 127=Drive, 128=Sport.
-  // Boot to Park to match a real vehicle at rest.
+  // Boot to Park to match a real vehicle at rest.  Driver intent
+  // (SelectedGear) and the plant's actual engaged gear (CurrentGear)
+  // both start at Park.
+  'Powertrain.Transmission.SelectedGear':126,
   'Powertrain.Transmission.CurrentGear':126,
   // 3-position dome switch — DOOR is the typical default in a real
   // car so the lamp comes on while loading the cabin.
@@ -1758,6 +1761,20 @@ function Btn({on,night,onClick,onMouseDown,onMouseUp,onMouseLeave,children,sz,pa
     onMouseLeave={onMouseLeave} style={cockpitBtnSty(on,night,{sz,pad,min})}>{children}</button>;
 }
 
+// VSS Powertrain.Transmission.CurrentGear / SelectedGear encoding:
+//   126 = Park, -1 = Reverse, 0 = Neutral, 127 = Drive, 128 = Sport
+//   (custom).  Positive 1..N are forward gears (manual transmission).
+//   Hoisted to module scope so any view (cockpit cluster, sidebar Gear
+//   row, etc.) can use the same label rendering.
+function gearLabelGlobal(g){
+  if(g===126) return 'P';
+  if(g===127) return 'D';
+  if(g===128) return 'S';
+  if(g===0)   return 'N';
+  if(g<0)     return 'R';
+  return String(g);
+}
+
 function CockpitZone({title,subtitle,night,children}){
   return <div style={{
     background: night?'#080F18':'#0A1320',
@@ -1820,7 +1837,13 @@ function CockpitView({s,set}){
   const ffogSw=s['Body.Switches.Fog.Front.IsEngaged'];
   const rfogSw=s['Body.Switches.Fog.Rear.IsEngaged'];
   const lightSw=s['Body.Lights.LightSwitch']||'OFF';
-  const gear=s['Powertrain.Transmission.CurrentGear']??0;
+  // CurrentGear = actual engaged gear (published by TransmissionPlant);
+  // drives the instrument-cluster PRND readout.
+  // SelectedGear = driver's selector position (what the HMI writes);
+  // drives the gear-selector highlight for instant feedback before
+  // the plant catches up.
+  const gear=s['Powertrain.Transmission.CurrentGear']??126;
+  const selGear=s['Powertrain.Transmission.SelectedGear']??126;
   const lockL=s['Body.Doors.Row1.Left.IsLocked'];
   const lockR=s['Body.Doors.Row1.Right.IsLocked'];
   const dblL=s['Body.Doors.Row1.Left.IsDoubleLocked'];
@@ -1844,20 +1867,7 @@ function CockpitView({s,set}){
   // label is rewritten.
   const DIST_LABEL={AUTO:'Auto',FACE:'Panel',FACE_FEET:'Floor+Panel',FEET:'Floor',FEET_DEF:'Windshield_Floor',DEF:'Windshield'};
   const DOME_CYCLE={OFF:'DOOR',DOOR:'ON',ON:'OFF'};
-  // VSS Powertrain.Transmission.CurrentGear encoding:
-  //   126 = Park, -1 = Reverse, 0 = Neutral, 127 = Drive, 128 = Sport (custom).
-  // Negative values below -1 are reverse-gear-N (still display 'R').
-  // Positive 1..N are forward gears in manual transmissions — display
-  // the number directly so the instrument cluster reflects what the
-  // driver picked.
-  const gearLabel=g=>{
-    if(g===126) return 'P';
-    if(g===127) return 'D';
-    if(g===128) return 'S';
-    if(g===0)   return 'N';
-    if(g<0)     return 'R';
-    return String(g); // 1, 2, 3, ... for manual
-  };
+  const gearLabel=gearLabelGlobal;
   // Word + tint for the under-speedo readout.
   const gearWord=g=>{
     const lab=gearLabel(g);
@@ -2137,11 +2147,11 @@ function CockpitView({s,set}){
     </CockpitZone>
 
     {/* ── Gear shifter ── */}
-    <CockpitZone title="GEAR SHIFTER" subtitle="Powertrain.Transmission.CurrentGear" night={night}>
+    <CockpitZone title="GEAR SHIFTER" subtitle="SelectedGear → TransmissionPlant → CurrentGear" night={night}>
       <div style={{display:'flex',gap:6,alignItems:'center'}}>
         {[{lab:'P',g:126},{lab:'R',g:-1},{lab:'N',g:0},{lab:'D',g:127},{lab:'S',g:128}].map(({lab,g})=>(
-          <Btn night={night} key={lab} on={gearLabel(gear)===lab}
-            onClick={()=>set('Powertrain.Transmission.CurrentGear',g)}
+          <Btn night={night} key={lab} on={gearLabel(selGear)===lab}
+            onClick={()=>set('Powertrain.Transmission.SelectedGear',g)}
             sz={14} pad={'10px 18px'} min={50}>{lab}</Btn>
         ))}
         <span style={{flex:1}}/>
@@ -2463,8 +2473,12 @@ function ControlPanelContent({s,set,anyDoor,anyLight,lux}){
           <span className="cn">Parking Brake</span>
           <Tog val={s['Chassis.ParkingBrake.IsEngaged']} on={()=>set('Chassis.ParkingBrake.IsEngaged',!s['Chassis.ParkingBrake.IsEngaged'])} c="r"/>
         </div>
-        <EnumR label="Gear" k="Powertrain.Transmission.CurrentGear" s={s} set={set}
-          opts={[-2,-1,0,1,2,3,4,5,6]}/>
+        {/* Driver writes SelectedGear (intent); TransmissionPlant
+            mirrors it to CurrentGear (actual).  The label appends the
+            actual gear so the simulator panel shows both at a glance. */}
+        <EnumR label={`Gear  (actual: ${gearLabelGlobal(s['Powertrain.Transmission.CurrentGear']??126)})`}
+          k="Powertrain.Transmission.SelectedGear" s={s} set={set}
+          opts={[-1,0,1,2,3,4,5,6,126,127,128]}/>
       </SG>
 
       <SG title="ADAS" vss="Vehicle.ADAS">

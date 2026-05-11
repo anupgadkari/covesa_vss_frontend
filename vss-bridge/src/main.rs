@@ -48,6 +48,7 @@ use vss_bridge::features::door_trim_button::DoorTrimButton;
 use vss_bridge::features::double_lock_release::DoubleLockRelease;
 use vss_bridge::features::exterior_trunk_button::ExteriorTrunkButton;
 use vss_bridge::features::dome_switch::DomeSwitch;
+use vss_bridge::plant_models::transmission::TransmissionPlant;
 use vss_bridge::features::farewell::Farewell;
 use vss_bridge::features::fog_lamps::FogLamps;
 use vss_bridge::features::follow_me_home::FollowMeHome;
@@ -375,6 +376,12 @@ async fn boot_simulation_stack(
     // Cabin.Lights.IsDomeOn; Welcome / Farewell / PerimeterAlarm
     // pre-empt cleanly via the courtesy arbiter.
     set.spawn(DomeSwitch::new(Arc::clone(&bus), Arc::clone(&courtesy_arb)).run());
+
+    // TransmissionPlant — mirrors driver's SelectedGear into the
+    // actual engaged CurrentGear.  Stands in for the TCU on dev hosts;
+    // future extensions will add brake interlock + speed-based shift
+    // logic.  Single writer of CurrentGear.
+    set.spawn(TransmissionPlant::new(Arc::clone(&bus)).run());
 
     // PassiveEntry — handle-pull authenticated unlock.
     let pe_devices: Vec<PairedDevice> = {

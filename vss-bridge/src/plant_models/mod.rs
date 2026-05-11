@@ -20,4 +20,5 @@ pub mod mirror_adjust;
 pub mod mirror_fold;
 pub mod peps;
 pub mod sunroof;
+pub mod transmission;
 pub mod trunk;

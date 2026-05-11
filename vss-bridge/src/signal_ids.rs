@@ -273,6 +273,11 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Powertrain.Transmission.CurrentGear" => Some(0x000C_0002),
         "Vehicle.Speed" => Some(0x000C_0003),
         "Body.Lights.LightSwitch" => Some(0x000C_0004),
+        // Driver's gear-selector position (intent).  Same VSS encoding
+        // as CurrentGear: 126=P, -1=R, 0=N, 127=D, 128=S, 1..N=manual.
+        // Consumed by `TransmissionPlant`, which publishes the actual
+        // engaged gear back as CurrentGear.
+        "Powertrain.Transmission.SelectedGear" => Some(0x000C_0005),
 
         // Door lock inputs (overlay — DoorLockInputs.vspec)
         "Body.Switches.DoorTrim.Row1.Left.LockButton" => Some(0x000E_0001),
@@ -638,6 +643,7 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Powertrain.Transmission.CurrentGear", 0x000C_0002),
     ("Vehicle.Speed", 0x000C_0003),
     ("Body.Lights.LightSwitch", 0x000C_0004),
+    ("Powertrain.Transmission.SelectedGear", 0x000C_0005),
     // Door lock inputs (overlay — DoorLockInputs.vspec)
     ("Body.Switches.DoorTrim.Row1.Left.LockButton", 0x000E_0001),
     ("Body.Switches.DoorTrim.Row1.Right.LockButton", 0x000E_0002),

@@ -36,7 +36,10 @@ const INPUT_SIGNALS: &[VssPath] = &[
     "Body.Switches.Fog.Rear.IsEngaged",
     "Chassis.ParkingBrake.IsEngaged",
     "Chassis.Brake.PedalPosition",
-    "Powertrain.Transmission.CurrentGear",
+    // Driver's gear-selector intent — written by HMI cockpit shifter
+    // + sidebar gear control.  Consumed by the TransmissionPlant
+    // which publishes the actual engaged CurrentGear in OUTPUT_SIGNALS.
+    "Powertrain.Transmission.SelectedGear",
     "Body.Lights.LightSwitch",
     "Body.PEPS.KeyPresent",
     "Body.Switches.Keyfob.LockButton",
@@ -155,6 +158,10 @@ const INPUT_SIGNALS: &[VssPath] = &[
     // 3-position interior dome-light switch (String enum OFF/DOOR/ON).
     // Driven by the cockpit HMI; consumed by the DomeSwitch feature.
     "Cabin.Lights.Dome.SwitchPosition",
+    // Actual engaged gear — published by the TransmissionPlant from
+    // the driver's SelectedGear input.  HMI reads for cluster PRND
+    // text and the sidebar Gear display.
+    "Powertrain.Transmission.CurrentGear",
 ];
 
 /// Signals the bridge pushes back to the HMI (actuator outputs from arbiters).
