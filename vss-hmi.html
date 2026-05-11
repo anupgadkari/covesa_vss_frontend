@@ -1895,6 +1895,10 @@ function CockpitView({s,set}){
   const fanL=s['Cabin.HVAC.Station.Row1.Left.FanSpeed']??0;
   const distL=s['Cabin.HVAC.Station.Row1.Left.AirDistribution']||'AUTO';
   const mirL=s['Body.Mirror.Left.IsFolded'],mirR=s['Body.Mirror.Right.IsFolded'];
+  // Mirror selector — String enum "NONE" / "LEFT" / "RIGHT".  Same
+  // signal as the top-view MirrorAdjustControls; clicking SEL toggles
+  // the chosen side, second click clears.
+  const mirSel=s['Body.Switches.Mirror.Select']||'NONE';
 
   const txt = night?'#F59E0B':'#1C3050';
   const txtDim = night?'#8A6020':'#2A3A50';
@@ -2248,8 +2252,8 @@ function CockpitView({s,set}){
           <div style={{display:'flex',gap:6,alignItems:'center',marginTop:2}}>
             <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1}}>MIRRORS:</span>
             <Btn night={night} on={mirL&&mirR} onClick={()=>set('Body.Switches.Mirror.Fold',true)} sz={9} pad={'6px 10px'}>FOLD {(mirL&&mirR)?'●':'○'}</Btn>
-            <Btn night={night} on={false} onClick={()=>{}} sz={9} pad={'6px 8px'}>SEL L</Btn>
-            <Btn night={night} on={false} onClick={()=>{}} sz={9} pad={'6px 8px'}>SEL R</Btn>
+            <Btn night={night} on={mirSel==='LEFT'}  onClick={()=>set('Body.Switches.Mirror.Select', mirSel==='LEFT' ?'NONE':'LEFT')}  sz={9} pad={'6px 8px'}>SEL L</Btn>
+            <Btn night={night} on={mirSel==='RIGHT'} onClick={()=>set('Body.Switches.Mirror.Select', mirSel==='RIGHT'?'NONE':'RIGHT')} sz={9} pad={'6px 8px'}>SEL R</Btn>
           </div>
         </div>
       </CockpitZone>
