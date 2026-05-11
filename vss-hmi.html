@@ -2100,6 +2100,23 @@ function CockpitView({s,set}){
       </div>
     </CockpitZone>
 
+    {/* ── Dash-mounted body-opening release pulls ── */}
+    <CockpitZone title="BODY RELEASES" subtitle="dash lower-left pulls" night={night}>
+      <div style={{display:'flex',gap:8,alignItems:'center'}}>
+        <Btn night={night} on={s['Body.Switches.Trunk.Release.IsPressed']}
+             onMouseDown={()=>set('Body.Switches.Trunk.Release.IsPressed',true)}
+             onMouseUp={()=>set('Body.Switches.Trunk.Release.IsPressed',false)}
+             onMouseLeave={()=>set('Body.Switches.Trunk.Release.IsPressed',false)} min={130}>TRUNK ⇧</Btn>
+        <Btn night={night} on={s['Body.Switches.Hood.Release.IsPulled']}
+             onMouseDown={()=>set('Body.Switches.Hood.Release.IsPulled',true)}
+             onMouseUp={()=>set('Body.Switches.Hood.Release.IsPulled',false)}
+             onMouseLeave={()=>set('Body.Switches.Hood.Release.IsPulled',false)} min={130}>HOOD ⇧</Btn>
+        <span style={{fontFamily:'Share Tech Mono',fontSize:8,color:txtDim,marginLeft:8}}>
+          press-and-hold — momentary switches feed the trunk/hood release features
+        </span>
+      </div>
+    </CockpitZone>
+
     {/* ── HVAC panel ── */}
     <CockpitZone title="HVAC" night={night}>
       <div style={{display:'flex',gap:14,marginBottom:8,alignItems:'flex-end',flexWrap:'wrap'}}>
