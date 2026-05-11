@@ -150,6 +150,17 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Body.Trunk.IsOpen" => Some(0x0006_0002),
         "Body.Trunk.IsLocked" => Some(0x0006_0003),
         "Body.Horn.IsActive" => Some(0x0006_0004),
+        // Interior chime — soft tone driven by feature business logic
+        // for "imminent alarm" warning, door-ajar reminder, seatbelt
+        // chime, etc.  Distinct from the main horn so users can tell
+        // a 12 s pre-alarm warning chime apart from a full intrusion
+        // alarm.  Single writer today (PerimeterAlarm); add an arbiter
+        // when a second feature wants the same actuator.
+        "Body.Chime.IsActive" => Some(0x0006_000E),
+        // ChimePlantModel output: physical buzzer state.  Mirrors
+        // `IsActive` for now; the split lets us add onset/decay or
+        // ducking later without touching feature code.
+        "Body.Chime.IsSounding" => Some(0x0006_000F),
         "Body.Trunk.OpenCmd" => Some(0x0006_0007),
         "Body.Trunk.CloseCmd" => Some(0x0006_0008),
         "Body.FuelLid.IsOpen" => Some(0x0006_0005),
@@ -242,6 +253,11 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
 
         // Anti-theft alarm status (project extension — not in standard VSS v4.0)
         "Vehicle.Body.Alarm.IsActive" => Some(0x0006_0009),
+        // Authoritative perimeter-alarm state enum, single writer is
+        // PerimeterAlarm.  Values: "DISARMED" | "PRE_ARMED" | "ARMED" |
+        // "ACTIVATED".  HMI displays this directly instead of computing
+        // state from secondary signals (kills the banner-restart race).
+        "Vehicle.Body.Alarm.State" => Some(0x0006_0010),
 
         // AutoRelock status (project extension — set when the relock timer is armed)
         "Body.Doors.AutoRelock.IsArmed" => Some(0x000A_0040),
@@ -258,6 +274,12 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Body.Switches.DoorTrim.Row1.Right.LockButton" => Some(0x000E_0002),
         "Body.Switches.DoorTrim.Row2.Left.LockButton" => Some(0x000E_0003),
         "Body.Switches.DoorTrim.Row2.Right.LockButton" => Some(0x000E_0004),
+        // Interior trim unlock buttons — Row 1 only (driver and front
+        // passenger door panels).  No auth needed (egress safety); the
+        // PerimeterAlarm feature watches these to escalate when an
+        // unlock fires while the alarm is armed.
+        "Body.Switches.DoorTrim.Row1.Left.UnlockButton" => Some(0x000E_0005),
+        "Body.Switches.DoorTrim.Row1.Right.UnlockButton" => Some(0x000E_0006),
         "Body.Switches.Keyfob.LockButton" => Some(0x000E_0010),
         "Body.Connectivity.RemoteLock" => Some(0x000E_0020),
         "Body.Connectivity.BleLock" => Some(0x000E_0021),
@@ -534,11 +556,14 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Body.Trunk.IsOpen", 0x0006_0002),
     ("Body.Trunk.IsLocked", 0x0006_0003),
     ("Body.Horn.IsActive", 0x0006_0004),
+    ("Body.Chime.IsActive", 0x0006_000E),
+    ("Body.Chime.IsSounding", 0x0006_000F),
     ("Body.Trunk.OpenCmd", 0x0006_0007),
     ("Body.Trunk.CloseCmd", 0x0006_0008),
     ("Body.FuelLid.IsOpen", 0x0006_0005),
     ("Body.ChargeLid.IsOpen", 0x0006_0006),
     ("Vehicle.Body.Alarm.IsActive", 0x0006_0009),
+    ("Vehicle.Body.Alarm.State", 0x0006_0010),
     ("Body.Trunk.ExteriorButton.IsPressed", 0x0006_000A),
     ("Body.Hood.OpenCmd", 0x0006_000B),
     ("Body.Hood.CloseCmd", 0x0006_000C),
@@ -594,6 +619,11 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Body.Switches.DoorTrim.Row1.Right.LockButton", 0x000E_0002),
     ("Body.Switches.DoorTrim.Row2.Left.LockButton", 0x000E_0003),
     ("Body.Switches.DoorTrim.Row2.Right.LockButton", 0x000E_0004),
+    ("Body.Switches.DoorTrim.Row1.Left.UnlockButton", 0x000E_0005),
+    (
+        "Body.Switches.DoorTrim.Row1.Right.UnlockButton",
+        0x000E_0006,
+    ),
     ("Body.Switches.Keyfob.LockButton", 0x000E_0010),
     ("Body.Connectivity.RemoteLock", 0x000E_0020),
     ("Body.Connectivity.BleLock", 0x000E_0021),

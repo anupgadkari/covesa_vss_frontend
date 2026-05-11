@@ -120,15 +120,72 @@ impl<B: SignalBus + Send + Sync + 'static> PanicAlarm<B> {
         });
 
         let mut switch_rx = self.bus.subscribe(PANIC_SWITCH).await;
+        // Subscribe to the shared `Vehicle.Body.Alarm.IsActive` flag so a
+        // panic-button press during another alarm (e.g. PerimeterAlarm)
+        // is correctly interpreted as "cancel that alarm" rather than
+        // "start a new panic alarm."  PerimeterAlarm separately watches
+        // PANIC_SWITCH and disarms itself; we just have to make sure
+        // PanicAlarm doesn't simultaneously engage.
+        //
+        // `biased` select! ordering processes the panic stream first so
+        // a press received in the same tick as a `ALARM_STATUS=false`
+        // publish (the other alarm's disarm) is evaluated against the
+        // *previous* cached value, not the new one — preserving the
+        // "press during alarm = cancel" semantics.
+        let mut alarm_status_rx = self.bus.subscribe(ALARM_STATUS).await;
+        let mut alarm_status_cache = false;
         let mut current: Option<JoinHandle<()>> = None;
         let mut engaged = false;
 
-        while let Some(val) = switch_rx.next().await {
+        loop {
+            let val = tokio::select! {
+                biased;
+                Some(v) = switch_rx.next() => v,
+                Some(v) = alarm_status_rx.next() => {
+                    if let SignalValue::Bool(b) = v {
+                        alarm_status_cache = b;
+                    }
+                    continue;
+                }
+                else => break,
+            };
             let want = matches!(val, SignalValue::Bool(true));
             if want == engaged {
                 // Idempotent — repeated TRUE/FALSE while already in that state.
                 continue;
             }
+
+            // Engagement gate: if another feature has already asserted
+            // `Vehicle.Body.Alarm.IsActive` (PerimeterAlarm), a fresh
+            // `PANIC_SWITCH=true` is the user telling us to *cancel*
+            // that alarm, not start a panic alarm.  PerimeterAlarm
+            // sees the same press on its own subscription and disarms;
+            // we just skip our engagement.
+            //
+            // We also write `PANIC_SWITCH=false` back to the bus to keep
+            // every subscriber's view of the switch coherent — including
+            // RKE, which mirrors the published value into its local
+            // `panic_engaged` latch via its own watcher.  Without this,
+            // RKE's latch would stay `true` (it published `true` on the
+            // press), the bus would also stay `true`, and the user's
+            // next fob press would just toggle back to `false` with
+            // nothing observable happening — they'd need a second press
+            // to actually start a panic alarm.
+            if want && !engaged && alarm_status_cache {
+                tracing::info!(
+                    "PanicAlarm: panic press while another alarm is active — \
+                     treating as cancel, not engaging panic alarm"
+                );
+                let _ = self
+                    .bus
+                    .publish(PANIC_SWITCH, SignalValue::Bool(false))
+                    .await;
+                // Don't update `engaged` — we never engaged.  The cached
+                // alarm_status will flip to false shortly when the other
+                // alarm publishes its disarm.
+                continue;
+            }
+
             engaged = want;
 
             if engaged {
@@ -555,6 +612,48 @@ mod tests {
             !h.iter()
                 .any(|(s, v)| *s == HORN && *v == SignalValue::Bool(true)),
             "no HORN=TRUE expected when alarm was never engaged"
+        );
+    }
+
+    /// Regression: a panic-button press while another alarm (e.g.
+    /// PerimeterAlarm) has already asserted `Vehicle.Body.Alarm.IsActive`
+    /// is the user's "cancel" gesture — PanicAlarm must NOT engage
+    /// its own pulse loop on top of the existing alarm.  PerimeterAlarm
+    /// separately watches the same panic press and disarms itself; the
+    /// shared `ALARM_STATUS` flag is the coordination channel.
+    #[tokio::test(start_paused = true)]
+    async fn panic_press_during_other_alarm_does_not_engage_panic_alarm() {
+        let (bus, _h) = setup().await;
+
+        // Pretend PerimeterAlarm (or any other alarm source) has just
+        // asserted ALARM_STATUS=true.
+        bus.inject(ALARM_STATUS, SignalValue::Bool(true));
+        settle(1).await;
+
+        // User presses panic — meant as "cancel the running alarm".
+        bus.inject(PANIC_SWITCH, SignalValue::Bool(true));
+        settle(50).await;
+
+        // PanicAlarm must NOT have engaged its own pulse — no claims on
+        // indicators or horn from this feature.
+        let h = bus.history();
+        let indicator_claims_after_inject: Vec<_> = h
+            .iter()
+            .skip_while(|(s, _)| *s != PANIC_SWITCH)
+            .filter(|(s, v)| *s == LEFT_INDICATOR && *v == SignalValue::Bool(true))
+            .collect();
+        assert!(
+            indicator_claims_after_inject.is_empty(),
+            "PanicAlarm must not claim indicator pulses when panic is pressed during another alarm; saw {indicator_claims_after_inject:?}"
+        );
+        let horn_claims_after_inject: Vec<_> = h
+            .iter()
+            .skip_while(|(s, _)| *s != PANIC_SWITCH)
+            .filter(|(s, v)| *s == HORN && *v == SignalValue::Bool(true))
+            .collect();
+        assert!(
+            horn_claims_after_inject.is_empty(),
+            "PanicAlarm must not chirp horn when panic is pressed during another alarm; saw {horn_claims_after_inject:?}"
         );
     }
 }

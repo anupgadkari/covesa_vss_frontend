@@ -93,13 +93,19 @@ Feature: Passive Entry (PEPS unlock-on-handle-pull)
     When the driver pulls the Row1.Left outside handle
     Then PassiveEntry does NOT dispatch any lock command
 
-  # --- REQ-PE-005 ---
-  Scenario: Two-stage unlock — second pull within window unlocks all
+  # --- REQ-PE-005: stage-2 escalation via the OTHER side handle ---
+  # Cabin-state gate (Cabin.LockStatus = DRIVER_UNLOCKED after stage-1)
+  # silently skips a repeat pull on the driver handle — the user
+  # already has access through that door.  To unlock all, pull a
+  # passenger or rear handle (both bypass two-stage and dispatch
+  # UnlockAll directly).
+  Scenario: Two-stage unlock — passenger pull after stage-1 unlocks all
     Given paired fob 1 is in the LeftFront zone
     And dealer.two_stage_unlock is enabled
     When the driver pulls the Row1.Left outside handle
     Then PassiveEntry dispatches UnlockDriver
-    When the driver releases and re-pulls the Row1.Left outside handle within 1 second
+    Given paired fob 1 is in the RightFront zone
+    When the passenger pulls the Row1.Right outside handle
     Then PassiveEntry dispatches UnlockAll
 
   # --- REQ-PE-006 ---
@@ -142,16 +148,16 @@ Feature: Passive Entry (PEPS unlock-on-handle-pull)
   #               relative to the driver-door cal, not to physical
   #               position.
   #
-  # REQ-PE-010: RHD two-stage — first pull on the RHD driver door
-  #             (Row1.Right) unlocks driver only; second pull within
-  #             the window unlocks all.
-  Scenario: RHD two-stage unlock — driver-side first pull, all-doors second pull
+  # REQ-PE-010: RHD stage-2 escalation via the passenger (LHS on RHD).
+  # Mirror of REQ-PE-005 for RHD.
+  Scenario: RHD two-stage unlock — passenger pull after stage-1 unlocks all
     Given the vehicle is RHD
     And dealer.two_stage_unlock is enabled
     And paired fob 1 is in the RightFront zone
     When the driver pulls the Row1.Right outside handle
     Then PassiveEntry dispatches UnlockDriver
-    When the driver releases and re-pulls the Row1.Right outside handle within 1 second
+    Given paired fob 1 is in the LeftFront zone
+    When the passenger pulls the Row1.Left outside handle
     Then PassiveEntry dispatches UnlockAll
 
   # REQ-PE-011: RHD passenger-side bypass — pulling Row1.Left (the

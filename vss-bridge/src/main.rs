@@ -44,6 +44,7 @@ use vss_bridge::features::auto_relock::AutoRelock;
 use vss_bridge::features::brake_reverse_lamps::BrakeReverseLamps;
 use vss_bridge::features::cabin_trunk_release::CabinTrunkRelease;
 use vss_bridge::features::door_open_assist::DoorOpenAssist;
+use vss_bridge::features::door_trim_button::DoorTrimButton;
 use vss_bridge::features::double_lock_release::DoubleLockRelease;
 use vss_bridge::features::exterior_trunk_button::ExteriorTrunkButton;
 use vss_bridge::features::farewell::Farewell;
@@ -57,7 +58,9 @@ use vss_bridge::features::mirror_adjust::MirrorAdjust;
 use vss_bridge::features::mirror_fold::MirrorFold;
 use vss_bridge::features::panic_alarm::PanicAlarm;
 use vss_bridge::features::passive_entry::{DeviceKind, PairedDevice, PassiveEntry};
+use vss_bridge::features::perimeter_alarm::PerimeterAlarm;
 use vss_bridge::features::rke::{PairedFob, RkeFeature};
+use vss_bridge::features::slam_lock::SlamLock;
 use vss_bridge::features::thumb_pad_lock::ThumbPadLock;
 use vss_bridge::features::turn_indicator::TurnIndicator;
 use vss_bridge::features::walk_away_lock::WalkAwayLock;
@@ -66,6 +69,7 @@ use vss_bridge::ipc_message::SignalValue;
 use vss_bridge::kuksa_sync;
 use vss_bridge::nvm::NvmStore;
 use vss_bridge::plant_models::blink_relay::BlinkRelay;
+use vss_bridge::plant_models::chime::ChimePlantModel;
 use vss_bridge::plant_models::door_handle::DoorHandlePlantModel;
 use vss_bridge::plant_models::door_lock::DoorLockPlantModel;
 use vss_bridge::plant_models::hood::HoodPlantModel;
@@ -89,6 +93,28 @@ async fn main() -> anyhow::Result<()> {
     // ── CLI flags ──────────────────────────────────────────────────
     let args: Vec<String> = std::env::args().collect();
     let reset_nvm = args.iter().any(|a| a == "--reset-nvm");
+
+    // ── Dev-default config dir ─────────────────────────────────────
+    // Production builds resolve `VSS_BRIDGE_CONFIG_PATH` from the env
+    // (set by the systemd unit / yocto image to `/etc/vss-bridge`).
+    // For `cargo run` on a developer machine the env var is usually
+    // unset, and `/etc/vss-bridge` is not writable without root — so
+    // reboot-driven cal edits silently fail with "Permission denied"
+    // and the next boot loads defaults instead of the user's staged
+    // values.  Fall back to the in-repo `config/` directory so the
+    // HMI's Apply & Reboot round-trips cleanly out of the box.
+    if std::env::var("VSS_BRIDGE_CONFIG_PATH").is_err() {
+        let dev_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("config");
+        // Unsafe in multi-threaded contexts on some platforms; this
+        // runs before tokio spawns any workers so it's fine here.
+        unsafe {
+            std::env::set_var("VSS_BRIDGE_CONFIG_PATH", &dev_path);
+        }
+        tracing::info!(
+            path = %dev_path.display(),
+            "VSS_BRIDGE_CONFIG_PATH unset — defaulting to in-repo config/"
+        );
+    }
 
     tracing::info!(reset_nvm, "vss-bridge starting");
 
@@ -285,10 +311,36 @@ async fn boot_simulation_stack(
         )
         .run(),
     );
-    set.spawn(LockFeedback::new(Arc::clone(&bus), Arc::clone(&lighting_arb)).run());
+    set.spawn(
+        LockFeedback::new(Arc::clone(&bus), Arc::clone(&lighting_arb))
+            .with_cfg(Arc::clone(&cfg))
+            .run(),
+    );
     set.spawn(DoubleLockRelease::new(Arc::clone(&bus), Arc::clone(&door_lock_arb)).run());
     set.spawn(WalkAwayLock::new(Arc::clone(&bus), Arc::clone(&door_lock_arb)).run());
     set.spawn(ThumbPadLock::new(Arc::clone(&bus), Arc::clone(&door_lock_arb)).run());
+    // Interior trim Lock / Unlock buttons on Row 1 doors.  No auth —
+    // occupant-operated; unlock works even with the alarm armed (egress
+    // safety) but PerimeterAlarm escalates on the resulting unlock
+    // event when LastRequestor = DoorTrimButton during the armed window.
+    set.spawn(
+        DoorTrimButton::new(
+            Arc::clone(&bus),
+            Arc::clone(&door_lock_arb),
+            Arc::clone(&cfg),
+        )
+        .run(),
+    );
+    // SlamLock — slam-lock-protect inversion for EU vehicle lines.
+    // No-op on US lines (cfg.vehicle_line.slam_lock_protect = false).
+    set.spawn(
+        SlamLock::new(
+            Arc::clone(&bus),
+            Arc::clone(&door_lock_arb),
+            Arc::clone(&cfg),
+        )
+        .run(),
+    );
     set.spawn(AutoHighBeam::new(Arc::clone(&low_beam_arb), Arc::clone(&bus)).run());
     set.spawn(BrakeReverseLamps::new(Arc::clone(&bus)).run());
     set.spawn(FogLamps::new(Arc::clone(&bus)).run());
@@ -297,6 +349,20 @@ async fn boot_simulation_stack(
             Arc::clone(&lighting_arb),
             Arc::clone(&horn_arb),
             Arc::clone(&bus),
+        )
+        .run(),
+    );
+    // PerimeterAlarm — anti-intrusion alarm.  Arms when any door
+    // opens while the cabin is LOCKED / DOUBLE_LOCKED.  Disarms on
+    // an authenticated unlock (fob/PEPS/phone/NFC) or panic-button
+    // press.  Pulses horn for 30 s, lights/dome/puddle for 5 min.
+    set.spawn(
+        PerimeterAlarm::new(
+            Arc::clone(&bus),
+            Arc::clone(&lighting_arb),
+            Arc::clone(&horn_arb),
+            Arc::clone(&courtesy_arb),
+            Arc::clone(&puddle_arb),
         )
         .run(),
     );
@@ -368,10 +434,14 @@ async fn boot_simulation_stack(
     set.spawn(CabinTrunkRelease::new(Arc::clone(&bus), Arc::clone(&trunk_arb)).run());
     set.spawn(ExteriorTrunkButton::new(Arc::clone(&bus), Arc::clone(&trunk_arb)).run());
 
-    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome, MirrorFold, MirrorAdjust, Farewell, DoorOpenAssist, ExteriorTrunkButton, CabinTrunkRelease, ManualHorn");
+    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome, MirrorFold, MirrorAdjust, Farewell, DoorOpenAssist, ExteriorTrunkButton, CabinTrunkRelease, ManualHorn, PerimeterAlarm");
 
     // ── Plant Models ────────────────────────────────────────────────
     set.spawn(BlinkRelay::new(Arc::clone(&bus)).run());
+    // Chime piezo: subscribes to Body.Chime.IsActive (intent), publishes
+    // Body.Chime.IsSounding (actuator state).  HMI watches IsSounding
+    // for the ripple visualisation.
+    set.spawn(ChimePlantModel::new(Arc::clone(&bus)).run());
     set.spawn(
         DoorLockPlantModel::with_ack_and_nvm(Arc::clone(&bus), door_lock_ack_tx, nvm.clone())
             .with_cfg(Arc::clone(&cfg))
@@ -388,7 +458,7 @@ async fn boot_simulation_stack(
             .with_response_stagger_ms(vss_bridge::plant_models::peps::PRODUCTION_STAGGER_MS)
             .run(),
     );
-    tracing::info!("plant models spawned: BlinkRelay, DoorLockPlantModel, DoorHandlePlantModel, TrunkPlantModel, HoodPlantModel, SunroofPlantModel, PepsPlantModel");
+    tracing::info!("plant models spawned: BlinkRelay, ChimePlantModel, DoorLockPlantModel, DoorHandlePlantModel, TrunkPlantModel, HoodPlantModel, SunroofPlantModel, PepsPlantModel");
 
     // ── WebSocket bridge ────────────────────────────────────────────
     let ws_port: u16 = std::env::var("VSS_BRIDGE_WS_PORT")

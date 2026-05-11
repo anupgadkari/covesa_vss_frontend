@@ -93,7 +93,11 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--white);fo
 @keyframes blink{0%,49%{opacity:1}50%,100%{opacity:.1}}
 @keyframes pulse{0%,100%{opacity:.2}50%{opacity:.7}}
 @keyframes hornPulse{0%{transform:scale(1);opacity:.9}80%{transform:scale(2.4);opacity:0}100%{transform:scale(2.4);opacity:0}}
+@keyframes chimeRipple{0%{transform:scale(1);opacity:.9}80%{transform:scale(2.4);opacity:0}100%{transform:scale(2.4);opacity:0}}
 @keyframes relockPulseBg{0%,100%{background:rgba(245,158,11,.18)}50%{background:rgba(245,158,11,.32)}}
+@keyframes prearmPulseBg{0%,100%{background:rgba(96,165,250,.18)}50%{background:rgba(96,165,250,.32)}}
+@keyframes chimePulseBg{0%,100%{background:rgba(239,68,68,.20)}50%{background:rgba(239,68,68,.40)}}
+@keyframes alarmPulseBg{0%,100%{background:rgba(220,38,38,.45);box-shadow:0 0 8px rgba(248,113,113,.4)}50%{background:rgba(248,113,113,.65);box-shadow:0 0 14px rgba(252,165,165,.7)}}
 .blink{animation:blink .7s infinite}
 .blinks{animation:blink 1.4s infinite}
 .pulse{animation:pulse .5s infinite}
@@ -106,12 +110,24 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--white);fo
 .hyd-overlay .hyd-card .dot{width:8px;height:8px;border-radius:50%;background:var(--amber);animation:pulse .9s infinite}
 .hyd-overlay .hyd-card .sub{color:var(--muted);font-size:9px;letter-spacing:.04em;text-transform:uppercase}
 .relock-banner b{color:#FFEDD5;font-weight:800;font-size:12px}
+.prearm-banner{display:flex;align-items:center;gap:8px;padding:3px 10px;border-radius:14px;border:1px solid rgba(96,165,250,.55);font-family:var(--fm);font-size:10px;color:#BFDBFE;font-weight:600;letter-spacing:.04em;animation:prearmPulseBg 1.6s infinite;text-shadow:0 0 6px rgba(191,219,254,.4)}
+.prearm-banner b{color:#EFF6FF;font-weight:800;font-size:12px}
+.chime-banner{display:flex;align-items:center;gap:8px;padding:3px 10px;border-radius:14px;border:1px solid rgba(239,68,68,.65);font-family:var(--fm);font-size:10px;color:#FCA5A5;font-weight:700;letter-spacing:.04em;animation:chimePulseBg 0.8s infinite;text-shadow:0 0 6px rgba(252,165,165,.5)}
+.chime-banner b{color:#FEE2E2;font-weight:800;font-size:12px}
+.alarm-banner{display:flex;align-items:center;gap:8px;padding:3px 10px;border-radius:14px;border:1px solid #FCA5A5;font-family:var(--fm);font-size:11px;color:#FFF;font-weight:800;letter-spacing:.08em;animation:alarmPulseBg 0.45s infinite;text-shadow:0 0 8px rgba(252,165,165,.8);text-transform:uppercase}
+.alarm-banner b{color:#FEE2E2;font-weight:900;font-size:12px}
 .horn-viz{position:relative;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px}
 .horn-viz svg{position:relative;z-index:2}
 .horn-viz .ripple{position:absolute;inset:0;border:2px solid #EF4444;border-radius:50%;opacity:0;pointer-events:none}
 .horn-viz.active .ripple{animation:hornPulse .42s ease-out infinite}
 .horn-viz.active .ripple.r2{animation-delay:.15s}
 .horn-viz.active .ripple.r3{animation-delay:.30s}
+.chime-viz{position:relative;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px}
+.chime-viz svg{position:relative;z-index:2}
+.chime-viz .ripple{position:absolute;inset:0;border:2px solid #FCD34D;border-radius:50%;opacity:0;pointer-events:none}
+.chime-viz.active .ripple{animation:chimeRipple .50s ease-out infinite}
+.chime-viz.active .ripple.r2{animation-delay:.18s}
+.chime-viz.active .ripple.r3{animation-delay:.36s}
 .peps-card{background:var(--s2);border-radius:var(--r6);padding:8px 10px;border:1px solid var(--bdr);display:flex;flex-direction:column;gap:5px;margin-bottom:6px}
 .peps-card.intruder{border-color:rgba(240,64,64,.4);background:var(--red2)}
 .peps-badge{display:inline-flex;align-items:center;gap:4px;font-family:var(--fm);font-size:8px;padding:2px 6px;border-radius:3px;font-weight:600}
@@ -193,10 +209,12 @@ const INIT_STATE={
   // PEPS
   'Body.PEPS.KeyPresent':false,
   'Body.Switches.Keyfob.LockButton':'IDLE',
-  'Body.Switches.DoorTrim.Row1.Left.LockButton':'IDLE',
-  'Body.Switches.DoorTrim.Row1.Right.LockButton':'IDLE',
-  'Body.Switches.DoorTrim.Row2.Left.LockButton':'IDLE',
-  'Body.Switches.DoorTrim.Row2.Right.LockButton':'IDLE',
+  'Body.Switches.DoorTrim.Row1.Left.LockButton':false,
+  'Body.Switches.DoorTrim.Row1.Right.LockButton':false,
+  'Body.Switches.DoorTrim.Row2.Left.LockButton':false,
+  'Body.Switches.DoorTrim.Row2.Right.LockButton':false,
+  'Body.Switches.DoorTrim.Row1.Left.UnlockButton':false,
+  'Body.Switches.DoorTrim.Row1.Right.UnlockButton':false,
   'Body.Connectivity.RemoteLock':'IDLE',
   'Body.Connectivity.BleLock':'IDLE',
   'Body.Connectivity.NfcCardPresent':false,
@@ -490,6 +508,13 @@ function DoorCard({label,pfx,s,set}){
   // the signal prefix and conditionally render the toggle so the panel
   // matches a real OEM door card layout.
   const isRearDoor = p.includes('Row2');
+  // Interior door-trim Lock/Unlock buttons are physical only on Row 1
+  // (driver + front passenger) — Row 2 doors don't carry them.  Each
+  // is a momentary push button: mousedown fires the bool=true edge the
+  // bridge `DoorTrimButton` feature consumes; mouseup releases.
+  const trimSide = p.endsWith('.Left') ? 'Left' : 'Right';
+  const trimLockSig   = `Body.Switches.DoorTrim.Row1.${trimSide}.LockButton`;
+  const trimUnlockSig = `Body.Switches.DoorTrim.Row1.${trimSide}.UnlockButton`;
   return <div className="dcard">
     <div className="dctitle">{label}</div>
     <div className="dcr"><span className="dcl">Open</span><Tog val={s[`${p}.IsOpen`]} on={()=>set(`${p}.IsOpen`,!s[`${p}.IsOpen`])} c="a"/></div>
@@ -498,6 +523,39 @@ function DoorCard({label,pfx,s,set}){
     <div className="dcr"><span className="dcl">Latched</span><Tog val={s[`${p}.Latch.IsLatched`]} c="v"/></div>
     {isRearDoor && (
       <div className="dcr"><span className="dcl">ChildLk</span><Tog val={s[`${p}.IsChildLockActive`]} on={()=>set(`${p}.IsChildLockActive`,!s[`${p}.IsChildLockActive`])} c="v"/></div>
+    )}
+    {!isRearDoor && (
+      <div className="ebrow" style={{display:'flex',gap:4,marginTop:3}}
+           title="Interior door-trim panel buttons.  No auth — occupant control. Pressing UNLK while the perimeter alarm is armed triggers the chime → full alarm sequence (egress still succeeds).">
+        <button className="eb"
+          onMouseDown ={()=>set(trimLockSig,true)}
+          onMouseUp   ={()=>set(trimLockSig,false)}
+          onMouseLeave={()=>set(trimLockSig,false)}
+          onTouchStart={e=>{e.preventDefault();set(trimLockSig,true);}}
+          onTouchEnd  ={()=>set(trimLockSig,false)}
+          style={{flex:1,cursor:'pointer',userSelect:'none',touchAction:'none',
+                  padding:'3px 6px',fontSize:9,fontWeight:600,letterSpacing:'.06em',
+                  color:s[trimLockSig]?'#FCA5A5':'var(--amber)',
+                  background:s[trimLockSig]?'rgba(127,29,29,.45)':'transparent',
+                  border:`1px solid ${s[trimLockSig]?'#EF4444':'rgba(245,158,11,.55)'}`,
+                  borderRadius:4}}>
+          ▼ TRIM LOCK
+        </button>
+        <button className="eb"
+          onMouseDown ={()=>set(trimUnlockSig,true)}
+          onMouseUp   ={()=>set(trimUnlockSig,false)}
+          onMouseLeave={()=>set(trimUnlockSig,false)}
+          onTouchStart={e=>{e.preventDefault();set(trimUnlockSig,true);}}
+          onTouchEnd  ={()=>set(trimUnlockSig,false)}
+          style={{flex:1,cursor:'pointer',userSelect:'none',touchAction:'none',
+                  padding:'3px 6px',fontSize:9,fontWeight:600,letterSpacing:'.06em',
+                  color:s[trimUnlockSig]?'#BFDBFE':'#86EFAC',
+                  background:s[trimUnlockSig]?'rgba(30,58,138,.45)':'transparent',
+                  border:`1px solid ${s[trimUnlockSig]?'#60A5FA':'rgba(34,197,94,.55)'}`,
+                  borderRadius:4}}>
+          ▲ TRIM UNLK
+        </button>
+      </div>
     )}
     <div style={{marginTop:2}}>
       <div className="slhdr"><span className="dcl">Win</span><span className="sv">{s[`${p}.Window.Position`]??0}%</span></div>
@@ -2008,17 +2066,28 @@ function ControlPanelContent({s,set,anyDoor,anyLight,lux}){
         </div>
       </SG>
 
-      <SG title="Door Lock Sources" vss="Body.PEPS">
-        <div className="cr"><span className="cn">PEPS Key</span><Tog val={s['Body.PEPS.KeyPresent']} on={()=>set('Body.PEPS.KeyPresent',!s['Body.PEPS.KeyPresent'])} c="t"/></div>
-        <EnumR label="Keyfob RKE" k="Body.Switches.Keyfob.LockButton" s={s} set={set} opts={['IDLE','LOCK','UNLOCK','DOUBLE_LOCK']}/>
-        {[['Trim FL','Body.Switches.DoorTrim.Row1.Left.LockButton'],['Trim FR','Body.Switches.DoorTrim.Row1.Right.LockButton'],
-          ['Trim RL','Body.Switches.DoorTrim.Row2.Left.LockButton'],['Trim RR','Body.Switches.DoorTrim.Row2.Right.LockButton']].map(([l,k])=>(
-          <EnumR key={k} label={l} k={k} s={s} set={set} opts={['IDLE','LOCK','UNLOCK']}/>
-        ))}
-        <EnumR label="Phone App" k="Body.Connectivity.RemoteLock" s={s} set={set} opts={['IDLE','LOCK','UNLOCK']}/>
-        <EnumR label="BLE Key" k="Body.Connectivity.BleLock" s={s} set={set} opts={['IDLE','LOCK','UNLOCK']}/>
-        <div className="cr"><span className="cn">NFC Card</span><Tog val={s['Body.Connectivity.NfcCardPresent']} on={()=>set('Body.Connectivity.NfcCardPresent',!s['Body.Connectivity.NfcCardPresent'])} c="v"/></div>
-        <div className="cr"><span className="cn">NFC Phone</span><Tog val={s['Body.Connectivity.NfcPhonePresent']} on={()=>set('Body.Connectivity.NfcPhonePresent',!s['Body.Connectivity.NfcPhonePresent'])} c="v"/></div>
+      {/* Lock Status — read-only display of the door-lock arbiter's
+          published outputs.  The per-source interactors that used to
+          live here (Keyfob RKE, Trim buttons, Phone, BLE, NFC) all
+          have dedicated panels elsewhere now (PEPS plant cards,
+          fob-button row, etc.) — keeping them here would just be
+          duplicate UI driving the same input signals.  What's
+          *unique* to the arbiter is the published lock-state event
+          stream, which features like AutoRelock and PerimeterAlarm
+          gate on. */}
+      <SG title="Lock Status" vss="Cabin.LockStatus">
+        <div className="cr">
+          <span className="cn">LockStatus</span>
+          <CfgReadOnly val={s['Cabin.LockStatus']||'—'}/>
+        </div>
+        <div className="cr">
+          <span className="cn">LastRequestor</span>
+          <CfgReadOnly val={s['Cabin.LockStatus.LastRequestor']||'—'}/>
+        </div>
+        <div className="cr">
+          <span className="cn">EventNum</span>
+          <CfgReadOnly val={s['Cabin.LockStatus.EventNum']??'—'}/>
+        </div>
       </SG>
 
       <SG title="Safety" vss="Vehicle.Safety">
@@ -2230,6 +2299,8 @@ const INIT_CONFIG={
     lock_feedback_blink_count:3, lock_feedback_blink_period_ms:400,
     shutdown_grace_secs:30, lane_change_flash_count:3,
     auto_headlamp_lux_threshold:200, peps_rear_capacitive_handles:false,
+    panic_press_mode:'SINGLE',
+    slam_lock_protect:true,
   },
 };
 
@@ -2416,8 +2487,20 @@ function ConfigView({cfg, onSet, staged, setStaged, onApplyReboot}){
       <CfgRow label="Shutdown grace period" hint="A53 stay-alive after ignition OFF (s)" dirty={isVLDirty('shutdown_grace_secs')}>
         <CfgNum val={vlVal('shutdown_grace_secs')} min={5} max={120} onChange={n=>stageVL('shutdown_grace_secs',n)}/>
       </CfgRow>
+      <CfgRow label="Panic-button activation"
+        hint="SINGLE = one press toggles. DOUBLE = two presses within 3 s required to engage; cancel still 1 press. LONG_PRESS = falls back to SINGLE today (plant-model wiring TBD)."
+        dirty={isVLDirty('panic_press_mode')}>
+        <CfgSelect val={vlVal('panic_press_mode')||'SINGLE'}
+          opts={['SINGLE','DOUBLE','LONG_PRESS']}
+          onChange={p=>stageVL('panic_press_mode',p)}/>
+      </CfgRow>
       <CfgRow label="Rear handles capacitive" hint="OFF: rear handles mechanical-only — must auth at front first. ON: legacy wiring, rear pull initiates PEPS." dirty={isVLDirty('peps_rear_capacitive_handles')}>
         <CfgBool val={!!vlVal('peps_rear_capacitive_handles')} onChange={b=>stageVL('peps_rear_capacitive_handles',b)}/>
+      </CfgRow>
+      <CfgRow label="Slam-lock protection"
+        hint="ON (EU default): trim Lock with a door open is undone by the SlamLock feature (driver-side respects two-stage; passenger-side always UnlockAll). OFF (US slam-lock allowed): trim Lock with door open dispatches as FeatureId::SlamLock — when the door slams shut the perimeter alarm arms."
+        dirty={isVLDirty('slam_lock_protect')}>
+        <CfgBool val={!!vlVal('slam_lock_protect')} onChange={b=>stageVL('slam_lock_protect',b)}/>
       </CfgRow>
     </CfgSection>
 
@@ -2492,10 +2575,29 @@ function App(){
   // The banner derives remaining seconds = timeoutSecs - (now - armedAt) and
   // ticks once a second while armed.
   const [relockArmedAt,setRelockArmedAt]=useState(null);
+  // PerimeterAlarm pre-arm + chime countdowns.  Both are wall-clock
+  // stamps captured the instant the corresponding phase begins; the
+  // banner derives "remaining = duration - elapsed" client-side.
+  // Mirrors the cabin-state rules in
+  // `vss-bridge/src/features/perimeter_alarm.rs`:
+  //   • prearmStartedAt — set when Cabin.LockStatus enters
+  //     LOCKED / DOUBLE_LOCKED from any non-armable state, cleared
+  //     when it returns to UNLOCKED / DRIVER_UNLOCKED.
+  //   • chimeStartedAt  — set on the first Body.Chime.IsActive=TRUE
+  //     edge of a sequence, cleared when Vehicle.Body.Alarm.IsActive
+  //     escalates to TRUE or the cabin unlocks (silent disarm).
+  const [prearmStartedAt,setPrearmStartedAt]=useState(null);
+  const [chimeStartedAt,setChimeStartedAt]=useState(null);
   const [tickNow,setTickNow]=useState(Date.now());
   const wsRef=useRef(null);
   const reconnRef=useRef(null);
   const attemptsRef=useRef(0);
+  // Tracks the wall-clock of the most recent CHIME=true edge so the
+  // banner watchdog below can tell when the chime has actually stopped
+  // pulsing (e.g. ignition-cancel mid-chime, where Cabin.LockStatus is
+  // still LOCKED and Vehicle.Body.Alarm.IsActive is still FALSE — none
+  // of the other "clear" conditions fire).
+  const chimeLastTrueRef=useRef(null);
 
   useEffect(()=>{const t=setInterval(()=>setTime(new Date()),1000);return()=>clearInterval(t)},[]);
 
@@ -2531,13 +2633,76 @@ function App(){
     }
   },[relockArmed, lockEventNum]);
 
-  // Seconds-tick driver — only runs while the banner is visible to keep
-  // the rest of the app at a slow heartbeat.
+  // PerimeterAlarm pre-arm window stamp.  The 20 s grace period starts
+  // the instant the cabin transitions into an armable lock state; we
+  // mirror that here by stamping on the first render that sees
+  // LOCKED/DOUBLE_LOCKED, and clearing on any non-armable state.
+  // LOCKED ↔ DOUBLE_LOCKED transitions deliberately do NOT restamp —
+  // the bridge feature behaves the same way (REQ-PERI-002).
+  const isCabinArmable =
+        lockStatus === 'LOCKED' || lockStatus === 'DOUBLE_LOCKED';
   useEffect(()=>{
-    if(!relockArmed) return;
+    if(isCabinArmable){
+      setPrearmStartedAt(prev=>prev ?? Date.now());
+    } else {
+      setPrearmStartedAt(null);
+    }
+  },[isCabinArmable]);
+
+  // PerimeterAlarm chime window stamp.  Stamp on the first observed
+  // CHIME=true while no alarm is active; clear when the alarm
+  // escalates (ALARM_STATUS=true) or the cabin returns to unlocked
+  // (silent disarm during chime — REQ-PERI-012).
+  const chimeActive  = !!s['Body.Chime.IsActive'];
+  const alarmActive  = !!s['Vehicle.Body.Alarm.IsActive'];
+  // Authoritative perimeter-alarm state from the bridge.  Gating the
+  // banners on this string (rather than the HMI's lock-status guess)
+  // prevents the "ARMING IN" banner from restarting after a chime is
+  // silently cancelled (e.g. ignition disarm) — the bridge knows the
+  // alarm went straight back to ARMED, the HMI just renders that.
+  // Possible values: 'DISARMED' | 'PRE_ARMED' | 'ARMED' | 'ACTIVATED'.
+  // Until the WS snapshot lands the field is undefined; treat as
+  // 'DISARMED' so we don't paint stale banners.
+  const alarmState = s['Vehicle.Body.Alarm.State'] || 'DISARMED';
+  useEffect(()=>{
+    if(alarmActive || !isCabinArmable){
+      setChimeStartedAt(null);
+      chimeLastTrueRef.current=null;
+      return;
+    }
+    if(chimeActive){
+      chimeLastTrueRef.current=Date.now();
+      setChimeStartedAt(prev=>prev ?? Date.now());
+    }
+  },[chimeActive, alarmActive, isCabinArmable]);
+
+  // Chime-stopped watchdog.  The chime alternates ON/OFF every ~1 s
+  // while pulsing; if we go more than 1.5 s without a fresh CHIME=true
+  // edge, the bridge has aborted the chime (ignition disarm, panic
+  // press without an unlock, etc.) and the banner should disappear
+  // immediately rather than counting down to 0 on its own.
+  useEffect(()=>{
+    if(!chimeStartedAt) return;
+    const t=setInterval(()=>{
+      const last=chimeLastTrueRef.current;
+      if(last && Date.now()-last>1500){
+        setChimeStartedAt(null);
+        chimeLastTrueRef.current=null;
+      }
+    },250);
+    return()=>clearInterval(t);
+  },[chimeStartedAt]);
+
+  // Seconds-tick driver — runs whenever any of the three countdown
+  // banners is visible (auto-relock, perimeter pre-arm, perimeter
+  // chime).  Idle the rest of the time so the rest of the app stays
+  // at a slow heartbeat.
+  const anyCountdownVisible = relockArmed || !!prearmStartedAt || !!chimeStartedAt;
+  useEffect(()=>{
+    if(!anyCountdownVisible) return;
     const t=setInterval(()=>setTickNow(Date.now()),250);
     return()=>clearInterval(t);
-  },[relockArmed]);
+  },[anyCountdownVisible]);
 
   useEffect(()=>{
     function connect(){
@@ -2675,6 +2840,29 @@ function App(){
         )}
         <div className="ctbar">
           <span className="ctlabel"><b>VSS</b> · {viewLabel}</span>
+          {/* Perimeter-alarm state pill — always visible, drawn from
+              the bridge's authoritative `Vehicle.Body.Alarm.State`.
+              Replaces what used to be a mental model of "is the cabin
+              locked × is the chime pulsing × wall-clock since lock"
+              with a single string the bridge owns. */}
+          {(() => {
+            const meta = ({
+              DISARMED:  {label:'DISARMED',  color:'#64748B', bg:'rgba(100,116,139,.15)', border:'rgba(100,116,139,.45)', icon:'🔓', tip:'Cabin unlocked — perimeter alarm idle.'},
+              PRE_ARMED: {label:'PRE-ARMED', color:'#BFDBFE', bg:'rgba(96,165,250,.18)',  border:'rgba(96,165,250,.55)',  icon:'🛡️', tip:'Cabin locked, 20 s grace window in progress. Door-opens during this window are ignored.'},
+              ARMED:     {label:'ARMED',     color:'#A7F3D0', bg:'rgba(16,217,138,.15)',  border:'rgba(16,217,138,.55)',  icon:'🛡️', tip:'Pre-arm window elapsed. A door-open or interior-trim unlock now triggers the chime warning.'},
+              ACTIVATED: {label:'ACTIVATED', color:'#FECACA', bg:'rgba(239,68,68,.25)',   border:'rgba(239,68,68,.7)',    icon:'🚨', tip:'Alarm sequence in progress (chime / horn+lights / lights-only).'},
+            })[alarmState] || ({label:alarmState, color:'#64748B', bg:'transparent', border:'rgba(100,116,139,.45)', icon:'·', tip:`Unknown alarm state: ${alarmState}`});
+            return (
+              <span title={meta.tip}
+                style={{display:'inline-flex',alignItems:'center',gap:6,padding:'2px 9px',borderRadius:14,
+                        border:`1px solid ${meta.border}`,background:meta.bg,fontFamily:'var(--fm)',fontSize:10,
+                        fontWeight:700,letterSpacing:'.06em',color:meta.color}}>
+                <span style={{fontSize:11}}>{meta.icon}</span>
+                <span>ALARM:</span>
+                <b style={{color:meta.color}}>{meta.label}</b>
+              </span>
+            );
+          })()}
           {/* AutoRelock countdown banner — visible only while IsArmed=true.
               Remaining seconds computed client-side from the wall-clock
               captured at the FALSE→TRUE transition. */}
@@ -2687,6 +2875,66 @@ function App(){
               <span className="relock-banner" title="Auto-relock will lock all doors when this counter reaches 0. Open any door to cancel.">
                 <span style={{fontSize:11}}>🔒</span>
                 <span>AUTO-RELOCK IN</span>
+                <b>{remaining}s</b>
+              </span>
+            );
+          })()}
+          {/* Vehicle.Body.Alarm.IsActive — full anti-intrusion alarm
+              is sounding (chime escalated to horn + lights, OR PanicAlarm
+              was triggered).  Highest-priority banner; shown alone — the
+              chime banner is suppressed because chimeStartedAt clears
+              the moment ALARM_STATUS goes true. */}
+          {alarmActive && (
+            <span className="alarm-banner" title="Anti-intrusion alarm sounding. Authenticate (RKE / PEPS / phone) or press PANIC to cancel.  Starting the engine (ignition ON) also disarms.">
+              <span style={{fontSize:12}}>🚨</span>
+              <span>ALARM ACTIVE</span>
+            </span>
+          )}
+          {/* PerimeterAlarm chime countdown — visible during the 12 s
+              pre-alarm chime warning phase.  Takes priority over the
+              pre-arm banner (the pre-arm phase is over once the chime
+              fires) but is sequential with auto-relock so both never
+              show together in practice. */}
+          {(() => {
+            // Hide the chime banner the instant the bridge moves out
+            // of ACTIVATED — silent disarms (auth unlock / ignition /
+            // panic during chime) all transition straight back to
+            // ARMED or DISARMED, and the banner must disappear with
+            // them rather than continuing its local countdown.
+            if(alarmState !== 'ACTIVATED') return null;
+            if(!chimeStartedAt || alarmActive) return null;
+            const CHIME_TOTAL = 12;
+            const elapsed = Math.floor((tickNow - chimeStartedAt) / 1000);
+            const remaining = Math.max(0, CHIME_TOTAL - elapsed);
+            if(remaining === 0) return null;
+            return (
+              <span className="chime-banner" title="Pre-alarm chime: authenticate with a paired fob/phone or press PANIC before this counter reaches 0 to cancel silently.">
+                <span style={{fontSize:11}}>🔔</span>
+                <span>ALARM IN</span>
+                <b>{remaining}s</b>
+              </span>
+            );
+          })()}
+          {/* PerimeterAlarm pre-arm countdown — visible during the 20 s
+              grace period after the cabin first becomes locked.  Hidden
+              once the alarm is fully armed (or once a chime sequence
+              has started). */}
+          {(() => {
+            // Gate on the bridge's authoritative state: PRE_ARMED
+            // means we are inside the 20 s grace window.  Any other
+            // state (ARMED / ACTIVATED / DISARMED) hides the banner —
+            // including the ignition-cancel case where the cabin stays
+            // LOCKED but the bridge has moved past pre-arm.
+            if(alarmState !== 'PRE_ARMED') return null;
+            if(!prearmStartedAt) return null;
+            const PRE_ARM_TOTAL = 20;
+            const elapsed = Math.floor((tickNow - prearmStartedAt) / 1000);
+            const remaining = Math.max(0, PRE_ARM_TOTAL - elapsed);
+            if(remaining === 0) return null;
+            return (
+              <span className="prearm-banner" title="Perimeter alarm pre-arm window: a door-open during this window is a no-op. After the counter reaches 0 the alarm is fully armed.">
+                <span style={{fontSize:11}}>🛡️</span>
+                <span>ARMING IN</span>
                 <b>{remaining}s</b>
               </span>
             );
@@ -2707,8 +2955,9 @@ function App(){
             {label:'WIPERS', active:s['Body.Windshield.Front.Wiping.Mode']!=='OFF',c:'var(--blue)'},
             {label:'HVAC',   active:s['Cabin.HVAC.IsAirConditioningActive'],c:'var(--teal)'},
             {label:'HORN',   active:s['Body.Horn.IsActive'],c:'var(--red)',horn:true},
+            {label:'CHIME',  active:s['Body.Chime.IsSounding'],c:'var(--amber)',chime:true},
             {label:'PEPS',   active:[1,2,3,4,5,6].some(i=>s[`Body.PEPS.Plant.KeyFob.${i}.Zone`]&&s[`Body.PEPS.Plant.KeyFob.${i}.Zone`]!=='OutOfRange')||[1,2].some(i=>s[`Body.PEPS.Plant.BlePhone.${i}.Zone`]&&s[`Body.PEPS.Plant.BlePhone.${i}.Zone`]!=='OutOfRange'),c:'var(--teal)'},
-          ].map(({label,active,c,horn})=>(
+          ].map(({label,active,c,horn,chime})=>(
             <div key={label} className="sti">
               {horn ? (
                 /* Horn-with-sound-waves visualisation: the indicator dot is
@@ -2727,6 +2976,27 @@ function App(){
                       <path d="M11 6 Q12 8 11 10" stroke="#EF4444" strokeWidth="1" fill="none"/>
                       <path d="M13 4 Q15 8 13 12" stroke="#EF4444" strokeWidth="1" fill="none" opacity=".7"/>
                     </>}
+                  </svg>
+                </span>
+              ) : chime ? (
+                /* Chime visualisation — bell icon with three concentric
+                   amber ripples that emanate when Body.Chime.IsSounding
+                   is TRUE.  Same shape as the horn visualisation but in
+                   amber + slightly slower so the user reads "warning
+                   chime" vs "intrusion alarm" at a glance. */
+                <span className={`chime-viz${active?' active':''}`} title={active?'Chime sounding — pre-alarm warning':'Chime idle'}>
+                  <span className="ripple"/>
+                  <span className="ripple r2"/>
+                  <span className="ripple r3"/>
+                  <svg width="14" height="14" viewBox="0 0 16 16">
+                    {/* Bell body */}
+                    <path d="M8 2 C5 2 4 4 4 7 L4 10 L3 11 L13 11 L12 10 L12 7 C12 4 11 2 8 2 Z"
+                      fill={active?'#FCD34D':'var(--muted)'}
+                      stroke={active?'#FFFBEB':'#222'} strokeWidth="0.6"/>
+                    {/* Clapper */}
+                    <circle cx="8" cy="13" r="1.2"
+                      fill={active?'#FCD34D':'var(--muted)'}
+                      stroke={active?'#FFFBEB':'#222'} strokeWidth="0.4"/>
                   </svg>
                 </span>
               ) : (

@@ -171,6 +171,41 @@ fn is_rear_door(door: &Door) -> bool {
     door.name.starts_with("Row2.")
 }
 
+/// Returns true if this handle pull should kick off a key search
+/// (LF challenge + verify + arbiter dispatch).  False means the
+/// `Cabin.LockStatus` indicates the door is already accessible —
+/// PassiveEntry stays silent and the mechanical pull is handled by
+/// `DoorHandlePlantModel` (which simply opens the door).
+///
+/// See the table in `run()`:
+///
+/// | LockStatus       | Driver pull | Other pulls |
+/// |------------------|-------------|-------------|
+/// | LOCKED           | auth        | auth        |
+/// | DOUBLE_LOCKED    | auth        | auth        |
+/// | DRIVER_UNLOCKED  | **skip**    | auth        |
+/// | UNLOCKED         | skip        | skip        |
+///
+/// Key design choice: this is gated on the vehicle-level
+/// `Cabin.LockStatus`, not per-door `IsLocked`.  A thief inside the
+/// cabin can pop a sill-pin (soldier knob) and unlock a single
+/// door without authentication, which would update `IsLocked`
+/// locally but cannot update `Cabin.LockStatus` (the door-lock
+/// arbiter only publishes that on accepted external commands).
+/// Using cabin-level state keeps the gate immune to that bypass.
+fn auth_needed_for_door(door: &Door, lock_status: &str, cfg: &PlatformConfig) -> bool {
+    match lock_status {
+        "UNLOCKED" => false,
+        "DRIVER_UNLOCKED" => !is_driver_door(door, cfg),
+        // LOCKED, DOUBLE_LOCKED, or anything we don't recognise
+        // (e.g. the bus hasn't published yet) → safest default is
+        // "yes, search."  An unauthenticated user simply can't
+        // produce a valid response, so the auth attempt fails
+        // cheaply.
+        _ => true,
+    }
+}
+
 /// True if this physical door is the driver door under the current
 /// `dealer.driver_door_side` cal.  RHD swaps Row1.Left ↔ Row1.Right
 /// for stage-1 / passenger-bypass routing; rear doors (Row2.*) are
@@ -379,6 +414,34 @@ impl<B: SignalBus + Send + Sync + 'static> PassiveEntry<B> {
                         door = door.name,
                         "PassiveEntry: rear handle pulled but capacitive sensing is \
                          not wired on this vehicle line — ignoring"
+                    );
+                    continue;
+                }
+                // Cabin-state gate — auth (key search) is only needed
+                // when the cabin is in a state where this specific
+                // door is still locked.  Soldier-knob unlocks don't
+                // promote `Cabin.LockStatus` so a thief popping a sill
+                // pin from inside cannot slip past this check.
+                //
+                //   • UNLOCKED         — every door already unlocked,
+                //                        skip everywhere.
+                //   • DRIVER_UNLOCKED  — driver door is the only one
+                //                        unlocked, skip on driver pull
+                //                        but auth on passenger / rear.
+                //   • LOCKED / DOUBLE_LOCKED — auth on every pull.
+                //
+                // UX consequence: stage-2 escalation via a second
+                // driver-door pull no longer fires.  The user reaches
+                // `UnlockAll` by pulling a passenger or rear handle
+                // (both bypass two-stage and dispatch UnlockAll
+                // directly), or via fob / phone app / NFC.  See the
+                // `pending_stage_two` field — kept around for future
+                // cal-driven scenarios but inert under this gate.
+                if !auth_needed_for_door(door, &self.last_lock_status, &self.config) {
+                    tracing::debug!(
+                        door = door.name,
+                        lock_status = %self.last_lock_status,
+                        "PassiveEntry: cabin already unlocked for this door — skipping auth"
                     );
                     continue;
                 }
@@ -990,10 +1053,15 @@ mod tests {
         assert_eq!(last_command(&bus), None);
     }
 
-    /// 4. Two-stage unlock honoured.  First pull with fob in LeftFront
-    ///    → UnlockDriver.  Second pull within window → UnlockAll.
+    /// 4. After stage-1 unlocks the driver door, a second pull on the
+    /// SAME (driver) handle is now silently skipped — `Cabin.LockStatus`
+    /// is `DRIVER_UNLOCKED`, the driver door is the only one unlocked,
+    /// the user already has access.  No regression to `UnlockDriver`.
+    /// To reach `UnlockAll`, the user pulls a passenger or rear handle
+    /// (those bypass two-stage and dispatch `UnlockAll` directly — see
+    /// the dedicated tests further down).
     #[tokio::test]
-    async fn two_stage_unlock_first_press_driver_second_press_all() {
+    async fn second_driver_pull_after_stage_one_is_skipped() {
         let bus = setup().await;
         bus.inject(
             peps_signals::KEYFOB_1_ZONE,
@@ -1001,6 +1069,48 @@ mod tests {
         );
         drain().await;
         bus.clear_history();
+
+        // Stage 1: driver pull while cabin is LOCKED → UnlockDriver.
+        bus.inject(
+            "Body.Doors.Row1.Left.Handle.Outside.IsPulled",
+            SignalValue::Bool(true),
+        );
+        drain().await;
+        assert_eq!(last_command(&bus), Some("unlock_driver".into()));
+
+        // Cabin is now DRIVER_UNLOCKED.  Release + pull again on the
+        // driver handle — gate kicks in, no further command dispatched.
+        bus.inject(
+            "Body.Doors.Row1.Left.Handle.Outside.IsPulled",
+            SignalValue::Bool(false),
+        );
+        drain().await;
+        bus.clear_history();
+        bus.inject(
+            "Body.Doors.Row1.Left.Handle.Outside.IsPulled",
+            SignalValue::Bool(true),
+        );
+        drain().await;
+        assert_eq!(
+            last_command(&bus),
+            None,
+            "second driver-door pull at DRIVER_UNLOCKED must be silently skipped — \
+             no `UnlockDriver` regression and no stage-2 escalation from this handle"
+        );
+    }
+
+    /// Passenger pull at `DRIVER_UNLOCKED` (i.e. immediately after
+    /// stage-1) should fire auth and dispatch `UnlockAll` — that's the
+    /// new escalation path replacing the old "second-driver-pull"
+    /// stage-2 gesture.
+    #[tokio::test]
+    async fn passenger_pull_after_stage_one_unlocks_all() {
+        let bus = setup().await;
+        bus.inject(
+            peps_signals::KEYFOB_1_ZONE,
+            SignalValue::String("LeftFront".into()),
+        );
+        drain().await;
 
         // Stage 1.
         bus.inject(
@@ -1010,21 +1120,55 @@ mod tests {
         drain().await;
         assert_eq!(last_command(&bus), Some("unlock_driver".into()));
 
-        // Release + pull again (stage 2).
+        // Move fob to RightFront, pull passenger — should unlock all.
         bus.inject(
-            "Body.Doors.Row1.Left.Handle.Outside.IsPulled",
-            SignalValue::Bool(false),
+            peps_signals::KEYFOB_1_ZONE,
+            SignalValue::String("RightFront".into()),
         );
         drain().await;
+        bus.clear_history();
+        bus.inject(
+            "Body.Doors.Row1.Right.Handle.Outside.IsPulled",
+            SignalValue::Bool(true),
+        );
+        drain().await;
+        assert_eq!(last_command(&bus), Some("unlock_all".into()));
+    }
+
+    /// Pull a handle while the cabin is fully `UNLOCKED` — gate skips
+    /// auth on every door.  No spurious `UnlockDriver` regression.
+    #[tokio::test]
+    async fn pull_while_cabin_unlocked_skips_auth() {
+        let bus = setup().await;
+        bus.inject(
+            peps_signals::KEYFOB_1_ZONE,
+            SignalValue::String("LeftFront".into()),
+        );
+        // Force cabin into UNLOCKED.
+        bus.publish("Cabin.LockStatus", SignalValue::String("UNLOCKED".into()))
+            .await
+            .unwrap();
+        drain().await;
+        bus.clear_history();
+
         bus.inject(
             "Body.Doors.Row1.Left.Handle.Outside.IsPulled",
             SignalValue::Bool(true),
         );
         drain().await;
+
         assert_eq!(
             last_command(&bus),
-            Some("unlock_all".into()),
-            "second pull within window should fire stage-2 UnlockAll"
+            None,
+            "pull at UNLOCKED must skip auth — no command dispatched"
+        );
+        let challenge_fired = bus
+            .history()
+            .into_iter()
+            .any(|(s, _)| s == peps_signals::PEPS_LF_CHALLENGE);
+        assert!(
+            !challenge_fired,
+            "no LF challenge should fire when cabin is fully UNLOCKED"
         );
     }
 
@@ -1199,10 +1343,11 @@ mod tests {
         );
     }
 
-    /// RHD: a second pull within the window on Row1.Right escalates to
-    /// UnlockAll (stage 2), same as LHD on Row1.Left.
+    /// RHD mirror of `second_driver_pull_after_stage_one_is_skipped`.
+    /// Row1.Right is the driver door on RHD; after stage-1 a second
+    /// pull on the same handle is skipped by the cabin-state gate.
     #[tokio::test]
-    async fn rhd_driver_pull_second_press_within_window_is_unlock_all() {
+    async fn rhd_second_driver_pull_after_stage_one_is_skipped() {
         let bus = setup_rhd().await;
         bus.inject(
             peps_signals::KEYFOB_1_ZONE,
@@ -1218,12 +1363,13 @@ mod tests {
         drain().await;
         assert_eq!(last_command(&bus), Some("unlock_driver".into()));
 
-        // Release + re-pull within the window.
+        // Release + re-pull on the driver (Row1.Right) handle.
         bus.inject(
             "Body.Doors.Row1.Right.Handle.Outside.IsPulled",
             SignalValue::Bool(false),
         );
         drain().await;
+        bus.clear_history();
         bus.inject(
             "Body.Doors.Row1.Right.Handle.Outside.IsPulled",
             SignalValue::Bool(true),
@@ -1231,8 +1377,9 @@ mod tests {
         drain().await;
         assert_eq!(
             last_command(&bus),
-            Some("unlock_all".into()),
-            "RHD: second driver-door pull within window must escalate to UnlockAll"
+            None,
+            "RHD: second pull on the driver (Row1.Right) handle at \
+             DRIVER_UNLOCKED must be silently skipped by the cabin-state gate"
         );
     }
 

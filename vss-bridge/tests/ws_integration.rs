@@ -334,7 +334,14 @@ async fn passive_entry_unlocks_driver_door_via_handle_pull() {
     let (mut tx, mut rx) = connect_ws(&bridge.ws_url()).await;
 
     // Make sure doors start locked so we'll see the unlock transition.
+    // Lock the per-door state via CentralLock.Command (sets IsLocked
+    // per door), AND publish Cabin.LockStatus = LOCKED so the
+    // PassiveEntry cabin-state gate (new in this PR) lets the pull
+    // through.  HMI direct-write bypasses the arbiter, so it doesn't
+    // automatically update Cabin.LockStatus — we need both signals
+    // for a realistic "doors are locked" simulation.
     send_sensor(&mut tx, "Body.Doors.CentralLock.Command", json!("lock_all")).await;
+    send_sensor(&mut tx, "Cabin.LockStatus", json!("LOCKED")).await;
     let locked = wait_for_state(
         &mut rx,
         "Body.Doors.Row1.Left.IsLocked",
