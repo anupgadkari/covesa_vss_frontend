@@ -2089,14 +2089,6 @@ function CockpitView({s,set}){
           <Btn night={night} on={ffogSw} onClick={()=>set('Body.Switches.Fog.Front.IsEngaged',!ffogSw)} min={110}>FOG FRONT {ffogSw?'●':'○'}</Btn>
           <Btn night={night} on={rfogSw} onClick={()=>set('Body.Switches.Fog.Rear.IsEngaged',!rfogSw)} min={110}>FOG REAR {rfogSw?'●':'○'}</Btn>
           <Btn night={night} on={hazSw} onClick={()=>set('Body.Switches.Hazard.IsEngaged',!hazSw)} min={110}>⚠ HAZARD {hazSw?'●':'○'}</Btn>
-          <Btn night={night} on={s['Body.Switches.Trunk.Release.IsPressed']}
-               onMouseDown={()=>set('Body.Switches.Trunk.Release.IsPressed',true)}
-               onMouseUp={()=>set('Body.Switches.Trunk.Release.IsPressed',false)}
-               onMouseLeave={()=>set('Body.Switches.Trunk.Release.IsPressed',false)} min={110}>TRUNK ⇧</Btn>
-          <Btn night={night} on={s['Body.Switches.Hood.Release.IsPulled']}
-               onMouseDown={()=>set('Body.Switches.Hood.Release.IsPulled',true)}
-               onMouseUp={()=>set('Body.Switches.Hood.Release.IsPulled',false)}
-               onMouseLeave={()=>set('Body.Switches.Hood.Release.IsPulled',false)} min={110}>HOOD ⇧</Btn>
         </div>
         {/* Status readout */}
         <div style={{fontFamily:'Share Tech Mono',fontSize:8,color:txtDim,display:'flex',flexDirection:'column',gap:3}}>
