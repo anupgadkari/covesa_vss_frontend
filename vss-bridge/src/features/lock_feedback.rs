@@ -35,6 +35,7 @@ use tokio::task::JoinHandle;
 use tokio::time::{sleep, Duration};
 
 use crate::arbiter::{ActuatorRequest, DomainArbiter, FEEDBACK_REQUEST};
+use crate::config::PlatformConfig;
 use crate::ipc_message::{FeatureId, Priority, SignalValue};
 use crate::signal_bus::{SignalBus, VssPath};
 
@@ -43,6 +44,14 @@ use crate::signal_bus::{SignalBus, VssPath};
 const LEFT_SIG: VssPath = "Body.Lights.DirectionIndicator.Left.IsSignaling";
 const RIGHT_SIG: VssPath = "Body.Lights.DirectionIndicator.Right.IsSignaling";
 const TRUNK_OPEN_SIG: VssPath = "Body.Trunk.IsOpen";
+const CHIME: VssPath = "Body.Chime.IsActive";
+
+/// Duration of the audible chime pulse on a successful lock when
+/// `dealer.horn_chirp_on_lock` is enabled (ms).  Brief — matches the
+/// typical real-vehicle horn chirp / lock chime cadence and is well
+/// under the LockFeedback flash window (≈ 1 s) so the audible and
+/// visible cues finish together from the user's perspective.
+const LOCK_CHIME_MS: u64 = 300;
 
 /// Door IsLocked signals tracked to determine whether the cabin is secured.
 const DOOR_LOCKED_SIGNALS: [VssPath; 4] = [
@@ -50,6 +59,17 @@ const DOOR_LOCKED_SIGNALS: [VssPath; 4] = [
     "Body.Doors.Row1.Right.IsLocked",
     "Body.Doors.Row2.Left.IsLocked",
     "Body.Doors.Row2.Right.IsLocked",
+];
+
+/// Door IsOpen signals tracked so the lock-confirmation chime can be
+/// suppressed when SlamLock is about to invert the lock — see
+/// `slam_lock.rs`.  No point cheerfully chirping "locked!" when the
+/// next thing the user will hear is the mislock honk.
+const DOOR_OPEN_SIGNALS: [VssPath; 4] = [
+    "Body.Doors.Row1.Left.IsOpen",
+    "Body.Doors.Row1.Right.IsOpen",
+    "Body.Doors.Row2.Left.IsOpen",
+    "Body.Doors.Row2.Right.IsOpen",
 ];
 
 // ── Flash timing ───────────────────────────────────────────────────────────
@@ -74,11 +94,25 @@ const GAP_MS: u64 = 300;
 pub struct LockFeedback<B: SignalBus> {
     bus: Arc<B>,
     lighting_arb: Arc<DomainArbiter>,
+    cfg: Option<Arc<PlatformConfig>>,
 }
 
 impl<B: SignalBus + Send + Sync + 'static> LockFeedback<B> {
     pub fn new(bus: Arc<B>, lighting_arb: Arc<DomainArbiter>) -> Self {
-        Self { bus, lighting_arb }
+        Self {
+            bus,
+            lighting_arb,
+            cfg: None,
+        }
+    }
+
+    /// Attach a `PlatformConfig` so the `"lock"` feedback can fire an
+    /// audible chime pulse when `dealer.horn_chirp_on_lock = true`.
+    /// Without a config, no chime is dispatched (existing test paths
+    /// stay silent).
+    pub fn with_cfg(mut self, cfg: Arc<PlatformConfig>) -> Self {
+        self.cfg = Some(cfg);
+        self
     }
 
     pub async fn run(self) {
@@ -92,6 +126,14 @@ impl<B: SignalBus + Send + Sync + 'static> LockFeedback<B> {
         let mut door_rx2 = self.bus.subscribe(DOOR_LOCKED_SIGNALS[2]).await;
         let mut door_rx3 = self.bus.subscribe(DOOR_LOCKED_SIGNALS[3]).await;
         let mut doors_locked = [false; 4];
+
+        // IsOpen subscriptions — used only to gate the lock-chime
+        // suppression below.  Explicit per-door branches (cancel-safe).
+        let mut open_rx0 = self.bus.subscribe(DOOR_OPEN_SIGNALS[0]).await;
+        let mut open_rx1 = self.bus.subscribe(DOOR_OPEN_SIGNALS[1]).await;
+        let mut open_rx2 = self.bus.subscribe(DOOR_OPEN_SIGNALS[2]).await;
+        let mut open_rx3 = self.bus.subscribe(DOOR_OPEN_SIGNALS[3]).await;
+        let mut doors_open = [false; 4];
 
         let mut current_flash: Option<JoinHandle<()>> = None;
         // Set when a "trunk_unlock" feedback is received; cleared when trunk closes.
@@ -129,6 +171,37 @@ impl<B: SignalBus + Send + Sync + 'static> LockFeedback<B> {
                         Arc::clone(&self.lighting_arb),
                     )
                     .await;
+
+                    // Audible chime on the lock confirmation, gated by
+                    // the dealer cal.  Fire-and-forget — the chime pulse
+                    // is shorter than the flash so it always finishes
+                    // before the next FeedbackRequest can preempt.
+                    // Body.Chime.IsActive is single-writer for now
+                    // (PerimeterAlarm pulses it during its 12 s warning
+                    // phase, which is mutually exclusive with a successful
+                    // RKE/PEPS lock since arming requires the cabin to
+                    // be DISARMED first).  If a second concurrent writer
+                    // appears later, route through a chime arbiter.
+                    //
+                    // Suppress the chime when SlamLock is about to
+                    // invert this lock (cal=true + any door open).
+                    // The mislock honk from `slam_lock.rs` is the
+                    // user-facing cue in that case — playing the
+                    // cheerful "lock confirmed" chime right before
+                    // the denied honk would be confusing.
+                    let inversion_imminent =
+                        self.cfg.as_ref().is_some_and(|c| {
+                            c.vehicle_line.slam_lock_protect
+                                && doors_open.iter().any(|&o| o)
+                        });
+                    if kind == "lock" && self.lock_chime_enabled() && !inversion_imminent {
+                        let bus = Arc::clone(&self.bus);
+                        tokio::spawn(async move {
+                            let _ = bus.publish(CHIME, SignalValue::Bool(true)).await;
+                            sleep(Duration::from_millis(LOCK_CHIME_MS)).await;
+                            let _ = bus.publish(CHIME, SignalValue::Bool(false)).await;
+                        });
+                    }
                 }
 
                 Some(val) = trunk_rx.next() => {
@@ -167,11 +240,37 @@ impl<B: SignalBus + Send + Sync + 'static> LockFeedback<B> {
                     if let SignalValue::Bool(b) = val { doors_locked[3] = b; }
                 }
 
+                // ── Track per-door IsOpen for chime suppression ─────────
+                Some(val) = open_rx0.next() => {
+                    if let SignalValue::Bool(b) = val { doors_open[0] = b; }
+                }
+                Some(val) = open_rx1.next() => {
+                    if let SignalValue::Bool(b) = val { doors_open[1] = b; }
+                }
+                Some(val) = open_rx2.next() => {
+                    if let SignalValue::Bool(b) = val { doors_open[2] = b; }
+                }
+                Some(val) = open_rx3.next() => {
+                    if let SignalValue::Bool(b) = val { doors_open[3] = b; }
+                }
+
                 else => break,
             }
         }
 
         tracing::info!("LockFeedback feature stopped");
+    }
+
+    /// True if the lock-confirmation chime should fire on the next
+    /// `"lock"` feedback event.  Reads `dealer.horn_chirp_on_lock` at
+    /// the moment of the event so hot-edits via the HMI take effect
+    /// without a reboot.  Returns `false` when no `PlatformConfig`
+    /// was attached (existing tests).
+    fn lock_chime_enabled(&self) -> bool {
+        self.cfg
+            .as_ref()
+            .map(|c| c.dealer_config().horn_chirp_on_lock)
+            .unwrap_or(false)
     }
 }
 
@@ -515,6 +614,158 @@ mod tests {
             !h.iter()
                 .any(|(s, v)| *s == LEFT_SIG && *v == SignalValue::Bool(true)),
             "trunk close without external open should NOT trigger feedback"
+        );
+    }
+
+    // ── Lock-confirmation chime (dealer.horn_chirp_on_lock) ─────────────
+
+    /// Like `setup` but spawns the feature with a `PlatformConfig` so
+    /// the `with_cfg` path is exercised.  `chirp` selects the cal value.
+    async fn setup_with_chirp(chirp: bool) -> Arc<MockBus> {
+        let bus = Arc::new(MockBus::new());
+        let (arb, loop_fut) = lighting_arbiter(Arc::clone(&bus));
+        tokio::spawn(loop_fut);
+        let cfg = PlatformConfig::defaults();
+        let mut dc = cfg.dealer_config();
+        dc.horn_chirp_on_lock = chirp;
+        cfg.update_dealer_config(dc);
+        let feature = LockFeedback::new(Arc::clone(&bus), Arc::new(arb)).with_cfg(Arc::clone(&cfg));
+        tokio::spawn(feature.run());
+        drain().await;
+        bus
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn lock_chime_fires_when_cal_enabled() {
+        let bus = setup_with_chirp(true).await;
+        bus.inject(FEEDBACK_REQUEST, SignalValue::String("lock".into()));
+        // The chime task spawns separately from the flash task; give
+        // it a beat to publish CHIME=true, then advance past the
+        // 300 ms pulse so it publishes CHIME=false.
+        drain().await;
+        advance(Duration::from_millis(1)).await;
+        drain().await;
+        assert_eq!(
+            bus.latest_value(CHIME),
+            Some(SignalValue::Bool(true)),
+            "horn_chirp_on_lock=true: chime should fire on lock feedback"
+        );
+        advance(Duration::from_millis(LOCK_CHIME_MS + 50)).await;
+        drain().await;
+        assert_eq!(
+            bus.latest_value(CHIME),
+            Some(SignalValue::Bool(false)),
+            "chime should release after its pulse window"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn lock_chime_skipped_when_cal_disabled() {
+        let bus = setup_with_chirp(false).await;
+        bus.inject(FEEDBACK_REQUEST, SignalValue::String("lock".into()));
+        drain().await;
+        advance(Duration::from_millis(LOCK_CHIME_MS + 50)).await;
+        drain().await;
+        assert!(
+            bus.history().iter().all(|(s, _)| *s != CHIME),
+            "horn_chirp_on_lock=false: chime must not fire"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn unlock_does_not_fire_chime() {
+        // Only "lock" feedback gates on the cal — "unlock" never plays
+        // the chime regardless of `horn_chirp_on_lock`.
+        let bus = setup_with_chirp(true).await;
+        bus.inject(FEEDBACK_REQUEST, SignalValue::String("unlock".into()));
+        drain().await;
+        advance(Duration::from_millis(LOCK_CHIME_MS + 50)).await;
+        drain().await;
+        assert!(
+            bus.history().iter().all(|(s, _)| *s != CHIME),
+            "unlock feedback must never trigger the lock chime"
+        );
+    }
+
+    /// Like `setup_with_chirp`, but also lets the test set
+    /// `vehicle_line.slam_lock_protect`.  Used to exercise the
+    /// chime-suppression path: chirp_on_lock=true but
+    /// slam_lock_protect=true + a door open → no chime, because
+    /// SlamLock is about to invert the lock with a honk.
+    async fn setup_with_chirp_and_protect(chirp: bool, protect: bool) -> Arc<MockBus> {
+        let bus = Arc::new(MockBus::new());
+        let (arb, loop_fut) = lighting_arbiter(Arc::clone(&bus));
+        tokio::spawn(loop_fut);
+        let vl = crate::config::VehicleLineCal {
+            slam_lock_protect: protect,
+            ..crate::config::VehicleLineCal::default()
+        };
+        let cfg = PlatformConfig::with_vehicle_line(vl);
+        let mut dc = cfg.dealer_config();
+        dc.horn_chirp_on_lock = chirp;
+        cfg.update_dealer_config(dc);
+        let feature = LockFeedback::new(Arc::clone(&bus), Arc::new(arb)).with_cfg(Arc::clone(&cfg));
+        tokio::spawn(feature.run());
+        drain().await;
+        bus
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn lock_chime_suppressed_when_slam_lock_will_invert() {
+        // EU cal + door open + chirp-on-lock=true: chime would normally
+        // play, but SlamLock is about to invert the lock with its
+        // mislock honk — suppress the chime so the user doesn't get a
+        // "lock confirmed" cue followed immediately by "denied."
+        let bus = setup_with_chirp_and_protect(true, true).await;
+        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        drain().await;
+        bus.inject(FEEDBACK_REQUEST, SignalValue::String("lock".into()));
+        drain().await;
+        advance(Duration::from_millis(LOCK_CHIME_MS + 50)).await;
+        drain().await;
+
+        assert!(
+            bus.history().iter().all(|(s, _)| *s != CHIME),
+            "chime must be suppressed when SlamLock will invert (protect=true + door open)"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn lock_chime_still_fires_when_slam_lock_protect_off() {
+        // US cal: slam_lock_protect=false → no inversion will happen,
+        // chime should play normally even with a door open.
+        let bus = setup_with_chirp_and_protect(true, false).await;
+        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        drain().await;
+        bus.inject(FEEDBACK_REQUEST, SignalValue::String("lock".into()));
+        drain().await;
+        advance(Duration::from_millis(1)).await;
+        drain().await;
+
+        assert_eq!(
+            bus.latest_value(CHIME),
+            Some(SignalValue::Bool(true)),
+            "US cal with door open: chime fires normally (no SlamLock inversion)"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn lock_chime_fires_when_all_doors_closed_under_eu() {
+        // EU cal + all doors closed: no inversion will happen
+        // (DoorTrimButton lock with closed doors is just a normal
+        // interior lock).  Chime should play.
+        let bus = setup_with_chirp_and_protect(true, true).await;
+        // doors_open defaults to [false; 4] — don't inject any IsOpen.
+        drain().await;
+        bus.inject(FEEDBACK_REQUEST, SignalValue::String("lock".into()));
+        drain().await;
+        advance(Duration::from_millis(1)).await;
+        drain().await;
+
+        assert_eq!(
+            bus.latest_value(CHIME),
+            Some(SignalValue::Bool(true)),
+            "EU cal with doors closed: chime fires normally (no inversion possible)"
         );
     }
 }

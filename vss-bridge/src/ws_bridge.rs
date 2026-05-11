@@ -44,6 +44,8 @@ const INPUT_SIGNALS: &[VssPath] = &[
     "Body.Switches.DoorTrim.Row1.Right.LockButton",
     "Body.Switches.DoorTrim.Row2.Left.LockButton",
     "Body.Switches.DoorTrim.Row2.Right.LockButton",
+    "Body.Switches.DoorTrim.Row1.Left.UnlockButton",
+    "Body.Switches.DoorTrim.Row1.Right.UnlockButton",
     "Body.Connectivity.RemoteLock",
     "Body.Connectivity.BleLock",
     "Body.Connectivity.NfcCardPresent",
@@ -247,8 +249,21 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     "Body.Sunroof.Shade.Position",
     // Horn arbiter output — drives the HMI horn-pulse visualisation.
     "Body.Horn.IsActive",
+    // Interior chime — pulsed by PerimeterAlarm during the 12 s
+    // pre-alarm warning phase so the HMI can render a distinct
+    // "warning chime" indicator vs the main intrusion-alarm horn.
+    "Body.Chime.IsActive",
+    // ChimePlantModel output: physical buzzer state.  Mirrors
+    // IsActive (intent) but lives on its own signal so the HMI can
+    // visualise the actuator with horn-style ripples while features
+    // continue writing the intent flag.
+    "Body.Chime.IsSounding",
     // Anti-theft alarm status (PanicAlarm direct publish).
     "Vehicle.Body.Alarm.IsActive",
+    // Authoritative PerimeterAlarm state enum: "DISARMED" |
+    // "PRE_ARMED" | "ARMED" | "ACTIVATED".  HMI subscribes for the
+    // status pill + countdown banners.
+    "Vehicle.Body.Alarm.State",
     // Panic switch — set by RKE on PANIC press, cleared by PanicAlarm
     // on cancel-via-unlock.  HMI consumes this to keep its own alarm
     // toggle state in sync.
@@ -638,6 +653,7 @@ fn build_config_msg(cfg: &PlatformConfig) -> String {
                 "shutdown_grace_secs":         vl.shutdown_grace_secs,
                 "peps_rear_capacitive_handles":vl.peps_rear_capacitive_handles,
                 "panic_press_mode":           format!("{:?}", vl.panic_press_mode).to_uppercase(),
+                "slam_lock_protect":          vl.slam_lock_protect,
             }
         }
     });

@@ -227,6 +227,39 @@ pub struct VehicleLineCal {
     ///   by RKE — falls back to SINGLE if selected.**  Tracked in a
     ///   separate PR.
     pub panic_press_mode: PanicPressMode,
+
+    /// Slam-lock protection — defends against accidentally locking
+    /// with a door open (and possibly keys / occupants inside).
+    ///
+    /// - `true` (default, EU and most modern vehicles): pressing the
+    ///   interior trim Lock button while *any* door is open is
+    ///   undone by the SlamLock feature, which dispatches a corresponding
+    ///   unlock (driver-side respects two-stage; passenger-side is a
+    ///   pure UnlockAll bypass — same rules as PassiveEntry).
+    /// - `false` (US "slam-lock" markets): the lock command goes
+    ///   through, tagged with `FeatureId::SlamLock` rather than
+    ///   `DoorTrimButton`.  Slamming the door closes the latch on an
+    ///   already-locked vehicle and arms the perimeter alarm — same
+    ///   trust class as RKE / WalkAwayLock / AutoRelock.
+    ///
+    /// Implementation lives in `door_trim_button.rs` (lock dispatch)
+    /// and `slam_lock.rs` (EU inversion).  PerimeterAlarm picks up
+    /// the result via `EXTERNAL_LOCK_REQUESTORS` membership of
+    /// `SlamLock`.  This requestor is **only** in the lock-arming
+    /// list — it is intentionally NOT trusted to disarm a running
+    /// alarm, so a thief pressing trim-lock during a chime cannot
+    /// silently cancel the alarm via the EU inversion path.
+    #[serde(default = "default_slam_lock_protect")]
+    pub slam_lock_protect: bool,
+}
+
+/// Default value for [`VehicleLineCal::slam_lock_protect`].  Defaults
+/// `true` (defensive) — most modern vehicles ship with this on, even
+/// in US markets, because keys-in-vehicle lawsuits are nasty.  US
+/// dealers / vehicle lines that explicitly want slam-lock semantics
+/// override to `false`.
+fn default_slam_lock_protect() -> bool {
+    true
 }
 
 /// Activation gesture for the paired-fob PANIC button.  See
@@ -265,6 +298,7 @@ impl Default for VehicleLineCal {
             // Default matches GM / Ford / most US brands: single press
             // toggles immediately.
             panic_press_mode: PanicPressMode::Single,
+            slam_lock_protect: default_slam_lock_protect(),
         }
     }
 }
@@ -500,7 +534,14 @@ pub struct DealerConfig {
 
     /// Driver door side (LHD vs. RHD).
     /// DID 0xF196. Determines which door is unlocked on first press of
-    /// RKE UNLOCK in two-stage mode.
+    /// RKE UNLOCK in two-stage mode, and which side of the trim Lock
+    /// button is the "driver side" for SlamLock's passenger-bypass
+    /// logic.  Conceptually a vehicle-line attribute (assembly lines
+    /// ship to one market or the other), but kept on the dealer cal
+    /// for now because the e2e test infrastructure relies on watch-
+    /// channelled hot updates — migrating to `VehicleLineCal` is a
+    /// follow-up that requires plumbing a watch channel for vehicle-
+    /// line cals.
     pub driver_door_side: DriverDoorSide,
 
     /// Side-mirror fold mode.
@@ -534,7 +575,7 @@ pub enum MirrorFoldMode {
 
 /// Which side of the vehicle has the driver door.
 /// Affects RKE two-stage unlock (first press unlocks driver door only).
-#[derive(Debug, Clone, Default, Deserialize, PartialEq, Copy)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Copy)]
 pub enum DriverDoorSide {
     /// Left-hand drive (most markets). Row1.Left is the driver door.
     #[default]

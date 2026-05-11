@@ -67,6 +67,7 @@ use vss_bridge::ipc_message::SignalValue;
 use vss_bridge::kuksa_sync;
 use vss_bridge::nvm::NvmStore;
 use vss_bridge::plant_models::blink_relay::BlinkRelay;
+use vss_bridge::plant_models::chime::ChimePlantModel;
 use vss_bridge::plant_models::door_handle::DoorHandlePlantModel;
 use vss_bridge::plant_models::door_lock::DoorLockPlantModel;
 use vss_bridge::plant_models::hood::HoodPlantModel;
@@ -90,6 +91,28 @@ async fn main() -> anyhow::Result<()> {
     // ── CLI flags ──────────────────────────────────────────────────
     let args: Vec<String> = std::env::args().collect();
     let reset_nvm = args.iter().any(|a| a == "--reset-nvm");
+
+    // ── Dev-default config dir ─────────────────────────────────────
+    // Production builds resolve `VSS_BRIDGE_CONFIG_PATH` from the env
+    // (set by the systemd unit / yocto image to `/etc/vss-bridge`).
+    // For `cargo run` on a developer machine the env var is usually
+    // unset, and `/etc/vss-bridge` is not writable without root — so
+    // reboot-driven cal edits silently fail with "Permission denied"
+    // and the next boot loads defaults instead of the user's staged
+    // values.  Fall back to the in-repo `config/` directory so the
+    // HMI's Apply & Reboot round-trips cleanly out of the box.
+    if std::env::var("VSS_BRIDGE_CONFIG_PATH").is_err() {
+        let dev_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("config");
+        // Unsafe in multi-threaded contexts on some platforms; this
+        // runs before tokio spawns any workers so it's fine here.
+        unsafe {
+            std::env::set_var("VSS_BRIDGE_CONFIG_PATH", &dev_path);
+        }
+        tracing::info!(
+            path = %dev_path.display(),
+            "VSS_BRIDGE_CONFIG_PATH unset — defaulting to in-repo config/"
+        );
+    }
 
     tracing::info!(reset_nvm, "vss-bridge starting");
 
@@ -286,7 +309,11 @@ async fn boot_simulation_stack(
         )
         .run(),
     );
-    set.spawn(LockFeedback::new(Arc::clone(&bus), Arc::clone(&lighting_arb)).run());
+    set.spawn(
+        LockFeedback::new(Arc::clone(&bus), Arc::clone(&lighting_arb))
+            .with_cfg(Arc::clone(&cfg))
+            .run(),
+    );
     set.spawn(DoubleLockRelease::new(Arc::clone(&bus), Arc::clone(&door_lock_arb)).run());
     set.spawn(WalkAwayLock::new(Arc::clone(&bus), Arc::clone(&door_lock_arb)).run());
     set.spawn(ThumbPadLock::new(Arc::clone(&bus), Arc::clone(&door_lock_arb)).run());
@@ -387,6 +414,10 @@ async fn boot_simulation_stack(
 
     // ── Plant Models ────────────────────────────────────────────────
     set.spawn(BlinkRelay::new(Arc::clone(&bus)).run());
+    // Chime piezo: subscribes to Body.Chime.IsActive (intent), publishes
+    // Body.Chime.IsSounding (actuator state).  HMI watches IsSounding
+    // for the ripple visualisation.
+    set.spawn(ChimePlantModel::new(Arc::clone(&bus)).run());
     set.spawn(
         DoorLockPlantModel::with_ack_and_nvm(Arc::clone(&bus), door_lock_ack_tx, nvm.clone())
             .with_cfg(Arc::clone(&cfg))
@@ -403,7 +434,7 @@ async fn boot_simulation_stack(
             .with_response_stagger_ms(vss_bridge::plant_models::peps::PRODUCTION_STAGGER_MS)
             .run(),
     );
-    tracing::info!("plant models spawned: BlinkRelay, DoorLockPlantModel, DoorHandlePlantModel, TrunkPlantModel, HoodPlantModel, SunroofPlantModel, PepsPlantModel");
+    tracing::info!("plant models spawned: BlinkRelay, ChimePlantModel, DoorLockPlantModel, DoorHandlePlantModel, TrunkPlantModel, HoodPlantModel, SunroofPlantModel, PepsPlantModel");
 
     // ── WebSocket bridge ────────────────────────────────────────────
     let ws_port: u16 = std::env::var("VSS_BRIDGE_WS_PORT")
