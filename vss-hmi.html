@@ -1838,6 +1838,11 @@ function CockpitView({s,set}){
   const WIPER_CYCLE={OFF:'INTERMITTENT',INTERMITTENT:'SLOW',SLOW:'MEDIUM',MEDIUM:'FAST',FAST:'OFF'};
   const LIGHT_CYCLE={OFF:'POSITION',POSITION:'DRL',DRL:'AUTO',AUTO:'BEAM',BEAM:'OFF'};
   const DIST_CYCLE={AUTO:'FACE',FACE:'FACE_FEET',FACE_FEET:'FEET',FEET:'FEET_DEF',FEET_DEF:'DEF',DEF:'AUTO'};
+  // Friendlier display labels for the VSS AirDistribution enum.
+  // The on-wire signal value still uses the canonical VSS strings
+  // (AUTO / FACE / FACE_FEET / FEET / FEET_DEF / DEF); only the HMI
+  // label is rewritten.
+  const DIST_LABEL={AUTO:'Auto',FACE:'Panel',FACE_FEET:'Floor+Panel',FEET:'Floor',FEET_DEF:'Windshield_Floor',DEF:'Windshield'};
   const DOME_CYCLE={OFF:'DOOR',DOOR:'ON',ON:'OFF'};
   // VSS Powertrain.Transmission.CurrentGear encoding:
   //   126 = Park, -1 = Reverse, 0 = Neutral, 127 = Drive, 128 = Sport (custom).
@@ -2083,7 +2088,7 @@ function CockpitView({s,set}){
         {/* Air distribution mode cycle */}
         <div>
           <div style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,marginBottom:2}}>MODE</div>
-          <Btn night={night} on={distL!=='AUTO'} onClick={()=>set('Cabin.HVAC.Station.Row1.Left.AirDistribution',DIST_CYCLE[distL]||'AUTO')} min={110}>{distL}</Btn>
+          <Btn night={night} on={distL!=='AUTO'} onClick={()=>set('Cabin.HVAC.Station.Row1.Left.AirDistribution',DIST_CYCLE[distL]||'AUTO')} min={120}>{DIST_LABEL[distL]||distL}</Btn>
         </div>
       </div>
       <div style={{display:'flex',gap:6,marginBottom:8,flexWrap:'wrap'}}>
