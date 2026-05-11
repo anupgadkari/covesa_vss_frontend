@@ -1767,10 +1767,13 @@ function Btn({on,night,onClick,onMouseDown,onMouseUp,onMouseLeave,children,sz,pa
 // on the left, with 3 "beam" lines emanating leftward.  This matches
 // the standard ISO 2575 telltale orientation seen in real clusters.
 //
-//   kind="lo"  — beams slope down-and-out (low beam aim).
-//   kind="hi"  — beams are horizontal (high beam reach).
-//   kind="fog" — low-beam style + a vertical wavy line through the
-//                beams representing fog.
+//   kind="lo"   — beams slope down-and-out (low beam aim).
+//   kind="hi"   — beams are horizontal (high beam reach).
+//   kind="fog"  — low-beam style + a vertical wavy line through the
+//                 beams representing fog (front fog, green).
+//   kind="rfog" — high-beam-style horizontal beams + the same wavy
+//                 fog line (rear fog, amber).  Distinguished from
+//                 front fog only by the beam geometry, per ISO 2575.
 //
 // Drawn in a 24×16 local box centred on the caller's (cx, cy).  The
 // caller passes `on` and the active/inactive colours; we render the
@@ -1784,7 +1787,9 @@ function HeadlampTelltale({cx, cy, kind, on, onColor, offColor='#1F2C40'}){
   const body = `M ${cx-1},${cy-7} A 7,7 0 0,1 ${cx-1},${cy+7} Z`;
   // Three beam endpoints differ per kind.  All beams start at the
   // flat diameter on the left and extend further left.
-  const beams = kind === 'hi'
+  // Horizontal for hi/rfog, slanted down-and-out for lo/fog.
+  const horiz = kind === 'hi' || kind === 'rfog';
+  const beams = horiz
     ? [[cx-1,cy-4,cx-13,cy-4],[cx-1,cy,cx-13,cy],[cx-1,cy+4,cx-13,cy+4]]
     : [[cx-1,cy-4,cx-13,cy-1],[cx-1,cy,  cx-13,cy+3],[cx-1,cy+4,cx-13,cy+7]];
   return <g opacity={op}>
@@ -1793,7 +1798,7 @@ function HeadlampTelltale({cx, cy, kind, on, onColor, offColor='#1F2C40'}){
       <line key={i} x1={x1} y1={y1} x2={x2} y2={y2}
         stroke={c} strokeWidth={sw} strokeLinecap="round"/>
     ))}
-    {kind === 'fog' && (
+    {(kind === 'fog' || kind === 'rfog') && (
       // Wavy vertical line cutting across the 3 beams to indicate fog.
       <path d={`M ${cx-7},${cy-7} Q ${cx-11},${cy-3.5} ${cx-7},${cy} T ${cx-7},${cy+7}`}
         fill="none" stroke={c} strokeWidth={sw} strokeLinecap="round"/>
@@ -1963,21 +1968,21 @@ function CockpitView({s,set}){
         <text x="380" y="130" textAnchor="middle" fill={txtDim} fontSize="12" fontFamily="Share Tech Mono">km/h</text>
         <text x="380" y="165" textAnchor="middle" fill={gw.c} fontSize="13" fontFamily="Share Tech Mono" fontWeight="600">● {gw.t}</text>
         <text x="30" y="55" fill={txtDim} fontSize="9" fontFamily="Share Tech Mono" fontWeight="600">WARNINGS:</text>
-        {/* Real ISO-style headlamp telltales for LO / HI / front-FOG.
-            Standard automotive colour cues: green = low beam,
-            blue = high beam, amber = front fog. */}
+        {/* Real ISO-style headlamp telltales.  Colour cues per ISO
+            2575 convention: green = low beam, blue = high beam,
+            green = front fog (distinguished from low beam by the
+            wavy fog line), amber = rear fog (distinguished from
+            front fog by the horizontal beams). */}
         {/* When high beams are on the high-beam telltale takes
             precedence; the low-beam telltale is suppressed even
             though Beam.Low.IsOn may still be true. */}
         <HeadlampTelltale cx={30}  cy={80} kind="lo"  on={lo && !hi} onColor="#22C55E"/>
         <HeadlampTelltale cx={90}  cy={80} kind="hi"  on={hi}   onColor="#4A9EF5"/>
-        <HeadlampTelltale cx={150} cy={80} kind="fog" on={ffog} onColor="#F59E0B"/>
-        {/* RFOG keeps the existing circular badge — distinct rear-fog
-            ISO icon is a follow-up. */}
-        <g>
-          <circle cx={210} cy={80} r={12} fill={rfog?'#EF4444':'#1A2838'} opacity={rfog?0.6:0.25} stroke={rfog?'#EF4444':'#3A4D5C'} strokeWidth="1.2"/>
-          <text x={210} y={85} textAnchor="middle" fill={rfog?'#EF4444':'#3A5060'} fontSize="7" fontFamily="Share Tech Mono" fontWeight="600">RFOG</text>
-        </g>
+        {/* Front fog: green (same hue as low beam — the wavy line
+            distinguishes it).  Rear fog: amber (same wavy line, but
+            horizontal beams distinguish it from front fog). */}
+        <HeadlampTelltale cx={150} cy={80} kind="fog"  on={ffog} onColor="#22C55E"/>
+        <HeadlampTelltale cx={210} cy={80} kind="rfog" on={rfog} onColor="#F59E0B"/>
         {li&&<g><circle cx={30} cy={120} r={12} fill="#F59E0B" opacity="0.3" stroke="#F59E0B" strokeWidth="1.2" className="blink"/>
           <text x={30} y={125} textAnchor="middle" fill="#F59E0B" fontSize="10" fontFamily="Share Tech Mono" fontWeight="600">◄</text></g>}
         {ri&&<g><circle cx={90} cy={120} r={12} fill="#F59E0B" opacity="0.3" stroke="#F59E0B" strokeWidth="1.2" className="blink"/>
