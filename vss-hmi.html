@@ -1786,9 +1786,40 @@ function CockpitView({s,set}){
   // Interior door release pulls — mirror the inside handle signals.
   const pullL=s['Body.Doors.Row1.Left.Handle.Inside.IsPulled'];
   const pullR=s['Body.Doors.Row1.Right.Handle.Inside.IsPulled'];
+  // Switches + supplementary state for the fleshed-out zones.
+  const sigDir=s['Body.Switches.TurnIndicator.Direction']||'OFF';
+  const hbSw=s['Body.Switches.HighBeam.IsEngaged'];
+  const hazSw=s['Body.Switches.Hazard.IsEngaged'];
+  const ffogSw=s['Body.Switches.Fog.Front.IsEngaged'];
+  const rfogSw=s['Body.Switches.Fog.Rear.IsEngaged'];
+  const lightSw=s['Body.Lights.LightSwitch']||'OFF';
+  const gear=s['Powertrain.Transmission.CurrentGear']??0;
+  const lockL=s['Body.Doors.Row1.Left.IsLocked'];
+  const lockR=s['Body.Doors.Row1.Right.IsLocked'];
+  const dblL=s['Body.Doors.Row1.Left.IsDoubleLocked'];
+  const fanL=s['Cabin.HVAC.Station.Row1.Left.FanSpeed']??0;
+  const distL=s['Cabin.HVAC.Station.Row1.Left.AirDistribution']||'AUTO';
+  const mirL=s['Body.Mirror.Left.IsFolded'],mirR=s['Body.Mirror.Right.IsFolded'];
 
   const txt = night?'#F59E0B':'#1C3050';
   const txtDim = night?'#8A6020':'#2A3A50';
+  // Compact button factory — keeps zone markup tidy.
+  const btnSty=(on,opts={})=>({
+    background: on?(night?'#3A2C0A':'#1E3A52'):(night?'#0A1018':'#0E1625'),
+    border: `1px solid ${on?(night?'#F59E0B':'#4A9EF5'):(night?'#2A3A50':'#1A2838')}`,
+    color: on?(night?'#F59E0B':'#4A9EF5'):(night?'#D7A03A':'#3A5070'),
+    fontFamily:'Share Tech Mono',fontSize:opts.sz||9,fontWeight:600,
+    padding:opts.pad||'6px 10px',borderRadius:3,cursor:'pointer',
+    minWidth:opts.min||0,letterSpacing:.5,whiteSpace:'nowrap',
+  });
+  const Btn=({on,onClick,onMouseDown,onMouseUp,onMouseLeave,children,sz,pad,min})=>(
+    <button onClick={onClick} onMouseDown={onMouseDown} onMouseUp={onMouseUp} onMouseLeave={onMouseLeave}
+            style={btnSty(on,{sz,pad,min})}>{children}</button>
+  );
+  const WIPER_CYCLE={OFF:'INTERMITTENT',INTERMITTENT:'SLOW',SLOW:'MEDIUM',MEDIUM:'FAST',FAST:'OFF'};
+  const LIGHT_CYCLE={OFF:'POSITION',POSITION:'DRL',DRL:'AUTO',AUTO:'BEAM',BEAM:'OFF'};
+  const DIST_CYCLE={AUTO:'FACE',FACE:'FACE_FEET',FACE_FEET:'FEET',FEET:'FEET_DEF',FEET_DEF:'DEF',DEF:'AUTO'};
+  const gearLabel=g=>g<0?'R':g===0?'N':g===1?'D':g===2?'S':'?';
   const placeholder=(label)=><div style={{
     fontFamily:'Share Tech Mono', fontSize:9, color:night?'#5A7090':'#2A3A50',
     fontStyle:'italic', padding:'14px 0', textAlign:'center',
@@ -1862,61 +1893,207 @@ function CockpitView({s,set}){
 
     {/* ── Steering wheel + stalks ── */}
     <CockpitZone title="STEERING" subtitle="wheel · stalks · paddles" night={night}>
-      {placeholder('steering buttons (volume, cruise, voice) · turn/wiper stalks · paddle shifters — todo')}
+      <div style={{display:'grid',gridTemplateColumns:'120px 1fr 120px',gap:10,alignItems:'center'}}>
+        {/* Left stalk: turn signals + high-beam pull */}
+        <div style={{display:'flex',flexDirection:'column',gap:5}}>
+          <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1}}>LEFT STALK</span>
+          <Btn on={sigDir==='LEFT'} onClick={()=>set('Body.Switches.TurnIndicator.Direction', sigDir==='LEFT'?'OFF':'LEFT')}>◄ TURN L</Btn>
+          <Btn on={sigDir==='RIGHT'} onClick={()=>set('Body.Switches.TurnIndicator.Direction', sigDir==='RIGHT'?'OFF':'RIGHT')}>TURN R ►</Btn>
+          <Btn on={hbSw} onClick={()=>set('Body.Switches.HighBeam.IsEngaged',!hbSw)}>HI-BEAM {hbSw?'●':'○'}</Btn>
+        </div>
+        {/* Wheel SVG with embedded button pads */}
+        <svg viewBox="0 0 240 200" style={{width:'100%',maxHeight:200}}>
+          <circle cx="120" cy="105" r="85" fill="none" stroke={night?'#2A1A08':'#15202F'} strokeWidth="14"/>
+          <circle cx="120" cy="105" r="32" fill={night?'#0F1726':'#0C1825'} stroke={night?'#3A2A12':'#1A2838'} strokeWidth="2"/>
+          <text x="120" y="111" textAnchor="middle" fill={txtDim} fontSize="11" fontFamily="Share Tech Mono">⊕</text>
+          <line x1="120" y1="73" x2="120" y2="58" stroke={night?'#3A2A12':'#1A2838'} strokeWidth="3"/>
+          <line x1="92" y1="115" x2="50" y2="135" stroke={night?'#3A2A12':'#1A2838'} strokeWidth="3"/>
+          <line x1="148" y1="115" x2="190" y2="135" stroke={night?'#3A2A12':'#1A2838'} strokeWidth="3"/>
+          {/* Left pad: volume + voice */}
+          <rect x="42" y="78" width="40" height="54" rx="3" fill={night?'#0F1726':'#0C1825'} stroke={night?'#3A2A12':'#1A2838'}/>
+          <text x="62" y="92" textAnchor="middle" fill={txt} fontSize="9" fontFamily="Share Tech Mono">VOL +</text>
+          <text x="62" y="107" textAnchor="middle" fill={txt} fontSize="9" fontFamily="Share Tech Mono">VOL −</text>
+          <text x="62" y="124" textAnchor="middle" fill={txt} fontSize="8" fontFamily="Share Tech Mono">VOICE</text>
+          {/* Right pad: cruise */}
+          <rect x="158" y="78" width="40" height="54" rx="3" fill={night?'#0F1726':'#0C1825'} stroke={night?'#3A2A12':'#1A2838'}/>
+          <text x="178" y="92" textAnchor="middle" fill={txt} fontSize="7" fontFamily="Share Tech Mono">CRS ON</text>
+          <text x="178" y="107" textAnchor="middle" fill={txt} fontSize="7" fontFamily="Share Tech Mono">SET +</text>
+          <text x="178" y="122" textAnchor="middle" fill={txt} fontSize="7" fontFamily="Share Tech Mono">RES −</text>
+          {/* Paddles */}
+          <rect x="40" y="148" width="50" height="11" rx="3" fill={night?'#0F1726':'#0C1825'} stroke={night?'#3A2A12':'#1A2838'}/>
+          <rect x="150" y="148" width="50" height="11" rx="3" fill={night?'#0F1726':'#0C1825'} stroke={night?'#3A2A12':'#1A2838'}/>
+          <text x="65" y="157" textAnchor="middle" fill={txtDim} fontSize="7" fontFamily="Share Tech Mono">◄ −1</text>
+          <text x="175" y="157" textAnchor="middle" fill={txtDim} fontSize="7" fontFamily="Share Tech Mono">+1 ►</text>
+          {/* Horn target on center pad */}
+          <circle cx="120" cy="105" r="32" fill="transparent" style={{cursor:'pointer'}}
+            onMouseDown={()=>set('Body.Horn.IsActive',true)}
+            onMouseUp={()=>set('Body.Horn.IsActive',false)}
+            onMouseLeave={()=>set('Body.Horn.IsActive',false)}>
+            <title>Press and hold for horn</title>
+          </circle>
+          {horn&&<circle cx="120" cy="105" r="34" fill="none" stroke="#EF4444" strokeWidth="2" className="blink"/>}
+        </svg>
+        {/* Right stalk: wiper + washer */}
+        <div style={{display:'flex',flexDirection:'column',gap:5}}>
+          <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1}}>WIPER STALK</span>
+          <Btn on={wf&&wf!=='OFF'} onClick={()=>set('Body.Windshield.Front.Wiping.Mode', WIPER_CYCLE[wf||'OFF']||'OFF')}>WIPE: {wf||'OFF'}</Btn>
+          <Btn on={false} onClick={()=>{}}>WASHER ⇣</Btn>
+          <Btn on={horn} onMouseDown={()=>set('Body.Horn.IsActive',true)} onMouseUp={()=>set('Body.Horn.IsActive',false)} onMouseLeave={()=>set('Body.Horn.IsActive',false)}>🔊 HORN</Btn>
+        </div>
+      </div>
     </CockpitZone>
 
     {/* ── Headlamp / lighting switches ── */}
     <CockpitZone title="LIGHTING SWITCHES" subtitle="left dash cluster" night={night}>
-      {placeholder('headlamp rotary (off / park / auto / on) · fog · interior dim · trunk release — todo')}
+      <div style={{display:'flex',gap:14,alignItems:'center',flexWrap:'wrap'}}>
+        {/* Headlamp rotary — cycles Body.Lights.LightSwitch */}
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4}}>
+          <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1}}>HEADLAMP</span>
+          <svg viewBox="0 0 100 100" style={{width:80,height:80,cursor:'pointer'}} onClick={()=>set('Body.Lights.LightSwitch', LIGHT_CYCLE[lightSw]||'OFF')}>
+            <circle cx="50" cy="50" r="38" fill={night?'#0F1726':'#0C1825'} stroke={night?'#3A2A12':'#1A2838'} strokeWidth="2"/>
+            <circle cx="50" cy="50" r="6" fill="#F59E0B" opacity={lightSw==='OFF'?.2:.9}/>
+            {['OFF','POSITION','DRL','AUTO','BEAM'].map((p,i)=>{
+              const a=-Math.PI/2 + i*(2*Math.PI/5);
+              const x=50+Math.cos(a)*28, y=50+Math.sin(a)*28;
+              return <text key={p} x={x} y={y+3} textAnchor="middle" fontSize="6"
+                fontFamily="Share Tech Mono" fontWeight="600"
+                fill={lightSw===p?'#F59E0B':txtDim}>{p[0]}</text>;
+            })}
+            {/* Pointer */}
+            {(()=>{const i=['OFF','POSITION','DRL','AUTO','BEAM'].indexOf(lightSw);
+              const a=-Math.PI/2 + (i<0?0:i)*(2*Math.PI/5);
+              return <line x1="50" y1="50" x2={50+Math.cos(a)*18} y2={50+Math.sin(a)*18}
+                stroke="#F59E0B" strokeWidth="2.5" strokeLinecap="round"/>;})()}
+          </svg>
+          <span style={{fontFamily:'Share Tech Mono',fontSize:8,color:txt,fontWeight:600}}>{lightSw}</span>
+        </div>
+        {/* Switch column */}
+        <div style={{display:'grid',gridTemplateColumns:'repeat(2,auto)',gap:6}}>
+          <Btn on={ffogSw} onClick={()=>set('Body.Switches.Fog.Front.IsEngaged',!ffogSw)} min={110}>FOG FRONT {ffogSw?'●':'○'}</Btn>
+          <Btn on={rfogSw} onClick={()=>set('Body.Switches.Fog.Rear.IsEngaged',!rfogSw)} min={110}>FOG REAR {rfogSw?'●':'○'}</Btn>
+          <Btn on={hazSw} onClick={()=>set('Body.Switches.Hazard.IsEngaged',!hazSw)} min={110}>⚠ HAZARD {hazSw?'●':'○'}</Btn>
+          <Btn on={dome} onClick={()=>set('Cabin.Lights.IsDomeOn',!dome)} min={110}>☼ INTERIOR {dome?'●':'○'}</Btn>
+          <Btn on={s['Body.Switches.Trunk.Release.IsPressed']}
+               onMouseDown={()=>set('Body.Switches.Trunk.Release.IsPressed',true)}
+               onMouseUp={()=>set('Body.Switches.Trunk.Release.IsPressed',false)}
+               onMouseLeave={()=>set('Body.Switches.Trunk.Release.IsPressed',false)} min={110}>TRUNK ⇧</Btn>
+          <Btn on={s['Body.Switches.Hood.Release.IsPulled']}
+               onMouseDown={()=>set('Body.Switches.Hood.Release.IsPulled',true)}
+               onMouseUp={()=>set('Body.Switches.Hood.Release.IsPulled',false)}
+               onMouseLeave={()=>set('Body.Switches.Hood.Release.IsPulled',false)} min={110}>HOOD ⇧</Btn>
+        </div>
+        {/* Status readout */}
+        <div style={{fontFamily:'Share Tech Mono',fontSize:8,color:txtDim,display:'flex',flexDirection:'column',gap:3}}>
+          <span>LO BEAM: <b style={{color:lo?'#22C55E':txtDim}}>{lo?'ON':'-'}</b></span>
+          <span>HI BEAM: <b style={{color:hi?'#4A9EF5':txtDim}}>{hi?'ON':'-'}</b></span>
+          <span>PARK: <b style={{color:s['Body.Lights.Parking.IsOn']?'#F59E0B':txtDim}}>{s['Body.Lights.Parking.IsOn']?'ON':'-'}</b></span>
+          <span>DRL: <b style={{color:s['Body.Lights.Running.IsOn']?'#22C55E':txtDim}}>{s['Body.Lights.Running.IsOn']?'ON':'-'}</b></span>
+        </div>
+      </div>
     </CockpitZone>
 
     {/* ── HVAC panel ── */}
     <CockpitZone title="HVAC" night={night}>
-      <svg viewBox="0 0 760 150" style={{width:'100%'}}>
-        <text x="60"  y="30" fill={txtDim} fontSize="8" fontFamily="Share Tech Mono">DRIVER:</text>
-        <text x="60"  y="60" fill="#F59E0B" fontSize="22" fontFamily="Orbitron" fontWeight="600">{dT.toFixed(0)}°</text>
-        <text x="200" y="30" fill={txtDim} fontSize="8" fontFamily="Share Tech Mono">PASS:</text>
-        <text x="200" y="60" fill="#F59E0B" fontSize="22" fontFamily="Orbitron" fontWeight="600">{pT.toFixed(0)}°</text>
-        <text x="60"  y="95"  fill={ac?'#4A9EF5':txtDim}     fontSize="9" fontFamily="Share Tech Mono">{ac?'[A/C]':'a/c'}</text>
-        <text x="140" y="95"  fill={recirc?'#10D98A':txtDim} fontSize="9" fontFamily="Share Tech Mono">{recirc?'[RECIRC]':'recirc'}</text>
-        <text x="240" y="95"  fill={defF?'#4A9EF5':txtDim}   fontSize="9" fontFamily="Share Tech Mono">{defF?'[DEF-F]':'def-f'}</text>
-        <text x="340" y="95"  fill={defR?'#4A9EF5':txtDim}   fontSize="9" fontFamily="Share Tech Mono">{defR?'[DEF-R]':'def-r'}</text>
-        {/* Seat heat / vent reused from prior cockpit */}
-        <g onClick={()=>set('Cabin.Seat.Row1.Left.HeatingLevel',[3,0,1,2][heatL])} style={{cursor:'pointer'}}>
-          <rect x="480" y="20" width="55" height="36" rx="3" fill={heatL>0?'#6B1E1E':'#0E1625'} stroke={heatL>0?'#EF6020':'#1A2838'} strokeWidth="1.2"/>
-          <text x="508" y="42" textAnchor="middle" fill={heatL>0?'#FF6B35':txtDim} fontSize="14" fontFamily="Orbitron" fontWeight="600">{heatL}</text>
-          <text x="508" y="54" textAnchor="middle" fill={heatL>0?'#FF6B35':txtDim} fontSize="6" fontFamily="Share Tech Mono">DRV HEAT</text>
-        </g>
-        <g onClick={()=>set('Cabin.Seat.Row1.Right.HeatingLevel',[3,0,1,2][heatR])} style={{cursor:'pointer'}}>
-          <rect x="550" y="20" width="55" height="36" rx="3" fill={heatR>0?'#6B1E1E':'#0E1625'} stroke={heatR>0?'#EF6020':'#1A2838'} strokeWidth="1.2"/>
-          <text x="578" y="42" textAnchor="middle" fill={heatR>0?'#FF6B35':txtDim} fontSize="14" fontFamily="Orbitron" fontWeight="600">{heatR}</text>
-          <text x="578" y="54" textAnchor="middle" fill={heatR>0?'#FF6B35':txtDim} fontSize="6" fontFamily="Share Tech Mono">PAS HEAT</text>
-        </g>
-        <g onClick={()=>set('Cabin.Seat.Row1.Left.IsVentilationOn',!vent1L)} style={{cursor:'pointer'}}>
-          <rect x="480" y="70" width="55" height="36" rx="3" fill={vent1L?'#1E3A52':'#0E1625'} stroke={vent1L?'#4A9EF5':'#1A2838'} strokeWidth="1.2"/>
-          <text x="508" y="94" textAnchor="middle" fill={vent1L?'#4A9EF5':txtDim} fontSize="13" fontFamily="Share Tech Mono" fontWeight="600">{vent1L?'●':'○'}</text>
-          <text x="508" y="104" textAnchor="middle" fill={vent1L?'#4A9EF5':txtDim} fontSize="6" fontFamily="Share Tech Mono">DRV VENT</text>
-        </g>
-        <g onClick={()=>set('Cabin.Seat.Row1.Right.IsVentilationOn',!vent1R)} style={{cursor:'pointer'}}>
-          <rect x="550" y="70" width="55" height="36" rx="3" fill={vent1R?'#1E3A52':'#0E1625'} stroke={vent1R?'#4A9EF5':'#1A2838'} strokeWidth="1.2"/>
-          <text x="578" y="94" textAnchor="middle" fill={vent1R?'#4A9EF5':txtDim} fontSize="13" fontFamily="Share Tech Mono" fontWeight="600">{vent1R?'●':'○'}</text>
-          <text x="578" y="104" textAnchor="middle" fill={vent1R?'#4A9EF5':txtDim} fontSize="6" fontFamily="Share Tech Mono">PAS VENT</text>
-        </g>
-        <text x="660" y="40" fill={txtDim} fontSize="8" fontFamily="Share Tech Mono">FAN</text>
-        <text x="660" y="60" fill={night?'#D7A03A':'#5A6A80'} fontSize="14" fontFamily="Orbitron" fontWeight="600">— bars</text>
-        <text x="660" y="90" fill={txtDim} fontSize="8" fontFamily="Share Tech Mono">MODE</text>
-        <text x="660" y="108" fill={night?'#D7A03A':'#5A6A80'} fontSize="11" fontFamily="Share Tech Mono" fontWeight="600">AUTO</text>
-      </svg>
+      <div style={{display:'flex',gap:14,marginBottom:8,alignItems:'flex-end',flexWrap:'wrap'}}>
+        {/* Driver temp +/- */}
+        <div>
+          <div style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,marginBottom:2}}>DRIVER</div>
+          <div style={{display:'flex',alignItems:'center',gap:4}}>
+            <Btn on={false} onClick={()=>set('Cabin.HVAC.Station.Row1.Left.Temperature',Math.max(16,dT-1))} sz={11} pad={'4px 8px'}>−</Btn>
+            <span style={{fontFamily:'Orbitron',fontSize:22,fontWeight:600,color:'#F59E0B',minWidth:48,textAlign:'center'}}>{dT.toFixed(0)}°</span>
+            <Btn on={false} onClick={()=>set('Cabin.HVAC.Station.Row1.Left.Temperature',Math.min(30,dT+1))} sz={11} pad={'4px 8px'}>+</Btn>
+          </div>
+        </div>
+        {/* Passenger temp +/- */}
+        <div>
+          <div style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,marginBottom:2}}>PASSENGER</div>
+          <div style={{display:'flex',alignItems:'center',gap:4}}>
+            <Btn on={false} onClick={()=>set('Cabin.HVAC.Station.Row1.Right.Temperature',Math.max(16,pT-1))} sz={11} pad={'4px 8px'}>−</Btn>
+            <span style={{fontFamily:'Orbitron',fontSize:22,fontWeight:600,color:'#F59E0B',minWidth:48,textAlign:'center'}}>{pT.toFixed(0)}°</span>
+            <Btn on={false} onClick={()=>set('Cabin.HVAC.Station.Row1.Right.Temperature',Math.min(30,pT+1))} sz={11} pad={'4px 8px'}>+</Btn>
+          </div>
+        </div>
+        {/* Fan +/- with bars */}
+        <div>
+          <div style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,marginBottom:2}}>FAN</div>
+          <div style={{display:'flex',alignItems:'center',gap:4}}>
+            <Btn on={false} onClick={()=>set('Cabin.HVAC.Station.Row1.Left.FanSpeed',Math.max(0,fanL-1))} sz={11} pad={'4px 8px'}>−</Btn>
+            <svg viewBox="0 0 84 24" style={{width:84,height:24}}>
+              {Array.from({length:7},(_,i)=>(
+                <rect key={i} x={i*12} y={20-(i*2)} width={9} height={4+i*2} rx="1"
+                  fill={i<fanL?'#3B82F6':(night?'#0F1726':'#101E30')} opacity={i<fanL?1:.55}/>
+              ))}
+            </svg>
+            <Btn on={false} onClick={()=>set('Cabin.HVAC.Station.Row1.Left.FanSpeed',Math.min(7,fanL+1))} sz={11} pad={'4px 8px'}>+</Btn>
+          </div>
+        </div>
+        {/* Air distribution mode cycle */}
+        <div>
+          <div style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,marginBottom:2}}>MODE</div>
+          <Btn on={distL!=='AUTO'} onClick={()=>set('Cabin.HVAC.Station.Row1.Left.AirDistribution',DIST_CYCLE[distL]||'AUTO')} min={110}>{distL}</Btn>
+        </div>
+      </div>
+      <div style={{display:'flex',gap:6,marginBottom:8,flexWrap:'wrap'}}>
+        <Btn on={ac} onClick={()=>set('Cabin.HVAC.IsAirConditioningActive',!ac)}>A/C {ac?'●':'○'}</Btn>
+        <Btn on={recirc} onClick={()=>set('Cabin.HVAC.IsRecirculationActive',!recirc)}>RECIRC {recirc?'●':'○'}</Btn>
+        <Btn on={defF} onClick={()=>set('Cabin.HVAC.IsFrontDefrosterActive',!defF)}>DEF-FRONT {defF?'●':'○'}</Btn>
+        <Btn on={defR} onClick={()=>set('Cabin.HVAC.IsRearDefrosterActive',!defR)}>DEF-REAR {defR?'●':'○'}</Btn>
+      </div>
+      <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+        <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,alignSelf:'center',marginRight:4,letterSpacing:1}}>SEATS:</span>
+        <Btn on={heatL>0} onClick={()=>set('Cabin.Seat.Row1.Left.HeatingLevel',[3,0,1,2][heatL])}>DRV HEAT {heatL}</Btn>
+        <Btn on={heatR>0} onClick={()=>set('Cabin.Seat.Row1.Right.HeatingLevel',[3,0,1,2][heatR])}>PAS HEAT {heatR}</Btn>
+        <Btn on={vent1L} onClick={()=>set('Cabin.Seat.Row1.Left.IsVentilationOn',!vent1L)}>DRV VENT {vent1L?'●':'○'}</Btn>
+        <Btn on={vent1R} onClick={()=>set('Cabin.Seat.Row1.Right.IsVentilationOn',!vent1R)}>PAS VENT {vent1R?'●':'○'}</Btn>
+      </div>
     </CockpitZone>
 
     {/* ── Center stack / infotainment ── */}
     <CockpitZone title="CENTER STACK" subtitle="infotainment · media · nav" night={night}>
-      {placeholder('media transport · radio · phone · nav — todo')}
+      <div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:10}}>
+        {/* Mock display */}
+        <div style={{
+          border:`1px solid ${night?'#2A3A50':'#1A2838'}`, borderRadius:4,
+          padding:'8px 10px', background: night?'#050B14':'#070F1C',
+          fontFamily:'Share Tech Mono',fontSize:9,color:txt,minHeight:88,
+        }}>
+          <div style={{display:'flex',justifyContent:'space-between',color:txtDim,fontSize:7,letterSpacing:1}}>
+            <span>♬ MEDIA</span><span>FM 98.5 · NPR</span>
+          </div>
+          <div style={{textAlign:'center',marginTop:8,color:'#F59E0B',fontSize:11,fontWeight:600}}>— No track —</div>
+          <div style={{display:'flex',justifyContent:'center',gap:8,marginTop:8}}>
+            <Btn on={false} onClick={()=>{}} sz={10} pad={'3px 9px'}>⏮</Btn>
+            <Btn on={false} onClick={()=>{}} sz={10} pad={'3px 9px'}>▶</Btn>
+            <Btn on={false} onClick={()=>{}} sz={10} pad={'3px 9px'}>⏭</Btn>
+          </div>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:5}}>
+          <Btn on={false} onClick={()=>{}}>RADIO</Btn>
+          <Btn on={false} onClick={()=>{}}>MEDIA</Btn>
+          <Btn on={false} onClick={()=>{}}>PHONE</Btn>
+          <Btn on={false} onClick={()=>{}}>NAV</Btn>
+          <Btn on={false} onClick={()=>{}}>APPS</Btn>
+          <Btn on={false} onClick={()=>{}}>SETUP</Btn>
+        </div>
+      </div>
     </CockpitZone>
 
     {/* ── Gear shifter ── */}
-    <CockpitZone title="GEAR SHIFTER" night={night}>
-      {placeholder('P · R · N · D · S — todo (will subscribe to Powertrain.Transmission.SelectedGear)')}
+    <CockpitZone title="GEAR SHIFTER" subtitle="Powertrain.Transmission.CurrentGear" night={night}>
+      <div style={{display:'flex',gap:6,alignItems:'center'}}>
+        {[{lab:'P',g:0,parking:true},{lab:'R',g:-1},{lab:'N',g:0,neutral:true},{lab:'D',g:1},{lab:'S',g:2}].map(({lab,g,parking,neutral})=>{
+          // P and N both map to gear=0; pick based on the button identity using a second signal would be cleaner.
+          // Here we collapse to CurrentGear (Int16) and trust the gearLabel mapping.
+          const on=gearLabel(gear)===lab || (lab==='P'&&gear===0&&!neutral);
+          return <Btn key={lab} on={on} onClick={()=>set('Powertrain.Transmission.CurrentGear',g)}
+            sz={14} pad={'10px 18px'} min={50}>{lab}</Btn>;
+        })}
+        <span style={{flex:1}}/>
+        <div style={{fontFamily:'Orbitron',fontSize:24,fontWeight:700,color:'#F59E0B',
+          border:`1px solid ${night?'#3A2A12':'#1A2838'}`,padding:'4px 18px',borderRadius:4,minWidth:60,textAlign:'center'}}>
+          {gearLabel(gear)}
+        </div>
+      </div>
     </CockpitZone>
 
     {/* ── Duplicated door trim controls (driver door) ── */}
@@ -1938,15 +2115,37 @@ function CockpitView({s,set}){
                   padding:'10px 14px',borderRadius:4,cursor:'pointer',minWidth:130}}>
           ⇱ PAS INSIDE PULL {pullR?'●':''}
         </button>
-        <span style={{fontFamily:'Share Tech Mono',fontSize:8,color:txtDim,alignSelf:'center'}}>
-          window switches · mirror fold/adjust · door lock — todo
-        </span>
+      </div>
+      <div style={{display:'flex',gap:6,marginTop:8,flexWrap:'wrap'}}>
+        <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,alignSelf:'center',marginRight:4,letterSpacing:1}}>LOCK:</span>
+        <Btn on={!lockL&&!lockR} onClick={()=>set('Body.Switches.DoorTrim.Row1.Left.UnlockButton',true)}>UNLOCK ALL</Btn>
+        <Btn on={lockL&&lockR} onClick={()=>set('Body.Switches.DoorTrim.Row1.Left.LockButton',true)}>LOCK ALL {dblL?'⊕⊕':''}</Btn>
+        <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,alignSelf:'center',marginLeft:8,letterSpacing:1}}>MIRRORS:</span>
+        <Btn on={mirL&&mirR} onClick={()=>set('Body.Switches.Mirror.Fold',true)}>FOLD {(mirL&&mirR)?'●':'○'}</Btn>
+        <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,alignSelf:'center',marginLeft:8,letterSpacing:1}}>WINDOW:</span>
+        <Btn on={false} onClick={()=>{}}>DRV ⇧</Btn>
+        <Btn on={false} onClick={()=>{}}>DRV ⇩</Btn>
+        <Btn on={false} onClick={()=>{}}>PAS ⇧</Btn>
+        <Btn on={false} onClick={()=>{}}>PAS ⇩</Btn>
       </div>
     </CockpitZone>
 
     {/* ── Ambient / footwell lighting ── */}
     <CockpitZone title="AMBIENT LIGHTING" subtitle="footwell · console · door piping" night={night}>
-      {placeholder('footwell-L · footwell-R · center console · door-card piping — todo')}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:6}}>
+        {[
+          {k:'Cabin.Lights.Ambient.Footwell.Left.IsOn',l:'FOOTWELL L'},
+          {k:'Cabin.Lights.Ambient.Footwell.Right.IsOn',l:'FOOTWELL R'},
+          {k:'Cabin.Lights.Ambient.CenterConsole.IsOn',l:'CONSOLE'},
+          {k:'Cabin.Lights.Ambient.DoorCard.IsOn',l:'DOOR PIPING'},
+        ].map(({k,l})=>{
+          const on=!!s[k];
+          return <Btn key={k} on={on} onClick={()=>set(k,!on)}>{l} {on?'●':'○'}</Btn>;
+        })}
+      </div>
+      <div style={{marginTop:6,fontFamily:'Share Tech Mono',fontSize:8,color:txtDim,fontStyle:'italic'}}>
+        Each lamp will be backlit-tied to the LightSwitch feature in a follow-up.
+      </div>
     </CockpitZone>
 
     {/* ── Status bar ── */}
