@@ -204,6 +204,9 @@ const INIT_STATE={
   // VSS encoding: 126=Park, -1=Reverse, 0=Neutral, 127=Drive, 128=Sport.
   // Boot to Park to match a real vehicle at rest.
   'Powertrain.Transmission.CurrentGear':126,
+  // 3-position dome switch — DOOR is the typical default in a real
+  // car so the lamp comes on while loading the cabin.
+  'Cabin.Lights.Dome.SwitchPosition':'DOOR',
   // ADAS
   'Vehicle.ADAS.HighBeam.OncomingVehicleDetected':false,
   // Safety
@@ -1799,6 +1802,9 @@ function CockpitView({s,set}){
   const trunk=s['Body.Trunk.IsOpen'],fuel=s['Body.FuelLid.IsOpen'];
   const wf=s['Body.Windshield.Front.Wiping.Mode'];
   const horn=s['Body.Horn.IsActive'],dome=s['Cabin.Lights.IsDomeOn'];
+  // 3-position dome switch — drives `Cabin.Lights.IsDomeOn` via the
+  // DomeSwitch feature (OFF / DOOR=on-when-any-door-open / ON).
+  const domeSw=s['Cabin.Lights.Dome.SwitchPosition']||'OFF';
   // TPMS: lamp lights if ANY of the 4 wheels reports low pressure.
   const tpms=['Vehicle.Chassis.Axle.Row1.Wheel.Left.Tire.IsPressureLow',
               'Vehicle.Chassis.Axle.Row1.Wheel.Right.Tire.IsPressureLow',
@@ -1832,6 +1838,7 @@ function CockpitView({s,set}){
   const WIPER_CYCLE={OFF:'INTERMITTENT',INTERMITTENT:'SLOW',SLOW:'MEDIUM',MEDIUM:'FAST',FAST:'OFF'};
   const LIGHT_CYCLE={OFF:'POSITION',POSITION:'DRL',DRL:'AUTO',AUTO:'BEAM',BEAM:'OFF'};
   const DIST_CYCLE={AUTO:'FACE',FACE:'FACE_FEET',FACE_FEET:'FEET',FEET:'FEET_DEF',FEET_DEF:'DEF',DEF:'AUTO'};
+  const DOME_CYCLE={OFF:'DOOR',DOOR:'ON',ON:'OFF'};
   // VSS Powertrain.Transmission.CurrentGear encoding:
   //   126 = Park, -1 = Reverse, 0 = Neutral, 127 = Drive, 128 = Sport (custom).
   const gearLabel=g=>g===126?'P':g===-1?'R':g===0?'N':g===127?'D':g===128?'S':'?';
@@ -1848,15 +1855,24 @@ function CockpitView({s,set}){
     transition:'background 200ms ease',
   }}>
 
-    {/* ── Overhead console: dome lamp + map lights placeholder ── */}
+    {/* ── Overhead console: 3-position dome switch + map lights placeholder ── */}
     <CockpitZone title="OVERHEAD CONSOLE" subtitle={night?'NIGHT':'DAY'} night={night}>
-      <div style={{display:'flex',gap:10,alignItems:'center',justifyContent:'space-around'}}>
-        <button onClick={()=>set('Cabin.Lights.IsDomeOn',!dome)} style={{
-          background:dome?'#3A2C0A':'#0E1625',border:`1px solid ${dome?'#FCD34D':'#1A2838'}`,
-          color:dome?'#FCD34D':txtDim,fontFamily:'Share Tech Mono',fontSize:10,
-          padding:'8px 16px',borderRadius:4,cursor:'pointer'}}>
-          ☼ DOME {dome?'ON':'OFF'}
-        </button>
+      <div style={{display:'flex',gap:10,alignItems:'center',justifyContent:'space-around',flexWrap:'wrap'}}>
+        {/* 3-position dome switch: tap to cycle OFF → DOOR → ON.  The
+            DomeSwitch feature converts position + door state into the
+            actual `Cabin.Lights.IsDomeOn` claim via the courtesy
+            arbiter — Welcome / Farewell / PerimeterAlarm pre-empt. */}
+        <div style={{display:'flex',gap:4,alignItems:'center'}}>
+          <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1,marginRight:4}}>DOME:</span>
+          {['OFF','DOOR','ON'].map(p=>(
+            <Btn night={night} key={p} on={domeSw===p}
+              onClick={()=>set('Cabin.Lights.Dome.SwitchPosition',p)}
+              sz={9} pad={'6px 10px'} min={48}>{p}</Btn>
+          ))}
+          <span style={{fontFamily:'Share Tech Mono',fontSize:9,color:dome?'#FCD34D':txtDim,marginLeft:8}}>
+            ☼ {dome?'LAMP ON':'lamp off'}
+          </span>
+        </div>
         <span style={{fontFamily:'Share Tech Mono',fontSize:8,color:txtDim}}>MAP-L · MAP-R · SUNROOF · GARAGE (todo)</span>
       </div>
     </CockpitZone>
@@ -1987,7 +2003,7 @@ function CockpitView({s,set}){
           <Btn night={night} on={ffogSw} onClick={()=>set('Body.Switches.Fog.Front.IsEngaged',!ffogSw)} min={110}>FOG FRONT {ffogSw?'●':'○'}</Btn>
           <Btn night={night} on={rfogSw} onClick={()=>set('Body.Switches.Fog.Rear.IsEngaged',!rfogSw)} min={110}>FOG REAR {rfogSw?'●':'○'}</Btn>
           <Btn night={night} on={hazSw} onClick={()=>set('Body.Switches.Hazard.IsEngaged',!hazSw)} min={110}>⚠ HAZARD {hazSw?'●':'○'}</Btn>
-          <Btn night={night} on={dome} onClick={()=>set('Cabin.Lights.IsDomeOn',!dome)} min={110}>☼ INTERIOR {dome?'●':'○'}</Btn>
+          <Btn night={night} on={domeSw!=='OFF'} onClick={()=>set('Cabin.Lights.Dome.SwitchPosition',DOME_CYCLE[domeSw]||'OFF')} min={110}>☼ DOME: {domeSw}</Btn>
           <Btn night={night} on={s['Body.Switches.Trunk.Release.IsPressed']}
                onMouseDown={()=>set('Body.Switches.Trunk.Release.IsPressed',true)}
                onMouseUp={()=>set('Body.Switches.Trunk.Release.IsPressed',false)}

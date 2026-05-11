@@ -152,6 +152,9 @@ const INPUT_SIGNALS: &[VssPath] = &[
     "Body.Switches.Mirror.Fold",
     "Body.Switches.Mirror.Select",
     "Body.Switches.Mirror.Direction",
+    // 3-position interior dome-light switch (String enum OFF/DOOR/ON).
+    // Driven by the cockpit HMI; consumed by the DomeSwitch feature.
+    "Cabin.Lights.Dome.SwitchPosition",
 ];
 
 /// Signals the bridge pushes back to the HMI (actuator outputs from arbiters).

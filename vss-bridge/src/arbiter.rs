@@ -1122,6 +1122,16 @@ pub fn courtesy_arbiter<B: SignalBus>(
             signal: "Cabin.Lights.IsDomeOn",
             priority: Priority::High,
         },
+        // DomeSwitch owns the default ("user intent") claim at LOW so
+        // Welcome / Farewell / PerimeterAlarm naturally pre-empt for
+        // their courtesy sequences.  When no higher claimant is
+        // active, this dictates the lamp state from the OFF/DOOR/ON
+        // switch + any-door-open inputs.
+        AllowEntry {
+            feature_id: FeatureId::DomeSwitch,
+            signal: "Cabin.Lights.IsDomeOn",
+            priority: Priority::Low,
+        },
     ];
 
     DomainArbiter::new("Courtesy", allow_list, bus)

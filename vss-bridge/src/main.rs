@@ -47,6 +47,7 @@ use vss_bridge::features::door_open_assist::DoorOpenAssist;
 use vss_bridge::features::door_trim_button::DoorTrimButton;
 use vss_bridge::features::double_lock_release::DoubleLockRelease;
 use vss_bridge::features::exterior_trunk_button::ExteriorTrunkButton;
+use vss_bridge::features::dome_switch::DomeSwitch;
 use vss_bridge::features::farewell::Farewell;
 use vss_bridge::features::fog_lamps::FogLamps;
 use vss_bridge::features::follow_me_home::FollowMeHome;
@@ -368,6 +369,12 @@ async fn boot_simulation_stack(
         .run(),
     );
     set.spawn(AutoRelock::from_config(Arc::clone(&door_lock_arb), Arc::clone(&bus), &cfg).run());
+
+    // DomeSwitch — 3-position interior dome-light switch (OFF / DOOR /
+    // ON).  Owns the Low-priority default claim on
+    // Cabin.Lights.IsDomeOn; Welcome / Farewell / PerimeterAlarm
+    // pre-empt cleanly via the courtesy arbiter.
+    set.spawn(DomeSwitch::new(Arc::clone(&bus), Arc::clone(&courtesy_arb)).run());
 
     // PassiveEntry — handle-pull authenticated unlock.
     let pe_devices: Vec<PairedDevice> = {

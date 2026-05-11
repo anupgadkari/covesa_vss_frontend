@@ -192,6 +192,11 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Cabin.Lights.IsGloveBoxOn" => Some(0x0008_0002),
         "Cabin.Lights.Ambient.Intensity" => Some(0x0008_0003),
         "Cabin.Lights.Ambient.Color" => Some(0x0008_0004),
+        // 3-position interior dome-light switch (String enum:
+        // "OFF" / "DOOR" / "ON").  Driven by the cockpit HMI;
+        // consumed by the `DomeSwitch` feature which arbitrates
+        // `Cabin.Lights.IsDomeOn`.
+        "Cabin.Lights.Dome.SwitchPosition" => Some(0x0008_0005),
 
         // HVAC
         "Cabin.HVAC.IsAirConditioningActive" => Some(0x0009_0001),
@@ -596,6 +601,7 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Cabin.Lights.IsGloveBoxOn", 0x0008_0002),
     ("Cabin.Lights.Ambient.Intensity", 0x0008_0003),
     ("Cabin.Lights.Ambient.Color", 0x0008_0004),
+    ("Cabin.Lights.Dome.SwitchPosition", 0x0008_0005),
     ("Cabin.HVAC.IsAirConditioningActive", 0x0009_0001),
     ("Cabin.HVAC.IsRecirculationActive", 0x0009_0002),
     ("Cabin.HVAC.IsFrontDefrosterActive", 0x0009_0003),

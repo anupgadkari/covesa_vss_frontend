@@ -163,6 +163,11 @@ pub enum FeatureId {
     /// `INTERNAL_UNLOCK_SOURCES` — neither flow can disarm a running
     /// alarm or trigger a tampering chime.
     SlamLock = 0x22,
+    /// 3-position interior dome-light switch (OFF / DOOR / ON).
+    /// Owns the default claim on `Cabin.Lights.IsDomeOn` at LOW
+    /// priority — Welcome / Farewell (MEDIUM) and PerimeterAlarm
+    /// (HIGH) preempt cleanly via the courtesy arbiter.
+    DomeSwitch = 0x23,
 }
 
 impl std::fmt::Display for FeatureId {
@@ -214,6 +219,7 @@ impl FeatureId {
             0x20 => Some(Self::ManualHorn),
             0x21 => Some(Self::PerimeterAlarm),
             0x22 => Some(Self::SlamLock),
+            0x23 => Some(Self::DomeSwitch),
             _ => None,
         }
     }
