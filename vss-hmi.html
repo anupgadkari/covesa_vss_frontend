@@ -1502,15 +1502,30 @@ function SideView({s,set}){
     {hood&&<path d="M 82,372 L 87,310 L 120,265 L 150,248 L 268,228"
       stroke="#F59E0B" strokeWidth="3" fill="none" opacity=".6"/>}
 
-    {/* ── Front door panel & open status ── */}
+    {/* ── Front door panel & open status ──
+         When the door is open, the whole panel becomes a click target
+         that fires CloseCmd via the DoorHandle plant model (same path
+         the top view uses for door-clicks).  Cursor + tooltip cue
+         appears only while open so we don't imply the panel does
+         anything when the door is shut. */}
     <rect x="430" y="233" width="135" height="157" fill="#0C1825"
-      stroke={d1?'#F59E0B':'#1A2838'} strokeWidth={d1?2.5:1.2} rx="2"/>
-    {d1&&<text x="497" y="322" textAnchor="middle" fill="#F59E0B" fontSize="8" fontWeight="bold">DOOR OPEN</text>}
+      stroke={d1?'#F59E0B':'#1A2838'} strokeWidth={d1?2.5:1.2} rx="2"
+      style={d1?{cursor:'pointer'}:undefined}
+      onClick={d1?()=>set(r1pfx+'.CloseCmd',true):undefined}>
+      {d1 && <title>Click to close {side} Row 1 door</title>}
+    </rect>
+    {d1&&<text x="497" y="322" textAnchor="middle" fill="#F59E0B" fontSize="8" fontWeight="bold"
+              style={{pointerEvents:'none'}}>DOOR OPEN — CLICK TO CLOSE</text>}
 
     {/* ── Rear door panel & open status ── */}
     <rect x="589" y="233" width="183" height="157" fill="#0C1825"
-      stroke={d2?'#F59E0B':'#1A2838'} strokeWidth={d2?2.5:1.2} rx="2"/>
-    {d2&&<text x="680" y="322" textAnchor="middle" fill="#F59E0B" fontSize="8" fontWeight="bold">DOOR OPEN</text>}
+      stroke={d2?'#F59E0B':'#1A2838'} strokeWidth={d2?2.5:1.2} rx="2"
+      style={d2?{cursor:'pointer'}:undefined}
+      onClick={d2?()=>set(r2pfx+'.CloseCmd',true):undefined}>
+      {d2 && <title>Click to close {side} Row 2 door</title>}
+    </rect>
+    {d2&&<text x="680" y="322" textAnchor="middle" fill="#F59E0B" fontSize="8" fontWeight="bold"
+              style={{pointerEvents:'none'}}>DOOR OPEN — CLICK TO CLOSE</text>}
 
     {/* ── Door handles — always pullable.  When the door is locked the
          pull won't open the door (plant model decides), but it still
@@ -1711,8 +1726,38 @@ function SideView({s,set}){
   </div>;
 }
 
-/* ══════ COCKPIT VIEW ══════ */
+/* ══════ COCKPIT VIEW ══════
+ *
+ * Scrollable vertical layout of zones an occupant in the front row can
+ * see and reach.  Zones are stubbed with placeholder content today and
+ * fleshed out in follow-up commits.  Each zone is dimmed/tinted when
+ * the bus is in NIGHT mode (published by the DayNightModePlant from
+ * `Body.Lights.Beam.Low.IsOn`).
+ */
+function CockpitZone({title,subtitle,night,children}){
+  return <div style={{
+    background: night?'#080F18':'#0A1320',
+    border:`1px solid ${night?'#15243A':'#1A2838'}`,
+    borderRadius:6, padding:'10px 14px', marginBottom:10,
+    boxShadow: night?'inset 0 0 24px rgba(245,158,11,0.04)':'none',
+    transition:'background 200ms ease, box-shadow 200ms ease',
+  }}>
+    <div style={{
+      display:'flex',justifyContent:'space-between',alignItems:'baseline',
+      borderBottom:`1px solid ${night?'#1A2A3E':'#15202F'}`,paddingBottom:4,marginBottom:8,
+    }}>
+      <span style={{fontFamily:'Share Tech Mono',fontSize:10,letterSpacing:2,
+        color: night?'#F59E0B':'#3A5070', fontWeight:600}}>{title}</span>
+      {subtitle && <span style={{fontFamily:'Share Tech Mono',fontSize:8,
+        color: night?'#5A7090':'#2A3A50'}}>{subtitle}</span>}
+    </div>
+    {children}
+  </div>;
+}
+
 function CockpitView({s,set}){
+  const mode=s['Vehicle.Cabin.Infotainment.HMI.DayNightMode'];
+  const night=mode==='NIGHT';
   const lo=s['Body.Lights.Beam.Low.IsOn'],hi=s['Body.Lights.Beam.High.IsOn'];
   const lLamp=s['Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn'];
   const rLamp=s['Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn'];
@@ -1733,77 +1778,189 @@ function CockpitView({s,set}){
   const trunk=s['Body.Trunk.IsOpen'],fuel=s['Body.FuelLid.IsOpen'];
   const wf=s['Body.Windshield.Front.Wiping.Mode'];
   const horn=s['Body.Horn.IsActive'],dome=s['Cabin.Lights.IsDomeOn'];
-  const fanBars=(f,x)=>Array.from({length:7},(_,i)=>(
-    <rect key={i} x={x+i*12} y={232-(i*4)} width={9} height={16+i*4} rx="1" fill={i<f?'#3B82F6':'#101E30'} opacity={i<f?1:.5}/>
-  ));
-  return <svg viewBox="0 0 800 500" style={{width:'100%',maxWidth:'800px'}}>
-    <rect x="0" y="0" width="800" height="500" fill="#06101C"/>
-    <path d="M0,60 Q400,100 800,60 L800,500 L0,500 Z" fill="#091424"/>
-    <rect x="280" y="80" width="240" height="160" rx="8" fill="#070F1C" stroke="#1A2838" strokeWidth="1.2"/>
-    <text x="400" y="105" textAnchor="middle" fill="#1C3050" fontSize="11" fontFamily="Share Tech Mono" fontWeight="600" letterSpacing="2">SPEED</text>
-    <text x="400" y="155" textAnchor="middle" fill="#F59E0B" fontSize="52" fontFamily="Orbitron" fontWeight="700">0</text>
-    <text x="400" y="180" textAnchor="middle" fill="#1C3050" fontSize="12" fontFamily="Share Tech Mono">km/h</text>
-    <text x="400" y="215" textAnchor="middle" fill="#10D98A" fontSize="13" fontFamily="Share Tech Mono" fontWeight="600">● PARK</text>
-    <text x="50" y="105" fill="#1C3050" fontSize="9" fontFamily="Share Tech Mono" fontWeight="600">WARNINGS:</text>
-    {[
-      {active:lo,color:'#22C55E',label:'LO',cx:50},
-      {active:hi,color:'#4A9EF5',label:'HI',cx:110},
-      {active:ffog,color:'#BAD6FE',label:'FOG',cx:170},
-      {active:rfog,color:'#EF4444',label:'RFOG',cx:230},
-    ].map(({active,color,label,cx})=>(
-      <g key={label}>
-        <circle cx={cx} cy={130} r={12} fill={active?color:'#1A2838'} opacity={active?0.6:0.25} stroke={active?color:'#3A4D5C'} strokeWidth="1.2"/>
-        <text x={cx} y={135} textAnchor="middle" fill={active?color:'#3A5060'} fontSize={label.length>3?7:8} fontFamily="Share Tech Mono" fontWeight="600">{label}</text>
-      </g>
-    ))}
-    {li&&<g><circle cx={290} cy={130} r={12} fill="#F59E0B" opacity="0.3" stroke="#F59E0B" strokeWidth="1.2" className="blink"/>
-      <text x={290} y={135} textAnchor="middle" fill="#F59E0B" fontSize="10" fontFamily="Share Tech Mono" fontWeight="600">◄</text></g>}
-    {ri&&<g><circle cx={350} cy={130} r={12} fill="#F59E0B" opacity="0.3" stroke="#F59E0B" strokeWidth="1.2" className="blink"/>
-      <text x={350} y={135} textAnchor="middle" fill="#F59E0B" fontSize="10" fontFamily="Share Tech Mono" fontWeight="600">►</text></g>}
-    {doorAjar&&<g><circle cx={410} cy={130} r={12} fill="#EF4444" opacity="0.3" stroke="#EF4444" strokeWidth="1.2"/>
-      <text x={410} y={135} textAnchor="middle" fill="#EF4444" fontSize="8" fontFamily="Share Tech Mono" fontWeight="600">DOOR</text></g>}
-    {brake&&<g><circle cx={470} cy={130} r={12} fill="#EF4444" opacity="0.3" stroke="#EF4444" strokeWidth="1.2"/>
-      <text x={470} y={135} textAnchor="middle" fill="#EF4444" fontSize="8" fontFamily="Share Tech Mono" fontWeight="600">BRK</text></g>}
-    <rect x="20" y="260" width="240" height="140" rx="6" fill="#060E1A" stroke="#1A2838" strokeWidth="1"/>
-    <text x="140" y="280" textAnchor="middle" fill="#1C3050" fontSize="10" fontFamily="Share Tech Mono" fontWeight="600">CLIMATE</text>
-    <text x="50"  y="310" fill="#2A3A50" fontSize="8" fontFamily="Share Tech Mono">DRIVER:</text>
-    <text x="50"  y="330" fill="#F59E0B" fontSize="20" fontFamily="Orbitron" fontWeight="600">{dT.toFixed(0)}°</text>
-    <text x="175" y="310" fill="#2A3A50" fontSize="8" fontFamily="Share Tech Mono">PASS:</text>
-    <text x="175" y="330" fill="#F59E0B" fontSize="20" fontFamily="Orbitron" fontWeight="600">{pT.toFixed(0)}°</text>
-    <text x="50"  y="360" fill={ac?'#4A9EF5':'#1C3050'} fontSize="7" fontFamily="Share Tech Mono">{ac?'[A/C]':'a/c'}</text>
-    <text x="110" y="360" fill={recirc?'#10D98A':'#1C3050'} fontSize="7" fontFamily="Share Tech Mono">{recirc?'[RECIRC]':'recirc'}</text>
-    <text x="175" y="360" fill={defF?'#4A9EF5':'#1C3050'} fontSize="7" fontFamily="Share Tech Mono">{defF?'[DEF-F]':'def-f'}</text>
-    <text x="50"  y="375" fill={defR?'#4A9EF5':'#1C3050'} fontSize="7" fontFamily="Share Tech Mono">{defR?'[DEF-R]':'def-r'}</text>
-    <rect x="540" y="260" width="240" height="140" rx="6" fill="#060E1A" stroke="#1A2838" strokeWidth="1"/>
-    <text x="660" y="280" textAnchor="middle" fill="#1C3050" fontSize="10" fontFamily="Share Tech Mono" fontWeight="600">SEATS</text>
-    <g onClick={()=>set('Cabin.Seat.Row1.Left.HeatingLevel',[3,0,1,2][heatL])} style={{cursor:'pointer'}}>
-      <rect x="555" y="295" width="45" height="32" rx="2" fill={heatL>0?'#6B1E1E':'#0E1625'} stroke={heatL>0?'#EF6020':'#1A2838'} strokeWidth="1.2"/>
-      <text x="577" y="314" textAnchor="middle" fill={heatL>0?'#FF6B35':'#1C3050'} fontSize="14" fontFamily="Orbitron" fontWeight="600">{heatL}</text>
-      <text x="577" y="326" textAnchor="middle" fill={heatL>0?'#FF6B35':'#1C3050'} fontSize="6" fontFamily="Share Tech Mono">Heat</text>
-    </g>
-    <g onClick={()=>set('Cabin.Seat.Row1.Right.HeatingLevel',[3,0,1,2][heatR])} style={{cursor:'pointer'}}>
-      <rect x="670" y="295" width="45" height="32" rx="2" fill={heatR>0?'#6B1E1E':'#0E1625'} stroke={heatR>0?'#EF6020':'#1A2838'} strokeWidth="1.2"/>
-      <text x="692" y="314" textAnchor="middle" fill={heatR>0?'#FF6B35':'#1C3050'} fontSize="14" fontFamily="Orbitron" fontWeight="600">{heatR}</text>
-      <text x="692" y="326" textAnchor="middle" fill={heatR>0?'#FF6B35':'#1C3050'} fontSize="6" fontFamily="Share Tech Mono">Heat</text>
-    </g>
-    <g onClick={()=>set('Cabin.Seat.Row1.Left.IsVentilationOn',!vent1L)} style={{cursor:'pointer'}}>
-      <rect x="555" y="345" width="45" height="32" rx="2" fill={vent1L?'#1E3A52':'#0E1625'} stroke={vent1L?'#4A9EF5':'#1A2838'} strokeWidth="1.2"/>
-      <text x="577" y="368" textAnchor="middle" fill={vent1L?'#4A9EF5':'#1C3050'} fontSize="11" fontFamily="Share Tech Mono" fontWeight="600">{vent1L?'●':'○'}</text>
-      <text x="577" y="378" textAnchor="middle" fill={vent1L?'#4A9EF5':'#1C3050'} fontSize="6" fontFamily="Share Tech Mono">Vent</text>
-    </g>
-    <g onClick={()=>set('Cabin.Seat.Row1.Right.IsVentilationOn',!vent1R)} style={{cursor:'pointer'}}>
-      <rect x="670" y="345" width="45" height="32" rx="2" fill={vent1R?'#1E3A52':'#0E1625'} stroke={vent1R?'#4A9EF5':'#1A2838'} strokeWidth="1.2"/>
-      <text x="692" y="368" textAnchor="middle" fill={vent1R?'#4A9EF5':'#1C3050'} fontSize="11" fontFamily="Share Tech Mono" fontWeight="600">{vent1R?'●':'○'}</text>
-      <text x="692" y="378" textAnchor="middle" fill={vent1R?'#4A9EF5':'#1C3050'} fontSize="6" fontFamily="Share Tech Mono">Vent</text>
-    </g>
-    <rect x="20" y="410" width="760" height="70" rx="6" fill="#060E1A" stroke="#1A2838" strokeWidth="1"/>
-    <text x="400" y="430" textAnchor="middle" fill="#1C3050" fontSize="8" fontFamily="Share Tech Mono" fontWeight="600">STATUS</text>
-    <text x="50"  y="455" fill={wf!=='OFF'?'#4A9EF5':'#1C3050'} fontSize="8" fontFamily="Share Tech Mono">WIPERS: <tspan fontWeight="600">{wf}</tspan></text>
-    <text x="200" y="455" fill={horn?'#EF4444':'#1C3050'} fontSize="8" fontFamily="Share Tech Mono">HORN: <tspan fontWeight="600">{horn?'●':'-'}</tspan></text>
-    <text x="340" y="455" fill={dome?'#FCD34D':'#1C3050'} fontSize="8" fontFamily="Share Tech Mono">DOME: <tspan fontWeight="600">{dome?'ON':'OFF'}</tspan></text>
-    <text x="480" y="455" fill={fuel?'#F59E0B':'#1C3050'} fontSize="8" fontFamily="Share Tech Mono">FUEL: <tspan fontWeight="600">{fuel?'OPEN':'-'}</tspan></text>
-    <text x="50"  y="475" fill={trunk?'#F59E0B':'#1C3050'} fontSize="8" fontFamily="Share Tech Mono">GATE: <tspan fontWeight="600">{trunk?'OPEN':'-'}</tspan></text>
-  </svg>;
+  // TPMS: lamp lights if ANY of the 4 wheels reports low pressure.
+  const tpms=['Vehicle.Chassis.Axle.Row1.Wheel.Left.Tire.IsPressureLow',
+              'Vehicle.Chassis.Axle.Row1.Wheel.Right.Tire.IsPressureLow',
+              'Vehicle.Chassis.Axle.Row2.Wheel.Left.Tire.IsPressureLow',
+              'Vehicle.Chassis.Axle.Row2.Wheel.Right.Tire.IsPressureLow'].some(k=>s[k]);
+  // Interior door release pulls — mirror the inside handle signals.
+  const pullL=s['Body.Doors.Row1.Left.Handle.Inside.IsPulled'];
+  const pullR=s['Body.Doors.Row1.Right.Handle.Inside.IsPulled'];
+
+  const txt = night?'#F59E0B':'#1C3050';
+  const txtDim = night?'#8A6020':'#2A3A50';
+  const placeholder=(label)=><div style={{
+    fontFamily:'Share Tech Mono', fontSize:9, color:night?'#5A7090':'#2A3A50',
+    fontStyle:'italic', padding:'14px 0', textAlign:'center',
+    border:`1px dashed ${night?'#1A2A3E':'#15202F'}`, borderRadius:4,
+  }}>{label}</div>;
+
+  return <div style={{
+    width:'100%', maxWidth:800, height:'calc(100vh - 100px)',
+    overflowY:'auto', paddingRight:6,
+    background: night?'#040810':'#06101C',
+    transition:'background 200ms ease',
+  }}>
+
+    {/* ── Overhead console: dome lamp + map lights placeholder ── */}
+    <CockpitZone title="OVERHEAD CONSOLE" subtitle={night?'NIGHT':'DAY'} night={night}>
+      <div style={{display:'flex',gap:10,alignItems:'center',justifyContent:'space-around'}}>
+        <button onClick={()=>set('Cabin.Lights.IsDomeOn',!dome)} style={{
+          background:dome?'#3A2C0A':'#0E1625',border:`1px solid ${dome?'#FCD34D':'#1A2838'}`,
+          color:dome?'#FCD34D':txtDim,fontFamily:'Share Tech Mono',fontSize:10,
+          padding:'8px 16px',borderRadius:4,cursor:'pointer'}}>
+          ☼ DOME {dome?'ON':'OFF'}
+        </button>
+        <span style={{fontFamily:'Share Tech Mono',fontSize:8,color:txtDim}}>MAP-L · MAP-R · SUNROOF · GARAGE (todo)</span>
+      </div>
+    </CockpitZone>
+
+    {/* ── Instrument cluster ── */}
+    <CockpitZone title="INSTRUMENT CLUSTER" night={night}>
+      <svg viewBox="0 0 760 220" style={{width:'100%'}}>
+        <rect x="260" y="30" width="240" height="160" rx="8" fill={night?'#050B14':'#070F1C'} stroke={night?'#2A3A50':'#1A2838'} strokeWidth="1.2"/>
+        <text x="380" y="55" textAnchor="middle" fill={txtDim} fontSize="11" fontFamily="Share Tech Mono" fontWeight="600" letterSpacing="2">SPEED</text>
+        <text x="380" y="105" textAnchor="middle" fill="#F59E0B" fontSize="52" fontFamily="Orbitron" fontWeight="700">0</text>
+        <text x="380" y="130" textAnchor="middle" fill={txtDim} fontSize="12" fontFamily="Share Tech Mono">km/h</text>
+        <text x="380" y="165" textAnchor="middle" fill="#10D98A" fontSize="13" fontFamily="Share Tech Mono" fontWeight="600">● PARK</text>
+        <text x="30" y="55" fill={txtDim} fontSize="9" fontFamily="Share Tech Mono" fontWeight="600">WARNINGS:</text>
+        {[
+          {active:lo,color:'#22C55E',label:'LO',cx:30},
+          {active:hi,color:'#4A9EF5',label:'HI',cx:90},
+          {active:ffog,color:'#BAD6FE',label:'FOG',cx:150},
+          {active:rfog,color:'#EF4444',label:'RFOG',cx:210},
+        ].map(({active,color,label,cx})=>(
+          <g key={label}>
+            <circle cx={cx} cy={80} r={12} fill={active?color:'#1A2838'} opacity={active?0.6:0.25} stroke={active?color:'#3A4D5C'} strokeWidth="1.2"/>
+            <text x={cx} y={85} textAnchor="middle" fill={active?color:'#3A5060'} fontSize={label.length>3?7:8} fontFamily="Share Tech Mono" fontWeight="600">{label}</text>
+          </g>
+        ))}
+        {li&&<g><circle cx={30} cy={120} r={12} fill="#F59E0B" opacity="0.3" stroke="#F59E0B" strokeWidth="1.2" className="blink"/>
+          <text x={30} y={125} textAnchor="middle" fill="#F59E0B" fontSize="10" fontFamily="Share Tech Mono" fontWeight="600">◄</text></g>}
+        {ri&&<g><circle cx={90} cy={120} r={12} fill="#F59E0B" opacity="0.3" stroke="#F59E0B" strokeWidth="1.2" className="blink"/>
+          <text x={90} y={125} textAnchor="middle" fill="#F59E0B" fontSize="10" fontFamily="Share Tech Mono" fontWeight="600">►</text></g>}
+        {doorAjar&&<g><circle cx={150} cy={120} r={12} fill="#EF4444" opacity="0.3" stroke="#EF4444" strokeWidth="1.2"/>
+          <text x={150} y={125} textAnchor="middle" fill="#EF4444" fontSize="8" fontFamily="Share Tech Mono" fontWeight="600">DOOR</text></g>}
+        {brake&&<g><circle cx={210} cy={120} r={12} fill="#EF4444" opacity="0.3" stroke="#EF4444" strokeWidth="1.2"/>
+          <text x={210} y={125} textAnchor="middle" fill="#EF4444" fontSize="8" fontFamily="Share Tech Mono" fontWeight="600">BRK</text></g>}
+        {/* TPMS warning — off by default, lit if any wheel reports low pressure. */}
+        <g>
+          <circle cx={30} cy={170} r={12} fill={tpms?'#F59E0B':'#1A2838'} opacity={tpms?0.6:0.25} stroke={tpms?'#F59E0B':'#3A4D5C'} strokeWidth="1.2"/>
+          <text x={30} y={174} textAnchor="middle" fill={tpms?'#F59E0B':'#3A5060'} fontSize="7" fontFamily="Share Tech Mono" fontWeight="600">TPMS</text>
+          <title>{tpms?'Tire pressure low':'TPMS normal'}</title>
+        </g>
+        <text x="540" y="55" fill={txtDim} fontSize="9" fontFamily="Share Tech Mono">ODO</text>
+        <text x="540" y="75" fill={night?'#D7A03A':'#5A6A80'} fontSize="14" fontFamily="Orbitron" fontWeight="600">000000</text>
+        <text x="540" y="105" fill={txtDim} fontSize="9" fontFamily="Share Tech Mono">FUEL</text>
+        <text x="540" y="125" fill={night?'#D7A03A':'#5A6A80'} fontSize="14" fontFamily="Orbitron" fontWeight="600">— %</text>
+        <text x="640" y="55" fill={txtDim} fontSize="9" fontFamily="Share Tech Mono">RPM</text>
+        <text x="640" y="75" fill={night?'#D7A03A':'#5A6A80'} fontSize="14" fontFamily="Orbitron" fontWeight="600">0</text>
+        <text x="640" y="105" fill={txtDim} fontSize="9" fontFamily="Share Tech Mono">COOL</text>
+        <text x="640" y="125" fill={night?'#D7A03A':'#5A6A80'} fontSize="14" fontFamily="Orbitron" fontWeight="600">— °</text>
+      </svg>
+    </CockpitZone>
+
+    {/* ── Steering wheel + stalks ── */}
+    <CockpitZone title="STEERING" subtitle="wheel · stalks · paddles" night={night}>
+      {placeholder('steering buttons (volume, cruise, voice) · turn/wiper stalks · paddle shifters — todo')}
+    </CockpitZone>
+
+    {/* ── Headlamp / lighting switches ── */}
+    <CockpitZone title="LIGHTING SWITCHES" subtitle="left dash cluster" night={night}>
+      {placeholder('headlamp rotary (off / park / auto / on) · fog · interior dim · trunk release — todo')}
+    </CockpitZone>
+
+    {/* ── HVAC panel ── */}
+    <CockpitZone title="HVAC" night={night}>
+      <svg viewBox="0 0 760 150" style={{width:'100%'}}>
+        <text x="60"  y="30" fill={txtDim} fontSize="8" fontFamily="Share Tech Mono">DRIVER:</text>
+        <text x="60"  y="60" fill="#F59E0B" fontSize="22" fontFamily="Orbitron" fontWeight="600">{dT.toFixed(0)}°</text>
+        <text x="200" y="30" fill={txtDim} fontSize="8" fontFamily="Share Tech Mono">PASS:</text>
+        <text x="200" y="60" fill="#F59E0B" fontSize="22" fontFamily="Orbitron" fontWeight="600">{pT.toFixed(0)}°</text>
+        <text x="60"  y="95"  fill={ac?'#4A9EF5':txtDim}     fontSize="9" fontFamily="Share Tech Mono">{ac?'[A/C]':'a/c'}</text>
+        <text x="140" y="95"  fill={recirc?'#10D98A':txtDim} fontSize="9" fontFamily="Share Tech Mono">{recirc?'[RECIRC]':'recirc'}</text>
+        <text x="240" y="95"  fill={defF?'#4A9EF5':txtDim}   fontSize="9" fontFamily="Share Tech Mono">{defF?'[DEF-F]':'def-f'}</text>
+        <text x="340" y="95"  fill={defR?'#4A9EF5':txtDim}   fontSize="9" fontFamily="Share Tech Mono">{defR?'[DEF-R]':'def-r'}</text>
+        {/* Seat heat / vent reused from prior cockpit */}
+        <g onClick={()=>set('Cabin.Seat.Row1.Left.HeatingLevel',[3,0,1,2][heatL])} style={{cursor:'pointer'}}>
+          <rect x="480" y="20" width="55" height="36" rx="3" fill={heatL>0?'#6B1E1E':'#0E1625'} stroke={heatL>0?'#EF6020':'#1A2838'} strokeWidth="1.2"/>
+          <text x="508" y="42" textAnchor="middle" fill={heatL>0?'#FF6B35':txtDim} fontSize="14" fontFamily="Orbitron" fontWeight="600">{heatL}</text>
+          <text x="508" y="54" textAnchor="middle" fill={heatL>0?'#FF6B35':txtDim} fontSize="6" fontFamily="Share Tech Mono">DRV HEAT</text>
+        </g>
+        <g onClick={()=>set('Cabin.Seat.Row1.Right.HeatingLevel',[3,0,1,2][heatR])} style={{cursor:'pointer'}}>
+          <rect x="550" y="20" width="55" height="36" rx="3" fill={heatR>0?'#6B1E1E':'#0E1625'} stroke={heatR>0?'#EF6020':'#1A2838'} strokeWidth="1.2"/>
+          <text x="578" y="42" textAnchor="middle" fill={heatR>0?'#FF6B35':txtDim} fontSize="14" fontFamily="Orbitron" fontWeight="600">{heatR}</text>
+          <text x="578" y="54" textAnchor="middle" fill={heatR>0?'#FF6B35':txtDim} fontSize="6" fontFamily="Share Tech Mono">PAS HEAT</text>
+        </g>
+        <g onClick={()=>set('Cabin.Seat.Row1.Left.IsVentilationOn',!vent1L)} style={{cursor:'pointer'}}>
+          <rect x="480" y="70" width="55" height="36" rx="3" fill={vent1L?'#1E3A52':'#0E1625'} stroke={vent1L?'#4A9EF5':'#1A2838'} strokeWidth="1.2"/>
+          <text x="508" y="94" textAnchor="middle" fill={vent1L?'#4A9EF5':txtDim} fontSize="13" fontFamily="Share Tech Mono" fontWeight="600">{vent1L?'●':'○'}</text>
+          <text x="508" y="104" textAnchor="middle" fill={vent1L?'#4A9EF5':txtDim} fontSize="6" fontFamily="Share Tech Mono">DRV VENT</text>
+        </g>
+        <g onClick={()=>set('Cabin.Seat.Row1.Right.IsVentilationOn',!vent1R)} style={{cursor:'pointer'}}>
+          <rect x="550" y="70" width="55" height="36" rx="3" fill={vent1R?'#1E3A52':'#0E1625'} stroke={vent1R?'#4A9EF5':'#1A2838'} strokeWidth="1.2"/>
+          <text x="578" y="94" textAnchor="middle" fill={vent1R?'#4A9EF5':txtDim} fontSize="13" fontFamily="Share Tech Mono" fontWeight="600">{vent1R?'●':'○'}</text>
+          <text x="578" y="104" textAnchor="middle" fill={vent1R?'#4A9EF5':txtDim} fontSize="6" fontFamily="Share Tech Mono">PAS VENT</text>
+        </g>
+        <text x="660" y="40" fill={txtDim} fontSize="8" fontFamily="Share Tech Mono">FAN</text>
+        <text x="660" y="60" fill={night?'#D7A03A':'#5A6A80'} fontSize="14" fontFamily="Orbitron" fontWeight="600">— bars</text>
+        <text x="660" y="90" fill={txtDim} fontSize="8" fontFamily="Share Tech Mono">MODE</text>
+        <text x="660" y="108" fill={night?'#D7A03A':'#5A6A80'} fontSize="11" fontFamily="Share Tech Mono" fontWeight="600">AUTO</text>
+      </svg>
+    </CockpitZone>
+
+    {/* ── Center stack / infotainment ── */}
+    <CockpitZone title="CENTER STACK" subtitle="infotainment · media · nav" night={night}>
+      {placeholder('media transport · radio · phone · nav — todo')}
+    </CockpitZone>
+
+    {/* ── Gear shifter ── */}
+    <CockpitZone title="GEAR SHIFTER" night={night}>
+      {placeholder('P · R · N · D · S — todo (will subscribe to Powertrain.Transmission.SelectedGear)')}
+    </CockpitZone>
+
+    {/* ── Duplicated door trim controls (driver door) ── */}
+    <CockpitZone title="DOOR TRIM (DRIVER)" subtitle="interior pulls · windows · locks · mirrors" night={night}>
+      <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
+        <button onMouseDown={()=>set('Body.Doors.Row1.Left.Handle.Inside.IsPulled',true)}
+                onMouseUp={()=>set('Body.Doors.Row1.Left.Handle.Inside.IsPulled',false)}
+                onMouseLeave={()=>set('Body.Doors.Row1.Left.Handle.Inside.IsPulled',false)}
+                style={{background:pullL?'#3A2C0A':'#0E1625',border:`1px solid ${pullL?'#F59E0B':'#1A2838'}`,
+                  color:pullL?'#F59E0B':txt,fontFamily:'Share Tech Mono',fontSize:9,
+                  padding:'10px 14px',borderRadius:4,cursor:'pointer',minWidth:130}}>
+          ⇲ DRV INSIDE PULL {pullL?'●':''}
+        </button>
+        <button onMouseDown={()=>set('Body.Doors.Row1.Right.Handle.Inside.IsPulled',true)}
+                onMouseUp={()=>set('Body.Doors.Row1.Right.Handle.Inside.IsPulled',false)}
+                onMouseLeave={()=>set('Body.Doors.Row1.Right.Handle.Inside.IsPulled',false)}
+                style={{background:pullR?'#3A2C0A':'#0E1625',border:`1px solid ${pullR?'#F59E0B':'#1A2838'}`,
+                  color:pullR?'#F59E0B':txt,fontFamily:'Share Tech Mono',fontSize:9,
+                  padding:'10px 14px',borderRadius:4,cursor:'pointer',minWidth:130}}>
+          ⇱ PAS INSIDE PULL {pullR?'●':''}
+        </button>
+        <span style={{fontFamily:'Share Tech Mono',fontSize:8,color:txtDim,alignSelf:'center'}}>
+          window switches · mirror fold/adjust · door lock — todo
+        </span>
+      </div>
+    </CockpitZone>
+
+    {/* ── Ambient / footwell lighting ── */}
+    <CockpitZone title="AMBIENT LIGHTING" subtitle="footwell · console · door piping" night={night}>
+      {placeholder('footwell-L · footwell-R · center console · door-card piping — todo')}
+    </CockpitZone>
+
+    {/* ── Status bar ── */}
+    <CockpitZone title="STATUS" night={night}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:6,fontFamily:'Share Tech Mono',fontSize:9}}>
+        <span style={{color: wf!=='OFF'?'#4A9EF5':txtDim}}>WIPERS: <b>{wf}</b></span>
+        <span style={{color: horn?'#EF4444':txtDim}}>HORN: <b>{horn?'●':'-'}</b></span>
+        <span style={{color: dome?'#FCD34D':txtDim}}>DOME: <b>{dome?'ON':'OFF'}</b></span>
+        <span style={{color: fuel?'#F59E0B':txtDim}}>FUEL: <b>{fuel?'OPEN':'-'}</b></span>
+        <span style={{color: trunk?'#F59E0B':txtDim}}>GATE: <b>{trunk?'OPEN':'-'}</b></span>
+      </div>
+    </CockpitZone>
+
+  </div>;
 }
 
 /* ══════ CONTROL PANEL ══════ */
@@ -2544,7 +2701,7 @@ function ConfigView({cfg, onSet, staged, setStaged, onApplyReboot}){
 const VIEWS=[
   {id:'top',    label:'TOP',    icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="5" y="3" width="14" height="18" rx="3"/><line x1="5" y1="9" x2="19" y2="9"/><line x1="5" y1="15" x2="19" y2="15"/></svg>},
   {id:'side',   label:'SIDE',   icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3,16 L6,8 L8,5 L18,5 L21,8 L21,16 Z"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg>},
-  {id:'cockpit',label:'DASH',   icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/><circle cx="12" cy="12" r="2"/></svg>},
+  {id:'cockpit',label:'COCKPIT',icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/><circle cx="12" cy="12" r="2"/></svg>},
   {id:'config', label:'CONFIG', icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg>},
 ];
 

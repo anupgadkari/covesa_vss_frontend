@@ -406,6 +406,24 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // OncomingVehicleDetected: true when forward camera sees oncoming headlights.
         "Vehicle.ADAS.HighBeam.OncomingVehicleDetected" => Some(0x0016_0001),
 
+        // ── Standard COVESA VSS v4.0 paths (block 0x0018) ──────────────
+        //
+        // `Vehicle.Cabin.Infotainment.HMI.DayNightMode` — String enum
+        // (`"DAY"` / `"NIGHT"`).  Published by the `DayNightMode` plant
+        // model in `plant_models/day_night_mode.rs`.  HMI subscribes and
+        // applies the "night backlit" rendering style to the cockpit
+        // view buttons / indicators while NIGHT.
+        "Vehicle.Cabin.Infotainment.HMI.DayNightMode" => Some(0x0018_0001),
+
+        // Per-wheel tire-pressure low warnings — bool.  Default false at
+        // boot; no producer yet (a real TPMS feature will set these
+        // based on the per-wheel pressure sensors).  The cockpit TPMS
+        // indicator subscribes to all four and lights if ANY is true.
+        "Vehicle.Chassis.Axle.Row1.Wheel.Left.Tire.IsPressureLow" => Some(0x0018_0010),
+        "Vehicle.Chassis.Axle.Row1.Wheel.Right.Tire.IsPressureLow" => Some(0x0018_0011),
+        "Vehicle.Chassis.Axle.Row2.Wheel.Left.Tire.IsPressureLow" => Some(0x0018_0012),
+        "Vehicle.Chassis.Axle.Row2.Wheel.Right.Tire.IsPressureLow" => Some(0x0018_0013),
+
         _ => None,
     }
 }
@@ -710,6 +728,23 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Cabin.LockStatus.EventNum", 0x0014_0007),
     ("Body.Lights.AmbientLightSensor.Illuminance", 0x0015_0001),
     ("Vehicle.ADAS.HighBeam.OncomingVehicleDetected", 0x0016_0001),
+    ("Vehicle.Cabin.Infotainment.HMI.DayNightMode", 0x0018_0001),
+    (
+        "Vehicle.Chassis.Axle.Row1.Wheel.Left.Tire.IsPressureLow",
+        0x0018_0010,
+    ),
+    (
+        "Vehicle.Chassis.Axle.Row1.Wheel.Right.Tire.IsPressureLow",
+        0x0018_0011,
+    ),
+    (
+        "Vehicle.Chassis.Axle.Row2.Wheel.Left.Tire.IsPressureLow",
+        0x0018_0012,
+    ),
+    (
+        "Vehicle.Chassis.Axle.Row2.Wheel.Right.Tire.IsPressureLow",
+        0x0018_0013,
+    ),
     ("Cabin.ValetMode.IsActive", 0x0017_0001),
 ];
 

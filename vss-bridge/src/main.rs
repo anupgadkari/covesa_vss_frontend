@@ -70,6 +70,7 @@ use vss_bridge::kuksa_sync;
 use vss_bridge::nvm::NvmStore;
 use vss_bridge::plant_models::blink_relay::BlinkRelay;
 use vss_bridge::plant_models::chime::ChimePlantModel;
+use vss_bridge::plant_models::day_night_mode::DayNightModePlant;
 use vss_bridge::plant_models::door_handle::DoorHandlePlantModel;
 use vss_bridge::plant_models::door_lock::DoorLockPlantModel;
 use vss_bridge::plant_models::hood::HoodPlantModel;
@@ -442,6 +443,11 @@ async fn boot_simulation_stack(
     // Body.Chime.IsSounding (actuator state).  HMI watches IsSounding
     // for the ripple visualisation.
     set.spawn(ChimePlantModel::new(Arc::clone(&bus)).run());
+    // Day/Night HMI mode: subscribes to Body.Lights.Beam.Low.IsOn,
+    // publishes Vehicle.Cabin.Infotainment.HMI.DayNightMode (VSS v4.0).
+    // Drives the cockpit view's night-backlit rendering style.  Future
+    // extensions: ambient light sensor, GPS sunset, tunnel detection.
+    set.spawn(DayNightModePlant::new(Arc::clone(&bus)).run());
     set.spawn(
         DoorLockPlantModel::with_ack_and_nvm(Arc::clone(&bus), door_lock_ack_tx, nvm.clone())
             .with_cfg(Arc::clone(&cfg))
@@ -458,7 +464,7 @@ async fn boot_simulation_stack(
             .with_response_stagger_ms(vss_bridge::plant_models::peps::PRODUCTION_STAGGER_MS)
             .run(),
     );
-    tracing::info!("plant models spawned: BlinkRelay, ChimePlantModel, DoorLockPlantModel, DoorHandlePlantModel, TrunkPlantModel, HoodPlantModel, SunroofPlantModel, PepsPlantModel");
+    tracing::info!("plant models spawned: BlinkRelay, ChimePlantModel, DayNightModePlant, DoorLockPlantModel, DoorHandlePlantModel, TrunkPlantModel, HoodPlantModel, SunroofPlantModel, PepsPlantModel");
 
     // ── WebSocket bridge ────────────────────────────────────────────
     let ws_port: u16 = std::env::var("VSS_BRIDGE_WS_PORT")

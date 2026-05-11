@@ -264,6 +264,16 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     // "PRE_ARMED" | "ARMED" | "ACTIVATED".  HMI subscribes for the
     // status pill + countdown banners.
     "Vehicle.Body.Alarm.State",
+    // VSS v4.0 HMI display mode — "DAY" or "NIGHT".  Published by the
+    // DayNightModePlant; drives the cockpit view's night-backlit style.
+    "Vehicle.Cabin.Infotainment.HMI.DayNightMode",
+    // VSS v4.0 per-wheel TPMS low-pressure flags.  Default false at
+    // boot — no producer yet (a real TPMS feature will set these).
+    // Cockpit aggregates these into a single TPMS warning lamp.
+    "Vehicle.Chassis.Axle.Row1.Wheel.Left.Tire.IsPressureLow",
+    "Vehicle.Chassis.Axle.Row1.Wheel.Right.Tire.IsPressureLow",
+    "Vehicle.Chassis.Axle.Row2.Wheel.Left.Tire.IsPressureLow",
+    "Vehicle.Chassis.Axle.Row2.Wheel.Right.Tire.IsPressureLow",
     // Panic switch — set by RKE on PANIC press, cleared by PanicAlarm
     // on cancel-via-unlock.  HMI consumes this to keep its own alarm
     // toggle state in sync.
