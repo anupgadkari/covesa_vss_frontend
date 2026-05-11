@@ -1841,7 +1841,29 @@ function CockpitView({s,set}){
   const DOME_CYCLE={OFF:'DOOR',DOOR:'ON',ON:'OFF'};
   // VSS Powertrain.Transmission.CurrentGear encoding:
   //   126 = Park, -1 = Reverse, 0 = Neutral, 127 = Drive, 128 = Sport (custom).
-  const gearLabel=g=>g===126?'P':g===-1?'R':g===0?'N':g===127?'D':g===128?'S':'?';
+  // Negative values below -1 are reverse-gear-N (still display 'R').
+  // Positive 1..N are forward gears in manual transmissions — display
+  // the number directly so the instrument cluster reflects what the
+  // driver picked.
+  const gearLabel=g=>{
+    if(g===126) return 'P';
+    if(g===127) return 'D';
+    if(g===128) return 'S';
+    if(g===0)   return 'N';
+    if(g<0)     return 'R';
+    return String(g); // 1, 2, 3, ... for manual
+  };
+  // Word + tint for the under-speedo readout.
+  const gearWord=g=>{
+    const lab=gearLabel(g);
+    if(lab==='P') return {t:'PARK',  c:'#10D98A'};
+    if(lab==='R') return {t:'REVERSE',c:'#EF4444'};
+    if(lab==='N') return {t:'NEUTRAL',c:'#4A9EF5'};
+    if(lab==='D') return {t:'DRIVE',  c:'#F59E0B'};
+    if(lab==='S') return {t:'SPORT',  c:'#EF6020'};
+    return {t:`GEAR ${lab}`,c:'#F59E0B'};   // manual 1..N
+  };
+  const gw=gearWord(gear);
   const placeholder=(label)=><div style={{
     fontFamily:'Share Tech Mono', fontSize:9, color:night?'#5A7090':'#2A3A50',
     fontStyle:'italic', padding:'14px 0', textAlign:'center',
@@ -1884,7 +1906,7 @@ function CockpitView({s,set}){
         <text x="380" y="55" textAnchor="middle" fill={txtDim} fontSize="11" fontFamily="Share Tech Mono" fontWeight="600" letterSpacing="2">SPEED</text>
         <text x="380" y="105" textAnchor="middle" fill="#F59E0B" fontSize="52" fontFamily="Orbitron" fontWeight="700">0</text>
         <text x="380" y="130" textAnchor="middle" fill={txtDim} fontSize="12" fontFamily="Share Tech Mono">km/h</text>
-        <text x="380" y="165" textAnchor="middle" fill="#10D98A" fontSize="13" fontFamily="Share Tech Mono" fontWeight="600">● PARK</text>
+        <text x="380" y="165" textAnchor="middle" fill={gw.c} fontSize="13" fontFamily="Share Tech Mono" fontWeight="600">● {gw.t}</text>
         <text x="30" y="55" fill={txtDim} fontSize="9" fontFamily="Share Tech Mono" fontWeight="600">WARNINGS:</text>
         {[
           {active:lo,color:'#22C55E',label:'LO',cx:30},
