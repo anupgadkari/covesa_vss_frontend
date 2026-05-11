@@ -1761,6 +1761,45 @@ function Btn({on,night,onClick,onMouseDown,onMouseUp,onMouseLeave,children,sz,pa
     onMouseLeave={onMouseLeave} style={cockpitBtnSty(on,night,{sz,pad,min})}>{children}</button>;
 }
 
+// ISO/SAE-style headlamp telltale icons for the instrument cluster.
+//
+// All three share the same left-bulging semicircle "headlamp body"
+// (curve on the left, flat diameter on the right) plus 3 emanating
+// "beam" lines coming off the diameter to the right:
+//
+//   kind="lo"  — beams slope down-and-right (low beam aim).
+//   kind="hi"  — beams are horizontal (high beam reach).
+//   kind="fog" — low-beam style + a vertical wavy line through the
+//                beams representing fog.
+//
+// Drawn in a 24×16 local box centred on the caller's (cx, cy).  The
+// caller passes `on` and the active/inactive colours; we render the
+// faint inactive icon when off so the cluster layout stays stable.
+function HeadlampTelltale({cx, cy, kind, on, onColor, offColor='#1F2C40'}){
+  const c = on ? onColor : offColor;
+  const op = on ? 1 : 0.45;
+  const sw = 1.6;
+  // Semicircle body — flat side on the right (x = cx+1), curve on
+  // the left.  Filled so it reads as a solid lamp lens.
+  const body = `M ${cx+1},${cy-7} A 7,7 0 0,0 ${cx+1},${cy+7} Z`;
+  // Three beam endpoints differ per kind.
+  const beams = kind === 'hi'
+    ? [[cx-5,cy-4,cx+11,cy-4],[cx-5,cy,cx+11,cy],[cx-5,cy+4,cx+11,cy+4]]
+    : [[cx-4,cy-4,cx+11,cy-1],[cx-3,cy,cx+11,cy+3],[cx-2,cy+4,cx+11,cy+7]];
+  return <g opacity={op}>
+    <path d={body} fill={c} stroke={c} strokeWidth="0.6"/>
+    {beams.map(([x1,y1,x2,y2],i)=>(
+      <line key={i} x1={x1} y1={y1} x2={x2} y2={y2}
+        stroke={c} strokeWidth={sw} strokeLinecap="round"/>
+    ))}
+    {kind === 'fog' && (
+      // Wavy vertical line cutting across the 3 beams to indicate fog.
+      <path d={`M ${cx+4},${cy-7} Q ${cx+8},${cy-3.5} ${cx+4},${cy} T ${cx+4},${cy+7}`}
+        fill="none" stroke={c} strokeWidth={sw} strokeLinecap="round"/>
+    )}
+  </g>;
+}
+
 // VSS Powertrain.Transmission.CurrentGear / SelectedGear encoding:
 //   126 = Park, -1 = Reverse, 0 = Neutral, 127 = Drive, 128 = Sport
 //   (custom).  Positive 1..N are forward gears (manual transmission).
@@ -1923,17 +1962,18 @@ function CockpitView({s,set}){
         <text x="380" y="130" textAnchor="middle" fill={txtDim} fontSize="12" fontFamily="Share Tech Mono">km/h</text>
         <text x="380" y="165" textAnchor="middle" fill={gw.c} fontSize="13" fontFamily="Share Tech Mono" fontWeight="600">● {gw.t}</text>
         <text x="30" y="55" fill={txtDim} fontSize="9" fontFamily="Share Tech Mono" fontWeight="600">WARNINGS:</text>
-        {[
-          {active:lo,color:'#22C55E',label:'LO',cx:30},
-          {active:hi,color:'#4A9EF5',label:'HI',cx:90},
-          {active:ffog,color:'#BAD6FE',label:'FOG',cx:150},
-          {active:rfog,color:'#EF4444',label:'RFOG',cx:210},
-        ].map(({active,color,label,cx})=>(
-          <g key={label}>
-            <circle cx={cx} cy={80} r={12} fill={active?color:'#1A2838'} opacity={active?0.6:0.25} stroke={active?color:'#3A4D5C'} strokeWidth="1.2"/>
-            <text x={cx} y={85} textAnchor="middle" fill={active?color:'#3A5060'} fontSize={label.length>3?7:8} fontFamily="Share Tech Mono" fontWeight="600">{label}</text>
-          </g>
-        ))}
+        {/* Real ISO-style headlamp telltales for LO / HI / front-FOG.
+            Standard automotive colour cues: green = low beam,
+            blue = high beam, amber = front fog. */}
+        <HeadlampTelltale cx={30}  cy={80} kind="lo"  on={lo}   onColor="#22C55E"/>
+        <HeadlampTelltale cx={90}  cy={80} kind="hi"  on={hi}   onColor="#4A9EF5"/>
+        <HeadlampTelltale cx={150} cy={80} kind="fog" on={ffog} onColor="#F59E0B"/>
+        {/* RFOG keeps the existing circular badge — distinct rear-fog
+            ISO icon is a follow-up. */}
+        <g>
+          <circle cx={210} cy={80} r={12} fill={rfog?'#EF4444':'#1A2838'} opacity={rfog?0.6:0.25} stroke={rfog?'#EF4444':'#3A4D5C'} strokeWidth="1.2"/>
+          <text x={210} y={85} textAnchor="middle" fill={rfog?'#EF4444':'#3A5060'} fontSize="7" fontFamily="Share Tech Mono" fontWeight="600">RFOG</text>
+        </g>
         {li&&<g><circle cx={30} cy={120} r={12} fill="#F59E0B" opacity="0.3" stroke="#F59E0B" strokeWidth="1.2" className="blink"/>
           <text x={30} y={125} textAnchor="middle" fill="#F59E0B" fontSize="10" fontFamily="Share Tech Mono" fontWeight="600">◄</text></g>}
         {ri&&<g><circle cx={90} cy={120} r={12} fill="#F59E0B" opacity="0.3" stroke="#F59E0B" strokeWidth="1.2" className="blink"/>
