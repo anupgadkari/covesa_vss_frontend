@@ -1899,6 +1899,7 @@ function CockpitView({s,set}){
   // signal as the top-view MirrorAdjustControls; clicking SEL toggles
   // the chosen side, second click clears.
   const mirSel=s['Body.Switches.Mirror.Select']||'NONE';
+  const mirDir=s['Body.Switches.Mirror.Direction']||'NONE';
 
   const txt = night?'#F59E0B':'#1C3050';
   const txtDim = night?'#8A6020':'#2A3A50';
@@ -2223,15 +2224,13 @@ function CockpitView({s,set}){
       </div>
     </CockpitZone>
 
-    {/* ── Row-1 door trim panels — left + right side-by-side ──
+    {/* ── Row-1 door trim panels — left + right side-by-side. ──
          Each side carries its own inside pull, window switch, and
-         lock/unlock pad.  The driver side (left, in LHD) also owns
-         the mirror master controls — fold + select L/R — because
-         that's where they physically live on the door card.  Central-
-         locking is cabin-wide: pressing LOCK or UNLOCK on either
-         side feeds the same DoorTrimButton feature, which decides
-         to lock-all / unlock-driver / unlock-all per the configured
-         two-stage policy. */}
+         lock/unlock pad.  Central-locking is cabin-wide: pressing
+         LOCK or UNLOCK on either side feeds the same DoorTrimButton
+         feature, which decides lock-all / unlock-driver / unlock-all
+         per the configured two-stage policy.  Driver-only controls
+         (mirror master pad) live in a dedicated zone below. */}
     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
       <CockpitZone title="LEFT DOOR TRIM" subtitle="driver (LHD)" night={night}>
         <div style={{display:'flex',flexDirection:'column',gap:6}}>
@@ -2247,13 +2246,6 @@ function CockpitView({s,set}){
           <div style={{display:'flex',gap:6}}>
             <Btn night={night} on={!lockL&&!lockR} onClick={()=>set('Body.Switches.DoorTrim.Row1.Left.UnlockButton',true)} sz={9} pad={'6px 10px'} min={90}>UNLOCK</Btn>
             <Btn night={night} on={lockL&&lockR} onClick={()=>set('Body.Switches.DoorTrim.Row1.Left.LockButton',true)} sz={9} pad={'6px 10px'} min={90}>LOCK {dblL?'⊕⊕':''}</Btn>
-          </div>
-          {/* Driver-side mirror controls — master fold + select. */}
-          <div style={{display:'flex',gap:6,alignItems:'center',marginTop:2}}>
-            <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1}}>MIRRORS:</span>
-            <Btn night={night} on={mirL&&mirR} onClick={()=>set('Body.Switches.Mirror.Fold',true)} sz={9} pad={'6px 10px'}>FOLD {(mirL&&mirR)?'●':'○'}</Btn>
-            <Btn night={night} on={mirSel==='LEFT'}  onClick={()=>set('Body.Switches.Mirror.Select', mirSel==='LEFT' ?'NONE':'LEFT')}  sz={9} pad={'6px 8px'}>SEL L</Btn>
-            <Btn night={night} on={mirSel==='RIGHT'} onClick={()=>set('Body.Switches.Mirror.Select', mirSel==='RIGHT'?'NONE':'RIGHT')} sz={9} pad={'6px 8px'}>SEL R</Btn>
           </div>
         </div>
       </CockpitZone>
@@ -2275,6 +2267,62 @@ function CockpitView({s,set}){
         </div>
       </CockpitZone>
     </div>
+
+    {/* ── Driver-side mirror master pad ──
+         Fold + side-select + 4-way direction dpad.  Direction is a
+         press-and-hold switch (`Body.Switches.Mirror.Direction`
+         enum NONE/UP/DOWN/LEFT/RIGHT) consumed by the mirror-adjust
+         plant model — releasing sets NONE, identical to the top-view
+         MirrorAdjustControls. */}
+    <CockpitZone title="DRIVER MIRROR" subtitle="master fold · select · adjust" night={night}>
+      <div style={{display:'flex',gap:14,alignItems:'center',flexWrap:'wrap'}}>
+        <div style={{display:'flex',flexDirection:'column',gap:5}}>
+          <Btn night={night} on={mirL&&mirR} onClick={()=>set('Body.Switches.Mirror.Fold',true)} sz={9} pad={'7px 12px'} min={90}>FOLD {(mirL&&mirR)?'●':'○'}</Btn>
+          <div style={{display:'flex',gap:5}}>
+            <Btn night={night} on={mirSel==='LEFT'}  onClick={()=>set('Body.Switches.Mirror.Select', mirSel==='LEFT' ?'NONE':'LEFT')}  sz={9} pad={'6px 10px'} min={42}>SEL L</Btn>
+            <Btn night={night} on={mirSel==='RIGHT'} onClick={()=>set('Body.Switches.Mirror.Select', mirSel==='RIGHT'?'NONE':'RIGHT')} sz={9} pad={'6px 10px'} min={42}>SEL R</Btn>
+          </div>
+          <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1}}>
+            {mirSel==='NONE'?'no side selected':`adjusting ${mirSel}`}
+          </span>
+        </div>
+        {/* 4-way direction dpad — disabled when no side is selected.
+            Press-and-hold: press writes the direction; release/leave
+            writes NONE so the plant stops integrating. */}
+        {(() => {
+          const enabled = mirSel !== 'NONE';
+          const dirBtn = (v, label) => {
+            const lit = mirDir === v;
+            const press = enabled ? {
+              onMouseDown: () => set('Body.Switches.Mirror.Direction', v),
+              onMouseUp:   () => set('Body.Switches.Mirror.Direction', 'NONE'),
+              onMouseLeave:() => { if (mirDir === v) set('Body.Switches.Mirror.Direction', 'NONE'); },
+            } : {};
+            return <button {...press} disabled={!enabled} style={{
+              width:36,height:36,padding:0,borderRadius:6,
+              background: lit?(night?'#3A2C0A':'#1E3A52'):(night?'#0A1018':'#0E1625'),
+              border: `1px solid ${lit?(night?'#F59E0B':'#4A9EF5'):(night?'#2A3A50':'#1A2838')}`,
+              color: lit?(night?'#F59E0B':'#4A9EF5'):(night?'#D7A03A':'#3A5070'),
+              fontFamily:'Share Tech Mono',fontSize:14,fontWeight:700,
+              cursor:enabled?'pointer':'not-allowed',opacity:enabled?1:0.35,
+              userSelect:'none',touchAction:'none',
+            }}>{label}</button>;
+          };
+          return <div style={{display:'grid',gridTemplateColumns:'36px 36px 36px',
+            gridTemplateRows:'36px 36px 36px',gap:4,justifyContent:'center'}}>
+            <div/>{dirBtn('UP','▲')}<div/>
+            {dirBtn('LEFT','◀')}
+            <div style={{width:36,height:36,opacity:0.25,display:'flex',alignItems:'center',
+              justifyContent:'center',fontFamily:'Share Tech Mono',fontSize:10,
+              color:txtDim,border:`1px dashed ${night?'#2A3A50':'#1A2838'}`,borderRadius:6}}>
+              {mirSel==='NONE'?'—':mirSel[0]}
+            </div>
+            {dirBtn('RIGHT','▶')}
+            <div/>{dirBtn('DOWN','▼')}<div/>
+          </div>;
+        })()}
+      </div>
+    </CockpitZone>
 
     {/* ── Ambient / footwell lighting ── */}
     <CockpitZone title="AMBIENT LIGHTING" subtitle="footwell · console · door piping" night={night}>
