@@ -162,6 +162,14 @@ const INPUT_SIGNALS: &[VssPath] = &[
     // the driver's SelectedGear input.  HMI reads for cluster PRND
     // text and the sidebar Gear display.
     "Powertrain.Transmission.CurrentGear",
+    // Driver-door window lockout + per-door child-lock status.  The
+    // cockpit driver-door panel writes these; HMI also subscribes so
+    // both the cockpit and any other view stay in sync.
+    "Body.Switches.Window.LockoutEnabled",
+    "Body.Doors.Row1.Left.IsChildLockActive",
+    "Body.Doors.Row1.Right.IsChildLockActive",
+    "Body.Doors.Row2.Left.IsChildLockActive",
+    "Body.Doors.Row2.Right.IsChildLockActive",
 ];
 
 /// Signals the bridge pushes back to the HMI (actuator outputs from arbiters).

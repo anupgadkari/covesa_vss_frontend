@@ -1900,6 +1900,19 @@ function CockpitView({s,set}){
   // the chosen side, second click clears.
   const mirSel=s['Body.Switches.Mirror.Select']||'NONE';
   const mirDir=s['Body.Switches.Mirror.Direction']||'NONE';
+  // Driver master-panel window + child-lock state.
+  const winLockout=s['Body.Switches.Window.LockoutEnabled'];
+  const childRL=s['Body.Doors.Row2.Left.IsChildLockActive'];
+  const childRR=s['Body.Doors.Row2.Right.IsChildLockActive'];
+  // One-touch window helpers: clicking ⇧ runs the window all the way
+  // up (Position=100), ⇩ all the way down (Position=0) — same auto-up
+  // / auto-down semantics found in real driver-door master switches.
+  const winUp=(k)=>set(k,100);
+  const winDn=(k)=>set(k,0);
+  // True when the master lockout is engaged AND the target window is
+  // not the driver's own (FL).  The body controller ignores writes
+  // from passenger-rear positions while lockout is engaged.
+  const winLocked=(k)=>winLockout && k!=='Body.Doors.Row1.Left.Window.Position';
 
   const txt = night?'#F59E0B':'#1C3050';
   const txtDim = night?'#8A6020':'#2A3A50';
@@ -2232,7 +2245,7 @@ function CockpitView({s,set}){
          per the configured two-stage policy.  Driver-only controls
          (mirror master pad) live in a dedicated zone below. */}
     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-      <CockpitZone title="LEFT DOOR TRIM" subtitle="driver (LHD)" night={night}>
+      <CockpitZone title="LEFT DOOR TRIM" subtitle="driver (LHD) · pull + lock" night={night}>
         <div style={{display:'flex',flexDirection:'column',gap:6}}>
           <Btn night={night} on={pullL}
             onMouseDown={()=>set('Body.Doors.Row1.Left.Handle.Inside.IsPulled',true)}
@@ -2240,13 +2253,12 @@ function CockpitView({s,set}){
             onMouseLeave={()=>set('Body.Doors.Row1.Left.Handle.Inside.IsPulled',false)}
             sz={10} pad={'8px 12px'}>⇲ INSIDE PULL {pullL?'●':''}</Btn>
           <div style={{display:'flex',gap:6}}>
-            <Btn night={night} on={false} onClick={()=>{}} sz={9} pad={'6px 10px'} min={70}>WIN ⇧</Btn>
-            <Btn night={night} on={false} onClick={()=>{}} sz={9} pad={'6px 10px'} min={70}>WIN ⇩</Btn>
-          </div>
-          <div style={{display:'flex',gap:6}}>
             <Btn night={night} on={!lockL&&!lockR} onClick={()=>set('Body.Switches.DoorTrim.Row1.Left.UnlockButton',true)} sz={9} pad={'6px 10px'} min={90}>UNLOCK</Btn>
             <Btn night={night} on={lockL&&lockR} onClick={()=>set('Body.Switches.DoorTrim.Row1.Left.LockButton',true)} sz={9} pad={'6px 10px'} min={90}>LOCK {dblL?'⊕⊕':''}</Btn>
           </div>
+          <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,fontStyle:'italic'}}>
+            Window + mirror master controls are in the DRIVER PANEL below.
+          </span>
         </div>
       </CockpitZone>
       <CockpitZone title="RIGHT DOOR TRIM" subtitle="passenger (LHD)" night={night}>
@@ -2256,10 +2268,18 @@ function CockpitView({s,set}){
             onMouseUp={()=>set('Body.Doors.Row1.Right.Handle.Inside.IsPulled',false)}
             onMouseLeave={()=>set('Body.Doors.Row1.Right.Handle.Inside.IsPulled',false)}
             sz={10} pad={'8px 12px'}>⇱ INSIDE PULL {pullR?'●':''}</Btn>
-          <div style={{display:'flex',gap:6}}>
-            <Btn night={night} on={false} onClick={()=>{}} sz={9} pad={'6px 10px'} min={70}>WIN ⇧</Btn>
-            <Btn night={night} on={false} onClick={()=>{}} sz={9} pad={'6px 10px'} min={70}>WIN ⇩</Btn>
-          </div>
+          {/* Passenger's own one-touch window switch — gated by the
+              driver master Body.Switches.Window.LockoutEnabled. */}
+          {(() => {
+            const k='Body.Doors.Row1.Right.Window.Position';
+            const pos=s[k]??0;
+            const locked=winLockout;
+            return <div style={{display:'flex',gap:6,alignItems:'center',opacity:locked?0.35:1}}>
+              <Btn night={night} on={pos===100} onClick={()=>{ if(!locked) winUp(k); }} sz={9} pad={'6px 10px'} min={70}>WIN ⇧</Btn>
+              <Btn night={night} on={pos===0}   onClick={()=>{ if(!locked) winDn(k); }} sz={9} pad={'6px 10px'} min={70}>WIN ⇩</Btn>
+              <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim}}>{pos|0}%{locked?' · LOCKED':''}</span>
+            </div>;
+          })()}
           <div style={{display:'flex',gap:6}}>
             <Btn night={night} on={!lockL&&!lockR} onClick={()=>set('Body.Switches.DoorTrim.Row1.Right.UnlockButton',true)} sz={9} pad={'6px 10px'} min={90}>UNLOCK</Btn>
             <Btn night={night} on={lockL&&lockR} onClick={()=>set('Body.Switches.DoorTrim.Row1.Right.LockButton',true)} sz={9} pad={'6px 10px'} min={90}>LOCK</Btn>
@@ -2268,13 +2288,24 @@ function CockpitView({s,set}){
       </CockpitZone>
     </div>
 
-    {/* ── Driver-side mirror master pad ──
-         Fold + side-select + 4-way direction dpad.  Direction is a
-         press-and-hold switch (`Body.Switches.Mirror.Direction`
-         enum NONE/UP/DOWN/LEFT/RIGHT) consumed by the mirror-adjust
-         plant model — releasing sets NONE, identical to the top-view
-         MirrorAdjustControls. */}
-    <CockpitZone title="DRIVER MIRROR" subtitle="master fold · select · adjust" night={night}>
+    {/* ── Driver master panel ──
+         The cluster of master controls physically located on the
+         driver's door card: mirror controls + 4-way window switches
+         + window lockout + rear child locks.
+         - Mirrors: master fold, side select, 4-way direction dpad on
+           Body.Switches.Mirror.{Fold,Select,Direction}.  Direction is
+           press-and-hold; releasing writes NONE so the mirror-adjust
+           plant model stops integrating.
+         - Windows: one-touch ⇧ writes Position=100, ⇩ writes 0 —
+           same auto-up / auto-down semantics as the real driver-door
+           switch pack.
+         - Lockout: master Body.Switches.Window.LockoutEnabled.  When
+           engaged, the passenger / rear switches in this UI grey out
+           (the underlying body controller would ignore their writes).
+         - Child locks: Body.Doors.Row2.{Left,Right}.IsChildLockActive
+           per rear door.  Front-door child locks exist in VSS but
+           aren't typically exposed at the driver master. */}
+    <CockpitZone title="DRIVER MASTER PANEL" subtitle="mirrors · windows · child locks" night={night}>
       <div style={{display:'flex',gap:14,alignItems:'center',flexWrap:'wrap'}}>
         <div style={{display:'flex',flexDirection:'column',gap:5}}>
           <Btn night={night} on={mirL&&mirR} onClick={()=>set('Body.Switches.Mirror.Fold',true)} sz={9} pad={'7px 12px'} min={90}>FOLD {(mirL&&mirR)?'●':'○'}</Btn>
@@ -2321,6 +2352,39 @@ function CockpitView({s,set}){
             <div/>{dirBtn('DOWN','▼')}<div/>
           </div>;
         })()}
+      </div>
+
+      {/* Window switch pack — 4-up / 4-down for the driver's master
+          control of all 4 windows. */}
+      <div style={{display:'grid',gridTemplateColumns:'auto repeat(4, 1fr)',gap:6,marginTop:10,alignItems:'center'}}>
+        <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1}}>WINDOWS:</span>
+        {[
+          {k:'Body.Doors.Row1.Left.Window.Position',  l:'FL (drv)'},
+          {k:'Body.Doors.Row1.Right.Window.Position', l:'FR'},
+          {k:'Body.Doors.Row2.Left.Window.Position',  l:'RL'},
+          {k:'Body.Doors.Row2.Right.Window.Position', l:'RR'},
+        ].map(({k,l})=>{
+          const pos=s[k]??0;
+          const locked=winLocked(k);
+          return <div key={k} style={{display:'flex',flexDirection:'column',gap:3,alignItems:'center',opacity:locked?0.35:1}}>
+            <span style={{fontFamily:'Share Tech Mono',fontSize:8,color:txtDim,letterSpacing:.5}}>{l}</span>
+            <div style={{display:'flex',gap:3}}>
+              <Btn night={night} on={pos===100} onClick={()=>{ if(!locked) winUp(k); }} sz={9} pad={'5px 9px'}>⇧</Btn>
+              <Btn night={night} on={pos===0}   onClick={()=>{ if(!locked) winDn(k); }} sz={9} pad={'5px 9px'}>⇩</Btn>
+            </div>
+            <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim}}>{pos|0}%</span>
+          </div>;
+        })}
+      </div>
+
+      {/* Lockout + child locks row. */}
+      <div style={{display:'flex',gap:6,marginTop:10,flexWrap:'wrap',alignItems:'center'}}>
+        <Btn night={night} on={winLockout} onClick={()=>set('Body.Switches.Window.LockoutEnabled',!winLockout)} sz={9} pad={'6px 10px'} min={140}>
+          {winLockout?'🔒 WINDOW LOCKOUT':'WINDOW LOCKOUT'}
+        </Btn>
+        <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1,marginLeft:6}}>CHILD LOCK:</span>
+        <Btn night={night} on={childRL} onClick={()=>set('Body.Doors.Row2.Left.IsChildLockActive',!childRL)} sz={9} pad={'6px 10px'}>RL {childRL?'●':'○'}</Btn>
+        <Btn night={night} on={childRR} onClick={()=>set('Body.Doors.Row2.Right.IsChildLockActive',!childRR)} sz={9} pad={'6px 10px'}>RR {childRR?'●':'○'}</Btn>
       </div>
     </CockpitZone>
 
