@@ -82,19 +82,17 @@ impl<B: SignalBus + Send + Sync + 'static> PowerWindowLocal<B> {
             down_streams.push(self.bus.subscribe(d).await);
         }
         // Child-lock streams are only present for Row2 (indices 2,3).
-        // We subscribe to all 4 slots and shove a permanently-pending
-        // dummy into the Row1 slots so the same `select_all` pattern
-        // works.  Simpler than branching the loop body per window.
+        // For Row1 slots we substitute a permanently-pending stream so
+        // the slot exists in the index-aligned select_all but never
+        // wakes the loop — `stream::pending()` is forever-blocked, vs
+        // `stream::empty()` which yields None immediately and would
+        // busy-loop the select.
         let mut child_streams: Vec<futures::stream::BoxStream<'static, SignalValue>> =
             Vec::with_capacity(4);
         for (_, _, _, cl) in WINDOWS.iter() {
             match cl {
                 Some(sig) => child_streams.push(self.bus.subscribe(sig).await),
-                None => {
-                    // Empty stream — will yield None immediately and
-                    // be excluded from `select_all` thereafter.
-                    child_streams.push(Box::pin(futures::stream::empty()));
-                }
+                None => child_streams.push(Box::pin(futures::stream::pending())),
             }
         }
 

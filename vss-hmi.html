@@ -282,8 +282,11 @@ const INIT_STATE={
   'Body.Trunk.ExteriorButton.IsPressed':false,
   // HVAC
   'Cabin.HVAC.IsAirConditioningActive':false,'Cabin.HVAC.IsRecirculationActive':false,'Cabin.HVAC.IsFrontDefrosterActive':false,'Cabin.HVAC.IsRearDefrosterActive':false,
-  'Cabin.HVAC.Station.Row1.Left.Temperature':22,'Cabin.HVAC.Station.Row1.Left.FanSpeed':0,'Cabin.HVAC.Station.Row1.Left.AirDistribution':'DASHBOARD',
-  'Cabin.HVAC.Station.Row1.Right.Temperature':22,'Cabin.HVAC.Station.Row1.Right.FanSpeed':0,'Cabin.HVAC.Station.Row1.Right.AirDistribution':'DASHBOARD',
+  // AirDistribution uses the VSS-canonical enum:
+  //   AUTO / FACE / FACE_FEET / FEET / FEET_DEF / DEF
+  // Default to FACE so the cockpit displays "Panel" at boot.
+  'Cabin.HVAC.Station.Row1.Left.Temperature':22,'Cabin.HVAC.Station.Row1.Left.FanSpeed':0,'Cabin.HVAC.Station.Row1.Left.AirDistribution':'FACE',
+  'Cabin.HVAC.Station.Row1.Right.Temperature':22,'Cabin.HVAC.Station.Row1.Right.FanSpeed':0,'Cabin.HVAC.Station.Row1.Right.AirDistribution':'FACE',
   // Seats
   'Cabin.Seat.Row1.Left.HeatingLevel':0,'Cabin.Seat.Row1.Left.IsVentilationOn':false,
   'Cabin.Seat.Row1.Right.HeatingLevel':0,'Cabin.Seat.Row1.Right.IsVentilationOn':false,
@@ -2100,23 +2103,64 @@ function CockpitView({s,set,cfg}){
     {/* ── Headlamp / lighting switches ── */}
     <CockpitZone title="LIGHTING SWITCHES" subtitle="left dash cluster" night={night}>
       <div style={{display:'flex',gap:14,alignItems:'center',flexWrap:'wrap'}}>
-        {/* Headlamp rotary — cycles Body.Lights.LightSwitch */}
+        {/* Headlamp rotary — cycles Body.Lights.LightSwitch.
+            Static white ISO-style icons sit just outside the knob at
+            each valid position so the driver sees what each detent
+            does without having to read the enum text.  The amber
+            pointer + the printed enum below give the current value. */}
         <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4}}>
           <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1}}>HEADLAMP</span>
-          <svg viewBox="0 0 100 100" style={{width:80,height:80,cursor:'pointer'}} onClick={()=>set('Body.Lights.LightSwitch', LIGHT_CYCLE[lightSw]||'OFF')}>
-            <circle cx="50" cy="50" r="38" fill={night?'#0F1726':'#0C1825'} stroke={night?'#3A2A12':'#1A2838'} strokeWidth="2"/>
-            <circle cx="50" cy="50" r="6" fill="#F59E0B" opacity={lightSw==='OFF'?.2:.9}/>
-            {['OFF','POSITION','DRL','AUTO','BEAM'].map((p,i)=>{
+          <svg viewBox="0 0 130 130" style={{width:110,height:110,cursor:'pointer'}} onClick={()=>set('Body.Lights.LightSwitch', LIGHT_CYCLE[lightSw]||'OFF')}>
+            {/* Knob disc */}
+            <circle cx="65" cy="65" r="34" fill={night?'#0F1726':'#0C1825'} stroke={night?'#3A2A12':'#1A2838'} strokeWidth="2"/>
+            <circle cx="65" cy="65" r="5" fill="#F59E0B" opacity={lightSw==='OFF'?.2:.9}/>
+            {/* Static position icons (white).  The matching enum lights
+                amber.  Where no widely-recognised ISO icon exists we
+                fall back to a short text label per the user spec. */}
+            {[
+              {p:'OFF',      kind:'text',   label:'OFF'},
+              {p:'POSITION', kind:'parking'},
+              {p:'DRL',      kind:'text',   label:'DRL'},
+              {p:'AUTO',     kind:'text',   label:'AUTO'},
+              {p:'BEAM',     kind:'beam'},
+            ].map(({p,kind,label},i)=>{
               const a=-Math.PI/2 + i*(2*Math.PI/5);
-              const x=50+Math.cos(a)*28, y=50+Math.sin(a)*28;
-              return <text key={p} x={x} y={y+3} textAnchor="middle" fontSize="6"
-                fontFamily="Share Tech Mono" fontWeight="600"
-                fill={lightSw===p?'#F59E0B':txtDim}>{p[0]}</text>;
+              // Place icons just outside the knob disc (radius 48).
+              const x=65+Math.cos(a)*48, y=65+Math.sin(a)*48;
+              const active=lightSw===p;
+              const c = active ? '#F59E0B' : '#E5E7EB';
+              if (kind==='text'){
+                return <text key={p} x={x} y={y+3} textAnchor="middle" fontSize="7"
+                  fontFamily="Share Tech Mono" fontWeight="700" fill={c}>{label}</text>;
+              }
+              if (kind==='parking'){
+                // Parking / side light — a small filled lamp body
+                // (left-bulging semicircle) with two short marker
+                // dashes representing the glow.
+                return <g key={p}>
+                  <path d={`M ${x+2},${y-4} A 4,4 0 0,0 ${x+2},${y+4} Z`} fill={c} stroke={c} strokeWidth="0.5"/>
+                  <line x1={x-3} y1={y} x2={x-7} y2={y} stroke={c} strokeWidth="1.2" strokeLinecap="round"/>
+                  <line x1={x-3} y1={y-3} x2={x-6} y2={y-4} stroke={c} strokeWidth="1.2" strokeLinecap="round"/>
+                  <line x1={x-3} y1={y+3} x2={x-6} y2={y+4} stroke={c} strokeWidth="1.2" strokeLinecap="round"/>
+                </g>;
+              }
+              if (kind==='beam'){
+                // Low-beam telltale — same geometry as the cluster
+                // telltale (semicircle + 3 down-slanted beams) but in
+                // miniature.  Always points left.
+                return <g key={p}>
+                  <path d={`M ${x+1},${y-5} A 5,5 0 0,1 ${x+1},${y+5} Z`} fill={c} stroke={c} strokeWidth="0.5"/>
+                  <line x1={x-1} y1={y-3} x2={x-9} y2={y-1}  stroke={c} strokeWidth="1.3" strokeLinecap="round"/>
+                  <line x1={x-1} y1={y}   x2={x-9} y2={y+2}  stroke={c} strokeWidth="1.3" strokeLinecap="round"/>
+                  <line x1={x-1} y1={y+3} x2={x-9} y2={y+5}  stroke={c} strokeWidth="1.3" strokeLinecap="round"/>
+                </g>;
+              }
+              return null;
             })}
-            {/* Pointer */}
+            {/* Amber pointer — points from the center toward the active position. */}
             {(()=>{const i=['OFF','POSITION','DRL','AUTO','BEAM'].indexOf(lightSw);
               const a=-Math.PI/2 + (i<0?0:i)*(2*Math.PI/5);
-              return <line x1="50" y1="50" x2={50+Math.cos(a)*18} y2={50+Math.sin(a)*18}
+              return <line x1="65" y1="65" x2={65+Math.cos(a)*26} y2={65+Math.sin(a)*26}
                 stroke="#F59E0B" strokeWidth="2.5" strokeLinecap="round"/>;})()}
           </svg>
           <span style={{fontFamily:'Share Tech Mono',fontSize:8,color:txt,fontWeight:600}}>{lightSw}</span>
@@ -2249,9 +2293,12 @@ function CockpitView({s,set,cfg}){
             sz={14} pad={'10px 18px'} min={50}>{lab}</Btn>
         ))}
         <span style={{flex:1}}/>
+        {/* Driver-intent readout — mirrors the highlighted button.
+            The cluster PRND under the speedometer is the authoritative
+            "actual engaged gear" indicator (bound to CurrentGear). */}
         <div style={{fontFamily:'Orbitron',fontSize:24,fontWeight:700,color:'#F59E0B',
           border:`1px solid ${night?'#3A2A12':'#1A2838'}`,padding:'4px 18px',borderRadius:4,minWidth:60,textAlign:'center'}}>
-          {gearLabel(gear)}
+          {gearLabel(selGear)}
         </div>
       </div>
     </CockpitZone>
@@ -2288,8 +2335,12 @@ function CockpitView({s,set,cfg}){
               {side==='Left'?'⇲':'⇱'} INSIDE PULL {pull?'●':''}
             </Btn>
             <div style={{display:'flex',gap:6}}>
-              <Btn night={night} on={!lockL&&!lockR} {...holdSwitch(unlockKey)} sz={9} pad={'6px 10px'} min={90}>UNLOCK</Btn>
-              <Btn night={night} on={lockL&&lockR}   {...holdSwitch(lockKey)}   sz={9} pad={'6px 10px'} min={90}>LOCK {dbl?'⊕⊕':''}</Btn>
+              {/* Momentary push: highlight tracks the switch input
+                  (true while held), not the resulting lock state.
+                  The persistent lock state shows elsewhere (top view
+                  IsLocked / IsDoubleLocked + the LOCK label suffix). */}
+              <Btn night={night} on={!!s[unlockKey]} {...holdSwitch(unlockKey)} sz={9} pad={'6px 10px'} min={90}>UNLOCK</Btn>
+              <Btn night={night} on={!!s[lockKey]}   {...holdSwitch(lockKey)}   sz={9} pad={'6px 10px'} min={90}>LOCK {dbl?'⊕⊕':''}</Btn>
             </div>
             {/* Passenger side: own local window switch (hold-to-move).
                 Driver side: no local switch — the master pack handles it. */}
@@ -2367,7 +2418,14 @@ function CockpitView({s,set,cfg}){
     <CockpitZone title="DRIVER MASTER PANEL" subtitle="mirrors · windows · child locks" night={night}>
       <div style={{display:'flex',gap:14,alignItems:'center',flexWrap:'wrap'}}>
         <div style={{display:'flex',flexDirection:'column',gap:5}}>
-          <Btn night={night} on={mirL&&mirR} onClick={()=>set('Body.Switches.Mirror.Fold',true)} sz={9} pad={'7px 12px'} min={90}>FOLD {(mirL&&mirR)?'●':'○'}</Btn>
+          {/* Momentary toggle — write true then immediately false so
+              the bridge sees a clean rising edge.  The button label
+              suffix (● / ○) reflects the resulting fold state from
+              the bus; the button itself is never "on" (no persistent
+              highlight on a momentary push). */}
+          <Btn night={night} on={false}
+            onClick={()=>{set('Body.Switches.Mirror.Fold',true);setTimeout(()=>set('Body.Switches.Mirror.Fold',false),60);}}
+            sz={9} pad={'7px 12px'} min={90}>FOLD {(mirL&&mirR)?'●':'○'}</Btn>
           <div style={{display:'flex',gap:5}}>
             <Btn night={night} on={mirSel==='LEFT'}  onClick={()=>set('Body.Switches.Mirror.Select', mirSel==='LEFT' ?'NONE':'LEFT')}  sz={9} pad={'6px 10px'} min={42}>SEL L</Btn>
             <Btn night={night} on={mirSel==='RIGHT'} onClick={()=>set('Body.Switches.Mirror.Select', mirSel==='RIGHT'?'NONE':'RIGHT')} sz={9} pad={'6px 10px'} min={42}>SEL R</Btn>
@@ -2950,11 +3008,11 @@ function ControlPanelContent({s,set,anyDoor,anyLight,lux}){
         <div className="hdiv2"/>
         <SlR label="Driver temp"   k="Cabin.HVAC.Station.Row1.Left.Temperature"  s={s} set={set} min={16} max={30} step={0.5} unit="°C"/>
         <SlR label="Driver fan"    k="Cabin.HVAC.Station.Row1.Left.FanSpeed"     s={s} set={set} min={0} max={7} step={1} unit="/7"/>
-        <EnumR label="Driver vent" k="Cabin.HVAC.Station.Row1.Left.AirDistribution" s={s} set={set} opts={['DASHBOARD','FLOOR','DEFROST','COMBINED']}/>
+        <EnumR label="Driver vent" k="Cabin.HVAC.Station.Row1.Left.AirDistribution" s={s} set={set} opts={['AUTO','FACE','FACE_FEET','FEET','FEET_DEF','DEF']}/>
         <div className="hdiv2"/>
         <SlR label="Pass temp"    k="Cabin.HVAC.Station.Row1.Right.Temperature"  s={s} set={set} min={16} max={30} step={0.5} unit="°C"/>
         <SlR label="Pass fan"     k="Cabin.HVAC.Station.Row1.Right.FanSpeed"     s={s} set={set} min={0} max={7} step={1} unit="/7"/>
-        <EnumR label="Pass vent"  k="Cabin.HVAC.Station.Row1.Right.AirDistribution" s={s} set={set} opts={['DASHBOARD','FLOOR','DEFROST','COMBINED']}/>
+        <EnumR label="Pass vent"  k="Cabin.HVAC.Station.Row1.Right.AirDistribution" s={s} set={set} opts={['AUTO','FACE','FACE_FEET','FEET','FEET_DEF','DEF']}/>
       </SG>
 
       <SG title="Seats" vss="Cabin.Seat">

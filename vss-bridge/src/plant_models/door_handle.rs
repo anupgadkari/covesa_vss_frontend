@@ -138,12 +138,13 @@ impl<B: SignalBus + Send + Sync + 'static> DoorHandlePlantModel<B> {
         let mut close_rx = bus.subscribe(CLOSE_CMD_SIGNALS[door]).await;
         // Row2 doors track child-lock state from the PowerChildLock
         // feature so they can suppress inside-handle pulls.  Row1 has
-        // no child lock — we substitute an empty stream so the
-        // `select!` arms stay symmetric.
+        // no child lock — we substitute a `stream::pending()` (which
+        // is forever-blocked) rather than `empty()` (which yields None
+        // immediately and would busy-loop the select).
         let mut child_lock_rx: futures::stream::BoxStream<'static, SignalValue> =
             match CHILD_LOCK_SIGNALS[door] {
                 Some(sig) => bus.subscribe(sig).await,
-                None => Box::pin(futures::stream::empty()),
+                None => Box::pin(futures::stream::pending()),
             };
 
         // Internal state — updated by bus events.
