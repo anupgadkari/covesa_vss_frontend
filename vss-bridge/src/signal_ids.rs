@@ -398,13 +398,22 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // qualifying press, not just on state transitions.
         "Cabin.LockStatus.EventNum" => Some(0x0014_0007),
 
-        // Driver's master window-lockout switch (OEM custom — not in
-        // standard VSS v4.x).  When true, the body controller ignores
-        // window-up/down requests from passenger / rear door switches.
-        // Today the HMI drives this directly; future versions will
-        // route through a window-lockout feature that gates the
-        // window-motor plant.
+        // Driver's master window-lockout output (OEM custom — not in
+        // standard VSS v4.x).  Latched bool: when true, the body
+        // controller ignores window-up/down requests from passenger /
+        // rear door switches.  Written by the `WindowLockout` feature
+        // on each momentary press of the input switch below.
         "Body.Switches.Window.LockoutEnabled" => Some(0x0014_0008),
+        // Momentary driver-master push for window lockout.  HMI sets
+        // true on press-down, false on release; the WindowLockout
+        // feature toggles the latched output on each rising edge.
+        "Body.Switches.WindowLockout.IsPressed" => Some(0x0014_0009),
+        // Momentary driver-master pushes for rear-door child locks.
+        // The ChildLock feature toggles
+        // `Body.Doors.Row2.{Left,Right}.IsChildLockActive` on each
+        // rising edge.
+        "Body.Switches.ChildLock.Row2.Left.IsPressed"  => Some(0x0014_000A),
+        "Body.Switches.ChildLock.Row2.Right.IsPressed" => Some(0x0014_000B),
 
         // Ambient light sensor (OEM custom — not in standard VSS v4.x).
         // Used by ManualLighting AUTO mode to gate low-beam activation.
@@ -747,6 +756,9 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Cabin.LockStatus.LastRequestor", 0x0014_0006),
     ("Cabin.LockStatus.EventNum", 0x0014_0007),
     ("Body.Switches.Window.LockoutEnabled", 0x0014_0008),
+    ("Body.Switches.WindowLockout.IsPressed", 0x0014_0009),
+    ("Body.Switches.ChildLock.Row2.Left.IsPressed", 0x0014_000A),
+    ("Body.Switches.ChildLock.Row2.Right.IsPressed", 0x0014_000B),
     ("Body.Lights.AmbientLightSensor.Illuminance", 0x0015_0001),
     ("Vehicle.ADAS.HighBeam.OncomingVehicleDetected", 0x0016_0001),
     ("Vehicle.Cabin.Infotainment.HMI.DayNightMode", 0x0018_0001),

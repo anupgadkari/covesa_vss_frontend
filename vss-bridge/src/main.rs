@@ -47,7 +47,9 @@ use vss_bridge::features::door_open_assist::DoorOpenAssist;
 use vss_bridge::features::door_trim_button::DoorTrimButton;
 use vss_bridge::features::double_lock_release::DoubleLockRelease;
 use vss_bridge::features::exterior_trunk_button::ExteriorTrunkButton;
+use vss_bridge::features::child_lock::ChildLock;
 use vss_bridge::features::dome_switch::DomeSwitch;
+use vss_bridge::features::window_lockout::WindowLockout;
 use vss_bridge::plant_models::transmission::TransmissionPlant;
 use vss_bridge::features::farewell::Farewell;
 use vss_bridge::features::fog_lamps::FogLamps;
@@ -382,6 +384,16 @@ async fn boot_simulation_stack(
     // future extensions will add brake interlock + speed-based shift
     // logic.  Single writer of CurrentGear.
     set.spawn(TransmissionPlant::new(Arc::clone(&bus)).run());
+
+    // WindowLockout — latches the driver-master momentary push into
+    // Body.Switches.Window.LockoutEnabled.  Single writer; no
+    // arbitration needed.
+    set.spawn(WindowLockout::new(Arc::clone(&bus)).run());
+
+    // ChildLock — latches per-rear-door driver-master momentary pushes
+    // into Body.Doors.Row2.{Left,Right}.IsChildLockActive.  Open-loop
+    // today; door-side feedback signals are a follow-up.
+    set.spawn(ChildLock::new(Arc::clone(&bus)).run());
 
     // PassiveEntry — handle-pull authenticated unlock.
     let pe_devices: Vec<PairedDevice> = {

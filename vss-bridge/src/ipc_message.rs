@@ -168,6 +168,19 @@ pub enum FeatureId {
     /// priority — Welcome / Farewell (MEDIUM) and PerimeterAlarm
     /// (HIGH) preempt cleanly via the courtesy arbiter.
     DomeSwitch = 0x23,
+    /// Window-lockout latching feature.  Consumes the driver-master
+    /// momentary push `Body.Switches.WindowLockout.IsPressed` and
+    /// toggles the latched output
+    /// `Body.Switches.Window.LockoutEnabled` on each press edge.
+    WindowLockout = 0x24,
+    /// Rear child-lock latching feature.  Consumes the driver-master
+    /// momentary pushes
+    /// `Body.Switches.ChildLock.Row2.{Left,Right}.IsPressed` and
+    /// toggles the per-door latched outputs
+    /// `Body.Doors.Row2.{Left,Right}.IsChildLockActive` on each
+    /// press edge.  Door-side feedback signals (mechanical latch
+    /// confirmation) are a follow-up.
+    ChildLock = 0x25,
 }
 
 impl std::fmt::Display for FeatureId {
@@ -220,6 +233,8 @@ impl FeatureId {
             0x21 => Some(Self::PerimeterAlarm),
             0x22 => Some(Self::SlamLock),
             0x23 => Some(Self::DomeSwitch),
+            0x24 => Some(Self::WindowLockout),
+            0x25 => Some(Self::ChildLock),
             _ => None,
         }
     }

@@ -162,14 +162,12 @@ const INPUT_SIGNALS: &[VssPath] = &[
     // the driver's SelectedGear input.  HMI reads for cluster PRND
     // text and the sidebar Gear display.
     "Powertrain.Transmission.CurrentGear",
-    // Driver-door window lockout + per-door child-lock status.  The
-    // cockpit driver-door panel writes these; HMI also subscribes so
-    // both the cockpit and any other view stay in sync.
-    "Body.Switches.Window.LockoutEnabled",
-    "Body.Doors.Row1.Left.IsChildLockActive",
-    "Body.Doors.Row1.Right.IsChildLockActive",
-    "Body.Doors.Row2.Left.IsChildLockActive",
-    "Body.Doors.Row2.Right.IsChildLockActive",
+    // Driver-master momentary pushes — HMI writes these; the
+    // WindowLockout and ChildLock features observe rising edges and
+    // toggle the latched output state in OUTPUT_SIGNALS.
+    "Body.Switches.WindowLockout.IsPressed",
+    "Body.Switches.ChildLock.Row2.Left.IsPressed",
+    "Body.Switches.ChildLock.Row2.Right.IsPressed",
 ];
 
 /// Signals the bridge pushes back to the HMI (actuator outputs from arbiters).
@@ -292,6 +290,12 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     "Vehicle.Chassis.Axle.Row1.Wheel.Right.Tire.IsPressureLow",
     "Vehicle.Chassis.Axle.Row2.Wheel.Left.Tire.IsPressureLow",
     "Vehicle.Chassis.Axle.Row2.Wheel.Right.Tire.IsPressureLow",
+    // Driver-master latched outputs — published by the WindowLockout
+    // and ChildLock features.  HMI subscribes for the indicator
+    // icons (read-only at the cockpit).
+    "Body.Switches.Window.LockoutEnabled",
+    "Body.Doors.Row2.Left.IsChildLockActive",
+    "Body.Doors.Row2.Right.IsChildLockActive",
     // Panic switch — set by RKE on PANIC press, cleared by PanicAlarm
     // on cancel-via-unlock.  HMI consumes this to keep its own alarm
     // toggle state in sync.
