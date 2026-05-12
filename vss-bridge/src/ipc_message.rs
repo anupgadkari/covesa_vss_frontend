@@ -168,19 +168,38 @@ pub enum FeatureId {
     /// priority — Welcome / Farewell (MEDIUM) and PerimeterAlarm
     /// (HIGH) preempt cleanly via the courtesy arbiter.
     DomeSwitch = 0x23,
-    /// Window-lockout latching feature.  Consumes the driver-master
-    /// momentary push `Body.Switches.WindowLockout.IsPressed` and
-    /// toggles the latched output
-    /// `Body.Switches.Window.LockoutEnabled` on each press edge.
-    WindowLockout = 0x24,
-    /// Rear child-lock latching feature.  Consumes the driver-master
-    /// momentary pushes
-    /// `Body.Switches.ChildLock.Row2.{Left,Right}.IsPressed` and
-    /// toggles the per-door latched outputs
-    /// `Body.Doors.Row2.{Left,Right}.IsChildLockActive` on each
-    /// press edge.  Door-side feedback signals (mechanical latch
-    /// confirmation) are a follow-up.
-    ChildLock = 0x25,
+    /// Master "power child lock" latching feature.  Consumes the
+    /// driver-master momentary push
+    /// `Body.Switches.PowerChildLock.IsPressed` and toggles, on each
+    /// press edge, the latched master output
+    /// `Body.PowerChildLock.MasterStatus` plus the per-rear-door
+    /// fan-out signals `Body.Doors.Row2.{Left,Right}.IsChildLockActive`.
+    /// When `IsChildLockActive` is true the door-handle plant ignores
+    /// inside pulls and the `PowerWindowLocal` feature suppresses
+    /// that door's local window switch.  Door-side mechanical-latch
+    /// feedback signals are still TODO — for now the per-door output
+    /// IS the commanded state.
+    PowerChildLock = 0x24,
+    /// Driver-master window switches feed motor-direction requests
+    /// for all 4 windows via the window arbiter at Medium priority.
+    /// No child-lock check — the driver always wins.
+    PowerWindowDriver = 0x25,
+    /// Per-door local window switches feed motor-direction requests
+    /// at Low priority.  For Row2 doors the request is gated by the
+    /// matching `IsChildLockActive` output — local rear switches are
+    /// suppressed while the door is child-locked.
+    PowerWindowLocal = 0x26,
+    // ---- Future window-arbiter participants (allow-list reserved) ----
+    // WindowAntiPinch       = 0x27 — Priority::Critical, observes a
+    //   future per-window anti-pinch detection signal and forces
+    //   DOWN (or STOPPED) to release the obstruction.
+    // WindowSecurityOverride = 0x28 — Priority::High, detects repeated
+    //   UP presses immediately after an anti-pinch event and
+    //   temporarily preempts anti-pinch so the user can force-close
+    //   the window for security reasons.
+    // WindowGlobalRemote    = 0x29 — Priority::VeryLow, RKE / phone-app
+    //   "vent" or "close all" requests.  Yields to every local
+    //   occupant input.
 }
 
 impl std::fmt::Display for FeatureId {
@@ -233,8 +252,9 @@ impl FeatureId {
             0x21 => Some(Self::PerimeterAlarm),
             0x22 => Some(Self::SlamLock),
             0x23 => Some(Self::DomeSwitch),
-            0x24 => Some(Self::WindowLockout),
-            0x25 => Some(Self::ChildLock),
+            0x24 => Some(Self::PowerChildLock),
+            0x25 => Some(Self::PowerWindowDriver),
+            0x26 => Some(Self::PowerWindowLocal),
             _ => None,
         }
     }
@@ -244,9 +264,15 @@ impl FeatureId {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum Priority {
+    /// Below Low — used today by `PowerWindowGlobal` (RKE / phone-app
+    /// vent / close-all requests) so they yield to any local occupant.
+    VeryLow = 0,
     Low = 1,
     Medium = 2,
     High = 3,
+    /// Above High — reserved for safety-class overrides.  Used by
+    /// `WindowAntiPinch` to preempt every other window claimant.
+    Critical = 4,
 }
 
 impl Priority {

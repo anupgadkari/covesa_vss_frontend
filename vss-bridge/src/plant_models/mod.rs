@@ -22,3 +22,4 @@ pub mod peps;
 pub mod sunroof;
 pub mod transmission;
 pub mod trunk;
+pub mod window;

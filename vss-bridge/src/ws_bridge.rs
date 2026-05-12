@@ -162,12 +162,32 @@ const INPUT_SIGNALS: &[VssPath] = &[
     // the driver's SelectedGear input.  HMI reads for cluster PRND
     // text and the sidebar Gear display.
     "Powertrain.Transmission.CurrentGear",
-    // Driver-master momentary pushes — HMI writes these; the
-    // WindowLockout and ChildLock features observe rising edges and
-    // toggle the latched output state in OUTPUT_SIGNALS.
-    "Body.Switches.WindowLockout.IsPressed",
-    "Body.Switches.ChildLock.Row2.Left.IsPressed",
-    "Body.Switches.ChildLock.Row2.Right.IsPressed",
+    // Master child-lock momentary push — HMI writes this; the
+    // PowerChildLock feature observes the rising edge and toggles
+    // MasterStatus + the per-door IsChildLockActive fan-out.
+    "Body.Switches.PowerChildLock.IsPressed",
+    // Driver-master per-window momentary pushes (8 total).  Consumed
+    // by PowerWindowDriver feeding the window arbiter at Medium.
+    "Body.Switches.Window.DriverMaster.Row1.Left.IsUpPressed",
+    "Body.Switches.Window.DriverMaster.Row1.Left.IsDownPressed",
+    "Body.Switches.Window.DriverMaster.Row1.Right.IsUpPressed",
+    "Body.Switches.Window.DriverMaster.Row1.Right.IsDownPressed",
+    "Body.Switches.Window.DriverMaster.Row2.Left.IsUpPressed",
+    "Body.Switches.Window.DriverMaster.Row2.Left.IsDownPressed",
+    "Body.Switches.Window.DriverMaster.Row2.Right.IsUpPressed",
+    "Body.Switches.Window.DriverMaster.Row2.Right.IsDownPressed",
+    // Local per-door momentary pushes (8 total).  All 4 sides
+    // defined symmetrically.  Cockpit only writes the front-passenger
+    // and rear pairs in production; Local.Row1.{driver-side} is
+    // reserved for tests and the arbiter sees a no-op from it.
+    "Body.Switches.Window.Local.Row1.Left.IsUpPressed",
+    "Body.Switches.Window.Local.Row1.Left.IsDownPressed",
+    "Body.Switches.Window.Local.Row1.Right.IsUpPressed",
+    "Body.Switches.Window.Local.Row1.Right.IsDownPressed",
+    "Body.Switches.Window.Local.Row2.Left.IsUpPressed",
+    "Body.Switches.Window.Local.Row2.Left.IsDownPressed",
+    "Body.Switches.Window.Local.Row2.Right.IsUpPressed",
+    "Body.Switches.Window.Local.Row2.Right.IsDownPressed",
 ];
 
 /// Signals the bridge pushes back to the HMI (actuator outputs from arbiters).
@@ -290,12 +310,26 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     "Vehicle.Chassis.Axle.Row1.Wheel.Right.Tire.IsPressureLow",
     "Vehicle.Chassis.Axle.Row2.Wheel.Left.Tire.IsPressureLow",
     "Vehicle.Chassis.Axle.Row2.Wheel.Right.Tire.IsPressureLow",
-    // Driver-master latched outputs — published by the WindowLockout
-    // and ChildLock features.  HMI subscribes for the indicator
-    // icons (read-only at the cockpit).
-    "Body.Switches.Window.LockoutEnabled",
+    // Power child-lock outputs — written by the PowerChildLock
+    // feature.  HMI subscribes to render the master indicator + the
+    // per-door child-lock state (used to dim local rear window
+    // switches in the cockpit).
+    "Body.PowerChildLock.MasterStatus",
     "Body.Doors.Row2.Left.IsChildLockActive",
     "Body.Doors.Row2.Right.IsChildLockActive",
+    // Per-window motor direction (String UP / DOWN / STOPPED).
+    // Published by the window arbiter from the winning claim.  HMI
+    // can show an "active drive" indicator if desired.
+    "Body.Doors.Row1.Left.Window.MotorDirection",
+    "Body.Doors.Row1.Right.Window.MotorDirection",
+    "Body.Doors.Row2.Left.Window.MotorDirection",
+    "Body.Doors.Row2.Right.Window.MotorDirection",
+    // Per-window position (uint 0..100).  Published by the window
+    // plant from the motor direction.
+    "Body.Doors.Row1.Left.Window.Position",
+    "Body.Doors.Row1.Right.Window.Position",
+    "Body.Doors.Row2.Left.Window.Position",
+    "Body.Doors.Row2.Right.Window.Position",
     // Panic switch — set by RKE on PANIC press, cleared by PanicAlarm
     // on cancel-via-unlock.  HMI consumes this to keep its own alarm
     // toggle state in sync.

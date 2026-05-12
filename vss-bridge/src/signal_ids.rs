@@ -398,22 +398,12 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // qualifying press, not just on state transitions.
         "Cabin.LockStatus.EventNum" => Some(0x0014_0007),
 
-        // Driver's master window-lockout output (OEM custom — not in
-        // standard VSS v4.x).  Latched bool: when true, the body
-        // controller ignores window-up/down requests from passenger /
-        // rear door switches.  Written by the `WindowLockout` feature
-        // on each momentary press of the input switch below.
-        "Body.Switches.Window.LockoutEnabled" => Some(0x0014_0008),
-        // Momentary driver-master push for window lockout.  HMI sets
-        // true on press-down, false on release; the WindowLockout
-        // feature toggles the latched output on each rising edge.
-        "Body.Switches.WindowLockout.IsPressed" => Some(0x0014_0009),
-        // Momentary driver-master pushes for rear-door child locks.
-        // The ChildLock feature toggles
-        // `Body.Doors.Row2.{Left,Right}.IsChildLockActive` on each
-        // rising edge.
-        "Body.Switches.ChildLock.Row2.Left.IsPressed"  => Some(0x0014_000A),
-        "Body.Switches.ChildLock.Row2.Right.IsPressed" => Some(0x0014_000B),
+        // Power child-lock momentary push (driver master panel) +
+        // latched master output.  PowerChildLock feature observes the
+        // press, toggles MasterStatus and fans it out to the per-door
+        // Body.Doors.Row2.{Left,Right}.IsChildLockActive signals.
+        "Body.Switches.PowerChildLock.IsPressed" => Some(0x0014_0008),
+        "Body.PowerChildLock.MasterStatus" => Some(0x0014_0009),
 
         // Ambient light sensor (OEM custom — not in standard VSS v4.x).
         // Used by ManualLighting AUTO mode to gate low-beam activation.
@@ -450,6 +440,44 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Vehicle.Chassis.Axle.Row1.Wheel.Right.Tire.IsPressureLow" => Some(0x0018_0011),
         "Vehicle.Chassis.Axle.Row2.Wheel.Left.Tire.IsPressureLow" => Some(0x0018_0012),
         "Vehicle.Chassis.Axle.Row2.Wheel.Right.Tire.IsPressureLow" => Some(0x0018_0013),
+
+        // ── Power-window switches + motors (block 0x001A) ──────────────
+        //
+        // Driver-master pack: 4 windows × 2 directions = 8 momentary
+        // bool inputs.  Always defined for all 4 windows regardless of
+        // LHD/RHD — the master pack sits on the driver's door card and
+        // covers every window.  Written by the cockpit DRIVER MASTER
+        // PANEL.
+        "Body.Switches.Window.DriverMaster.Row1.Left.IsUpPressed"    => Some(0x001A_0001),
+        "Body.Switches.Window.DriverMaster.Row1.Left.IsDownPressed"  => Some(0x001A_0002),
+        "Body.Switches.Window.DriverMaster.Row1.Right.IsUpPressed"   => Some(0x001A_0003),
+        "Body.Switches.Window.DriverMaster.Row1.Right.IsDownPressed" => Some(0x001A_0004),
+        "Body.Switches.Window.DriverMaster.Row2.Left.IsUpPressed"    => Some(0x001A_0005),
+        "Body.Switches.Window.DriverMaster.Row2.Left.IsDownPressed"  => Some(0x001A_0006),
+        "Body.Switches.Window.DriverMaster.Row2.Right.IsUpPressed"   => Some(0x001A_0007),
+        "Body.Switches.Window.DriverMaster.Row2.Right.IsDownPressed" => Some(0x001A_0008),
+        // Local per-door switches — defined symmetrically for all 4
+        // doors.  The HMI only writes the side configured as
+        // **passenger** for the driver's row (Local.Row1.{!driver}) so
+        // there's no double-write from the driver's own door (which
+        // is covered by DriverMaster).  Local.Row1.{driver-side}
+        // stays defined so tests can inject it.
+        "Body.Switches.Window.Local.Row1.Left.IsUpPressed"    => Some(0x001A_0011),
+        "Body.Switches.Window.Local.Row1.Left.IsDownPressed"  => Some(0x001A_0012),
+        "Body.Switches.Window.Local.Row1.Right.IsUpPressed"   => Some(0x001A_0013),
+        "Body.Switches.Window.Local.Row1.Right.IsDownPressed" => Some(0x001A_0014),
+        "Body.Switches.Window.Local.Row2.Left.IsUpPressed"    => Some(0x001A_0015),
+        "Body.Switches.Window.Local.Row2.Left.IsDownPressed"  => Some(0x001A_0016),
+        "Body.Switches.Window.Local.Row2.Right.IsUpPressed"   => Some(0x001A_0017),
+        "Body.Switches.Window.Local.Row2.Right.IsDownPressed" => Some(0x001A_0018),
+        // Window-motor commanded direction (String enum UP / DOWN /
+        // STOPPED).  Published by the `window_arbiter` from the
+        // winning claim; consumed by the per-window plant which
+        // integrates the motor into Window.Position.
+        "Body.Doors.Row1.Left.Window.MotorDirection"  => Some(0x001A_0021),
+        "Body.Doors.Row1.Right.Window.MotorDirection" => Some(0x001A_0022),
+        "Body.Doors.Row2.Left.Window.MotorDirection"  => Some(0x001A_0023),
+        "Body.Doors.Row2.Right.Window.MotorDirection" => Some(0x001A_0024),
 
         _ => None,
     }
@@ -755,10 +783,8 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Cabin.LockStatus", 0x0014_0005),
     ("Cabin.LockStatus.LastRequestor", 0x0014_0006),
     ("Cabin.LockStatus.EventNum", 0x0014_0007),
-    ("Body.Switches.Window.LockoutEnabled", 0x0014_0008),
-    ("Body.Switches.WindowLockout.IsPressed", 0x0014_0009),
-    ("Body.Switches.ChildLock.Row2.Left.IsPressed", 0x0014_000A),
-    ("Body.Switches.ChildLock.Row2.Right.IsPressed", 0x0014_000B),
+    ("Body.Switches.PowerChildLock.IsPressed", 0x0014_0008),
+    ("Body.PowerChildLock.MasterStatus", 0x0014_0009),
     ("Body.Lights.AmbientLightSensor.Illuminance", 0x0015_0001),
     ("Vehicle.ADAS.HighBeam.OncomingVehicleDetected", 0x0016_0001),
     ("Vehicle.Cabin.Infotainment.HMI.DayNightMode", 0x0018_0001),
@@ -779,6 +805,27 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
         0x0018_0013,
     ),
     ("Cabin.ValetMode.IsActive", 0x0017_0001),
+    // Power-window block (0x001A).
+    ("Body.Switches.Window.DriverMaster.Row1.Left.IsUpPressed",    0x001A_0001),
+    ("Body.Switches.Window.DriverMaster.Row1.Left.IsDownPressed",  0x001A_0002),
+    ("Body.Switches.Window.DriverMaster.Row1.Right.IsUpPressed",   0x001A_0003),
+    ("Body.Switches.Window.DriverMaster.Row1.Right.IsDownPressed", 0x001A_0004),
+    ("Body.Switches.Window.DriverMaster.Row2.Left.IsUpPressed",    0x001A_0005),
+    ("Body.Switches.Window.DriverMaster.Row2.Left.IsDownPressed",  0x001A_0006),
+    ("Body.Switches.Window.DriverMaster.Row2.Right.IsUpPressed",   0x001A_0007),
+    ("Body.Switches.Window.DriverMaster.Row2.Right.IsDownPressed", 0x001A_0008),
+    ("Body.Switches.Window.Local.Row1.Left.IsUpPressed",    0x001A_0011),
+    ("Body.Switches.Window.Local.Row1.Left.IsDownPressed",  0x001A_0012),
+    ("Body.Switches.Window.Local.Row1.Right.IsUpPressed",   0x001A_0013),
+    ("Body.Switches.Window.Local.Row1.Right.IsDownPressed", 0x001A_0014),
+    ("Body.Switches.Window.Local.Row2.Left.IsUpPressed",    0x001A_0015),
+    ("Body.Switches.Window.Local.Row2.Left.IsDownPressed",  0x001A_0016),
+    ("Body.Switches.Window.Local.Row2.Right.IsUpPressed",   0x001A_0017),
+    ("Body.Switches.Window.Local.Row2.Right.IsDownPressed", 0x001A_0018),
+    ("Body.Doors.Row1.Left.Window.MotorDirection",  0x001A_0021),
+    ("Body.Doors.Row1.Right.Window.MotorDirection", 0x001A_0022),
+    ("Body.Doors.Row2.Left.Window.MotorDirection",  0x001A_0023),
+    ("Body.Doors.Row2.Right.Window.MotorDirection", 0x001A_0024),
 ];
 
 #[cfg(test)]

@@ -95,6 +95,18 @@ const AJAR_SIGNALS: [&str; 4] = [
     "Body.Doors.Row2.Right.IsOpen",
 ];
 
+/// Per-door child-lock state (output of the `PowerChildLock` feature).
+/// Only Row2 doors are ever child-locked; the Row1 slots are `None`
+/// because no signal is subscribed for them.  When the indexed slot is
+/// `Some(sig)` and the latest value is `true`, the door plant ignores
+/// `Handle.Inside.IsPulled` — kids can't open the door from inside.
+const CHILD_LOCK_SIGNALS: [Option<&str>; 4] = [
+    None,
+    None,
+    Some("Body.Doors.Row2.Left.IsChildLockActive"),
+    Some("Body.Doors.Row2.Right.IsChildLockActive"),
+];
+
 /// Short labels used in tracing.
 const DOOR_LABELS: [&str; 4] = ["Row1.Left", "Row1.Right", "Row2.Left", "Row2.Right"];
 
@@ -124,10 +136,20 @@ impl<B: SignalBus + Send + Sync + 'static> DoorHandlePlantModel<B> {
         let mut outside_rx = bus.subscribe(OUTSIDE_HANDLE_SIGNALS[door]).await;
         let mut soldier_rx = bus.subscribe(SOLDIER_SIGNALS[door]).await;
         let mut close_rx = bus.subscribe(CLOSE_CMD_SIGNALS[door]).await;
+        // Row2 doors track child-lock state from the PowerChildLock
+        // feature so they can suppress inside-handle pulls.  Row1 has
+        // no child lock — we substitute an empty stream so the
+        // `select!` arms stay symmetric.
+        let mut child_lock_rx: futures::stream::BoxStream<'static, SignalValue> =
+            match CHILD_LOCK_SIGNALS[door] {
+                Some(sig) => bus.subscribe(sig).await,
+                None => Box::pin(futures::stream::empty()),
+            };
 
         // Internal state — updated by bus events.
         let mut locked = false;
         let mut double_locked = false;
+        let mut child_locked = false;
         let mut is_latched = true;
         let mut is_open = false;
         // Currently-held state — true while the user is holding the
@@ -207,12 +229,29 @@ impl<B: SignalBus + Send + Sync + 'static> DoorHandlePlantModel<B> {
                     }
                 }
 
+                // ── Child-lock state (Row2 only — Row1 stream is empty) ──
+                Some(val) = child_lock_rx.next() => {
+                    if let SignalValue::Bool(b) = val {
+                        if child_locked != b {
+                            child_locked = b;
+                            tracing::debug!(door = label, child_locked,
+                                "DoorHandle: tracked IsChildLockActive");
+                        }
+                    }
+                }
+
                 // ── Inside handle ────────────────────────────────────────────
                 Some(val) = inside_rx.next() => {
                     if let SignalValue::Bool(pulled) = val {
                         inside_held = pulled;
                         if pulled {
-                            if double_locked {
+                            if child_locked {
+                                // Inside-pull suppressed — kids can't
+                                // open the door from inside.  Outside
+                                // handle is unaffected.
+                                tracing::debug!(door = label,
+                                    "DoorHandle: inside handle suppressed (child-locked)");
+                            } else if double_locked {
                                 // Interior linkage disconnected — completely blocked.
                                 tracing::debug!(door = label,
                                     "DoorHandle: inside handle blocked (double-locked)");

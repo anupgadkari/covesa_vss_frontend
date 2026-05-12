@@ -47,9 +47,11 @@ use vss_bridge::features::door_open_assist::DoorOpenAssist;
 use vss_bridge::features::door_trim_button::DoorTrimButton;
 use vss_bridge::features::double_lock_release::DoubleLockRelease;
 use vss_bridge::features::exterior_trunk_button::ExteriorTrunkButton;
-use vss_bridge::features::child_lock::ChildLock;
 use vss_bridge::features::dome_switch::DomeSwitch;
-use vss_bridge::features::window_lockout::WindowLockout;
+use vss_bridge::features::power_child_lock::PowerChildLock;
+use vss_bridge::features::power_window_driver::PowerWindowDriver;
+use vss_bridge::features::power_window_local::PowerWindowLocal;
+use vss_bridge::plant_models::window::WindowPlant;
 use vss_bridge::plant_models::transmission::TransmissionPlant;
 use vss_bridge::features::farewell::Farewell;
 use vss_bridge::features::fog_lamps::FogLamps;
@@ -256,6 +258,7 @@ async fn boot_simulation_stack(
     let (courtesy_arb, courtesy_fut) = arbiter::courtesy_arbiter(Arc::clone(&bus));
     let (puddle_arb, puddle_fut) = arbiter::puddle_arbiter(Arc::clone(&bus));
     let (trunk_arb, trunk_fut) = arbiter::trunk_arbiter(Arc::clone(&bus));
+    let (window_arb, window_fut) = arbiter::window_arbiter(Arc::clone(&bus));
 
     set.spawn(lighting_fut);
     set.spawn(low_beam_fut);
@@ -265,6 +268,7 @@ async fn boot_simulation_stack(
     set.spawn(courtesy_fut);
     set.spawn(puddle_fut);
     set.spawn(trunk_fut);
+    set.spawn(window_fut);
 
     let lighting_arb = Arc::new(lighting_arb);
     let low_beam_arb = Arc::new(low_beam_arb);
@@ -273,6 +277,7 @@ async fn boot_simulation_stack(
     let courtesy_arb = Arc::new(courtesy_arb);
     let puddle_arb = Arc::new(puddle_arb);
     let trunk_arb = Arc::new(trunk_arb);
+    let window_arb = Arc::new(window_arb);
 
     // ── Feature Business Logic ──────────────────────────────────────
     let lux_threshold = cfg.vehicle_line.auto_headlamp_lux_threshold;
@@ -385,15 +390,26 @@ async fn boot_simulation_stack(
     // logic.  Single writer of CurrentGear.
     set.spawn(TransmissionPlant::new(Arc::clone(&bus)).run());
 
-    // WindowLockout — latches the driver-master momentary push into
-    // Body.Switches.Window.LockoutEnabled.  Single writer; no
-    // arbitration needed.
-    set.spawn(WindowLockout::new(Arc::clone(&bus)).run());
+    // PowerChildLock — single momentary push toggles the master
+    // child-lock state and fans out to both rear-door
+    // IsChildLockActive outputs.  Door-handle plant + PowerWindowLocal
+    // observe these to gate inside pulls and local rear window
+    // switches respectively.  Door-side mechanical feedback is TBD.
+    set.spawn(PowerChildLock::new(Arc::clone(&bus)).run());
 
-    // ChildLock — latches per-rear-door driver-master momentary pushes
-    // into Body.Doors.Row2.{Left,Right}.IsChildLockActive.  Open-loop
-    // today; door-side feedback signals are a follow-up.
-    set.spawn(ChildLock::new(Arc::clone(&bus)).run());
+    // PowerWindowDriver — driver master pack switches → window arbiter
+    // at Medium.  Always wins over local switches.
+    set.spawn(PowerWindowDriver::new(Arc::clone(&bus), Arc::clone(&window_arb)).run());
+
+    // PowerWindowLocal — per-door local switches → window arbiter at
+    // Low.  For Row2 doors the claim is suppressed while the matching
+    // IsChildLockActive output (from PowerChildLock) is true.
+    set.spawn(PowerWindowLocal::new(Arc::clone(&bus), Arc::clone(&window_arb)).run());
+
+    // WindowPlant — 4 per-window motor → position ramps at 10 %/s.
+    // Reads MotorDirection (window arbiter output) and integrates
+    // Window.Position.
+    set.spawn(WindowPlant::new(Arc::clone(&bus)).run());
 
     // PassiveEntry — handle-pull authenticated unlock.
     let pe_devices: Vec<PairedDevice> = {

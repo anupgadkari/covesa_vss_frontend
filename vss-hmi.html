@@ -255,6 +255,12 @@ const INIT_STATE={
   'Body.Doors.Row1.Right.Window.Position':0,'Body.Doors.Row1.Right.Handle.Inside.IsPulled':false,'Body.Doors.Row1.Right.Handle.Outside.IsPulled':false,
   'Body.Doors.Row2.Left.IsChildLockActive':false,'Body.Doors.Row2.Left.Window.Position':0,'Body.Doors.Row2.Left.Handle.Inside.IsPulled':false,'Body.Doors.Row2.Left.Handle.Outside.IsPulled':false,
   'Body.Doors.Row2.Right.IsChildLockActive':false,'Body.Doors.Row2.Right.Window.Position':0,'Body.Doors.Row2.Right.Handle.Inside.IsPulled':false,'Body.Doors.Row2.Right.Handle.Outside.IsPulled':false,
+  // Power child-lock + window-motor outputs (owned by features /
+  // plant — seeded here so the cockpit indicators have a defined
+  // initial state before the bridge publishes them).
+  'Body.PowerChildLock.MasterStatus':false,
+  'Body.Doors.Row1.Left.Window.MotorDirection':'STOPPED','Body.Doors.Row1.Right.Window.MotorDirection':'STOPPED',
+  'Body.Doors.Row2.Left.Window.MotorDirection':'STOPPED','Body.Doors.Row2.Right.Window.MotorDirection':'STOPPED',
   // ── Body — HMI-owned inputs only ─────────────────────────────────────
   // Body.Trunk.IsOpen, Body.Trunk.IsLocked, Body.Horn.IsActive are
   // bridge-owned (TrunkPlantModel + Horn arbiter) and likewise omitted.
@@ -530,7 +536,10 @@ function DoorCard({label,pfx,s,set}){
     <div className="dcr"><span className="dcl">DblLock</span><Tog val={s[`${p}.IsDoubleLocked`]} on={()=>set('Body.Doors.CentralLock.Command',s[`${p}.IsDoubleLocked`]?'release_double':'lock_double')} c="r"/></div>
     <div className="dcr"><span className="dcl">Latched</span><Tog val={s[`${p}.Latch.IsLatched`]} c="v"/></div>
     {isRearDoor && (
-      <div className="dcr"><span className="dcl">ChildLk</span><Tog val={s[`${p}.IsChildLockActive`]} on={()=>set(`${p}.IsChildLockActive`,!s[`${p}.IsChildLockActive`])} c="v"/></div>
+      // Read-only indicator — IsChildLockActive is now an output of
+      // the `PowerChildLock` feature.  Toggle from the cockpit
+      // DRIVER MASTER PANEL's CHILD LOCK button.
+      <div className="dcr"><span className="dcl">ChildLk</span><Tog val={s[`${p}.IsChildLockActive`]} c="v"/></div>
     )}
     {!isRearDoor && (
       <div className="ebrow" style={{display:'flex',gap:4,marginTop:3}}
@@ -1841,7 +1850,12 @@ function CockpitZone({title,subtitle,night,children}){
   </div>;
 }
 
-function CockpitView({s,set}){
+function CockpitView({s,set,cfg}){
+  // Driver-door side — drives trim-zone labelling and which Local
+  // window switch the cockpit exposes for the front passenger door.
+  // Defaults to Left (LHD) when cfg is missing for any reason.
+  const driverSide = cfg?.dealer?.driver_door_side === 'Right' ? 'Right' : 'Left';
+  const passengerSide = driverSide === 'Right' ? 'Left' : 'Right';
   const mode=s['Vehicle.Cabin.Infotainment.HMI.DayNightMode'];
   const night=mode==='NIGHT';
   const lo=s['Body.Lights.Beam.Low.IsOn'],hi=s['Body.Lights.Beam.High.IsOn'];
@@ -1900,19 +1914,24 @@ function CockpitView({s,set}){
   // the chosen side, second click clears.
   const mirSel=s['Body.Switches.Mirror.Select']||'NONE';
   const mirDir=s['Body.Switches.Mirror.Direction']||'NONE';
-  // Driver master-panel window + child-lock state.
-  const winLockout=s['Body.Switches.Window.LockoutEnabled'];
+  // Power child-lock state — written by the PowerChildLock feature.
+  // `masterChildLock` drives the cockpit indicator LED; the per-door
+  // fan-out signals drive per-window indicator dimming and (via the
+  // door-handle plant on the bridge) inside-pull suppression.
+  const masterChildLock=s['Body.PowerChildLock.MasterStatus'];
   const childRL=s['Body.Doors.Row2.Left.IsChildLockActive'];
   const childRR=s['Body.Doors.Row2.Right.IsChildLockActive'];
-  // One-touch window helpers: clicking ⇧ runs the window all the way
-  // up (Position=100), ⇩ all the way down (Position=0) — same auto-up
-  // / auto-down semantics found in real driver-door master switches.
-  const winUp=(k)=>set(k,100);
-  const winDn=(k)=>set(k,0);
-  // True when the master lockout is engaged AND the target window is
-  // not the driver's own (FL).  The body controller ignores writes
-  // from passenger-rear positions while lockout is engaged.
-  const winLocked=(k)=>winLockout && k!=='Body.Doors.Row1.Left.Window.Position';
+  // Per-window motor + position read-back (plant outputs).
+  const winPos=(k)=>s[k]??0;
+  const winMotor=(motor)=>s[motor]||'STOPPED';
+  // Press-and-hold helpers for a switch signal: write true on press,
+  // false on release / leave.  Returns the event handler bundle so
+  // it can be spread onto a `<button>`.
+  const holdSwitch=(switchKey)=>({
+    onMouseDown:()=>set(switchKey,true),
+    onMouseUp:  ()=>set(switchKey,false),
+    onMouseLeave:()=>set(switchKey,false),
+  });
 
   const txt = night?'#F59E0B':'#1C3050';
   const txtDim = night?'#8A6020':'#2A3A50';
@@ -2238,73 +2257,113 @@ function CockpitView({s,set}){
     </CockpitZone>
 
     {/* ── Row-1 door trim panels — left + right side-by-side. ──
-         Each side carries its own inside pull, window switch, and
-         lock/unlock pad.  Central-locking is cabin-wide: pressing
-         LOCK or UNLOCK on either side feeds the same DoorTrimButton
-         feature, which decides lock-all / unlock-driver / unlock-all
-         per the configured two-stage policy.  Driver-only controls
-         (mirror master pad) live in a dedicated zone below. */}
+         Layout is fixed (LEFT=Row1.Left, RIGHT=Row1.Right physically);
+         labels and contents flip based on `driver_door_side`.  Each
+         side carries the inside pull and lock pad.  The passenger
+         side also carries its own local window switch writing
+         Body.Switches.Window.Local.Row1.{passenger-side}.*; the
+         driver side has no local window switch (the master pack on
+         the driver door card covers it via DriverMaster.*).
+         Central locking is cabin-wide — pressing LOCK or UNLOCK on
+         either side feeds the DoorTrimButton feature which applies
+         the two-stage policy.  Mirror master pad and 4-window
+         switch pack live in the DRIVER MASTER PANEL below. */}
+    {(() => {
+      const Side = ({side, isDriver}) => {
+        const pull = side==='Left' ? pullL : pullR;
+        const pullKey = `Body.Doors.Row1.${side}.Handle.Inside.IsPulled`;
+        const lockKey   = `Body.Switches.DoorTrim.Row1.${side}.LockButton`;
+        const unlockKey = `Body.Switches.DoorTrim.Row1.${side}.UnlockButton`;
+        const dbl = side==='Left' ? dblL : false;
+        const winKey = `Body.Doors.Row1.${side}.Window.Position`;
+        const localUp   = `Body.Switches.Window.Local.Row1.${side}.IsUpPressed`;
+        const localDown = `Body.Switches.Window.Local.Row1.${side}.IsDownPressed`;
+        return <CockpitZone
+          title={`${side.toUpperCase()} DOOR TRIM`}
+          subtitle={isDriver ? 'driver' : 'passenger'}
+          night={night}>
+          <div style={{display:'flex',flexDirection:'column',gap:6}}>
+            <Btn night={night} on={pull} {...holdSwitch(pullKey)}
+              sz={10} pad={'8px 12px'}>
+              {side==='Left'?'⇲':'⇱'} INSIDE PULL {pull?'●':''}
+            </Btn>
+            <div style={{display:'flex',gap:6}}>
+              <Btn night={night} on={!lockL&&!lockR} {...holdSwitch(unlockKey)} sz={9} pad={'6px 10px'} min={90}>UNLOCK</Btn>
+              <Btn night={night} on={lockL&&lockR}   {...holdSwitch(lockKey)}   sz={9} pad={'6px 10px'} min={90}>LOCK {dbl?'⊕⊕':''}</Btn>
+            </div>
+            {/* Passenger side: own local window switch (hold-to-move).
+                Driver side: no local switch — the master pack handles it. */}
+            {isDriver
+              ? <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,fontStyle:'italic'}}>
+                  Window + mirror master controls are in the DRIVER MASTER PANEL below.
+                </span>
+              : (() => {
+                  const pos = winPos(winKey);
+                  return <div style={{display:'flex',gap:6,alignItems:'center'}}>
+                    <Btn night={night} on={!!s[localUp]}   {...holdSwitch(localUp)}   sz={9} pad={'6px 10px'} min={64}>WIN ⇧</Btn>
+                    <Btn night={night} on={!!s[localDown]} {...holdSwitch(localDown)} sz={9} pad={'6px 10px'} min={64}>WIN ⇩</Btn>
+                    <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim}}>{pos|0}%</span>
+                  </div>;
+                })()
+            }
+          </div>
+        </CockpitZone>;
+      };
+      return <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+        <Side side="Left"  isDriver={driverSide==='Left'}/>
+        <Side side="Right" isDriver={driverSide==='Right'}/>
+      </div>;
+    })()}
+
+    {/* ── Row-2 rear-door trim panels — local window switches only. ──
+         The inside pull on rear doors is already exercisable from the
+         top view; the cockpit just exposes the per-door local window
+         up/down so child-lock gating in `PowerWindowLocal` can be
+         demonstrated.  When the matching `IsChildLockActive` is true
+         the buttons dim and the feature ignores the writes. */}
     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-      <CockpitZone title="LEFT DOOR TRIM" subtitle="driver (LHD) · pull + lock" night={night}>
-        <div style={{display:'flex',flexDirection:'column',gap:6}}>
-          <Btn night={night} on={pullL}
-            onMouseDown={()=>set('Body.Doors.Row1.Left.Handle.Inside.IsPulled',true)}
-            onMouseUp={()=>set('Body.Doors.Row1.Left.Handle.Inside.IsPulled',false)}
-            onMouseLeave={()=>set('Body.Doors.Row1.Left.Handle.Inside.IsPulled',false)}
-            sz={10} pad={'8px 12px'}>⇲ INSIDE PULL {pullL?'●':''}</Btn>
-          <div style={{display:'flex',gap:6}}>
-            <Btn night={night} on={!lockL&&!lockR} onClick={()=>set('Body.Switches.DoorTrim.Row1.Left.UnlockButton',true)} sz={9} pad={'6px 10px'} min={90}>UNLOCK</Btn>
-            <Btn night={night} on={lockL&&lockR} onClick={()=>set('Body.Switches.DoorTrim.Row1.Left.LockButton',true)} sz={9} pad={'6px 10px'} min={90}>LOCK {dblL?'⊕⊕':''}</Btn>
+      {[
+        {side:'Left',  childLock:childRL},
+        {side:'Right', childLock:childRR},
+      ].map(({side,childLock})=>{
+        const winKey   = `Body.Doors.Row2.${side}.Window.Position`;
+        const localUp   = `Body.Switches.Window.Local.Row2.${side}.IsUpPressed`;
+        const localDown = `Body.Switches.Window.Local.Row2.${side}.IsDownPressed`;
+        const pos = winPos(winKey);
+        return <CockpitZone key={side}
+          title={`REAR ${side.toUpperCase()} TRIM`}
+          subtitle={childLock?'child-locked — switches inert':'local window'}
+          night={night}>
+          <div style={{display:'flex',gap:6,alignItems:'center',opacity:childLock?0.4:1}}>
+            <Btn night={night} on={!!s[localUp]}   {...(childLock?{}:holdSwitch(localUp))}   sz={9} pad={'6px 10px'} min={64}>WIN ⇧</Btn>
+            <Btn night={night} on={!!s[localDown]} {...(childLock?{}:holdSwitch(localDown))} sz={9} pad={'6px 10px'} min={64}>WIN ⇩</Btn>
+            <span style={{fontFamily:'Share Tech Mono',fontSize:8,color:txtDim,marginLeft:4}}>
+              {pos|0}%{childLock?' · CHILD LOCK':''}
+            </span>
           </div>
-          <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,fontStyle:'italic'}}>
-            Window + mirror master controls are in the DRIVER PANEL below.
-          </span>
-        </div>
-      </CockpitZone>
-      <CockpitZone title="RIGHT DOOR TRIM" subtitle="passenger (LHD)" night={night}>
-        <div style={{display:'flex',flexDirection:'column',gap:6}}>
-          <Btn night={night} on={pullR}
-            onMouseDown={()=>set('Body.Doors.Row1.Right.Handle.Inside.IsPulled',true)}
-            onMouseUp={()=>set('Body.Doors.Row1.Right.Handle.Inside.IsPulled',false)}
-            onMouseLeave={()=>set('Body.Doors.Row1.Right.Handle.Inside.IsPulled',false)}
-            sz={10} pad={'8px 12px'}>⇱ INSIDE PULL {pullR?'●':''}</Btn>
-          {/* Passenger's own one-touch window switch — gated by the
-              driver master Body.Switches.Window.LockoutEnabled. */}
-          {(() => {
-            const k='Body.Doors.Row1.Right.Window.Position';
-            const pos=s[k]??0;
-            const locked=winLockout;
-            return <div style={{display:'flex',gap:6,alignItems:'center',opacity:locked?0.35:1}}>
-              <Btn night={night} on={pos===100} onClick={()=>{ if(!locked) winUp(k); }} sz={9} pad={'6px 10px'} min={70}>WIN ⇧</Btn>
-              <Btn night={night} on={pos===0}   onClick={()=>{ if(!locked) winDn(k); }} sz={9} pad={'6px 10px'} min={70}>WIN ⇩</Btn>
-              <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim}}>{pos|0}%{locked?' · LOCKED':''}</span>
-            </div>;
-          })()}
-          <div style={{display:'flex',gap:6}}>
-            <Btn night={night} on={!lockL&&!lockR} onClick={()=>set('Body.Switches.DoorTrim.Row1.Right.UnlockButton',true)} sz={9} pad={'6px 10px'} min={90}>UNLOCK</Btn>
-            <Btn night={night} on={lockL&&lockR} onClick={()=>set('Body.Switches.DoorTrim.Row1.Right.LockButton',true)} sz={9} pad={'6px 10px'} min={90}>LOCK</Btn>
-          </div>
-        </div>
-      </CockpitZone>
+        </CockpitZone>;
+      })}
     </div>
 
     {/* ── Driver master panel ──
          The cluster of master controls physically located on the
          driver's door card: mirror controls + 4-way window switches
-         + window lockout + rear child locks.
-         - Mirrors: master fold, side select, 4-way direction dpad on
-           Body.Switches.Mirror.{Fold,Select,Direction}.  Direction is
-           press-and-hold; releasing writes NONE so the mirror-adjust
-           plant model stops integrating.
-         - Windows: one-touch ⇧ writes Position=100, ⇩ writes 0 —
-           same auto-up / auto-down semantics as the real driver-door
-           switch pack.
-         - Lockout: master Body.Switches.Window.LockoutEnabled.  When
-           engaged, the passenger / rear switches in this UI grey out
-           (the underlying body controller would ignore their writes).
-         - Child locks: Body.Doors.Row2.{Left,Right}.IsChildLockActive
-           per rear door.  Front-door child locks exist in VSS but
-           aren't typically exposed at the driver master. */}
+         + power child-lock master button.
+         - Mirrors: master fold, side select, 4-way direction dpad
+           on Body.Switches.Mirror.{Fold,Select,Direction}.
+           Direction is press-and-hold; releasing writes NONE.
+         - Windows: hold-to-move switches writing
+           Body.Switches.Window.DriverMaster.Row{1,2}.{L,R}.Is{Up,Down}Pressed.
+           The PowerWindowDriver feature consumes them and claims
+           the window arbiter at Medium; the WindowPlant ramps the
+           position at 10 %/s.
+         - Power child lock: momentary push on
+           Body.Switches.PowerChildLock.IsPressed.  The
+           PowerChildLock feature toggles MasterStatus + both rear
+           IsChildLockActive on each rising edge.  Door plant
+           suppresses inside-pull on a child-locked door; the local
+           rear window switches are also suppressed by
+           PowerWindowLocal. */}
     <CockpitZone title="DRIVER MASTER PANEL" subtitle="mirrors · windows · child locks" night={night}>
       <div style={{display:'flex',gap:14,alignItems:'center',flexWrap:'wrap'}}>
         <div style={{display:'flex',flexDirection:'column',gap:5}}>
@@ -2354,76 +2413,74 @@ function CockpitView({s,set}){
         })()}
       </div>
 
-      {/* Window switch pack — 4-up / 4-down for the driver's master
-          control of all 4 windows. */}
+      {/* Window switch pack — 4 up + 4 down hold-to-move switches.
+          Each button writes Body.Switches.Window.DriverMaster.*.{Is{Up,Down}Pressed}
+          while held; the `PowerWindowDriver` feature claims the motor
+          via the window arbiter at Medium and the WindowPlant ramps
+          the position.  Rear positions dim if the matching rear door
+          is child-locked — the driver master still works at the
+          arbiter level, but the dim is a visual cue that something
+          will resist if a child reaches for their own switch. */}
       <div style={{display:'grid',gridTemplateColumns:'auto repeat(4, 1fr)',gap:6,marginTop:10,alignItems:'center'}}>
         <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1}}>WINDOWS:</span>
         {[
-          {k:'Body.Doors.Row1.Left.Window.Position',  l:'FL (drv)'},
-          {k:'Body.Doors.Row1.Right.Window.Position', l:'FR'},
-          {k:'Body.Doors.Row2.Left.Window.Position',  l:'RL'},
-          {k:'Body.Doors.Row2.Right.Window.Position', l:'RR'},
-        ].map(({k,l})=>{
-          const pos=s[k]??0;
-          const locked=winLocked(k);
-          return <div key={k} style={{display:'flex',flexDirection:'column',gap:3,alignItems:'center',opacity:locked?0.35:1}}>
+          {pos:'Body.Doors.Row1.Left.Window.Position',  motor:'Body.Doors.Row1.Left.Window.MotorDirection',  up:'Body.Switches.Window.DriverMaster.Row1.Left.IsUpPressed',  dn:'Body.Switches.Window.DriverMaster.Row1.Left.IsDownPressed',  l:driverSide==='Left' ?'FL (drv)':'FL (pas)'},
+          {pos:'Body.Doors.Row1.Right.Window.Position', motor:'Body.Doors.Row1.Right.Window.MotorDirection', up:'Body.Switches.Window.DriverMaster.Row1.Right.IsUpPressed', dn:'Body.Switches.Window.DriverMaster.Row1.Right.IsDownPressed', l:driverSide==='Right'?'FR (drv)':'FR (pas)'},
+          {pos:'Body.Doors.Row2.Left.Window.Position',  motor:'Body.Doors.Row2.Left.Window.MotorDirection',  up:'Body.Switches.Window.DriverMaster.Row2.Left.IsUpPressed',  dn:'Body.Switches.Window.DriverMaster.Row2.Left.IsDownPressed',  l:'RL', childLock:childRL},
+          {pos:'Body.Doors.Row2.Right.Window.Position', motor:'Body.Doors.Row2.Right.Window.MotorDirection', up:'Body.Switches.Window.DriverMaster.Row2.Right.IsUpPressed', dn:'Body.Switches.Window.DriverMaster.Row2.Right.IsDownPressed', l:'RR', childLock:childRR},
+        ].map(({pos,motor,up,dn,l,childLock})=>{
+          const p=winPos(pos);
+          const m=winMotor(motor);
+          return <div key={pos} style={{display:'flex',flexDirection:'column',gap:3,alignItems:'center',opacity:childLock?0.6:1}}>
             <span style={{fontFamily:'Share Tech Mono',fontSize:8,color:txtDim,letterSpacing:.5}}>{l}</span>
             <div style={{display:'flex',gap:3}}>
-              <Btn night={night} on={pos===100} onClick={()=>{ if(!locked) winUp(k); }} sz={9} pad={'5px 9px'}>⇧</Btn>
-              <Btn night={night} on={pos===0}   onClick={()=>{ if(!locked) winDn(k); }} sz={9} pad={'5px 9px'}>⇩</Btn>
+              <Btn night={night} on={m==='UP'}   {...holdSwitch(up)} sz={9} pad={'5px 9px'}>⇧</Btn>
+              <Btn night={night} on={m==='DOWN'} {...holdSwitch(dn)} sz={9} pad={'5px 9px'}>⇩</Btn>
             </div>
-            <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim}}>{pos|0}%</span>
+            <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim}}>{p|0}%</span>
           </div>;
         })}
       </div>
 
-      {/* Lockout + child locks row.  These are now momentary pushes:
-          press writes the switch input to the bus; the WindowLockout
-          and ChildLock features observe rising edges and toggle the
-          latched output.  The icon `on={...}` reflects the feature's
-          output (read-only display) — driver intent in, feature
-          arbitration out. */}
+      {/* Master child-lock indicator + push.  Single momentary
+          button on Body.Switches.PowerChildLock.IsPressed; the
+          PowerChildLock feature toggles MasterStatus on each rising
+          edge and fans it out to both rear-door IsChildLockActive
+          outputs.  The LED reflects MasterStatus (feature output —
+          read-only); the click writes the input. */}
       {(() => {
-        // Icon-style indicator wrapped around a momentary switch.
-        // - `output`: the latched bool the feature publishes.
-        // - `switchKey`: the momentary VSS switch path.
-        // - `iconOn` / `iconOff`: the visual glyph for the two states.
-        const IndicatorIcon = ({output, switchKey, iconOn, iconOff, label}) => {
-          const press = {
-            onMouseDown: () => set(switchKey, true),
-            onMouseUp:   () => set(switchKey, false),
-            onMouseLeave:() => set(switchKey, false),
-          };
-          return <button {...press} title={`${label} — ${output?'engaged':'released'} (tap to toggle)`}
+        const press = {
+          onMouseDown: () => set('Body.Switches.PowerChildLock.IsPressed', true),
+          onMouseUp:   () => set('Body.Switches.PowerChildLock.IsPressed', false),
+          onMouseLeave:() => set('Body.Switches.PowerChildLock.IsPressed', false),
+        };
+        return <div style={{display:'flex',gap:10,marginTop:10,alignItems:'center',flexWrap:'wrap'}}>
+          <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1}}>SAFETY:</span>
+          <button {...press}
+            title={`Master child lock — ${masterChildLock?'engaged':'released'} (tap to toggle).  Disables inside-pull on rear doors and suppresses rear local window switches.`}
             style={{
-              display:'flex',flexDirection:'column',alignItems:'center',gap:2,
-              background: output?(night?'#3A2C0A':'#1E3A52'):(night?'#0A1018':'#0E1625'),
-              border: `1px solid ${output?(night?'#F59E0B':'#4A9EF5'):(night?'#2A3A50':'#1A2838')}`,
-              color: output?(night?'#F59E0B':'#4A9EF5'):(night?'#5A7090':'#3A5070'),
-              fontFamily:'Share Tech Mono',fontSize:8,fontWeight:600,
-              padding:'5px 10px',borderRadius:4,cursor:'pointer',minWidth:80,
+              display:'flex',alignItems:'center',gap:8,
+              background: masterChildLock?(night?'#3A2C0A':'#1E3A52'):(night?'#0A1018':'#0E1625'),
+              border: `1px solid ${masterChildLock?(night?'#F59E0B':'#4A9EF5'):(night?'#2A3A50':'#1A2838')}`,
+              color: masterChildLock?(night?'#F59E0B':'#4A9EF5'):(night?'#5A7090':'#3A5070'),
+              fontFamily:'Share Tech Mono',fontSize:9,fontWeight:600,
+              padding:'8px 14px',borderRadius:4,cursor:'pointer',
               userSelect:'none',touchAction:'none',
             }}>
-            <span style={{fontSize:14,lineHeight:1}}>{output?iconOn:iconOff}</span>
-            <span style={{letterSpacing:.5}}>{label}</span>
-          </button>;
-        };
-        return <div style={{display:'flex',gap:8,marginTop:10,flexWrap:'wrap',alignItems:'center'}}>
-          <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1}}>SAFETY OUTPUTS:</span>
-          <IndicatorIcon
-            output={winLockout}
-            switchKey="Body.Switches.WindowLockout.IsPressed"
-            iconOn="🔒" iconOff="🔓" label="WIN LOCKOUT"/>
-          <IndicatorIcon
-            output={childRL}
-            switchKey="Body.Switches.ChildLock.Row2.Left.IsPressed"
-            iconOn="🔒" iconOff="🔓" label="CHILD RL"/>
-          <IndicatorIcon
-            output={childRR}
-            switchKey="Body.Switches.ChildLock.Row2.Right.IsPressed"
-            iconOn="🔒" iconOff="🔓" label="CHILD RR"/>
-          <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,fontStyle:'italic',marginLeft:6}}>
-            icon = feature output · click = momentary input
+            {/* LED dot — bright amber when engaged, dim grey otherwise. */}
+            <span style={{
+              width:10,height:10,borderRadius:'50%',
+              background: masterChildLock ? '#F59E0B' : (night?'#1A2838':'#3A4D5C'),
+              boxShadow: masterChildLock ? '0 0 6px rgba(245,158,11,0.7)' : 'none',
+            }}/>
+            <span style={{fontSize:16,lineHeight:1}}>{masterChildLock?'🔒':'🔓'}</span>
+            <span>CHILD LOCK</span>
+            <span style={{fontSize:7,color:txtDim,fontStyle:'italic',marginLeft:4}}>
+              {masterChildLock?'engaged · rear inside-pulls + local windows inert':'released'}
+            </span>
+          </button>
+          <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,fontStyle:'italic'}}>
+            LED = PowerChildLock.MasterStatus · click = momentary push
           </span>
         </div>;
       })()}
@@ -3603,7 +3660,7 @@ function App(){
         <div className={view==='config'?'':' svgwrap'} style={view==='config'?{flex:1,display:'flex',minHeight:0}:{}}>
           {view==='top'     &&<CombinedView s={s} set={set} onDeviceSelect={setSelDev}/>}
           {view==='side'    &&<SideView s={s} set={set}/>}
-          {view==='cockpit' &&<CockpitView s={s} set={set}/>}
+          {view==='cockpit' &&<CockpitView s={s} set={set} cfg={cfg}/>}
           {view==='config'  &&<ConfigView cfg={cfg} onSet={setCfgKey}
             staged={cfgStaged} setStaged={setCfgStaged} onApplyReboot={applyAndReboot}/>}
         </div>
