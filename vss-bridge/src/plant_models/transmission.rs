@@ -64,8 +64,14 @@ impl<B: SignalBus + Send + Sync + 'static> TransmissionPlant<B> {
         let mut current: i16 = PARK;
 
         while let Some(val) = sel_rx.next().await {
-            let want = match val {
+            // The ws-bridge JSON converter routes JS numbers into
+            // Uint8 / Uint16 / Int16 by range — positive small ints
+            // arrive as Uint8 even though the gear catalog is i16.
+            // Accept any numeric variant and coerce to i16.
+            let want: i16 = match val {
                 SignalValue::Int16(v) => v,
+                SignalValue::Uint8(v) => v as i16,
+                SignalValue::Uint16(v) => v.try_into().unwrap_or(i16::MAX),
                 _ => continue,
             };
             if want == current {
@@ -146,6 +152,22 @@ mod tests {
         settle().await;
         let republishes = bus.history().iter().filter(|(s, _)| *s == CURRENT).count();
         assert_eq!(republishes, 0);
+    }
+
+    #[tokio::test]
+    async fn accepts_uint8_for_positive_gear_codes() {
+        // Regression: the ws-bridge JSON converter routes positive
+        // ints ≤ 255 to Uint8, so PRND/S codes 126/127/128 arrive as
+        // Uint8 even though the plant publishes Int16.  Plant must
+        // coerce so the cockpit shifter can actually engage forward
+        // gears.
+        let bus = setup().await;
+        bus.inject(SELECTED, SignalValue::Uint8(127));
+        settle().await;
+        assert_eq!(current(&bus), Some(127));
+        bus.inject(SELECTED, SignalValue::Uint8(0));
+        settle().await;
+        assert_eq!(current(&bus), Some(0));
     }
 
     #[tokio::test]
