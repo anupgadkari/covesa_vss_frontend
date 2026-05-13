@@ -271,7 +271,14 @@ impl<B: SignalBus + Send + Sync + 'static> VehicleStartingControl<B> {
         *immobilizer = Immobilizer::Authenticated;
         self.publish_immobilizer(*immobilizer).await;
 
-        let next = if brake_applied {
+        // Brake jump-to-RUN only applies when the vehicle is currently
+        // *off* (OFF or ACC).  Once the engine is running (ON / START),
+        // a press always cycles back to OFF regardless of brake state —
+        // otherwise a driver sitting at a stoplight (foot on brake,
+        // engine running) couldn't shut the car off with a single
+        // press.
+        let is_off_state = matches!(*power, PowerState::Off | PowerState::Acc);
+        let next = if brake_applied && is_off_state {
             PowerState::On
         } else {
             power.cycle_next()
@@ -533,6 +540,28 @@ mod tests {
         settle().await;
         assert_eq!(latest_power(&bus).as_deref(), Some("ON"));
         // press 3: ON → OFF
+        bus.inject(START_STOP_IN, SignalValue::Bool(true));
+        settle().await;
+        assert_eq!(latest_power(&bus).as_deref(), Some("OFF"));
+    }
+
+    #[tokio::test]
+    async fn peps_press_with_brake_at_on_state_turns_off() {
+        // Real-world scenario: engine running, driver sitting at a
+        // stoplight with foot on the brake.  Pressing the start
+        // button should turn the engine OFF — not "jump to RUN" and
+        // hold at ON.
+        let bus = setup(cfg_peps()).await;
+        place_fob_in_cabin(&bus, 1);
+        bus.inject(BRAKE_IN, SignalValue::Bool(true));
+        settle().await;
+        // Get to ON first.
+        bus.inject(START_STOP_IN, SignalValue::Bool(true));
+        settle().await;
+        bus.inject(START_STOP_IN, SignalValue::Bool(false));
+        settle().await;
+        assert_eq!(latest_power(&bus).as_deref(), Some("ON"));
+        // Press again with brake still held — must go OFF.
         bus.inject(START_STOP_IN, SignalValue::Bool(true));
         settle().await;
         assert_eq!(latest_power(&bus).as_deref(), Some("OFF"));
