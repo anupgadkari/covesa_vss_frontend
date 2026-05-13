@@ -1818,6 +1818,20 @@ function HeadlampTelltale({cx, cy, kind, on, onColor, offColor='#1F2C40'}){
   </g>;
 }
 
+// Turn-signal telltale — a solid filled triangle arrow pointing in
+// the direction of travel (ISO 2575 convention).  Amber, blinks
+// while active, dim grey when off so the cluster layout stays
+// stable.  Drawn in a 30×30 local box centred on (cx, cy).
+function TurnArrowTelltale({cx, cy, direction, on, onColor='#F59E0B', offColor='#1F2C40'}){
+  const c = on ? onColor : offColor;
+  const r = 9;
+  const points = direction === 'right'
+    ? `${cx-r},${cy-r} ${cx-r},${cy+r} ${cx+r},${cy}`
+    : `${cx+r},${cy-r} ${cx+r},${cy+r} ${cx-r},${cy}`;
+  return <polygon points={points} fill={c} opacity={on ? 1 : 0.45}
+    className={on ? 'blink' : undefined}/>;
+}
+
 // TPMS (tire-pressure-low) telltale — ISO 2575 convention.  A thick
 // "(!) " bracket shape representing a tire viewed from the side
 // (open at the top, walls curving down to the contact patch), with
@@ -2072,10 +2086,11 @@ function CockpitView({s,set,cfg}){
             horizontal beams distinguish it from front fog). */}
         <HeadlampTelltale cx={150} cy={80} kind="fog"  on={ffog} onColor="#22C55E"/>
         <HeadlampTelltale cx={210} cy={80} kind="rfog" on={rfog} onColor="#F59E0B"/>
-        {li&&<g><circle cx={30} cy={120} r={12} fill="#F59E0B" opacity="0.3" stroke="#F59E0B" strokeWidth="1.2" className="blink"/>
-          <text x={30} y={125} textAnchor="middle" fill="#F59E0B" fontSize="10" fontFamily="Share Tech Mono" fontWeight="600">◄</text></g>}
-        {ri&&<g><circle cx={90} cy={120} r={12} fill="#F59E0B" opacity="0.3" stroke="#F59E0B" strokeWidth="1.2" className="blink"/>
-          <text x={90} y={125} textAnchor="middle" fill="#F59E0B" fontSize="10" fontFamily="Share Tech Mono" fontWeight="600">►</text></g>}
+        {/* Turn-signal telltales — filled triangle arrows, ISO 2575.
+            Blink amber while the indicator is active, dim grey when
+            idle so the warnings row layout stays stable. */}
+        <TurnArrowTelltale cx={30} cy={120} direction="left"  on={li}/>
+        <TurnArrowTelltale cx={90} cy={120} direction="right" on={ri}/>
         {/* Door-ajar telltale — fixed top-view silhouette with the
             driver-side front door swung out.  Single drawing regardless
             of which door is actually open; the lamp is the "any door"
