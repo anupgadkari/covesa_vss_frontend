@@ -2007,7 +2007,9 @@ function CockpitView({s,set,cfg}){
   // dropped mouse-up events on press-and-hold buttons).  Pass
   // `night={night}` at every call site.
   const WIPER_CYCLE={OFF:'INTERMITTENT',INTERMITTENT:'SLOW',SLOW:'MEDIUM',MEDIUM:'FAST',FAST:'OFF'};
-  const LIGHT_CYCLE={OFF:'POSITION',POSITION:'DRL',DRL:'AUTO',AUTO:'BEAM',BEAM:'OFF'};
+  // OFF → DRL → POSITION → AUTO → BEAM → OFF (matches the angular
+  // order of the icons around the rotary knob).
+  const LIGHT_CYCLE={OFF:'DRL',DRL:'POSITION',POSITION:'AUTO',AUTO:'BEAM',BEAM:'OFF'};
   const DIST_CYCLE={AUTO:'FACE',FACE:'FACE_FEET',FACE_FEET:'FEET',FEET:'FEET_DEF',FEET_DEF:'DEF',DEF:'AUTO'};
   // Friendlier display labels for the VSS AirDistribution enum.
   // The on-wire signal value still uses the canonical VSS strings
@@ -2186,8 +2188,8 @@ function CockpitView({s,set,cfg}){
                 fall back to a short text label per the user spec. */}
             {[
               {p:'OFF',      kind:'text',   label:'OFF'},
-              {p:'POSITION', kind:'parking'},
               {p:'DRL',      kind:'text',   label:'DRL'},
+              {p:'POSITION', kind:'parking'},
               {p:'AUTO',     kind:'text',   label:'AUTO'},
               {p:'BEAM',     kind:'beam'},
             ].map(({p,kind,label},i)=>{
@@ -2232,7 +2234,7 @@ function CockpitView({s,set,cfg}){
               return null;
             })}
             {/* Amber pointer — points from the center toward the active position. */}
-            {(()=>{const i=['OFF','POSITION','DRL','AUTO','BEAM'].indexOf(lightSw);
+            {(()=>{const i=['OFF','DRL','POSITION','AUTO','BEAM'].indexOf(lightSw);
               const a=-Math.PI/2 + (i<0?0:i)*(2*Math.PI/5);
               return <line x1="65" y1="65" x2={65+Math.cos(a)*26} y2={65+Math.sin(a)*26}
                 stroke="#F59E0B" strokeWidth="2.5" strokeLinecap="round"/>;})()}
