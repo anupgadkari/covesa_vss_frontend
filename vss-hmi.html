@@ -3380,11 +3380,11 @@ function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
               {powerMode}
             </span>
             {/* Immobilizer status is only meaningful when the
-                vehicle is in ACC / ON / START.  Hide it at OFF —
-                no auth has been attempted yet, and an old
-                AUTHENTICATED chip from a prior cycle reads as
+                vehicle is in ACC / ON / START.  Hide it at OFF or
+                LOCK — neither powers the auth path, and stale
+                AUTHENTICATED chips from a prior cycle read as
                 misleading noise. */}
-            {powerMode !== 'OFF' && <>
+            {powerMode !== 'OFF' && powerMode !== 'LOCK' && <>
               <span style={{fontFamily:'var(--fm)',fontSize:9,color:'var(--muted)'}}>Immobilizer:</span>
               <span style={{fontFamily:'var(--fm)',fontSize:10,fontWeight:700,color:immoColor}}>
                 {immo}
