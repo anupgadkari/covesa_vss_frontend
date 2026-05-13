@@ -3085,11 +3085,15 @@ function DevicePanel({s, set, sel, setSel}){
 
       {/* Zone quick-assign */}
       {(()=>{
-        // Fob 6 is modelled as a physically-incompatible key blank
-        // (wrong cut / no transponder) — it cannot be inserted into
-        // the cylinder, so the CYLINDER / BACKUP tile is omitted for
-        // this slot.  All other devices show the full set.
-        const isIncompatibleKey = dev.type==='fob' && dev.index===6;
+        // CYLINDER / BACKUP is only valid for devices that can be
+        // physically inserted in the cylinder slot:
+        //   - Fob 6 is an incompatible key blank (wrong cut / no
+        //     transponder), so the tile is hidden for it.
+        //   - Phones (P1, P2) have no physical key bow at all — they
+        //     authenticate over BLE only — so the tile is hidden for
+        //     phone devices entirely.
+        const noCylinderSlot =
+          (dev.type==='fob' && dev.index===6) || dev.type==='phone';
         const ZONE_BTNS=[
           {z:'OutOfRange',  label:'OUT',          c:'#2E3E55'},
           {z:'RfRange',     label:'RF RANGE',      c:'#4A9EF5'},
@@ -3107,7 +3111,7 @@ function DevicePanel({s, set, sel, setSel}){
           // Cylinder / backup antenna — KeyCylinder line-cal uses
           // this as the only auth path; PEPS line-cal uses it as a
           // low-battery fallback (auth still works without fob RF).
-          ...(isIncompatibleKey ? [] : [{z:'KeyCylinder', label:'CYLINDER\n/ BACKUP', c:'#4A9EF5'}]),
+          ...(noCylinderSlot ? [] : [{z:'KeyCylinder', label:'CYLINDER\n/ BACKUP', c:'#4A9EF5'}]),
         ];
         return <>
           <div className="devpanel-section">PLACE IN ZONE</div>
