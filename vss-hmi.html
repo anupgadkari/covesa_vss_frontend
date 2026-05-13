@@ -3085,15 +3085,17 @@ function DevicePanel({s, set, sel, setSel}){
 
       {/* Zone quick-assign */}
       {(()=>{
-        // CYLINDER / BACKUP is only valid for devices that can be
-        // physically inserted in the cylinder slot:
-        //   - Fob 6 is an incompatible key blank (wrong cut / no
-        //     transponder), so the tile is hidden for it.
-        //   - Phones (P1, P2) have no physical key bow at all — they
-        //     authenticate over BLE only — so the tile is hidden for
-        //     phone devices entirely.
-        const noCylinderSlot =
-          (dev.type==='fob' && dev.index===6) || dev.type==='phone';
+        // CYLINDER / BACKUP represents the short-range LF + NFC pad
+        // at the start button / cylinder.  Devices that can sit there:
+        //   - Authorised fobs (F1-F4) via the LF transponder.
+        //   - Fob 5 mechanically fits but fails the immobilizer check.
+        //   - Phones (P1, P2) tap the cylinder NFC pad — same model
+        //     as a phone tapped on the driver-door NFC reader for
+        //     unlock, just at the start-button NFC pad for ignition.
+        // Excluded:
+        //   - Fob 6 — physically incompatible key blank, can't even
+        //     be inserted into the cylinder.
+        const noCylinderSlot = dev.type==='fob' && dev.index===6;
         const ZONE_BTNS=[
           {z:'OutOfRange',  label:'OUT',          c:'#2E3E55'},
           {z:'RfRange',     label:'RF RANGE',      c:'#4A9EF5'},
