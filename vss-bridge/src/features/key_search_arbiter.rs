@@ -1,26 +1,29 @@
 //! KeySearch arbiter — owns LF airtime for PEPS searches.
 //!
 //! See `docs/key-search-arbiter-and-ignition.md` for the full design.
-//! This is **phase 1**: the foundation only.  Subsequent phases add
-//! the adaptive approach-poll loop (phase 2), feature migrations
-//! (phases 3–6, 8), and downstream consumers.
+//! This module covers **phases 1 + 2**: the foundation plus the
+//! adaptive approach-poll loop.  Subsequent phases (3–10) migrate
+//! existing features onto the arbiter and add new consumers.
 //!
-//! # What this phase delivers
+//! # What this module delivers today
 //!
 //! - `AntennaSet`, `SearchMode`, `Coalescing` enums.
 //! - `KeySearchRequest` / `KeySearchResult` / `KeyFinding` types.
 //! - `KeySearchArbiter::handle` for features to submit requests; one
 //!   tokio task processes them serially.
 //! - Simulated LF latency per antenna set + mode.
-//! - 50 ms coalescing window for repeat
-//!   `(antennas, mode)` requests flagged `Coalescing::Allowed`.
+//! - 50 ms coalescing window for repeat `(antennas, mode)` requests
+//!   flagged `Coalescing::Allowed`.
+//! - Adaptive approach-poll loop: 700 ms cadence when no key is in
+//!   approach, 10 s cadence when one is detected, suspended while
+//!   the ignition is in `ACC`/`ON`/`START`.  Publishes
+//!   `Body.PEPS.ApproachState` (bool), `Body.PEPS.ApproachKeys`
+//!   (count), `Body.PEPS.ApproachPollInterval` (current cadence ms).
+//!   Cadences are overridable via `with_cadence` for tests.
 //!
 //! # What is NOT yet in place
 //!
-//! - Adaptive approach poll loop (phase 2).
-//! - Priority queue / preemption between request classes (phase 2 +).
-//! - `Body.PEPS.ApproachState` / `ApproachKeys` derived signals
-//!   (phase 2).
+//! - Priority queue / preemption between request classes.
 //! - HMAC challenge integration with `plant_models/peps/crypto.rs`
 //!   for `SearchMode::Authenticated` — currently the simulated auth
 //!   passes for every fob in coverage.  Wired up in phase 7 when
@@ -42,8 +45,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures::StreamExt;
+use tokio::select;
 use tokio::sync::{mpsc, oneshot};
-use tokio::time::{sleep, Instant};
+use tokio::time::{sleep, sleep_until, Instant};
 
 use crate::ipc_message::SignalValue;
 use crate::plant_models::peps::zone::Zone;
@@ -80,7 +84,7 @@ pub enum AntennaSet {
 /// Identifies one physical door for `SingleHandle(door)` searches.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DoorRef {
-    pub row: u8,  // 1 or 2
+    pub row: u8, // 1 or 2
     pub side: Side,
 }
 
@@ -145,6 +149,23 @@ pub const COALESCE_WINDOW: Duration = Duration::from_millis(50);
 /// 6 slots cover 4 key fobs + 2 phones.
 pub const NUM_KEY_SLOTS: usize = 6;
 
+/// Approach-poll cadence when no key is currently in approach —
+/// scan briskly so we detect arrivals quickly.
+pub const APPROACH_POLL_FAST: Duration = Duration::from_millis(700);
+
+/// Approach-poll cadence when a key is already in approach —
+/// confirm presence less often (saves both vehicle and fob battery).
+pub const APPROACH_POLL_SLOW: Duration = Duration::from_secs(10);
+
+/// VSS path the arbiter watches to know whether to suspend the
+/// poll (driving — fob is in cabin anyway).
+const IGNITION_STATE_SIGNAL: VssPath = "Vehicle.LowVoltageSystemState";
+
+/// VSS paths the arbiter writes from the poll loop.
+const APPROACH_STATE_OUT: VssPath = "Body.PEPS.ApproachState";
+const APPROACH_KEYS_OUT: VssPath = "Body.PEPS.ApproachKeys";
+const APPROACH_POLL_INTERVAL_OUT: VssPath = "Body.PEPS.ApproachPollInterval";
+
 /// Simulated latency per antenna set + mode.
 const fn latency(antennas: &AntennaSet, mode: SearchMode) -> Duration {
     use AntennaSet::*;
@@ -195,27 +216,67 @@ impl KeySearchArbiterHandle {
 
 pub struct KeySearchArbiter<B: SignalBus> {
     bus: Arc<B>,
+    fast_cadence: Duration,
+    slow_cadence: Duration,
 }
 
 impl<B: SignalBus + Send + Sync + 'static> KeySearchArbiter<B> {
     pub fn new(bus: Arc<B>) -> (Self, KeySearchArbiterHandle) {
         let (tx, _rx) = mpsc::channel::<KeySearchRequest>(64);
         let handle = KeySearchArbiterHandle { tx };
-        (Self { bus }, handle)
+        (
+            Self {
+                bus,
+                fast_cadence: APPROACH_POLL_FAST,
+                slow_cadence: APPROACH_POLL_SLOW,
+            },
+            handle,
+        )
     }
 
     /// Bundled constructor that also returns the request receiver
     /// the run loop consumes — keeps the wiring local in `main.rs`.
     pub fn new_with_rx(
         bus: Arc<B>,
-    ) -> (Self, KeySearchArbiterHandle, mpsc::Receiver<KeySearchRequest>) {
+    ) -> (
+        Self,
+        KeySearchArbiterHandle,
+        mpsc::Receiver<KeySearchRequest>,
+    ) {
         let (tx, rx) = mpsc::channel::<KeySearchRequest>(64);
         let handle = KeySearchArbiterHandle { tx };
-        (Self { bus }, handle, rx)
+        (
+            Self {
+                bus,
+                fast_cadence: APPROACH_POLL_FAST,
+                slow_cadence: APPROACH_POLL_SLOW,
+            },
+            handle,
+            rx,
+        )
+    }
+
+    /// Override the adaptive approach-poll cadences.  Production
+    /// builds use the public constants (700 ms / 10 s); tests use
+    /// much shorter durations so they run in real time without
+    /// dragging the test suite.
+    pub fn with_cadence(mut self, fast: Duration, slow: Duration) -> Self {
+        self.fast_cadence = fast;
+        self.slow_cadence = slow;
+        self
     }
 
     /// Run loop.  Consumes `self` and the request receiver returned
     /// from `new_with_rx`.
+    ///
+    /// Three sources of work:
+    ///   1. Feature-submitted search requests (`rx`).
+    ///   2. Adaptive approach-poll deadline (cadence flips between
+    ///      `APPROACH_POLL_FAST` and `APPROACH_POLL_SLOW` based on
+    ///      the most recent poll result).  Suspended while the
+    ///      ignition is in `ACC`/`ON`/`START`.
+    ///   3. `Vehicle.LowVoltageSystemState` updates — drives the
+    ///      suspension flag.
     pub async fn run(self, mut rx: mpsc::Receiver<KeySearchRequest>) {
         tracing::info!("KeySearchArbiter started");
 
@@ -242,50 +303,172 @@ impl<B: SignalBus + Send + Sync + 'static> KeySearchArbiter<B> {
         // Recent-result cache for coalescing window.
         let mut cache: Vec<(AntennaSet, SearchMode, KeySearchResult, Instant)> = Vec::new();
 
-        while let Some(req) = rx.recv().await {
-            // Drop cache entries older than the coalesce window.
-            let now = Instant::now();
-            cache.retain(|(_, _, _, t)| now.duration_since(*t) <= COALESCE_WINDOW);
+        // Approach-poll state.
+        let mut approach_state: bool = false;
+        let mut approach_keys: u8 = 0;
+        let mut ign_suspended: bool = false;
+        let mut poll_deadline: Instant = Instant::now() + self.fast_cadence;
 
-            // Coalesce if a fresh cached result matches.
-            if req.coalescing == Coalescing::Allowed {
-                if let Some((_, _, hit, _)) = cache
-                    .iter()
-                    .find(|(a, m, _, _)| *a == req.antennas && *m == req.mode)
-                {
-                    tracing::debug!(
-                        requester = req.requester,
-                        "KeySearchArbiter: coalesced"
-                    );
-                    let _ = req.response.send(hit.clone());
-                    continue;
-                }
-            }
+        // Seed the derived signals so HMI snapshots see defined values.
+        let _ = self
+            .bus
+            .publish(APPROACH_STATE_OUT, SignalValue::Bool(false))
+            .await;
+        let _ = self
+            .bus
+            .publish(APPROACH_KEYS_OUT, SignalValue::Uint8(0))
+            .await;
+        let _ = self
+            .bus
+            .publish(
+                APPROACH_POLL_INTERVAL_OUT,
+                SignalValue::Uint16(self.fast_cadence.as_millis() as u16),
+            )
+            .await;
 
-            // Run the scan.
-            let started = Instant::now();
-            let zones_snapshot = zones.lock().await.clone();
-            let result = run_scan(&req.antennas, req.mode, &zones_snapshot).await;
-            let result = KeySearchResult {
-                took: started.elapsed(),
-                ..result
+        // Subscribe to ignition state for poll suspension.
+        let mut ign_rx = self.bus.subscribe(IGNITION_STATE_SIGNAL).await;
+
+        loop {
+            // While suspended, push the deadline far out so the
+            // sleep branch never wins; only `rx` and ignition events
+            // wake the loop.
+            let next_deadline = if ign_suspended {
+                Instant::now() + Duration::from_secs(3600)
+            } else {
+                poll_deadline
             };
 
-            tracing::debug!(
-                requester = req.requester,
-                antennas = ?req.antennas,
-                mode = ?req.mode,
-                keys_found = result.keys_found.len(),
-                took_ms = result.took.as_millis() as u64,
-                "KeySearchArbiter: scan complete"
-            );
+            select! {
+                biased;
 
-            cache.push((req.antennas.clone(), req.mode, result.clone(), Instant::now()));
-            let _ = req.response.send(result);
+                // Ignition state changes — suspend / resume the poll.
+                Some(val) = ign_rx.next() => {
+                    if let SignalValue::String(s) = val {
+                        let now_susp = matches!(s.as_str(), "ACC" | "ON" | "START");
+                        if now_susp != ign_suspended {
+                            ign_suspended = now_susp;
+                            tracing::info!(suspended = ign_suspended,
+                                "KeySearchArbiter: approach poll suspension changed");
+                            if ign_suspended {
+                                // Going suspended — clear state and publish.
+                                approach_state = false;
+                                approach_keys = 0;
+                                let _ = self.bus.publish(APPROACH_STATE_OUT, SignalValue::Bool(false)).await;
+                                let _ = self.bus.publish(APPROACH_KEYS_OUT, SignalValue::Uint8(0)).await;
+                                let _ = self.bus.publish(APPROACH_POLL_INTERVAL_OUT, SignalValue::Uint16(0)).await;
+                            } else {
+                                // Resuming — kick an immediate poll.
+                                poll_deadline = Instant::now();
+                            }
+                        }
+                    }
+                }
+
+                // Feature-submitted search request.
+                Some(req) = rx.recv() => {
+                    handle_request(req, &zones, &mut cache).await;
+                }
+
+                // Periodic approach poll.
+                _ = sleep_until(next_deadline), if !ign_suspended => {
+                    let zones_snapshot = zones.lock().await.clone();
+                    let started = Instant::now();
+                    let result = run_scan(
+                        &AntennaSet::AllApproach,
+                        SearchMode::Presence,
+                        &zones_snapshot,
+                    ).await;
+                    let now_any = !result.keys_found.is_empty();
+                    let now_count = result.keys_found.len() as u8;
+
+                    if now_any != approach_state || now_count != approach_keys {
+                        approach_state = now_any;
+                        approach_keys = now_count;
+                        let next_interval = if now_any {
+                            self.slow_cadence
+                        } else {
+                            self.fast_cadence
+                        };
+                        let _ = self.bus.publish(APPROACH_STATE_OUT, SignalValue::Bool(now_any)).await;
+                        let _ = self.bus.publish(APPROACH_KEYS_OUT, SignalValue::Uint8(now_count)).await;
+                        let _ = self
+                            .bus
+                            .publish(
+                                APPROACH_POLL_INTERVAL_OUT,
+                                SignalValue::Uint16(next_interval.as_millis() as u16),
+                            )
+                            .await;
+                        tracing::debug!(
+                            approach_state, approach_keys, ?next_interval,
+                            "KeySearchArbiter: approach state changed"
+                        );
+                    }
+
+                    // Schedule next poll.
+                    let next_interval = if approach_state {
+                        self.slow_cadence
+                    } else {
+                        self.fast_cadence
+                    };
+                    poll_deadline = started + next_interval;
+                }
+
+                else => break,
+            }
         }
 
         tracing::warn!("KeySearchArbiter: request channel closed, exiting");
     }
+}
+
+/// Process a single submitted search request — pure function over
+/// the zones cache and the coalescing window.  Extracted so the
+/// `select!` body stays readable.
+async fn handle_request(
+    req: KeySearchRequest,
+    zones: &Arc<tokio::sync::Mutex<HashMap<KeySlot, Zone>>>,
+    cache: &mut Vec<(AntennaSet, SearchMode, KeySearchResult, Instant)>,
+) {
+    // Drop cache entries older than the coalesce window.
+    let now = Instant::now();
+    cache.retain(|(_, _, _, t)| now.duration_since(*t) <= COALESCE_WINDOW);
+
+    if req.coalescing == Coalescing::Allowed {
+        if let Some((_, _, hit, _)) = cache
+            .iter()
+            .find(|(a, m, _, _)| *a == req.antennas && *m == req.mode)
+        {
+            tracing::debug!(requester = req.requester, "KeySearchArbiter: coalesced");
+            let _ = req.response.send(hit.clone());
+            return;
+        }
+    }
+
+    let started = Instant::now();
+    let zones_snapshot = zones.lock().await.clone();
+    let result = run_scan(&req.antennas, req.mode, &zones_snapshot).await;
+    let result = KeySearchResult {
+        took: started.elapsed(),
+        ..result
+    };
+
+    tracing::debug!(
+        requester = req.requester,
+        antennas = ?req.antennas,
+        mode = ?req.mode,
+        keys_found = result.keys_found.len(),
+        took_ms = result.took.as_millis() as u64,
+        "KeySearchArbiter: scan complete"
+    );
+
+    cache.push((
+        req.antennas.clone(),
+        req.mode,
+        result.clone(),
+        Instant::now(),
+    ));
+    let _ = req.response.send(result);
 }
 
 // ── Internal scan execution ───────────────────────────────────────────────
@@ -700,5 +883,122 @@ mod tests {
             elapsed >= Duration::from_millis(95),
             "two scans should serialize, got {elapsed:?}"
         );
+    }
+
+    // ── Phase 2: approach poll loop ─────────────────────────────────────
+
+    fn approach_state(bus: &MockBus) -> Option<bool> {
+        match bus.latest_value(APPROACH_STATE_OUT) {
+            Some(SignalValue::Bool(b)) => Some(b),
+            _ => None,
+        }
+    }
+
+    fn approach_keys(bus: &MockBus) -> Option<u8> {
+        match bus.latest_value(APPROACH_KEYS_OUT) {
+            Some(SignalValue::Uint8(v)) => Some(v),
+            _ => None,
+        }
+    }
+
+    fn approach_interval(bus: &MockBus) -> Option<u16> {
+        match bus.latest_value(APPROACH_POLL_INTERVAL_OUT) {
+            Some(SignalValue::Uint16(v)) => Some(v),
+            _ => None,
+        }
+    }
+
+    /// Yield + a tiny sleep in real time so spawned subscribers
+    /// process injected signals before we assert.  Used in tests
+    /// that don't pause virtual time.
+    async fn settle_real() {
+        for _ in 0..32 {
+            tokio::task::yield_now().await;
+        }
+        sleep(Duration::from_millis(5)).await;
+        for _ in 0..32 {
+            tokio::task::yield_now().await;
+        }
+    }
+
+    /// Spawn an arbiter with very short cadences so we can exercise
+    /// the poll loop in real time without making the test suite slow.
+    /// Fast=20 ms, slow=200 ms.  Adds the 50 ms poll latency on top.
+    async fn setup_short_cadence() -> Arc<MockBus> {
+        let bus = Arc::new(MockBus::new());
+        let (arb, _handle, rx) = KeySearchArbiter::new_with_rx(Arc::clone(&bus));
+        tokio::spawn(
+            arb.with_cadence(Duration::from_millis(20), Duration::from_millis(200))
+                .run(rx),
+        );
+        settle_real().await;
+        bus
+    }
+
+    #[tokio::test]
+    async fn approach_state_starts_false_with_no_keys() {
+        let (bus, _h) = setup().await;
+        settle_real().await;
+        assert_eq!(approach_state(&bus), Some(false));
+        assert_eq!(approach_keys(&bus), Some(0));
+        // Initial cadence published is fast (no key detected).
+        assert_eq!(approach_interval(&bus), Some(700));
+    }
+
+    #[tokio::test]
+    async fn approach_state_flips_to_true_when_key_enters_approach() {
+        let bus = setup_short_cadence().await;
+        place(&bus, 0, Zone::Approach);
+        // One fast cadence (20) + scan latency (50) = ~70 ms; give plenty of slack.
+        sleep(Duration::from_millis(200)).await;
+        assert_eq!(approach_state(&bus), Some(true));
+        assert_eq!(approach_keys(&bus), Some(1));
+        assert_eq!(approach_interval(&bus), Some(200)); // slow cadence
+    }
+
+    #[tokio::test]
+    async fn approach_state_flips_back_when_key_leaves() {
+        let bus = setup_short_cadence().await;
+        place(&bus, 0, Zone::Approach);
+        sleep(Duration::from_millis(200)).await;
+        assert_eq!(approach_state(&bus), Some(true));
+
+        // Move the fob out — should flip back after one slow cycle.
+        place(&bus, 0, Zone::OutOfRange);
+        sleep(Duration::from_millis(400)).await;
+        assert_eq!(approach_state(&bus), Some(false));
+        assert_eq!(approach_keys(&bus), Some(0));
+        assert_eq!(approach_interval(&bus), Some(20)); // fast cadence
+    }
+
+    #[tokio::test]
+    async fn poll_suspended_on_ignition_on() {
+        let bus = setup_short_cadence().await;
+        // Place a fob in Approach and immediately turn ignition ON.
+        place(&bus, 0, Zone::Approach);
+        bus.inject(IGNITION_STATE_SIGNAL, SignalValue::String("ON".into()));
+        // Wait well past what would be a poll cycle.
+        sleep(Duration::from_millis(400)).await;
+        // Suspension forces ApproachState=false and interval=0.
+        assert_eq!(approach_state(&bus), Some(false));
+        assert_eq!(approach_keys(&bus), Some(0));
+        assert_eq!(approach_interval(&bus), Some(0));
+    }
+
+    #[tokio::test]
+    async fn poll_resumes_when_ignition_returns_to_off() {
+        let bus = setup_short_cadence().await;
+        // Suspend first.
+        bus.inject(IGNITION_STATE_SIGNAL, SignalValue::String("ON".into()));
+        sleep(Duration::from_millis(50)).await;
+        place(&bus, 0, Zone::Approach);
+        sleep(Duration::from_millis(200)).await;
+        assert_eq!(approach_state(&bus), Some(false), "suspended");
+
+        // Resume — kick is immediate, plus the scan latency.
+        bus.inject(IGNITION_STATE_SIGNAL, SignalValue::String("OFF".into()));
+        sleep(Duration::from_millis(150)).await;
+        assert_eq!(approach_state(&bus), Some(true));
+        assert_eq!(approach_interval(&bus), Some(200));
     }
 }
