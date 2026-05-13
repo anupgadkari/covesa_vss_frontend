@@ -3027,14 +3027,27 @@ function DevicePanel({s, set, sel, setSel}){
   // Fob 6 is an incompatible key blank (modelled in the zone-button
   // filter — its CYLINDER tile is hidden).
   const devices=[
-    ...[1,2,3,4].map(i=>({type:'fob',  index:i, label:`F${i}`, color:'#F59E0B', pfx:`Body.PEPS.Plant.KeyFob.${i}`})),
-    ...[5,6]    .map(i=>({type:'fob',  index:i, label:`F${i}`, color:'#F04040', pfx:`Body.PEPS.Plant.KeyFob.${i}`, intruder:true})),
-    ...[1,2]    .map(i=>({type:'phone',index:i, label:`P${i}`, color:'#4A9EF5', pfx:`Body.PEPS.Plant.BlePhone.${i}`})),
+    ...[1,2,3,4].map(i=>({type:'fob',  index:i, label:`F${i}`, color:'#F59E0B', pfx:`Body.PEPS.Plant.KeyFob.${i}`,  sigKey:'Zone'})),
+    ...[5,6]    .map(i=>({type:'fob',  index:i, label:`F${i}`, color:'#F04040', pfx:`Body.PEPS.Plant.KeyFob.${i}`,  sigKey:'Zone', intruder:true})),
+    ...[1,2]    .map(i=>({type:'phone',index:i, label:`P${i}`, color:'#4A9EF5', pfx:`Body.PEPS.Plant.BlePhone.${i}`, sigKey:'Zone'})),
+    // NFC cards — signal is `.Position` (NfcPosition enum), not `.Zone`.
+    // Default value `NotPresent` represents "no NFC reader contact".
+    ...[1,2]    .map(i=>({type:'nfc',  index:i, label:`N${i}`, color:'#0DC8C8', pfx:`Body.PEPS.Plant.NfcCard.${i}`,  sigKey:'Position', isNfc:true})),
   ];
 
   const dev=devices.find(d=>d.type===sel.type&&d.index===sel.index)||devices[0];
-  const zone=s[`${dev.pfx}.Zone`]||'OutOfRange';
-  const rssi=s[`${dev.pfx}.RssiResponse`]||'';
+  const isNfc = dev.type === 'nfc';
+  // Raw signal value (Zone enum for fobs/phones, NfcPosition enum for cards).
+  const rawSlot=s[`${dev.pfx}.${dev.sigKey}`] || (isNfc?'NotPresent':'OutOfRange');
+  // Logical "zone" used by the proximity bar + colour code.  NFC
+  // positions translate into a representative zone (LeftFront for
+  // DriverHandle, Cabin for PushButton) just for the colour band —
+  // the actual signal write goes through the NFC-specific quick-
+  // assign buttons below, not the zone grid.
+  const zone = isNfc
+    ? (rawSlot==='DriverHandle' ? 'LeftFront' : rawSlot==='PushButton' ? 'Cabin' : 'OutOfRange')
+    : rawSlot;
+  const rssi=isNfc?'':(s[`${dev.pfx}.RssiResponse`]||'');
   const rfMsg=dev.type==='fob'?(s[`${dev.pfx}.RfMessage`]||''):'';
   const btnPress=dev.type==='fob'?(s[`${dev.pfx}.ButtonPress`]||'NONE'):null;
 
@@ -3061,8 +3074,8 @@ function DevicePanel({s, set, sel, setSel}){
       {/* Device chips — tap to select */}
       <div style={{display:'flex',flexWrap:'wrap',gap:4}}>
         {devices.map(d=>{
-          const dZone=s[`${d.pfx}.Zone`]||'OutOfRange';
-          const inRange=dZone!=='OutOfRange';
+          const dSlot=s[`${d.pfx}.${d.sigKey}`] || (d.isNfc?'NotPresent':'OutOfRange');
+          const inRange = d.isNfc ? dSlot!=='NotPresent' : dSlot!=='OutOfRange';
           const isSel=d.type===sel.type&&d.index===sel.index;
           return <div key={d.type+d.index}
             className={`devchip${isSel?' active':''}${inRange?' inrange':''}`}
@@ -3075,10 +3088,12 @@ function DevicePanel({s, set, sel, setSel}){
         })}
       </div>
 
-      {/* Zone display */}
+      {/* Zone display — for NFC, displays the NfcPosition enum value
+          (DriverHandle / PushButton / NotPresent) instead of the
+          zone name, since cards have no physical "zone". */}
       <div className="devpanel-zone">
-        <div className="devpanel-section">ZONE</div>
-        <div className="devpanel-zoneval" style={{color:zoneColor}}>{zone}</div>
+        <div className="devpanel-section">{isNfc?'NFC POSITION':'ZONE'}</div>
+        <div className="devpanel-zoneval" style={{color:zoneColor}}>{isNfc?rawSlot:zone}</div>
         {/* Proximity bar */}
         <div className="devpanel-prox">
           {ZONE_PROX.map(seg=>{
@@ -3099,8 +3114,32 @@ function DevicePanel({s, set, sel, setSel}){
         </div>
       </div>
 
+      {/* NFC quick-assign — only 3 valid NfcPosition values.
+          Bypasses the zone-based grid entirely. */}
+      {isNfc && (()=>{
+        const NFC_BTNS=[
+          {z:'NotPresent',  label:'NOT\nPRESENT',  c:'#2E3E55'},
+          {z:'DriverHandle',label:'DRIVER\nHANDLE',c:'#10D98A'},
+          {z:'PushButton',  label:'PUSH\nBUTTON',  c:'#4A9EF5'},
+        ];
+        return <>
+          <div className="devpanel-section">PLACE AT READER</div>
+          <div className="zonepick">
+            {NFC_BTNS.map(({z,label,c})=>{
+              const isActive=rawSlot===z;
+              return <button key={z}
+                className={`zpbtn${isActive?' zp-active':''}`}
+                style={{borderColor:isActive?c:'',background:isActive?c:'',color:isActive?'#0a0f18':''}}
+                onClick={()=>set(`${dev.pfx}.${dev.sigKey}`,z)}>
+                {label}
+              </button>;
+            })}
+          </div>
+        </>;
+      })()}
+
       {/* Zone quick-assign */}
-      {(()=>{
+      {!isNfc && (()=>{
         // CYLINDER / BACKUP represents the short-range LF + NFC pad
         // at the start button / cylinder.  Devices that can sit there:
         //   - Authorised fobs (F1-F4) via the LF transponder.
