@@ -459,7 +459,6 @@ async fn boot_simulation_stack(
         PassiveEntry::new(
             Arc::clone(&bus),
             Arc::clone(&door_lock_arb),
-            Arc::clone(&trunk_arb),
             Arc::clone(&cfg),
             pe_devices,
         )
@@ -490,15 +489,25 @@ async fn boot_simulation_stack(
     set.spawn(DoorOpenAssist::new(Arc::clone(&bus), Arc::clone(&puddle_arb), &cfg).run());
     set.spawn(ManualHorn::new(Arc::clone(&bus), Arc::clone(&horn_arb)).run());
     set.spawn(CabinTrunkRelease::new(Arc::clone(&bus), Arc::clone(&trunk_arb)).run());
-    set.spawn(ExteriorTrunkButton::new(Arc::clone(&bus), Arc::clone(&trunk_arb)).run());
 
     // KeySearch arbiter — owns LF airtime for PEPS searches and runs
-    // the adaptive approach-poll loop.  Today its only feature
-    // consumer is `VehicleStartingControl`; phase 8+ migrates the
-    // legacy passive-entry / exterior-trunk-button paths onto it.
+    // the adaptive approach-poll loop.  Constructed before its
+    // consumers so we can hand each one a `KeySearchArbiterHandle`
+    // clone.  Today: `VehicleStartingControl` (PR #27) and
+    // `ExteriorTrunkButton` (item 13).  Future phases migrate the
+    // remaining legacy passive-entry paths onto it.
     let (key_search_arb, key_search_handle, key_search_rx) =
         KeySearchArbiter::new_with_rx(Arc::clone(&bus));
     set.spawn(key_search_arb.run(key_search_rx));
+
+    set.spawn(
+        ExteriorTrunkButton::new(
+            Arc::clone(&bus),
+            Arc::clone(&trunk_arb),
+            key_search_handle.clone(),
+        )
+        .run(),
+    );
     set.spawn(
         VehicleStartingControl::new(
             Arc::clone(&bus),
