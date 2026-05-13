@@ -43,6 +43,7 @@ use vss_bridge::features::auto_high_beam::AutoHighBeam;
 use vss_bridge::features::auto_relock::AutoRelock;
 use vss_bridge::features::brake_reverse_lamps::BrakeReverseLamps;
 use vss_bridge::features::cabin_trunk_release::CabinTrunkRelease;
+use vss_bridge::features::delayed_accessory::DelayedAccessory;
 use vss_bridge::features::dome_switch::DomeSwitch;
 use vss_bridge::features::door_open_assist::DoorOpenAssist;
 use vss_bridge::features::door_trim_button::DoorTrimButton;
@@ -396,6 +397,12 @@ async fn boot_simulation_stack(
     // observe these to gate inside pulls and local rear window
     // switches respectively.  Door-side mechanical feedback is TBD.
     set.spawn(PowerChildLock::new(Arc::clone(&bus)).run());
+
+    // DelayedAccessory — gates power accessories (windows today;
+    // sunroof / radio later) so they only respond while the
+    // ignition is on OR within a courtesy window after switching
+    // off, terminated early on any cabin door opening.
+    set.spawn(DelayedAccessory::new(Arc::clone(&bus)).run());
 
     // PowerWindow — combined driver-master + local 5-detent rocker
     // controller for all 4 windows.  Handles cross-source conflicts

@@ -3,6 +3,7 @@ pub mod auto_high_beam;
 pub mod auto_relock;
 pub mod brake_reverse_lamps;
 pub mod cabin_trunk_release;
+pub mod delayed_accessory;
 pub mod dome_switch;
 pub mod door_open_assist;
 pub mod door_trim_button;

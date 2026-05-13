@@ -180,6 +180,15 @@ pub enum FeatureId {
     /// feedback signals are still TODO — for now the per-door output
     /// IS the commanded state.
     PowerChildLock = 0x24,
+    /// Delayed-accessory power.  Publishes a single latched output
+    /// `Body.Power.DelayedAccessory.IsActive` that gates accessory
+    /// features (PowerWindow today; sunroof + radio in the future).
+    /// Active when `Vehicle.LowVoltageSystemState` is ON / START, or
+    /// when it has transitioned to OFF / ACC / LOCK within the last
+    /// `timeout` (default 2 min) **and** no cabin door has opened
+    /// since the transition.  Door-open or timer expiry kills the
+    /// delayed window immediately.
+    DelayedAccessory = 0x26,
     /// Combined power-window control.  Owns the 5-detent rocker state
     /// machine for both driver-master and per-door local switches on
     /// all 4 windows, with internal conflict resolution (any time both
@@ -262,6 +271,7 @@ impl FeatureId {
             0x23 => Some(Self::DomeSwitch),
             0x24 => Some(Self::PowerChildLock),
             0x25 => Some(Self::PowerWindow),
+            0x26 => Some(Self::DelayedAccessory),
             0x27 => Some(Self::SunroofControl),
             _ => None,
         }

@@ -323,6 +323,11 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     "Body.Doors.Row1.Right.Window.MotorDirection",
     "Body.Doors.Row2.Left.Window.MotorDirection",
     "Body.Doors.Row2.Right.Window.MotorDirection",
+    // Delayed-accessory power gate.  Published by the
+    // DelayedAccessory feature; consumed by PowerWindow (and any
+    // future accessory feature that needs the gate).  HMI subscribes
+    // for the status indicator in the cockpit.
+    "Body.Power.DelayedAccessory.IsActive",
     // Per-window position (uint 0..100).  Published by the window
     // plant from the motor direction.
     "Body.Doors.Row1.Left.Window.Position",

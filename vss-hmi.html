@@ -268,6 +268,9 @@ const INIT_STATE={
   // plant — seeded here so the cockpit indicators have a defined
   // initial state before the bridge publishes them).
   'Body.PowerChildLock.MasterStatus':false,
+  // Delayed-accessory gate (DAP).  Published by the DelayedAccessory
+  // feature; gates PowerWindow (and future accessory features).
+  'Body.Power.DelayedAccessory.IsActive':false,
   'Body.Doors.Row1.Left.Window.MotorDirection':'STOPPED','Body.Doors.Row1.Right.Window.MotorDirection':'STOPPED',
   'Body.Doors.Row2.Left.Window.MotorDirection':'STOPPED','Body.Doors.Row2.Right.Window.MotorDirection':'STOPPED',
   // ── Body — HMI-owned inputs only ─────────────────────────────────────
@@ -2816,12 +2819,19 @@ function CockpitView({s,set,cfg}){
 
     {/* ── Status bar ── */}
     <CockpitZone title="STATUS" night={night}>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:6,fontFamily:'Share Tech Mono',fontSize:9}}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:6,fontFamily:'Share Tech Mono',fontSize:9}}>
         <span style={{color: wf!=='OFF'?'#4A9EF5':txtDim}}>WIPERS: <b>{wf}</b></span>
         <span style={{color: horn?'#EF4444':txtDim}}>HORN: <b>{horn?'●':'-'}</b></span>
         <span style={{color: dome?'#FCD34D':txtDim}}>DOME: <b>{dome?'ON':'OFF'}</b></span>
         <span style={{color: fuel?'#F59E0B':txtDim}}>FUEL: <b>{fuel?'OPEN':'-'}</b></span>
         <span style={{color: trunk?'#F59E0B':txtDim}}>GATE: <b>{trunk?'OPEN':'-'}</b></span>
+        {/* DAP — gates PowerWindow (and other accessory features later).
+            Active when ign is on, OR within 2 min after ign off provided
+            no door has opened.  When OFF the cockpit windows won't move. */}
+        <span style={{color: s['Body.Power.DelayedAccessory.IsActive']?'#10D98A':'#EF4444'}}
+              title="Delayed accessory power: ign-on, or 2-min courtesy window after ign-off (kills on door-open).">
+          ACC PWR: <b>{s['Body.Power.DelayedAccessory.IsActive']?'ON':'OFF'}</b>
+        </span>
       </div>
     </CockpitZone>
 

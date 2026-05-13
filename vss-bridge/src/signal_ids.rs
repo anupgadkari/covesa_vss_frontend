@@ -483,6 +483,11 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // the two motors and handles auto-mode latching.
         "Body.Switches.Sunroof.Detent" => Some(0x001B_0001),
 
+        // Delayed-accessory power latch.  Published by the
+        // DelayedAccessory feature.  Gates PowerWindow today; other
+        // accessory features can subscribe later.
+        "Body.Power.DelayedAccessory.IsActive" => Some(0x001C_0001),
+
         _ => None,
     }
 }
@@ -835,6 +840,7 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Body.Doors.Row2.Left.Window.MotorDirection", 0x001A_0023),
     ("Body.Doors.Row2.Right.Window.MotorDirection", 0x001A_0024),
     ("Body.Switches.Sunroof.Detent", 0x001B_0001),
+    ("Body.Power.DelayedAccessory.IsActive", 0x001C_0001),
 ];
 
 #[cfg(test)]

@@ -197,6 +197,11 @@ const CHILD_LOCK_SIGNALS: [Option<VssPath>; NUM_WINDOWS] = [
     Some("Body.Doors.Row2.Right.IsChildLockActive"),
 ];
 
+/// Delayed-accessory power gate — when false, the feature treats every
+/// source as having no intent (motors STOPPED) and clears any latched
+/// per-source state.  The user must re-press once DAP returns.
+const DAP_SIGNAL: VssPath = "Body.Power.DelayedAccessory.IsActive";
+
 pub struct PowerWindow<B: SignalBus> {
     bus: Arc<B>,
     arb: Arc<DomainArbiter>,
@@ -234,6 +239,11 @@ impl<B: SignalBus + Send + Sync + 'static> PowerWindow<B> {
         let mut child_locked = [false; NUM_WINDOWS];
         let mut position = [0u8; NUM_WINDOWS];
         let mut last_motor: [Option<&'static str>; NUM_WINDOWS] = [None; NUM_WINDOWS];
+        // Delayed-accessory power gate.  When false, the feature is
+        // dormant — every source's intent is treated as None and any
+        // motor claims are released.  Default false until the
+        // DelayedAccessory feature publishes the current state.
+        let mut dap_active: bool = false;
 
         // Subscribe to all the things.
         let mut driver_rx: Vec<futures::stream::BoxStream<'static, SignalValue>> =
@@ -259,6 +269,7 @@ impl<B: SignalBus + Send + Sync + 'static> PowerWindow<B> {
                 None => child_rx.push(Box::pin(futures::stream::pending())),
             }
         }
+        let mut dap_rx = self.bus.subscribe(DAP_SIGNAL).await;
 
         loop {
             // Find the next watchdog deadline across the per-source
@@ -316,7 +327,7 @@ impl<B: SignalBus + Send + Sync + 'static> PowerWindow<B> {
                         }
                     }
                     self.evaluate_window_motor_cmds(
-                        &mut state, &mut last_motor, &position, &child_locked).await;
+                        dap_active, &mut state, &mut last_motor, &position, &child_locked).await;
                 }
                 ((w, opt), _, _) = driver_evt => {
                     if let Some(d) = opt.as_ref().and_then(Detent::parse) {
@@ -325,7 +336,7 @@ impl<B: SignalBus + Send + Sync + 'static> PowerWindow<B> {
                             self.stuck_timeout);
                         Self::resolve_conflict(w, &mut state, &detent, &child_locked);
                         self.evaluate_window_motor_cmds(
-                            &mut state, &mut last_motor, &position, &child_locked).await;
+                            dap_active, &mut state, &mut last_motor, &position, &child_locked).await;
                     }
                 }
                 ((w, opt), _, _) = local_evt => {
@@ -335,7 +346,7 @@ impl<B: SignalBus + Send + Sync + 'static> PowerWindow<B> {
                             self.stuck_timeout);
                         Self::resolve_conflict(w, &mut state, &detent, &child_locked);
                         self.evaluate_window_motor_cmds(
-                            &mut state, &mut last_motor, &position, &child_locked).await;
+                            dap_active, &mut state, &mut last_motor, &position, &child_locked).await;
                     }
                 }
                 ((w, opt), _, _) = pos_evt => {
@@ -350,7 +361,7 @@ impl<B: SignalBus + Send + Sync + 'static> PowerWindow<B> {
                             }
                         }
                         self.evaluate_window_motor_cmds(
-                            &mut state, &mut last_motor, &position, &child_locked).await;
+                            dap_active, &mut state, &mut last_motor, &position, &child_locked).await;
                     }
                 }
                 ((w, opt), _, _) = child_evt => {
@@ -366,7 +377,29 @@ impl<B: SignalBus + Send + Sync + 'static> PowerWindow<B> {
                             // conflict with driver.
                             Self::resolve_conflict(w, &mut state, &detent, &child_locked);
                             self.evaluate_window_motor_cmds(
-                                &mut state, &mut last_motor, &position, &child_locked).await;
+                                dap_active, &mut state, &mut last_motor, &position, &child_locked).await;
+                        }
+                    }
+                }
+                Some(val) = dap_rx.next() => {
+                    if let SignalValue::Bool(b) = val {
+                        if dap_active != b {
+                            dap_active = b;
+                            tracing::info!(active = b, "PowerWindow: DAP state");
+                            if !b {
+                                // Going off: clear all per-source state
+                                // and watchdog deadlines.  Stuck flags
+                                // also clear — they belong to the
+                                // previous power session.
+                                for w in 0..NUM_WINDOWS {
+                                    for s in 0..SOURCES.len() {
+                                        state[w][s] = State::Idle;
+                                        deadlines[w][s] = None;
+                                    }
+                                }
+                            }
+                            self.evaluate_window_motor_cmds(
+                                dap_active, &mut state, &mut last_motor, &position, &child_locked).await;
                         }
                     }
                 }
@@ -489,26 +522,34 @@ impl<B: SignalBus + Send + Sync + 'static> PowerWindow<B> {
     /// arbiter claims on change.  Quiet when nothing changed.
     async fn evaluate_window_motor_cmds(
         &self,
+        dap_active: bool,
         state: &mut [[State; 2]; NUM_WINDOWS],
         last_motor: &mut [Option<&'static str>; NUM_WINDOWS],
         _position: &[u8; NUM_WINDOWS],
         child_locked: &[bool; NUM_WINDOWS],
     ) {
         for w in 0..NUM_WINDOWS {
-            let drv_intent = state[w][0].intent();
-            let loc_intent = if child_locked[w] {
+            // Delayed-accessory power gate — overrides everything.
+            // When DAP is off the feature is dormant and we force
+            // each window to None / STOPPED.
+            let resolved: Option<Dir> = if !dap_active {
                 None
             } else {
-                state[w][1].intent()
-            };
-            let resolved: Option<Dir> = match (drv_intent, loc_intent) {
-                (None, None) => None,
-                (Some(d), None) | (None, Some(d)) => Some(d),
-                // Both active → defensive None.  `resolve_conflict`
-                // should already have cleared one side, but the
-                // child-lock path can also produce a single-intent
-                // outcome, so we cover both here.
-                (Some(_), Some(_)) => None,
+                let drv_intent = state[w][0].intent();
+                let loc_intent = if child_locked[w] {
+                    None
+                } else {
+                    state[w][1].intent()
+                };
+                match (drv_intent, loc_intent) {
+                    (None, None) => None,
+                    (Some(d), None) | (None, Some(d)) => Some(d),
+                    // Both active → defensive None.  `resolve_conflict`
+                    // should already have cleared one side, but the
+                    // child-lock path can also produce a single-intent
+                    // outcome, so we cover both here.
+                    (Some(_), Some(_)) => None,
+                }
             };
             let want: &'static str = match resolved {
                 Some(d) => d.as_str(),
@@ -570,6 +611,14 @@ mod tests {
             PowerWindow::new(Arc::clone(&bus), arb)
                 .with_stuck_timeout(stuck)
                 .run(),
+        );
+        settle().await;
+        // Tests assume DAP is active so window switches actually do
+        // something.  Seed it here; the dedicated DAP gating tests
+        // toggle it explicitly.
+        bus.inject(
+            "Body.Power.DelayedAccessory.IsActive",
+            SignalValue::Bool(true),
         );
         settle().await;
         bus
@@ -732,6 +781,70 @@ mod tests {
         settle().await;
         // Local intent suppressed by child lock → no conflict, driver drives UP.
         assert_eq!(motor(&bus, 2).as_deref(), Some("UP"));
+    }
+
+    // DAP gating — when DAP is false the feature is dormant.
+    #[tokio::test]
+    async fn dap_off_blocks_all_motors() {
+        let bus = setup().await;
+        // DAP off.
+        bus.inject(
+            "Body.Power.DelayedAccessory.IsActive",
+            SignalValue::Bool(false),
+        );
+        settle().await;
+        // Driver press — motor stays STOPPED.
+        set_detent(&bus, DRIVER_DETENTS[0], "UP_HOLD");
+        settle().await;
+        assert_eq!(motor(&bus, 0).as_deref(), Some("STOPPED"));
+        // Local press too — also STOPPED.
+        set_detent(&bus, LOCAL_DETENTS[1], "DOWN_HOLD");
+        settle().await;
+        assert_eq!(motor(&bus, 1).as_deref(), Some("STOPPED"));
+    }
+
+    #[tokio::test]
+    async fn dap_off_clears_latched_auto() {
+        let bus = setup().await;
+        // Driver auto-close in flight.
+        set_detent(&bus, DRIVER_DETENTS[0], "UP_AUTO");
+        set_detent(&bus, DRIVER_DETENTS[0], "NEUTRAL");
+        settle().await;
+        assert_eq!(motor(&bus, 0).as_deref(), Some("UP"));
+        // DAP goes off — auto must NOT resume after DAP returns.
+        bus.inject(
+            "Body.Power.DelayedAccessory.IsActive",
+            SignalValue::Bool(false),
+        );
+        settle().await;
+        assert_eq!(motor(&bus, 0).as_deref(), Some("STOPPED"));
+        bus.inject(
+            "Body.Power.DelayedAccessory.IsActive",
+            SignalValue::Bool(true),
+        );
+        settle().await;
+        // Still STOPPED — auto was cleared, user must re-press.
+        assert_eq!(motor(&bus, 0).as_deref(), Some("STOPPED"));
+    }
+
+    #[tokio::test]
+    async fn dap_returns_then_new_press_works() {
+        let bus = setup().await;
+        bus.inject(
+            "Body.Power.DelayedAccessory.IsActive",
+            SignalValue::Bool(false),
+        );
+        settle().await;
+        // DAP comes back.
+        bus.inject(
+            "Body.Power.DelayedAccessory.IsActive",
+            SignalValue::Bool(true),
+        );
+        settle().await;
+        // Fresh press → drives.
+        set_detent(&bus, DRIVER_DETENTS[2], "DOWN_HOLD");
+        settle().await;
+        assert_eq!(motor(&bus, 2).as_deref(), Some("DOWN"));
     }
 
     // Stuck recovery
