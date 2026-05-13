@@ -60,8 +60,14 @@ const SHIFT_LOCK_OUT: VssPath = "Powertrain.Transmission.ShiftLockEngaged";
 
 const PARK: i16 = 126;
 
+/// "Live enough to release the shift lock."  Real automatic
+/// transmissions only energize the shift-lock solenoid once the
+/// engine controller is online — `ACC` powers radio + accessories
+/// but not the powertrain, so it does NOT release P.  `OFF` and
+/// `LOCK` are obviously not live.  Only `ON` (run) and `START`
+/// (cranking) qualify.
 fn ignition_is_live(s: &str) -> bool {
-    matches!(s, "ACC" | "ON" | "START")
+    matches!(s, "ON" | "START")
 }
 
 pub struct TransmissionPlant<B: SignalBus> {
@@ -309,6 +315,22 @@ mod tests {
         bus.inject(SELECTED, SignalValue::Int16(0)); // R → N
         settle().await;
         assert_eq!(current(&bus), Some(0));
+    }
+
+    #[tokio::test]
+    async fn acc_does_not_release_shift_lock() {
+        // ACC powers radio + accessories only; the powertrain stays
+        // dormant so the shift lock must NOT release.  Driver has to
+        // crank to ON (or START) before the selector frees up.
+        let bus = setup().await;
+        bus.inject(IGN_IN, SignalValue::String("ACC".into()));
+        bus.inject(BRAKE_IN, SignalValue::Bool(true));
+        settle().await;
+        assert_eq!(shift_lock(&bus), Some(true), "ACC must not release the lock");
+        bus.inject(SELECTED, SignalValue::Int16(127));
+        settle().await;
+        assert_eq!(current(&bus), Some(126), "shift attempt at ACC must be rejected");
+        assert_eq!(selected(&bus), Some(126), "selector chip snaps back");
     }
 
     #[tokio::test]
