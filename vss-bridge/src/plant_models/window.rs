@@ -102,11 +102,11 @@ impl<B: SignalBus + Send + Sync + 'static> WindowPlant<B> {
 
         let mut position: f32 = 0.0;
         let mut direction: i8 = 0; // -1 = DOWN, 0 = STOPPED, +1 = UP.
-        // Default Burst behaviour — after a tokio time-advance the
-        // queued missed ticks fire one per select! iteration so the
-        // position integrates correctly under both real and paused
-        // time.  Burn the immediate tick at construction time so the
-        // loop only starts counting once a real motor command lands.
+                                   // Default Burst behaviour — after a tokio time-advance the
+                                   // queued missed ticks fire one per select! iteration so the
+                                   // position integrates correctly under both real and paused
+                                   // time.  Burn the immediate tick at construction time so the
+                                   // loop only starts counting once a real motor command lands.
         let mut tick = interval(TICK);
         tick.tick().await;
 

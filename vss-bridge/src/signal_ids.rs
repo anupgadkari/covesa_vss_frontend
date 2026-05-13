@@ -448,13 +448,13 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // LHD/RHD — the master pack sits on the driver's door card and
         // covers every window.  Written by the cockpit DRIVER MASTER
         // PANEL.
-        "Body.Switches.Window.DriverMaster.Row1.Left.IsUpPressed"    => Some(0x001A_0001),
-        "Body.Switches.Window.DriverMaster.Row1.Left.IsDownPressed"  => Some(0x001A_0002),
-        "Body.Switches.Window.DriverMaster.Row1.Right.IsUpPressed"   => Some(0x001A_0003),
+        "Body.Switches.Window.DriverMaster.Row1.Left.IsUpPressed" => Some(0x001A_0001),
+        "Body.Switches.Window.DriverMaster.Row1.Left.IsDownPressed" => Some(0x001A_0002),
+        "Body.Switches.Window.DriverMaster.Row1.Right.IsUpPressed" => Some(0x001A_0003),
         "Body.Switches.Window.DriverMaster.Row1.Right.IsDownPressed" => Some(0x001A_0004),
-        "Body.Switches.Window.DriverMaster.Row2.Left.IsUpPressed"    => Some(0x001A_0005),
-        "Body.Switches.Window.DriverMaster.Row2.Left.IsDownPressed"  => Some(0x001A_0006),
-        "Body.Switches.Window.DriverMaster.Row2.Right.IsUpPressed"   => Some(0x001A_0007),
+        "Body.Switches.Window.DriverMaster.Row2.Left.IsUpPressed" => Some(0x001A_0005),
+        "Body.Switches.Window.DriverMaster.Row2.Left.IsDownPressed" => Some(0x001A_0006),
+        "Body.Switches.Window.DriverMaster.Row2.Right.IsUpPressed" => Some(0x001A_0007),
         "Body.Switches.Window.DriverMaster.Row2.Right.IsDownPressed" => Some(0x001A_0008),
         // Local per-door switches — defined symmetrically for all 4
         // doors.  The HMI only writes the side configured as
@@ -462,21 +462,21 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // there's no double-write from the driver's own door (which
         // is covered by DriverMaster).  Local.Row1.{driver-side}
         // stays defined so tests can inject it.
-        "Body.Switches.Window.Local.Row1.Left.IsUpPressed"    => Some(0x001A_0011),
-        "Body.Switches.Window.Local.Row1.Left.IsDownPressed"  => Some(0x001A_0012),
-        "Body.Switches.Window.Local.Row1.Right.IsUpPressed"   => Some(0x001A_0013),
+        "Body.Switches.Window.Local.Row1.Left.IsUpPressed" => Some(0x001A_0011),
+        "Body.Switches.Window.Local.Row1.Left.IsDownPressed" => Some(0x001A_0012),
+        "Body.Switches.Window.Local.Row1.Right.IsUpPressed" => Some(0x001A_0013),
         "Body.Switches.Window.Local.Row1.Right.IsDownPressed" => Some(0x001A_0014),
-        "Body.Switches.Window.Local.Row2.Left.IsUpPressed"    => Some(0x001A_0015),
-        "Body.Switches.Window.Local.Row2.Left.IsDownPressed"  => Some(0x001A_0016),
-        "Body.Switches.Window.Local.Row2.Right.IsUpPressed"   => Some(0x001A_0017),
+        "Body.Switches.Window.Local.Row2.Left.IsUpPressed" => Some(0x001A_0015),
+        "Body.Switches.Window.Local.Row2.Left.IsDownPressed" => Some(0x001A_0016),
+        "Body.Switches.Window.Local.Row2.Right.IsUpPressed" => Some(0x001A_0017),
         "Body.Switches.Window.Local.Row2.Right.IsDownPressed" => Some(0x001A_0018),
         // Window-motor commanded direction (String enum UP / DOWN /
         // STOPPED).  Published by the `window_arbiter` from the
         // winning claim; consumed by the per-window plant which
         // integrates the motor into Window.Position.
-        "Body.Doors.Row1.Left.Window.MotorDirection"  => Some(0x001A_0021),
+        "Body.Doors.Row1.Left.Window.MotorDirection" => Some(0x001A_0021),
         "Body.Doors.Row1.Right.Window.MotorDirection" => Some(0x001A_0022),
-        "Body.Doors.Row2.Left.Window.MotorDirection"  => Some(0x001A_0023),
+        "Body.Doors.Row2.Left.Window.MotorDirection" => Some(0x001A_0023),
         "Body.Doors.Row2.Right.Window.MotorDirection" => Some(0x001A_0024),
 
         _ => None,
@@ -806,25 +806,73 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ),
     ("Cabin.ValetMode.IsActive", 0x0017_0001),
     // Power-window block (0x001A).
-    ("Body.Switches.Window.DriverMaster.Row1.Left.IsUpPressed",    0x001A_0001),
-    ("Body.Switches.Window.DriverMaster.Row1.Left.IsDownPressed",  0x001A_0002),
-    ("Body.Switches.Window.DriverMaster.Row1.Right.IsUpPressed",   0x001A_0003),
-    ("Body.Switches.Window.DriverMaster.Row1.Right.IsDownPressed", 0x001A_0004),
-    ("Body.Switches.Window.DriverMaster.Row2.Left.IsUpPressed",    0x001A_0005),
-    ("Body.Switches.Window.DriverMaster.Row2.Left.IsDownPressed",  0x001A_0006),
-    ("Body.Switches.Window.DriverMaster.Row2.Right.IsUpPressed",   0x001A_0007),
-    ("Body.Switches.Window.DriverMaster.Row2.Right.IsDownPressed", 0x001A_0008),
-    ("Body.Switches.Window.Local.Row1.Left.IsUpPressed",    0x001A_0011),
-    ("Body.Switches.Window.Local.Row1.Left.IsDownPressed",  0x001A_0012),
-    ("Body.Switches.Window.Local.Row1.Right.IsUpPressed",   0x001A_0013),
-    ("Body.Switches.Window.Local.Row1.Right.IsDownPressed", 0x001A_0014),
-    ("Body.Switches.Window.Local.Row2.Left.IsUpPressed",    0x001A_0015),
-    ("Body.Switches.Window.Local.Row2.Left.IsDownPressed",  0x001A_0016),
-    ("Body.Switches.Window.Local.Row2.Right.IsUpPressed",   0x001A_0017),
-    ("Body.Switches.Window.Local.Row2.Right.IsDownPressed", 0x001A_0018),
-    ("Body.Doors.Row1.Left.Window.MotorDirection",  0x001A_0021),
+    (
+        "Body.Switches.Window.DriverMaster.Row1.Left.IsUpPressed",
+        0x001A_0001,
+    ),
+    (
+        "Body.Switches.Window.DriverMaster.Row1.Left.IsDownPressed",
+        0x001A_0002,
+    ),
+    (
+        "Body.Switches.Window.DriverMaster.Row1.Right.IsUpPressed",
+        0x001A_0003,
+    ),
+    (
+        "Body.Switches.Window.DriverMaster.Row1.Right.IsDownPressed",
+        0x001A_0004,
+    ),
+    (
+        "Body.Switches.Window.DriverMaster.Row2.Left.IsUpPressed",
+        0x001A_0005,
+    ),
+    (
+        "Body.Switches.Window.DriverMaster.Row2.Left.IsDownPressed",
+        0x001A_0006,
+    ),
+    (
+        "Body.Switches.Window.DriverMaster.Row2.Right.IsUpPressed",
+        0x001A_0007,
+    ),
+    (
+        "Body.Switches.Window.DriverMaster.Row2.Right.IsDownPressed",
+        0x001A_0008,
+    ),
+    (
+        "Body.Switches.Window.Local.Row1.Left.IsUpPressed",
+        0x001A_0011,
+    ),
+    (
+        "Body.Switches.Window.Local.Row1.Left.IsDownPressed",
+        0x001A_0012,
+    ),
+    (
+        "Body.Switches.Window.Local.Row1.Right.IsUpPressed",
+        0x001A_0013,
+    ),
+    (
+        "Body.Switches.Window.Local.Row1.Right.IsDownPressed",
+        0x001A_0014,
+    ),
+    (
+        "Body.Switches.Window.Local.Row2.Left.IsUpPressed",
+        0x001A_0015,
+    ),
+    (
+        "Body.Switches.Window.Local.Row2.Left.IsDownPressed",
+        0x001A_0016,
+    ),
+    (
+        "Body.Switches.Window.Local.Row2.Right.IsUpPressed",
+        0x001A_0017,
+    ),
+    (
+        "Body.Switches.Window.Local.Row2.Right.IsDownPressed",
+        0x001A_0018,
+    ),
+    ("Body.Doors.Row1.Left.Window.MotorDirection", 0x001A_0021),
     ("Body.Doors.Row1.Right.Window.MotorDirection", 0x001A_0022),
-    ("Body.Doors.Row2.Left.Window.MotorDirection",  0x001A_0023),
+    ("Body.Doors.Row2.Left.Window.MotorDirection", 0x001A_0023),
     ("Body.Doors.Row2.Right.Window.MotorDirection", 0x001A_0024),
 ];
 

@@ -80,10 +80,7 @@ impl<B: SignalBus + Send + Sync + 'static> PowerChildLock<B> {
                 // Rising edge — toggle master + fan-out both doors.
                 latched = !latched;
                 tracing::info!(active = latched, "PowerChildLock: toggled");
-                let _ = self
-                    .bus
-                    .publish(MASTER, SignalValue::Bool(latched))
-                    .await;
+                let _ = self.bus.publish(MASTER, SignalValue::Bool(latched)).await;
                 for sig in PER_DOOR.iter() {
                     let _ = self.bus.publish(sig, SignalValue::Bool(latched)).await;
                 }

@@ -199,7 +199,11 @@ mod tests {
     #[tokio::test]
     async fn boots_to_off() {
         let bus = setup().await;
-        assert_eq!(dome(&bus), Some(false), "lamp must be off before any switch input");
+        assert_eq!(
+            dome(&bus),
+            Some(false),
+            "lamp must be off before any switch input"
+        );
     }
 
     #[tokio::test]
@@ -254,11 +258,7 @@ mod tests {
         // Same value again — must not republish.
         bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
         settle().await;
-        let republishes = bus
-            .history()
-            .iter()
-            .filter(|(s, _)| *s == DOME)
-            .count();
+        let republishes = bus.history().iter().filter(|(s, _)| *s == DOME).count();
         assert_eq!(republishes, 0, "idempotent on redundant door edges");
     }
 }

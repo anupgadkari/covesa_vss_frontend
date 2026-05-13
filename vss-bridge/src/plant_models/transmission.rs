@@ -59,10 +59,7 @@ impl<B: SignalBus + Send + Sync + 'static> TransmissionPlant<B> {
 
         // Deterministic boot — publish Park so late subscribers (HMI
         // snapshot) always see a defined gear.
-        let _ = self
-            .bus
-            .publish(CURRENT, SignalValue::Int16(PARK))
-            .await;
+        let _ = self.bus.publish(CURRENT, SignalValue::Int16(PARK)).await;
 
         let mut current: i16 = PARK;
 
@@ -74,17 +71,9 @@ impl<B: SignalBus + Send + Sync + 'static> TransmissionPlant<B> {
             if want == current {
                 continue; // idempotent — no shift edge
             }
-            tracing::info!(
-                from = current,
-                to = want,
-                "TransmissionPlant: shift"
-            );
+            tracing::info!(from = current, to = want, "TransmissionPlant: shift");
             current = want;
-            if let Err(e) = self
-                .bus
-                .publish(CURRENT, SignalValue::Int16(current))
-                .await
-            {
+            if let Err(e) = self.bus.publish(CURRENT, SignalValue::Int16(current)).await {
                 tracing::error!(error = %e, "TransmissionPlant: publish failed");
             }
         }
@@ -155,11 +144,7 @@ mod tests {
         bus.inject(SELECTED, SignalValue::Int16(127));
         bus.inject(SELECTED, SignalValue::Int16(127));
         settle().await;
-        let republishes = bus
-            .history()
-            .iter()
-            .filter(|(s, _)| *s == CURRENT)
-            .count();
+        let republishes = bus.history().iter().filter(|(s, _)| *s == CURRENT).count();
         assert_eq!(republishes, 0);
     }
 
