@@ -1339,39 +1339,29 @@ function CombinedView({s,set,onDeviceSelect}){
     )}
 
     {/* Mirrors — top view (elongated housing + trailing-edge turn
-        indicator).  Anatomically the housings sit just behind the
-        A-pillars, right below the windshield's lower edge (y=123).
-        Fold pivots at the housing's inboard-rearward corner —
-        (54, 146) for left, (306, 146) for right.  This keeps the
-        entire rotation arc strictly outboard of the body skin
-        (x ≤ 60 left / x ≥ 300 right) at every interpolated angle,
-        matching the way real fold motors swing the housing rearward
-        against the door without the mirror appearing to cross
-        through the cabin. */}
-    {/* Mirror housings — anatomically thin (16×6) so a clean ±90°
-        rotation flips them from horizontal to vertical.  Inboard
-        edge sits on the body skin (x=60 left, x=300 right) so the
-        hinge corner is *on* the door, not 6 units outboard in
-        empty space.  After folding the rectangle ends up directly
-        alongside the body (x=54-60 / 300-306, y=140-156), tucked
-        against the door — same as a real mirror in stowed
-        position. */}
-    <g transform={mlf?'rotate(-90 60 140)':undefined} style={{transition:'transform 1.6s ease-in-out'}}>
+        indicator).  Fold pivots at the housing's inboard-rearward
+        corner — (54, 206) for left, (306, 206) for right.  This
+        keeps the entire rotation arc strictly outboard of the body
+        skin (x ≤ 60 left / x ≥ 300 right) at every interpolated
+        angle, matching the way real fold motors swing the housing
+        rearward against the door without the mirror appearing to
+        cross through the cabin. */}
+    <g transform={mlf?'rotate(-60 54 206)':undefined} style={{transition:'transform 0.6s ease'}}>
       <title>{mlf?'Left side mirror — folded':'Left side mirror'}</title>
-      <rect x="44" y="134" width="16" height="6" rx="2" fill="#0F1A28" stroke="#1A2838" strokeWidth="0.5"/>
-      <rect x="44" y="135" width="5" height="4" rx="1" fill={li?'#F59E0B':'#1A1208'} opacity={(mlf?0:1)*(li?0.95:.28)}>
+      <rect x="38" y="194" width="16" height="12" rx="2" fill="#0F1A28" stroke="#1A2838" strokeWidth="0.5"/>
+      <rect x="38" y="198" width="5" height="6" rx="1" fill={li?'#F59E0B':'#1A1208'} opacity={(mlf?0:1)*(li?0.95:.28)}>
         <title>{li?'Left mirror turn indicator — signaling':'Left mirror turn indicator — off'}</title>
       </rect>
     </g>
-    <g transform={mrf?'rotate(90 300 140)':undefined} style={{transition:'transform 1.6s ease-in-out'}}>
+    <g transform={mrf?'rotate(60 306 206)':undefined} style={{transition:'transform 0.6s ease'}}>
       <title>{mrf?'Right side mirror — folded':'Right side mirror'}</title>
-      <rect x="300" y="134" width="16" height="6" rx="2" fill="#0F1A28" stroke="#1A2838" strokeWidth="0.5"/>
-      <rect x="311" y="135" width="5" height="4" rx="1" fill={ri?'#F59E0B':'#1A1208'} opacity={(mrf?0:1)*(ri?0.95:.28)}>
+      <rect x="306" y="194" width="16" height="12" rx="2" fill="#0F1A28" stroke="#1A2838" strokeWidth="0.5"/>
+      <rect x="317" y="198" width="5" height="6" rx="1" fill={ri?'#F59E0B':'#1A1208'} opacity={(mrf?0:1)*(ri?0.95:.28)}>
         <title>{ri?'Right mirror turn indicator — signaling':'Right mirror turn indicator — off'}</title>
       </rect>
     </g>
-    {s['Body.Mirror.Left.IsHeatingOn']&&<circle cx="52" cy="137" r="10" fill="none" stroke="#FF4040" strokeWidth="1" opacity=".6" className="pulse"><title>Left mirror heating — active</title></circle>}
-    {s['Body.Mirror.Right.IsHeatingOn']&&<circle cx="308" cy="137" r="10" fill="none" stroke="#FF4040" strokeWidth="1" opacity=".6" className="pulse"><title>Right mirror heating — active</title></circle>}
+    {s['Body.Mirror.Left.IsHeatingOn']&&<circle cx="46" cy="200" r="10" fill="none" stroke="#FF4040" strokeWidth="1" opacity=".6" className="pulse"><title>Left mirror heating — active</title></circle>}
+    {s['Body.Mirror.Right.IsHeatingOn']&&<circle cx="314" cy="200" r="10" fill="none" stroke="#FF4040" strokeWidth="1" opacity=".6" className="pulse"><title>Right mirror heating — active</title></circle>}
 
     <text x="180" y="-58" textAnchor="middle" fill="#1E2C3C" fontSize="8" fontFamily="Share Tech Mono" fontWeight="bold">▲ FRONT</text>
     <text x="180" y="605" textAnchor="middle" fill="#1E2C3C" fontSize="8" fontFamily="Share Tech Mono" fontWeight="bold">REAR ▼</text>
