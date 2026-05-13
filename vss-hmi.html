@@ -3108,7 +3108,7 @@ function isFobLockedInCylinder(s, cfg){
 }
 
 /* ── Dedicated Auth Device Panel ──────────────────────────────── */
-function DevicePanel({s, set, sel, setSel}){
+function DevicePanel({s, set, cfg, sel, setSel}){
   const [firedBtn, setFiredBtn]=useState(null);
 
   // Device selector list: paired fobs 1-4 + intruder fobs 5-6 + phones 1-2.
@@ -4535,7 +4535,7 @@ function App(){
         </div>
       </div>
 
-      {view!=='config'&&<DevicePanel s={s} set={set} sel={selDev} setSel={setSelDev}/>}
+      {view!=='config'&&<DevicePanel s={s} set={set} cfg={cfg} sel={selDev} setSel={setSelDev}/>}
       {view!=='config'&&<ControlPanel s={s} set={set} cfg={cfg}/>}
     </div>
   </div>;
