@@ -443,33 +443,29 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
 
         // ── Power-window switches + motors (block 0x001A) ──────────────
         //
-        // Driver-master pack: 4 windows × 2 directions = 8 momentary
-        // bool inputs.  Always defined for all 4 windows regardless of
-        // LHD/RHD — the master pack sits on the driver's door card and
-        // covers every window.  Written by the cockpit DRIVER MASTER
-        // PANEL.
-        "Body.Switches.Window.DriverMaster.Row1.Left.IsUpPressed" => Some(0x001A_0001),
-        "Body.Switches.Window.DriverMaster.Row1.Left.IsDownPressed" => Some(0x001A_0002),
-        "Body.Switches.Window.DriverMaster.Row1.Right.IsUpPressed" => Some(0x001A_0003),
-        "Body.Switches.Window.DriverMaster.Row1.Right.IsDownPressed" => Some(0x001A_0004),
-        "Body.Switches.Window.DriverMaster.Row2.Left.IsUpPressed" => Some(0x001A_0005),
-        "Body.Switches.Window.DriverMaster.Row2.Left.IsDownPressed" => Some(0x001A_0006),
-        "Body.Switches.Window.DriverMaster.Row2.Right.IsUpPressed" => Some(0x001A_0007),
-        "Body.Switches.Window.DriverMaster.Row2.Right.IsDownPressed" => Some(0x001A_0008),
+        // 5-detent rocker per physical switch (String enum):
+        //   NEUTRAL / UP_HOLD / UP_AUTO / DOWN_HOLD / DOWN_AUTO
+        // UP closes the window (Position 0 → 100), DOWN opens it.
+        // A single Detent signal per switch replaces the legacy 2-bool
+        // (Is{Up,Down}Pressed) pair — see commit history if porting.
+        //
+        // Driver-master pack: one Detent per window.  Always defined
+        // for all 4 windows regardless of LHD/RHD — the master pack
+        // sits on the driver's door card and covers every window.
+        "Body.Switches.Window.DriverMaster.Row1.Left.Detent" => Some(0x001A_0001),
+        "Body.Switches.Window.DriverMaster.Row1.Right.Detent" => Some(0x001A_0002),
+        "Body.Switches.Window.DriverMaster.Row2.Left.Detent" => Some(0x001A_0003),
+        "Body.Switches.Window.DriverMaster.Row2.Right.Detent" => Some(0x001A_0004),
         // Local per-door switches — defined symmetrically for all 4
         // doors.  The HMI only writes the side configured as
         // **passenger** for the driver's row (Local.Row1.{!driver}) so
         // there's no double-write from the driver's own door (which
         // is covered by DriverMaster).  Local.Row1.{driver-side}
         // stays defined so tests can inject it.
-        "Body.Switches.Window.Local.Row1.Left.IsUpPressed" => Some(0x001A_0011),
-        "Body.Switches.Window.Local.Row1.Left.IsDownPressed" => Some(0x001A_0012),
-        "Body.Switches.Window.Local.Row1.Right.IsUpPressed" => Some(0x001A_0013),
-        "Body.Switches.Window.Local.Row1.Right.IsDownPressed" => Some(0x001A_0014),
-        "Body.Switches.Window.Local.Row2.Left.IsUpPressed" => Some(0x001A_0015),
-        "Body.Switches.Window.Local.Row2.Left.IsDownPressed" => Some(0x001A_0016),
-        "Body.Switches.Window.Local.Row2.Right.IsUpPressed" => Some(0x001A_0017),
-        "Body.Switches.Window.Local.Row2.Right.IsDownPressed" => Some(0x001A_0018),
+        "Body.Switches.Window.Local.Row1.Left.Detent" => Some(0x001A_0011),
+        "Body.Switches.Window.Local.Row1.Right.Detent" => Some(0x001A_0012),
+        "Body.Switches.Window.Local.Row2.Left.Detent" => Some(0x001A_0013),
+        "Body.Switches.Window.Local.Row2.Right.Detent" => Some(0x001A_0014),
         // Window-motor commanded direction (String enum UP / DOWN /
         // STOPPED).  Published by the `window_arbiter` from the
         // winning claim; consumed by the per-window plant which
@@ -813,71 +809,27 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
         0x0018_0013,
     ),
     ("Cabin.ValetMode.IsActive", 0x0017_0001),
-    // Power-window block (0x001A).
+    // Power-window block (0x001A) — Detent enums per switch.
     (
-        "Body.Switches.Window.DriverMaster.Row1.Left.IsUpPressed",
+        "Body.Switches.Window.DriverMaster.Row1.Left.Detent",
         0x001A_0001,
     ),
     (
-        "Body.Switches.Window.DriverMaster.Row1.Left.IsDownPressed",
+        "Body.Switches.Window.DriverMaster.Row1.Right.Detent",
         0x001A_0002,
     ),
     (
-        "Body.Switches.Window.DriverMaster.Row1.Right.IsUpPressed",
+        "Body.Switches.Window.DriverMaster.Row2.Left.Detent",
         0x001A_0003,
     ),
     (
-        "Body.Switches.Window.DriverMaster.Row1.Right.IsDownPressed",
+        "Body.Switches.Window.DriverMaster.Row2.Right.Detent",
         0x001A_0004,
     ),
-    (
-        "Body.Switches.Window.DriverMaster.Row2.Left.IsUpPressed",
-        0x001A_0005,
-    ),
-    (
-        "Body.Switches.Window.DriverMaster.Row2.Left.IsDownPressed",
-        0x001A_0006,
-    ),
-    (
-        "Body.Switches.Window.DriverMaster.Row2.Right.IsUpPressed",
-        0x001A_0007,
-    ),
-    (
-        "Body.Switches.Window.DriverMaster.Row2.Right.IsDownPressed",
-        0x001A_0008,
-    ),
-    (
-        "Body.Switches.Window.Local.Row1.Left.IsUpPressed",
-        0x001A_0011,
-    ),
-    (
-        "Body.Switches.Window.Local.Row1.Left.IsDownPressed",
-        0x001A_0012,
-    ),
-    (
-        "Body.Switches.Window.Local.Row1.Right.IsUpPressed",
-        0x001A_0013,
-    ),
-    (
-        "Body.Switches.Window.Local.Row1.Right.IsDownPressed",
-        0x001A_0014,
-    ),
-    (
-        "Body.Switches.Window.Local.Row2.Left.IsUpPressed",
-        0x001A_0015,
-    ),
-    (
-        "Body.Switches.Window.Local.Row2.Left.IsDownPressed",
-        0x001A_0016,
-    ),
-    (
-        "Body.Switches.Window.Local.Row2.Right.IsUpPressed",
-        0x001A_0017,
-    ),
-    (
-        "Body.Switches.Window.Local.Row2.Right.IsDownPressed",
-        0x001A_0018,
-    ),
+    ("Body.Switches.Window.Local.Row1.Left.Detent", 0x001A_0011),
+    ("Body.Switches.Window.Local.Row1.Right.Detent", 0x001A_0012),
+    ("Body.Switches.Window.Local.Row2.Left.Detent", 0x001A_0013),
+    ("Body.Switches.Window.Local.Row2.Right.Detent", 0x001A_0014),
     ("Body.Doors.Row1.Left.Window.MotorDirection", 0x001A_0021),
     ("Body.Doors.Row1.Right.Window.MotorDirection", 0x001A_0022),
     ("Body.Doors.Row2.Left.Window.MotorDirection", 0x001A_0023),

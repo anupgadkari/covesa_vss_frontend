@@ -61,11 +61,10 @@ use vss_bridge::features::panic_alarm::PanicAlarm;
 use vss_bridge::features::passive_entry::{DeviceKind, PairedDevice, PassiveEntry};
 use vss_bridge::features::perimeter_alarm::PerimeterAlarm;
 use vss_bridge::features::power_child_lock::PowerChildLock;
-use vss_bridge::features::power_window_driver::PowerWindowDriver;
-use vss_bridge::features::power_window_local::PowerWindowLocal;
-use vss_bridge::features::sunroof_control::SunroofControl;
+use vss_bridge::features::power_window::PowerWindow;
 use vss_bridge::features::rke::{PairedFob, RkeFeature};
 use vss_bridge::features::slam_lock::SlamLock;
+use vss_bridge::features::sunroof_control::SunroofControl;
 use vss_bridge::features::thumb_pad_lock::ThumbPadLock;
 use vss_bridge::features::turn_indicator::TurnIndicator;
 use vss_bridge::features::walk_away_lock::WalkAwayLock;
@@ -393,19 +392,19 @@ async fn boot_simulation_stack(
 
     // PowerChildLock — single momentary push toggles the master
     // child-lock state and fans out to both rear-door
-    // IsChildLockActive outputs.  Door-handle plant + PowerWindowLocal
+    // IsChildLockActive outputs.  Door-handle plant + PowerWindow
     // observe these to gate inside pulls and local rear window
     // switches respectively.  Door-side mechanical feedback is TBD.
     set.spawn(PowerChildLock::new(Arc::clone(&bus)).run());
 
-    // PowerWindowDriver — driver master pack switches → window arbiter
-    // at Medium.  Always wins over local switches.
-    set.spawn(PowerWindowDriver::new(Arc::clone(&bus), Arc::clone(&window_arb)).run());
-
-    // PowerWindowLocal — per-door local switches → window arbiter at
-    // Low.  For Row2 doors the claim is suppressed while the matching
-    // IsChildLockActive output (from PowerChildLock) is true.
-    set.spawn(PowerWindowLocal::new(Arc::clone(&bus), Arc::clone(&window_arb)).run());
+    // PowerWindow — combined driver-master + local 5-detent rocker
+    // controller for all 4 windows.  Handles cross-source conflicts
+    // internally (both active → motor STOPPED, both must re-press)
+    // and runs a 5 s stuck-switch watchdog per source per window.
+    // Claims the window arbiter at Medium for the single resolved
+    // motor direction.  Future anti-pinch (Critical) and security
+    // override (High) can pre-empt via the arbiter.
+    set.spawn(PowerWindow::new(Arc::clone(&bus), Arc::clone(&window_arb)).run());
 
     // SunroofControl — overhead-console rocker → coordinated roof +
     // shade motors.  Sequencing: shade opens first then roof; roof

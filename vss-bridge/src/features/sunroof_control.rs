@@ -244,11 +244,15 @@ impl<B: SignalBus + Send + Sync + 'static> SunroofControl<B> {
         };
         if *last_roof != Some(roof_cmd) {
             *last_roof = Some(roof_cmd);
-            let _ = bus.publish(ROOF_CMD, SignalValue::String(roof_cmd.into())).await;
+            let _ = bus
+                .publish(ROOF_CMD, SignalValue::String(roof_cmd.into()))
+                .await;
         }
         if *last_shade != Some(shade_cmd) {
             *last_shade = Some(shade_cmd);
-            let _ = bus.publish(SHADE_CMD, SignalValue::String(shade_cmd.into())).await;
+            let _ = bus
+                .publish(SHADE_CMD, SignalValue::String(shade_cmd.into()))
+                .await;
         }
     }
 }

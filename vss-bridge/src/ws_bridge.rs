@@ -171,28 +171,22 @@ const INPUT_SIGNALS: &[VssPath] = &[
     // OVERHEAD CONSOLE rocker; the SunroofControl feature sequences
     // the two motors from it.
     "Body.Switches.Sunroof.Detent",
-    // Driver-master per-window momentary pushes (8 total).  Consumed
-    // by PowerWindowDriver feeding the window arbiter at Medium.
-    "Body.Switches.Window.DriverMaster.Row1.Left.IsUpPressed",
-    "Body.Switches.Window.DriverMaster.Row1.Left.IsDownPressed",
-    "Body.Switches.Window.DriverMaster.Row1.Right.IsUpPressed",
-    "Body.Switches.Window.DriverMaster.Row1.Right.IsDownPressed",
-    "Body.Switches.Window.DriverMaster.Row2.Left.IsUpPressed",
-    "Body.Switches.Window.DriverMaster.Row2.Left.IsDownPressed",
-    "Body.Switches.Window.DriverMaster.Row2.Right.IsUpPressed",
-    "Body.Switches.Window.DriverMaster.Row2.Right.IsDownPressed",
-    // Local per-door momentary pushes (8 total).  All 4 sides
-    // defined symmetrically.  Cockpit only writes the front-passenger
-    // and rear pairs in production; Local.Row1.{driver-side} is
-    // reserved for tests and the arbiter sees a no-op from it.
-    "Body.Switches.Window.Local.Row1.Left.IsUpPressed",
-    "Body.Switches.Window.Local.Row1.Left.IsDownPressed",
-    "Body.Switches.Window.Local.Row1.Right.IsUpPressed",
-    "Body.Switches.Window.Local.Row1.Right.IsDownPressed",
-    "Body.Switches.Window.Local.Row2.Left.IsUpPressed",
-    "Body.Switches.Window.Local.Row2.Left.IsDownPressed",
-    "Body.Switches.Window.Local.Row2.Right.IsUpPressed",
-    "Body.Switches.Window.Local.Row2.Right.IsDownPressed",
+    // Driver-master per-window Detent rockers (4 total — one per
+    // window).  Consumed by PowerWindow which claims the window
+    // arbiter at Medium.  String enum: NEUTRAL / UP_HOLD / UP_AUTO /
+    // DOWN_HOLD / DOWN_AUTO.
+    "Body.Switches.Window.DriverMaster.Row1.Left.Detent",
+    "Body.Switches.Window.DriverMaster.Row1.Right.Detent",
+    "Body.Switches.Window.DriverMaster.Row2.Left.Detent",
+    "Body.Switches.Window.DriverMaster.Row2.Right.Detent",
+    // Local per-door Detent rockers (4 total).  All 4 sides defined
+    // symmetrically.  Cockpit only writes the front-passenger and
+    // rear sides in production; Local.Row1.{driver-side} is reserved
+    // for tests and stays at NEUTRAL otherwise.
+    "Body.Switches.Window.Local.Row1.Left.Detent",
+    "Body.Switches.Window.Local.Row1.Right.Detent",
+    "Body.Switches.Window.Local.Row2.Left.Detent",
+    "Body.Switches.Window.Local.Row2.Right.Detent",
 ];
 
 /// Signals the bridge pushes back to the HMI (actuator outputs from arbiters).

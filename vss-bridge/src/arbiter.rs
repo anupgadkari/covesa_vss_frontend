@@ -1335,17 +1335,17 @@ pub fn trunk_arbiter<B: SignalBus>(
 /// |---|---|---|---|
 /// | Anti-pinch | `WindowAntiPinch` | Critical | reserved — comment |
 /// | Security override | `WindowSecurityOverride` | High | reserved — comment |
-/// | Driver master pack | `PowerWindowDriver` | Medium | **yes** |
-/// | Local door switch | `PowerWindowLocal` | Low | **yes** |
-/// | Global (RKE / phone vent) | `WindowGlobalRemote` | VeryLow | reserved — comment |
+/// | Driver master + local (combined) | `PowerWindow` | Medium | **yes** |
+/// | Global (RKE / phone vent) | `WindowGlobalRemote` | Low | reserved — comment |
 ///
-/// Driver always wins over local for the same window — the
-/// front-passenger and rear occupants can't override a deliberate
-/// driver press.  Anti-pinch (when added) will pre-empt every other
-/// claimant to release an obstruction; a security override layer
-/// lets the user force-close past anti-pinch via repeated up
-/// presses.  Global remote (RKE-vent / phone close-all) sits at
-/// the bottom so any local occupant pre-empts it.
+/// The `PowerWindow` feature handles cross-source conflict
+/// **internally**: when both the driver-master and local switches
+/// have active intent on the same window, it stops the motor and
+/// puts both sources into AwaitingRelease.  That means only one
+/// claim per window ever reaches the arbiter from PowerWindow.
+/// Anti-pinch (Critical) and a security override (High) will
+/// pre-empt that single claim; RKE / phone-app global requests
+/// (Low) yield to any occupant switch.
 pub fn window_arbiter<B: SignalBus>(
     bus: Arc<B>,
 ) -> (DomainArbiter, impl std::future::Future<Output = ()>) {
@@ -1356,17 +1356,12 @@ pub fn window_arbiter<B: SignalBus>(
         "Body.Doors.Row2.Right.Window.MotorDirection",
     ];
 
-    let mut allow_list = Vec::with_capacity(8);
+    let mut allow_list = Vec::with_capacity(4);
     for &sig in MOTOR_SIGNALS.iter() {
         allow_list.push(AllowEntry {
-            feature_id: FeatureId::PowerWindowDriver,
+            feature_id: FeatureId::PowerWindow,
             signal: sig,
             priority: Priority::Medium,
-        });
-        allow_list.push(AllowEntry {
-            feature_id: FeatureId::PowerWindowLocal,
-            signal: sig,
-            priority: Priority::Low,
         });
         // ---- Reserved slots for future participants ----
         // AllowEntry {
@@ -1382,7 +1377,7 @@ pub fn window_arbiter<B: SignalBus>(
         // AllowEntry {
         //     feature_id: FeatureId::WindowGlobalRemote,
         //     signal: sig,
-        //     priority: Priority::VeryLow,
+        //     priority: Priority::Low,
         // },
     }
 

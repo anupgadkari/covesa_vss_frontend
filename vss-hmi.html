@@ -255,6 +255,15 @@ const INIT_STATE={
   'Body.Doors.Row1.Right.Window.Position':0,'Body.Doors.Row1.Right.Handle.Inside.IsPulled':false,'Body.Doors.Row1.Right.Handle.Outside.IsPulled':false,
   'Body.Doors.Row2.Left.IsChildLockActive':false,'Body.Doors.Row2.Left.Window.Position':0,'Body.Doors.Row2.Left.Handle.Inside.IsPulled':false,'Body.Doors.Row2.Left.Handle.Outside.IsPulled':false,
   'Body.Doors.Row2.Right.IsChildLockActive':false,'Body.Doors.Row2.Right.Window.Position':0,'Body.Doors.Row2.Right.Handle.Inside.IsPulled':false,'Body.Doors.Row2.Right.Handle.Outside.IsPulled':false,
+  // Window-switch 5-detent rocker defaults (NEUTRAL = at-rest centre).
+  'Body.Switches.Window.DriverMaster.Row1.Left.Detent':'NEUTRAL',
+  'Body.Switches.Window.DriverMaster.Row1.Right.Detent':'NEUTRAL',
+  'Body.Switches.Window.DriverMaster.Row2.Left.Detent':'NEUTRAL',
+  'Body.Switches.Window.DriverMaster.Row2.Right.Detent':'NEUTRAL',
+  'Body.Switches.Window.Local.Row1.Left.Detent':'NEUTRAL',
+  'Body.Switches.Window.Local.Row1.Right.Detent':'NEUTRAL',
+  'Body.Switches.Window.Local.Row2.Left.Detent':'NEUTRAL',
+  'Body.Switches.Window.Local.Row2.Right.Detent':'NEUTRAL',
   // Power child-lock + window-motor outputs (owned by features /
   // plant — seeded here so the cockpit indicators have a defined
   // initial state before the bridge publishes them).
@@ -1881,6 +1890,84 @@ function DoorAjarTelltale({cx, cy, on, onColor='#EF4444', offColor='#1F2C40'}){
   </g>;
 }
 
+// Compact vertical 5-detent rocker for window switches.  Press writes
+// the corresponding Detent enum value; release returns to NEUTRAL
+// (spring action).  The PowerWindow feature owns the state machine
+// and writes the motor command via the window arbiter — this
+// component is purely UI.
+function WindowRocker({ s, set, night, detentKey, posKey, motorKey, label, dimmed = false }) {
+  const detent = s[detentKey] || 'NEUTRAL';
+  const pos = s[posKey] ?? 0;
+  const motor = motorKey ? (s[motorKey] || 'STOPPED') : 'STOPPED';
+  const press = (v) => ({
+    onMouseDown:  () => set(detentKey, v),
+    onMouseUp:    () => set(detentKey, 'NEUTRAL'),
+    onMouseLeave: () => set(detentKey, 'NEUTRAL'),
+    onTouchStart: (e) => { e.preventDefault(); set(detentKey, v); },
+    onTouchEnd:   (e) => { e.preventDefault(); set(detentKey, 'NEUTRAL'); },
+  });
+  // Handle Y offset per detent — spring-back animation handled by CSS transition.
+  const handleY = {
+    UP_AUTO:   -22,
+    UP_HOLD:   -10,
+    NEUTRAL:     0,
+    DOWN_HOLD:  10,
+    DOWN_AUTO:  22,
+  }[detent] ?? 0;
+  const zone = (v) => ({
+    fill: detent === v ? '#F59E0B' : (night ? '#0A1018' : '#0E1625'),
+    stroke: detent === v ? '#F59E0B' : (night ? '#2A3A50' : '#1A2838'),
+  });
+  const txtDim = night ? '#5A7090' : '#3A5070';
+  const accent = motor === 'UP'   ? '#F59E0B'
+               : motor === 'DOWN' ? '#4A9EF5'
+               :                    txtDim;
+  return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, opacity: dimmed ? 0.55 : 1, userSelect:'none' }}>
+      {label && <span style={{ fontFamily:'Share Tech Mono', fontSize:7, color:txtDim, letterSpacing:.5 }}>{label}</span>}
+      <svg viewBox="0 0 36 88" style={{ width:32, height:80, touchAction:'none' }}>
+        {/* Outer track */}
+        <rect x="10" y="4" width="16" height="80" rx="4"
+          fill={night?'#070F1C':'#070F1C'} stroke={night?'#2A3A50':'#1A2838'} strokeWidth="1"/>
+        {/* 2nd-detent UP (close) */}
+        <rect x="11" y="6"  width="14" height="12" rx="2" {...press('UP_AUTO')}
+          fill={zone('UP_AUTO').fill} stroke={zone('UP_AUTO').stroke} strokeWidth="0.8"
+          style={{ cursor:'pointer' }}>
+          <title>2nd detent — AUTO CLOSE (latches; runs to fully closed)</title>
+        </rect>
+        {/* 1st-detent UP */}
+        <rect x="11" y="20" width="14" height="12" rx="2" {...press('UP_HOLD')}
+          fill={zone('UP_HOLD').fill} stroke={zone('UP_HOLD').stroke} strokeWidth="0.8"
+          style={{ cursor:'pointer' }}>
+          <title>Hold to close (proportional)</title>
+        </rect>
+        {/* 1st-detent DOWN */}
+        <rect x="11" y="56" width="14" height="12" rx="2" {...press('DOWN_HOLD')}
+          fill={zone('DOWN_HOLD').fill} stroke={zone('DOWN_HOLD').stroke} strokeWidth="0.8"
+          style={{ cursor:'pointer' }}>
+          <title>Hold to open (proportional)</title>
+        </rect>
+        {/* 2nd-detent DOWN (open) */}
+        <rect x="11" y="70" width="14" height="12" rx="2" {...press('DOWN_AUTO')}
+          fill={zone('DOWN_AUTO').fill} stroke={zone('DOWN_AUTO').stroke} strokeWidth="0.8"
+          style={{ cursor:'pointer' }}>
+          <title>2nd detent — AUTO OPEN (latches; runs to fully open)</title>
+        </rect>
+        {/* Arrow hints up = close, down = open */}
+        <polygon points="18,2 15,6 21,6" fill={txtDim}/>
+        <polygon points="18,86 15,82 21,82" fill={txtDim}/>
+        {/* Spring-returning handle bar */}
+        <rect x="9" y={42 + handleY} width="18" height="6" rx="2"
+          fill={night?'#D7A03A':'#F59E0B'} opacity="0.95"
+          style={{ transition:'y 80ms ease-out' }}/>
+      </svg>
+      <span style={{ fontFamily:'Share Tech Mono', fontSize:8, fontWeight:600, color:accent }}>
+        {pos|0}%
+      </span>
+    </div>
+  );
+}
+
 // VSS Powertrain.Transmission.CurrentGear / SelectedGear encoding:
 //   126 = Park, -1 = Reverse, 0 = Neutral, 127 = Drive, 128 = Sport
 //   (custom).  Positive 1..N are forward gears (manual transmission).
@@ -2487,8 +2574,8 @@ function CockpitView({s,set,cfg}){
         const unlockKey = `Body.Switches.DoorTrim.Row1.${side}.UnlockButton`;
         const dbl = side==='Left' ? dblL : false;
         const winKey = `Body.Doors.Row1.${side}.Window.Position`;
-        const localUp   = `Body.Switches.Window.Local.Row1.${side}.IsUpPressed`;
-        const localDown = `Body.Switches.Window.Local.Row1.${side}.IsDownPressed`;
+        const motorKey = `Body.Doors.Row1.${side}.Window.MotorDirection`;
+        const localDetent = `Body.Switches.Window.Local.Row1.${side}.Detent`;
         return <CockpitZone
           title={`${side.toUpperCase()} DOOR TRIM`}
           subtitle={isDriver ? 'driver' : 'passenger'}
@@ -2512,14 +2599,14 @@ function CockpitView({s,set,cfg}){
               ? <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,fontStyle:'italic'}}>
                   Window + mirror master controls are in the DRIVER DOOR TRIM BUTTONS below.
                 </span>
-              : (() => {
-                  const pos = winPos(winKey);
-                  return <div style={{display:'flex',gap:6,alignItems:'center'}}>
-                    <Btn night={night} on={!!s[localUp]}   {...holdSwitch(localUp)}   sz={9} pad={'6px 10px'} min={64}>WIN ⇧</Btn>
-                    <Btn night={night} on={!!s[localDown]} {...holdSwitch(localDown)} sz={9} pad={'6px 10px'} min={64}>WIN ⇩</Btn>
-                    <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim}}>{pos|0}%</span>
-                  </div>;
-                })()
+              : <div style={{display:'flex',gap:8,alignItems:'flex-end'}}>
+                  <WindowRocker s={s} set={set} night={night}
+                    detentKey={localDetent} posKey={winKey} motorKey={motorKey}
+                    label="LOCAL"/>
+                  <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,maxWidth:90}}>
+                    5-detent: outer detents latch AUTO; both-source presses STOP
+                  </span>
+                </div>
             }
           </div>
         </CockpitZone>;
@@ -2533,9 +2620,9 @@ function CockpitView({s,set,cfg}){
     {/* ── Row-2 rear-door trim panels — local window switches only. ──
          The inside pull on rear doors is already exercisable from the
          top view; the cockpit just exposes the per-door local window
-         up/down so child-lock gating in `PowerWindowLocal` can be
-         demonstrated.  Buttons stay CLICKABLE when the door is
-         child-locked — they still write the switch signal — so a
+         5-detent rocker so child-lock gating in `PowerWindow` can be
+         demonstrated.  The rocker stays clickable when the door is
+         child-locked — it still writes the Detent signal — so a
          tester can confirm the feature observes the write and
          declines to claim the motor arbiter.  Only the visual is
          dimmed; the wiring is identical to the unlocked case. */}
@@ -2544,19 +2631,21 @@ function CockpitView({s,set,cfg}){
         {side:'Left',  childLock:childRL},
         {side:'Right', childLock:childRR},
       ].map(({side,childLock})=>{
-        const winKey   = `Body.Doors.Row2.${side}.Window.Position`;
-        const localUp   = `Body.Switches.Window.Local.Row2.${side}.IsUpPressed`;
-        const localDown = `Body.Switches.Window.Local.Row2.${side}.IsDownPressed`;
-        const pos = winPos(winKey);
+        const winKey      = `Body.Doors.Row2.${side}.Window.Position`;
+        const motorKey    = `Body.Doors.Row2.${side}.Window.MotorDirection`;
+        const localDetent = `Body.Switches.Window.Local.Row2.${side}.Detent`;
         return <CockpitZone key={side}
           title={`REAR ${side.toUpperCase()} TRIM`}
           subtitle={childLock?'child-locked — writes ignored by feature':'local window'}
           night={night}>
-          <div style={{display:'flex',gap:6,alignItems:'center',opacity:childLock?0.55:1}}>
-            <Btn night={night} on={!!s[localUp]}   {...holdSwitch(localUp)}   sz={9} pad={'6px 10px'} min={64}>WIN ⇧</Btn>
-            <Btn night={night} on={!!s[localDown]} {...holdSwitch(localDown)} sz={9} pad={'6px 10px'} min={64}>WIN ⇩</Btn>
-            <span style={{fontFamily:'Share Tech Mono',fontSize:8,color:txtDim,marginLeft:4}}>
-              {pos|0}%{childLock?' · CHILD LOCK':''}
+          <div style={{display:'flex',gap:8,alignItems:'flex-end'}}>
+            <WindowRocker s={s} set={set} night={night}
+              detentKey={localDetent} posKey={winKey} motorKey={motorKey}
+              label="LOCAL" dimmed={childLock}/>
+            <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,maxWidth:130,fontStyle:childLock?'italic':'normal'}}>
+              {childLock
+                ? 'Switch still writes Detent — PowerWindow observes and refuses to claim arbiter while child-locked.'
+                : '5-detent: outer = AUTO. Cancel via any press.'}
             </span>
           </div>
         </CockpitZone>;
@@ -2570,18 +2659,18 @@ function CockpitView({s,set,cfg}){
          - Mirrors: master fold, side select, 4-way direction dpad
            on Body.Switches.Mirror.{Fold,Select,Direction}.
            Direction is press-and-hold; releasing writes NONE.
-         - Windows: hold-to-move switches writing
-           Body.Switches.Window.DriverMaster.Row{1,2}.{L,R}.Is{Up,Down}Pressed.
-           The PowerWindowDriver feature consumes them and claims
-           the window arbiter at Medium; the WindowPlant ramps the
-           position at 10 %/s.
+         - Windows: 2×2 grid of 5-detent rockers writing
+           Body.Switches.Window.DriverMaster.Row{1,2}.{L,R}.Detent.
+           The PowerWindow feature owns the state machine, cross-
+           source conflict resolution, and the stuck-switch
+           watchdog; the WindowPlant ramps the position at 10 %/s.
          - Power child lock: momentary push on
            Body.Switches.PowerChildLock.IsPressed.  The
            PowerChildLock feature toggles MasterStatus + both rear
            IsChildLockActive on each rising edge.  Door plant
            suppresses inside-pull on a child-locked door; the local
            rear window switches are also suppressed by
-           PowerWindowLocal. */}
+           PowerWindow. */}
     <CockpitZone title="DRIVER DOOR TRIM BUTTONS" subtitle="mirrors · windows · child locks" night={night}>
       <div style={{display:'flex',gap:14,alignItems:'center',flexWrap:'wrap'}}>
         <div style={{display:'flex',flexDirection:'column',gap:5}}>
@@ -2638,33 +2727,29 @@ function CockpitView({s,set,cfg}){
         })()}
       </div>
 
-      {/* Window switch pack — 4 up + 4 down hold-to-move switches.
-          Each button writes Body.Switches.Window.DriverMaster.*.{Is{Up,Down}Pressed}
-          while held; the `PowerWindowDriver` feature claims the motor
-          via the window arbiter at Medium and the WindowPlant ramps
-          the position.  Rear positions dim if the matching rear door
-          is child-locked — the driver master still works at the
-          arbiter level, but the dim is a visual cue that something
-          will resist if a child reaches for their own switch. */}
-      <div style={{display:'grid',gridTemplateColumns:'auto repeat(4, 1fr)',gap:6,marginTop:10,alignItems:'center'}}>
-        <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1}}>WINDOWS:</span>
-        {[
-          {pos:'Body.Doors.Row1.Left.Window.Position',  motor:'Body.Doors.Row1.Left.Window.MotorDirection',  up:'Body.Switches.Window.DriverMaster.Row1.Left.IsUpPressed',  dn:'Body.Switches.Window.DriverMaster.Row1.Left.IsDownPressed',  l:driverSide==='Left' ?'FL (drv)':'FL (pas)'},
-          {pos:'Body.Doors.Row1.Right.Window.Position', motor:'Body.Doors.Row1.Right.Window.MotorDirection', up:'Body.Switches.Window.DriverMaster.Row1.Right.IsUpPressed', dn:'Body.Switches.Window.DriverMaster.Row1.Right.IsDownPressed', l:driverSide==='Right'?'FR (drv)':'FR (pas)'},
-          {pos:'Body.Doors.Row2.Left.Window.Position',  motor:'Body.Doors.Row2.Left.Window.MotorDirection',  up:'Body.Switches.Window.DriverMaster.Row2.Left.IsUpPressed',  dn:'Body.Switches.Window.DriverMaster.Row2.Left.IsDownPressed',  l:'RL', childLock:childRL},
-          {pos:'Body.Doors.Row2.Right.Window.Position', motor:'Body.Doors.Row2.Right.Window.MotorDirection', up:'Body.Switches.Window.DriverMaster.Row2.Right.IsUpPressed', dn:'Body.Switches.Window.DriverMaster.Row2.Right.IsDownPressed', l:'RR', childLock:childRR},
-        ].map(({pos,motor,up,dn,l,childLock})=>{
-          const p=winPos(pos);
-          const m=winMotor(motor);
-          return <div key={pos} style={{display:'flex',flexDirection:'column',gap:3,alignItems:'center',opacity:childLock?0.6:1}}>
-            <span style={{fontFamily:'Share Tech Mono',fontSize:8,color:txtDim,letterSpacing:.5}}>{l}</span>
-            <div style={{display:'flex',gap:3}}>
-              <Btn night={night} on={m==='UP'}   {...holdSwitch(up)} sz={9} pad={'5px 9px'}>⇧</Btn>
-              <Btn night={night} on={m==='DOWN'} {...holdSwitch(dn)} sz={9} pad={'5px 9px'}>⇩</Btn>
-            </div>
-            <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim}}>{p|0}%</span>
-          </div>;
-        })}
+      {/* Driver-master window switch pack — 4 vertical 5-detent
+          rockers arranged in a 2×2 grid (FL/FR top row, RL/RR
+          bottom row), matching the physical pack layout on a real
+          door card.  Each rocker writes
+          Body.Switches.Window.DriverMaster.Row{1,2}.{L,R}.Detent.
+          The PowerWindow feature owns the state machine + cross-
+          source conflict resolution.  Rear positions dim when the
+          matching rear door is child-locked — visual cue only; the
+          driver master is not actually blocked by child lock. */}
+      <div style={{marginTop:10}}>
+        <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1,display:'block',marginBottom:4}}>WINDOWS — 2×2 master pack (UP = close, DOWN = open; outer detents latch AUTO):</span>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,maxWidth:260}}>
+          {[
+            {pos:'Body.Doors.Row1.Left.Window.Position',  motor:'Body.Doors.Row1.Left.Window.MotorDirection',  det:'Body.Switches.Window.DriverMaster.Row1.Left.Detent',  l:driverSide==='Left' ?'FL (drv)':'FL (pas)'},
+            {pos:'Body.Doors.Row1.Right.Window.Position', motor:'Body.Doors.Row1.Right.Window.MotorDirection', det:'Body.Switches.Window.DriverMaster.Row1.Right.Detent', l:driverSide==='Right'?'FR (drv)':'FR (pas)'},
+            {pos:'Body.Doors.Row2.Left.Window.Position',  motor:'Body.Doors.Row2.Left.Window.MotorDirection',  det:'Body.Switches.Window.DriverMaster.Row2.Left.Detent',  l:'RL', childLock:childRL},
+            {pos:'Body.Doors.Row2.Right.Window.Position', motor:'Body.Doors.Row2.Right.Window.MotorDirection', det:'Body.Switches.Window.DriverMaster.Row2.Right.Detent', l:'RR', childLock:childRR},
+          ].map(({pos,motor,det,l,childLock})=>(
+            <WindowRocker key={pos} s={s} set={set} night={night}
+              detentKey={det} posKey={pos} motorKey={motor}
+              label={l} dimmed={!!childLock}/>
+          ))}
+        </div>
       </div>
 
       {/* Master child-lock indicator + push.  Single momentary
