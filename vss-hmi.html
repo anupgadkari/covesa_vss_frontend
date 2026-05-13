@@ -3543,6 +3543,7 @@ const INIT_CONFIG={
     auto_headlamp_lux_threshold:200, peps_rear_capacitive_handles:false,
     panic_press_mode:'SINGLE',
     slam_lock_protect:true,
+    key_source_cfg:'PEPS',
   },
 };
 
@@ -3743,6 +3744,13 @@ function ConfigView({cfg, onSet, staged, setStaged, onApplyReboot}){
         hint="ON (EU default): trim Lock with a door open is undone by the SlamLock feature (driver-side respects two-stage; passenger-side always UnlockAll). OFF (US slam-lock allowed): trim Lock with door open dispatches as FeatureId::SlamLock — when the door slams shut the perimeter alarm arms."
         dirty={isVLDirty('slam_lock_protect')}>
         <CfgBool val={!!vlVal('slam_lock_protect')} onChange={b=>stageVL('slam_lock_protect',b)}/>
+      </CfgRow>
+      <CfgRow label="Key source"
+        hint="PEPS: push-button start with cabin LF antennas; fobs work passively (passive entry, passive start). KeyCylinder: physical rotary cylinder with short-range LF only at the cylinder; fobs degrade to remote-only (RKE buttons still work) and the driver must place a fob in the KeyCylinder zone to start."
+        dirty={isVLDirty('key_source_cfg')}>
+        <CfgSelect val={vlVal('key_source_cfg')||'PEPS'}
+          opts={['PEPS','KeyCylinder']}
+          onChange={p=>stageVL('key_source_cfg',p)}/>
       </CfgRow>
     </CfgSection>
 
