@@ -2444,8 +2444,11 @@ function CockpitView({s,set,cfg}){
          The inside pull on rear doors is already exercisable from the
          top view; the cockpit just exposes the per-door local window
          up/down so child-lock gating in `PowerWindowLocal` can be
-         demonstrated.  When the matching `IsChildLockActive` is true
-         the buttons dim and the feature ignores the writes. */}
+         demonstrated.  Buttons stay CLICKABLE when the door is
+         child-locked — they still write the switch signal — so a
+         tester can confirm the feature observes the write and
+         declines to claim the motor arbiter.  Only the visual is
+         dimmed; the wiring is identical to the unlocked case. */}
     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
       {[
         {side:'Left',  childLock:childRL},
@@ -2457,11 +2460,11 @@ function CockpitView({s,set,cfg}){
         const pos = winPos(winKey);
         return <CockpitZone key={side}
           title={`REAR ${side.toUpperCase()} TRIM`}
-          subtitle={childLock?'child-locked — switches inert':'local window'}
+          subtitle={childLock?'child-locked — writes ignored by feature':'local window'}
           night={night}>
-          <div style={{display:'flex',gap:6,alignItems:'center',opacity:childLock?0.4:1}}>
-            <Btn night={night} on={!!s[localUp]}   {...(childLock?{}:holdSwitch(localUp))}   sz={9} pad={'6px 10px'} min={64}>WIN ⇧</Btn>
-            <Btn night={night} on={!!s[localDown]} {...(childLock?{}:holdSwitch(localDown))} sz={9} pad={'6px 10px'} min={64}>WIN ⇩</Btn>
+          <div style={{display:'flex',gap:6,alignItems:'center',opacity:childLock?0.55:1}}>
+            <Btn night={night} on={!!s[localUp]}   {...holdSwitch(localUp)}   sz={9} pad={'6px 10px'} min={64}>WIN ⇧</Btn>
+            <Btn night={night} on={!!s[localDown]} {...holdSwitch(localDown)} sz={9} pad={'6px 10px'} min={64}>WIN ⇩</Btn>
             <span style={{fontFamily:'Share Tech Mono',fontSize:8,color:txtDim,marginLeft:4}}>
               {pos|0}%{childLock?' · CHILD LOCK':''}
             </span>
