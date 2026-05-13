@@ -3094,17 +3094,17 @@ function fobOccupyingCylinder(s){
 }
 
 /* Fob-stuck-in-cylinder predicate.
-   A fob can be pulled out of the cylinder only when the cylinder is
-   actually rotated to LOCK — which on KeyCylinder vehicles also
-   requires the transmission to be in PARK (the bridge enforces that
-   rotation gate via RemovalInhibited).  Position-based check here
-   covers the case where the driver shifts to P but hasn't yet
-   rotated to LOCK; in real cars the key still won't come out. */
+   A fob can be pulled out of the cylinder at either LOCK or OFF —
+   both are mechanical "no electrical activity" detents.  LOCK
+   additionally engages the steering-column lock (anti-theft); OFF
+   leaves the column free but the key still releases.  ACC / ON /
+   START all trap the key bow.  PEPS vehicles have no physical
+   cylinder so the lockout never applies. */
 function isFobLockedInCylinder(s, cfg){
   const keySource = cfg?.vehicle_line?.key_source_cfg || 'PEPS';
   if(keySource !== 'KeyCylinder') return false;
   const pos = s['Body.Switches.IgnitionCylinder.Position'] || 'LOCK';
-  return pos !== 'LOCK';
+  return pos !== 'LOCK' && pos !== 'OFF';
 }
 
 /* ── Dedicated Auth Device Panel ──────────────────────────────── */
@@ -3281,7 +3281,7 @@ function DevicePanel({s, set, sel, setSel}){
             {keyStuckHere && <span style={{
               marginLeft:6,fontFamily:'var(--fm)',fontSize:'7px',
               color:'#F59E0B',fontWeight:700,letterSpacing:0.5}}>
-              🔒 KEY-IN LOCKOUT · rotate cylinder to LOCK to remove
+              🔒 KEY-IN LOCKOUT · rotate cylinder to OFF or LOCK to remove
             </span>}
             {cylBlockedByOther && !keyStuckHere && <span style={{
               marginLeft:6,fontFamily:'var(--fm)',fontSize:'7px',
@@ -3581,7 +3581,7 @@ function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
                           opacity:stuck?0.55:1, cursor:stuck?'not-allowed':'pointer'}}
                   value={zone}
                   disabled={stuck}
-                  title={stuck?'Key locked in cylinder — rotate to LOCK to remove'
+                  title={stuck?'Key locked in cylinder — rotate to OFF or LOCK to remove'
                          : cylBlocked?`Cylinder occupied by Fob ${cylOccupant}`
                          : undefined}
                   onChange={e=>set(`${pfx}.Zone`, e.target.value)}>
@@ -3627,7 +3627,7 @@ function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
                           opacity:stuck?0.55:1, cursor:stuck?'not-allowed':'pointer'}}
                   value={zone}
                   disabled={stuck}
-                  title={stuck?'Key locked in cylinder — rotate to LOCK to remove'
+                  title={stuck?'Key locked in cylinder — rotate to OFF or LOCK to remove'
                          : cylBlocked?`Cylinder occupied by Fob ${cylOccupant}`
                          : undefined}
                   onChange={e=>set(`${pfx}.Zone`, e.target.value)}>
