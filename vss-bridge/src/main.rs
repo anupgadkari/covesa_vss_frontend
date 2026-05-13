@@ -74,6 +74,7 @@ use vss_bridge::ipc_message::SignalValue;
 use vss_bridge::kuksa_sync;
 use vss_bridge::nvm::NvmStore;
 use vss_bridge::plant_models::blink_relay::BlinkRelay;
+use vss_bridge::plant_models::brake::BrakePlant;
 use vss_bridge::plant_models::chime::ChimePlantModel;
 use vss_bridge::plant_models::day_night_mode::DayNightModePlant;
 use vss_bridge::plant_models::door_handle::DoorHandlePlantModel;
@@ -502,6 +503,10 @@ async fn boot_simulation_stack(
     // Drives the cockpit view's night-backlit rendering style.  Future
     // extensions: ambient light sensor, GPS sunset, tunnel detection.
     set.spawn(DayNightModePlant::new(Arc::clone(&bus)).run());
+    // Brake plant: derives Chassis.Brake.IsApplied (bool) from
+    // Chassis.Brake.PedalPosition (Uint8 %) with hysteresis.
+    // Consumed by the upcoming VehicleStartingControl feature.
+    set.spawn(BrakePlant::new(Arc::clone(&bus)).run());
     set.spawn(
         DoorLockPlantModel::with_ack_and_nvm(Arc::clone(&bus), door_lock_ack_tx, nvm.clone())
             .with_cfg(Arc::clone(&cfg))
@@ -518,7 +523,7 @@ async fn boot_simulation_stack(
             .with_response_stagger_ms(vss_bridge::plant_models::peps::PRODUCTION_STAGGER_MS)
             .run(),
     );
-    tracing::info!("plant models spawned: BlinkRelay, ChimePlantModel, DayNightModePlant, DoorLockPlantModel, DoorHandlePlantModel, TrunkPlantModel, HoodPlantModel, SunroofPlantModel, PepsPlantModel");
+    tracing::info!("plant models spawned: BlinkRelay, BrakePlant, ChimePlantModel, DayNightModePlant, DoorLockPlantModel, DoorHandlePlantModel, TrunkPlantModel, HoodPlantModel, SunroofPlantModel, PepsPlantModel");
 
     // ── WebSocket bridge ────────────────────────────────────────────
     let ws_port: u16 = std::env::var("VSS_BRIDGE_WS_PORT")
