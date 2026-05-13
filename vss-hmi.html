@@ -3001,7 +3001,7 @@ function ControlPanelContent({s,set,anyDoor,anyLight,lux}){
 
       <SG title="Vehicle Power" vss="Vehicle" def={true}>
         <EnumR label="Power Mode" k="Vehicle.LowVoltageSystemState" s={s} set={set}
-          opts={['OFF','LOCK','ACC','ON','START']}/>
+          opts={['LOCK','OFF','ACC','ON','START']}/>
         <EnumR label="Powertrain" k="Vehicle.Powertrain.Type" s={s} set={set}
           opts={['COMBUSTION','HYBRID','ELECTRIC']}/>
         {/* Valet mode — published by infotainment in production.
