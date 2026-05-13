@@ -1348,19 +1348,24 @@ function CombinedView({s,set,onDeviceSelect}){
         matching the way real fold motors swing the housing rearward
         against the door without the mirror appearing to cross
         through the cabin. */}
-    {/* Real power-fold motors take ~1.5-2.5 s through ~45-50° in a
-        top-view 2D representation (less than the 3D 75-85° because
-        the housing's depth foreshortens visually).  Slower
-        ease-in-out timing avoids the whippy snap of the previous
-        0.6 s / 60° / ease setting. */}
-    <g transform={mlf?'rotate(-48 54 146)':undefined} style={{transition:'transform 1.6s ease-in-out'}}>
+    {/* Rotation magnitude is capped at ±32° to stay BELOW the
+        outboard-bulge peak of the 16×12 housing rotating about its
+        rear-inboard corner.  The peak is at ≈arctan(12/16) ≈ 36.87°
+        — beyond that the outboard-front corner traces an arc that
+        sweeps further outboard than rest position and then curls
+        back, visually reading as "the mirror detached, pulled away
+        from the car, and then reattached".  Below the peak the
+        corner moves monotonically outboard during the fold, which
+        looks like a clean rotation.  Combined with 1.6 s
+        ease-in-out timing this matches real power-fold motors. */}
+    <g transform={mlf?'rotate(-32 54 146)':undefined} style={{transition:'transform 1.6s ease-in-out'}}>
       <title>{mlf?'Left side mirror — folded':'Left side mirror'}</title>
       <rect x="38" y="134" width="16" height="12" rx="2" fill="#0F1A28" stroke="#1A2838" strokeWidth="0.5"/>
       <rect x="38" y="138" width="5" height="6" rx="1" fill={li?'#F59E0B':'#1A1208'} opacity={(mlf?0:1)*(li?0.95:.28)}>
         <title>{li?'Left mirror turn indicator — signaling':'Left mirror turn indicator — off'}</title>
       </rect>
     </g>
-    <g transform={mrf?'rotate(48 306 146)':undefined} style={{transition:'transform 1.6s ease-in-out'}}>
+    <g transform={mrf?'rotate(32 306 146)':undefined} style={{transition:'transform 1.6s ease-in-out'}}>
       <title>{mrf?'Right side mirror — folded':'Right side mirror'}</title>
       <rect x="306" y="134" width="16" height="12" rx="2" fill="#0F1A28" stroke="#1A2838" strokeWidth="0.5"/>
       <rect x="317" y="138" width="5" height="6" rx="1" fill={ri?'#F59E0B':'#1A1208'} opacity={(mrf?0:1)*(ri?0.95:.28)}>
