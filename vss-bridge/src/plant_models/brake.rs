@@ -150,10 +150,7 @@ mod tests {
         let bus = setup().await;
         bus.inject(PEDAL_IN, SignalValue::Uint8(40));
         settle().await;
-        assert_eq!(
-            bus.latest_value(APPLIED_OUT),
-            Some(SignalValue::Bool(true))
-        );
+        assert_eq!(bus.latest_value(APPLIED_OUT), Some(SignalValue::Bool(true)));
     }
 
     #[tokio::test]
@@ -161,10 +158,7 @@ mod tests {
         let bus = setup().await;
         bus.inject(PEDAL_IN, SignalValue::Uint8(PRESS_THRESHOLD_PCT));
         settle().await;
-        assert_eq!(
-            bus.latest_value(APPLIED_OUT),
-            Some(SignalValue::Bool(true))
-        );
+        assert_eq!(bus.latest_value(APPLIED_OUT), Some(SignalValue::Bool(true)));
     }
 
     #[tokio::test]
@@ -262,10 +256,7 @@ mod tests {
         let bus = setup().await;
         bus.inject(PEDAL_IN, SignalValue::Int16(30));
         settle().await;
-        assert_eq!(
-            bus.latest_value(APPLIED_OUT),
-            Some(SignalValue::Bool(true))
-        );
+        assert_eq!(bus.latest_value(APPLIED_OUT), Some(SignalValue::Bool(true)));
     }
 
     #[test]

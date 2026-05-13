@@ -133,21 +133,19 @@ impl<B: SignalBus + Send + Sync + 'static> TransmissionPlant<B> {
                         continue; // idempotent — no shift edge
                     }
                     // BTSI: shifts OUT of PARK require brake + live ignition.
-                    if current == PARK && want != PARK {
-                        if !brake_applied || !ign_live {
-                            tracing::info!(
-                                want, brake = brake_applied, ign_live,
-                                "TransmissionPlant: BTSI blocked shift out of PARK"
-                            );
-                            // Snap the selector chip back to PARK so the
-                            // HMI shifter visually matches the engaged
-                            // gear.  Plant remains in PARK.
-                            let _ = self
-                                .bus
-                                .publish(SELECTED, SignalValue::Int16(PARK))
-                                .await;
-                            continue;
-                        }
+                    if current == PARK && want != PARK && (!brake_applied || !ign_live) {
+                        tracing::info!(
+                            want, brake = brake_applied, ign_live,
+                            "TransmissionPlant: BTSI blocked shift out of PARK"
+                        );
+                        // Snap the selector chip back to PARK so the
+                        // HMI shifter visually matches the engaged
+                        // gear.  Plant remains in PARK.
+                        let _ = self
+                            .bus
+                            .publish(SELECTED, SignalValue::Int16(PARK))
+                            .await;
+                        continue;
                     }
                     tracing::info!(from = current, to = want, "TransmissionPlant: shift");
                     current = want;
@@ -243,8 +241,11 @@ mod tests {
     async fn boots_to_park_with_shift_lock_engaged() {
         let bus = setup().await;
         assert_eq!(current(&bus), Some(126));
-        assert_eq!(shift_lock(&bus), Some(true),
-            "boot: P + brake released + ignition OFF must engage shift lock");
+        assert_eq!(
+            shift_lock(&bus),
+            Some(true),
+            "boot: P + brake released + ignition OFF must engage shift lock"
+        );
     }
 
     #[tokio::test]
@@ -256,7 +257,11 @@ mod tests {
         bus.inject(SELECTED, SignalValue::Int16(127)); // Drive
         settle().await;
         assert_eq!(current(&bus), Some(126), "shift to D must be rejected");
-        assert_eq!(selected(&bus), Some(126), "selector chip must snap back to P");
+        assert_eq!(
+            selected(&bus),
+            Some(126),
+            "selector chip must snap back to P"
+        );
     }
 
     #[tokio::test]
@@ -279,8 +284,11 @@ mod tests {
         bus.inject(SELECTED, SignalValue::Int16(127)); // Drive
         settle().await;
         assert_eq!(current(&bus), Some(127));
-        assert_eq!(shift_lock(&bus), Some(false),
-            "out of P → shift lock disengages");
+        assert_eq!(
+            shift_lock(&bus),
+            Some(false),
+            "out of P → shift lock disengages"
+        );
     }
 
     #[tokio::test]
@@ -326,10 +334,18 @@ mod tests {
         bus.inject(IGN_IN, SignalValue::String("ACC".into()));
         bus.inject(BRAKE_IN, SignalValue::Bool(true));
         settle().await;
-        assert_eq!(shift_lock(&bus), Some(true), "ACC must not release the lock");
+        assert_eq!(
+            shift_lock(&bus),
+            Some(true),
+            "ACC must not release the lock"
+        );
         bus.inject(SELECTED, SignalValue::Int16(127));
         settle().await;
-        assert_eq!(current(&bus), Some(126), "shift attempt at ACC must be rejected");
+        assert_eq!(
+            current(&bus),
+            Some(126),
+            "shift attempt at ACC must be rejected"
+        );
         assert_eq!(selected(&bus), Some(126), "selector chip snaps back");
     }
 

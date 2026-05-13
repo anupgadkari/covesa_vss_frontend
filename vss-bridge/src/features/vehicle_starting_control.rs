@@ -128,11 +128,11 @@ impl Immobilizer {
 ///
 /// Five physical detents on a typical key cylinder:
 ///   * `LOCK`  — key insertable / removable, steering column locked.
-///                Clears the immobilizer session (next rotation away
-///                forces a fresh authenticate).
+///     Clears the immobilizer session (next rotation away forces a
+///     fresh authenticate).
 ///   * `OFF`   — key in cylinder, accessories off.  Same power state
-///                as `LOCK` but the auth session is preserved so the
-///                driver can rotate to ACC/ON without re-authenticating.
+///     as `LOCK` but the auth session is preserved so the driver
+///     can rotate to ACC/ON without re-authenticating.
 ///   * `ACC`   — accessories (radio, power windows in some vehicles).
 ///   * `ON`    — full ignition / "RUN".
 ///   * `START` — spring-loaded crank position; releases back to `ON`.
@@ -176,11 +176,7 @@ pub struct VehicleStartingControl<B: SignalBus> {
 }
 
 impl<B: SignalBus + Send + Sync + 'static> VehicleStartingControl<B> {
-    pub fn new(
-        bus: Arc<B>,
-        cfg: Arc<PlatformConfig>,
-        key_search: KeySearchArbiterHandle,
-    ) -> Self {
+    pub fn new(bus: Arc<B>, cfg: Arc<PlatformConfig>, key_search: KeySearchArbiterHandle) -> Self {
         Self {
             bus,
             cfg,
@@ -382,10 +378,7 @@ impl<B: SignalBus + Send + Sync + 'static> VehicleStartingControl<B> {
                 // OFF rather than staying at LOCK.
                 let _ = self
                     .bus
-                    .publish(
-                        CYLINDER_IN,
-                        SignalValue::String("OFF".into()),
-                    )
+                    .publish(CYLINDER_IN, SignalValue::String("OFF".into()))
                     .await;
                 // Fall through to OFF semantics below.
                 return self
@@ -411,14 +404,8 @@ impl<B: SignalBus + Send + Sync + 'static> VehicleStartingControl<B> {
             return;
         }
 
-        self.handle_cylinder_change_inner(
-            pos,
-            power,
-            immobilizer,
-            session_authed,
-            last_pos,
-        )
-        .await;
+        self.handle_cylinder_change_inner(pos, power, immobilizer, session_authed, last_pos)
+            .await;
     }
 
     /// Common path for non-LOCK rotations (and the LOCK-blocked
@@ -478,13 +465,8 @@ impl<B: SignalBus + Send + Sync + 'static> VehicleStartingControl<B> {
     /// Engaged only on KeyCylinder builds and only while the
     /// transmission is out of PARK.  PEPS builds always publish
     /// `false`.
-    async fn update_removal_inhibited(
-        &self,
-        current_gear: i16,
-        last: &mut bool,
-    ) {
-        let want = self.key_source() == KeySource::KeyCylinder
-            && current_gear != GEAR_PARK;
+    async fn update_removal_inhibited(&self, current_gear: i16, last: &mut bool) {
+        let want = self.key_source() == KeySource::KeyCylinder && current_gear != GEAR_PARK;
         if want == *last {
             return;
         }
@@ -567,7 +549,12 @@ mod tests {
         // SAFETY-equivalent: PlatformConfig fields used by VSC are
         // public (`vehicle_line`); construct via a transparent struct
         // literal in this same crate.
-        Arc::new(PlatformConfig::test_construct(vl, VariantCal::default(), tx, rx))
+        Arc::new(PlatformConfig::test_construct(
+            vl,
+            VariantCal::default(),
+            tx,
+            rx,
+        ))
     }
 
     fn cfg_peps() -> Arc<PlatformConfig> {
@@ -702,10 +689,7 @@ mod tests {
         // its Paired flag is false.  Authenticated scans must filter
         // it out so the immobilizer goes FAILED and power stays OFF.
         let bus = setup(cfg_peps()).await;
-        bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.Paired",
-            SignalValue::Bool(false),
-        );
+        bus.inject("Body.PEPS.Plant.KeyFob.1.Paired", SignalValue::Bool(false));
         place_fob_in_cabin(&bus, 1);
         settle().await;
         bus.inject(START_STOP_IN, SignalValue::Bool(true));
@@ -804,8 +788,11 @@ mod tests {
         bus.inject(CYLINDER_IN, SignalValue::String("OFF".into()));
         settle().await;
         assert_eq!(latest_power(&bus).as_deref(), Some("OFF"));
-        assert_eq!(latest_immo(&bus).as_deref(), Some("LOCKED"),
-            "OFF must not trigger FAILED — it's a mechanical-only detent");
+        assert_eq!(
+            latest_immo(&bus).as_deref(),
+            Some("LOCKED"),
+            "OFF must not trigger FAILED — it's a mechanical-only detent"
+        );
         // Now place a key and rotate to ACC — must still authenticate
         // (OFF did not establish a session).
         place_fob_in_cylinder(&bus, 1);

@@ -901,7 +901,10 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Chassis.Brake.IsApplied", 0x001E_0003),
     ("Vehicle.Starting.ImmobilizerStatus", 0x001E_0004),
     ("Powertrain.Transmission.ShiftLockEngaged", 0x001E_0005),
-    ("Body.Switches.IgnitionCylinder.RemovalInhibited", 0x001E_0006),
+    (
+        "Body.Switches.IgnitionCylinder.RemovalInhibited",
+        0x001E_0006,
+    ),
 ];
 
 #[cfg(test)]
