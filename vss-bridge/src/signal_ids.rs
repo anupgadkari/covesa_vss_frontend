@@ -523,6 +523,22 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Chassis.Brake.IsApplied" => Some(0x001E_0003),
         "Vehicle.Starting.ImmobilizerStatus" => Some(0x001E_0004),
 
+        // Brake / Transmission Shift Interlock (BTSI) + Key-in-Ignition
+        // Inhibit derived flags.  Both bool, both bridge-published.
+        //
+        // ShiftLockEngaged: true while the transmission is in PARK
+        //   and (brake not applied OR ignition not live).  Auto
+        //   transmissions only release the gear selector once brake
+        //   + ignition are satisfied; the HMI uses this flag to grey
+        //   out non-P gear chips and explain the lockout.
+        // IgnitionCylinder.RemovalInhibited: true on KeyCylinder
+        //   builds when CurrentGear != PARK.  Blocks rotation to
+        //   LOCK (the "key removal" detent) — the cylinder snaps to
+        //   OFF instead, matching real automotive key-in-ignition
+        //   lockout behaviour.  Always false on PEPS builds.
+        "Powertrain.Transmission.ShiftLockEngaged" => Some(0x001E_0005),
+        "Body.Switches.IgnitionCylinder.RemovalInhibited" => Some(0x001E_0006),
+
         _ => None,
     }
 }
@@ -884,6 +900,8 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Body.Switches.IgnitionCylinder.Position", 0x001E_0002),
     ("Chassis.Brake.IsApplied", 0x001E_0003),
     ("Vehicle.Starting.ImmobilizerStatus", 0x001E_0004),
+    ("Powertrain.Transmission.ShiftLockEngaged", 0x001E_0005),
+    ("Body.Switches.IgnitionCylinder.RemovalInhibited", 0x001E_0006),
 ];
 
 #[cfg(test)]

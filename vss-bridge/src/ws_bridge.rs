@@ -355,6 +355,9 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     // status next to the Power Mode chip.
     "Chassis.Brake.IsApplied",
     "Vehicle.Starting.ImmobilizerStatus",
+    // BTSI + Key-in-Ignition Inhibit derived flags.
+    "Powertrain.Transmission.ShiftLockEngaged",
+    "Body.Switches.IgnitionCylinder.RemovalInhibited",
 ];
 
 /// Subset of `OUTPUT_SIGNALS` whose authoritative boot value comes from

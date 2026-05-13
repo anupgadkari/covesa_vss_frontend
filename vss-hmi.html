@@ -180,6 +180,9 @@ const INIT_STATE={
   'Body.Switches.IgnitionCylinder.Position':'LOCK',
   'Chassis.Brake.IsApplied':false,
   'Vehicle.Starting.ImmobilizerStatus':'LOCKED',
+  // BTSI + Key-in-Ignition Inhibit derived flags.
+  'Powertrain.Transmission.ShiftLockEngaged':true,
+  'Body.Switches.IgnitionCylinder.RemovalInhibited':false,
   // Lights — outputs
   'Body.Lights.Beam.Low.IsOn':false,
   'Body.Lights.Beam.High.IsOn':false,
@@ -761,6 +764,18 @@ function CombinedView({s,set,cfg,onDeviceSelect}){
   }
 
   function startDrag(e,device){
+    // Key-in-Ignition Inhibit applies only to **fobs** parked at the
+    // KeyCylinder slot (i.e. KeyCylinder vehicles where the fob's
+    // mechanical bow is physically inserted in the cylinder).  In
+    // PEPS configurations RemovalInhibited stays false so this
+    // branch is moot; phones at the cylinder are NFC taps that
+    // don't physically insert anything, so they're never stuck.
+    const removalInhibited = !!s['Body.Switches.IgnitionCylinder.RemovalInhibited'];
+    if (removalInhibited
+        && device.type === 'fob'
+        && device.zone === 'KeyCylinder') {
+      return;
+    }
     e.preventDefault();
     const {x,y}=svgCoords(e);
     setDrag({...device,x,y,ox:x,oy:y});
@@ -2467,7 +2482,15 @@ function CockpitView({s,set,cfg}){
               <circle cx="45" cy="45" r="28" fill={knobFill}
                 stroke={ringColor} strokeWidth="2"/>
               {/* Position dots (on ring) + labels (outside ring) */}
-              {POSITIONS.map(({p,angle})=>{
+              {(()=>{
+                // Key-in-Ignition Inhibit: when the transmission isn't
+                // in PARK, the LOCK detent is blocked (the bridge will
+                // bounce the rotation to OFF anyway).  Render LOCK in
+                // a muted red and short-circuit its click so the user
+                // sees the disabled state and doesn't trigger the
+                // bridge revert.
+                const removalInhibited = !!s['Body.Switches.IgnitionCylinder.RemovalInhibited'];
+                return POSITIONS.map(({p,angle})=>{
                 const rad = angle * Math.PI/180;
                 const dotR = 28;
                 const labR = 39;
@@ -2476,9 +2499,14 @@ function CockpitView({s,set,cfg}){
                 const lx = 45 + Math.cos(rad)*labR;
                 const ly = 45 + Math.sin(rad)*labR + 2; // baseline tweak
                 const active = p === pos;
-                const c = active ? accentColor : (night?'#5A4416':'#5A6878');
+                const lockBlocked = p === 'LOCK' && removalInhibited;
+                const c = lockBlocked
+                  ? (night?'#5A2828':'#8A4848')
+                  : (active ? accentColor : (night?'#5A4416':'#5A6878'));
                 const isStart = p === 'START';
-                const handlers = isStart
+                const handlers = lockBlocked
+                  ? { onClick: ()=>{/* swallowed — gear interlock */} }
+                  : isStart
                   ? {
                       onMouseDown: ()=>set('Body.Switches.IgnitionCylinder.Position','START'),
                       onMouseUp:   ()=>set('Body.Switches.IgnitionCylinder.Position','ON'),
@@ -2487,14 +2515,19 @@ function CockpitView({s,set,cfg}){
                       onTouchEnd:  ()=>set('Body.Switches.IgnitionCylinder.Position','ON'),
                     }
                   : { onClick: ()=>set('Body.Switches.IgnitionCylinder.Position',p) };
-                return <g key={p} style={{cursor:'pointer'}} {...handlers}>
+                return <g key={p}
+                  style={{cursor:lockBlocked?'not-allowed':'pointer',
+                          opacity:lockBlocked?0.55:1}}
+                  {...handlers}>
+                  {lockBlocked && <title>Shift to PARK to remove the key</title>}
                   {/* Larger transparent hitbox so the small dots are easy to tap. */}
                   <circle cx={dx} cy={dy} r="9" fill="transparent"/>
                   <circle cx={dx} cy={dy} r={active?3:2} fill={c}/>
                   <text x={lx} y={ly} textAnchor="middle" fill={c}
                     fontSize="6" fontFamily="Share Tech Mono" fontWeight="700">{p}</text>
                 </g>;
-              })}
+                });
+              })()}
               {/* Pointer needle — rotates to indicate current position.
                   Pivot is at the cylinder centre (45,45). */}
               <g transform={`rotate(${cur.angle} 45 45)`}>
@@ -2704,21 +2737,42 @@ function CockpitView({s,set,cfg}){
 
     {/* ── Gear shifter ── */}
     <CockpitZone title="GEAR SHIFTER" subtitle="SelectedGear → TransmissionPlant → CurrentGear" night={night}>
-      <div style={{display:'flex',gap:6,alignItems:'center'}}>
-        {[{lab:'P',g:126},{lab:'R',g:-1},{lab:'N',g:0},{lab:'D',g:127},{lab:'S',g:128}].map(({lab,g})=>(
-          <Btn night={night} key={lab} on={gearLabel(selGear)===lab}
-            onClick={()=>set('Powertrain.Transmission.SelectedGear',g)}
-            sz={14} pad={'10px 18px'} min={50}>{lab}</Btn>
-        ))}
-        <span style={{flex:1}}/>
-        {/* Driver-intent readout — mirrors the highlighted button.
-            The cluster PRND under the speedometer is the authoritative
-            "actual engaged gear" indicator (bound to CurrentGear). */}
-        <div style={{fontFamily:'Orbitron',fontSize:24,fontWeight:700,color:'#F59E0B',
-          border:`1px solid ${night?'#3A2A12':'#1A2838'}`,padding:'4px 18px',borderRadius:4,minWidth:60,textAlign:'center'}}>
-          {gearLabel(selGear)}
-        </div>
-      </div>
+      {(()=>{
+        // BTSI status — true while P is engaged but brake + ignition
+        // haven't both been satisfied.  Drives a small inline chip so
+        // the driver understands why a P→D shift is being rejected.
+        const shiftLock = !!s['Powertrain.Transmission.ShiftLockEngaged'];
+        return <div style={{display:'flex',gap:6,alignItems:'center'}}>
+          {[{lab:'P',g:126},{lab:'R',g:-1},{lab:'N',g:0},{lab:'D',g:127},{lab:'S',g:128}].map(({lab,g})=>{
+            // Grey out non-P chips while the shift lock is engaged so
+            // the user can see the interlock at a glance.
+            const isP = lab === 'P';
+            const blocked = shiftLock && !isP;
+            return <span key={lab}
+              style={{opacity:blocked?0.4:1,
+                      cursor:blocked?'not-allowed':'pointer',
+                      display:'inline-block'}}>
+              <Btn night={night} on={gearLabel(selGear)===lab}
+                onClick={()=>set('Powertrain.Transmission.SelectedGear',g)}
+                sz={14} pad={'10px 18px'} min={50}>{lab}</Btn>
+            </span>;
+          })}
+          {shiftLock && <div style={{fontFamily:'Share Tech Mono',fontSize:9,
+            color:'#F59E0B',fontWeight:700,padding:'4px 8px',borderRadius:3,
+            border:'1px solid #F59E0B',background:'rgba(245,158,11,0.08)',
+            letterSpacing:0.5,marginLeft:6}}>
+            🔒 SHIFT-LOCK · press brake + ignition ON
+          </div>}
+          <span style={{flex:1}}/>
+          {/* Driver-intent readout — mirrors the highlighted button.
+              The cluster PRND under the speedometer is the authoritative
+              "actual engaged gear" indicator (bound to CurrentGear). */}
+          <div style={{fontFamily:'Orbitron',fontSize:24,fontWeight:700,color:'#F59E0B',
+            border:`1px solid ${night?'#3A2A12':'#1A2838'}`,padding:'4px 18px',borderRadius:4,minWidth:60,textAlign:'center'}}>
+            {gearLabel(selGear)}
+          </div>
+        </div>;
+      })()}
     </CockpitZone>
 
     {/* ── Row-1 door trim panels — left + right side-by-side. ──
@@ -3170,15 +3224,37 @@ function DevicePanel({s, set, sel, setSel}){
           // low-battery fallback (auth still works without fob RF).
           ...(noCylinderSlot ? [] : [{z:'KeyCylinder', label:'CYLINDER\n/ BACKUP', c:'#4A9EF5'}]),
         ];
+        // Key-in-Ignition Inhibit: only applies to **fobs** parked at
+        // the KeyCylinder slot — those carry a mechanical key bow
+        // that's physically inserted in the cylinder.  Phones tap
+        // the cylinder NFC pad and are never "stuck".  PEPS-mode
+        // vehicles keep RemovalInhibited at false so this branch is
+        // a no-op for them too.
+        const removalInhibited = !!s['Body.Switches.IgnitionCylinder.RemovalInhibited'];
+        const keyStuckHere = removalInhibited
+                          && dev.type === 'fob'
+                          && zone === 'KeyCylinder';
         return <>
-          <div className="devpanel-section">PLACE IN ZONE</div>
+          <div className="devpanel-section">
+            PLACE IN ZONE
+            {keyStuckHere && <span style={{
+              marginLeft:6,fontFamily:'var(--fm)',fontSize:'7px',
+              color:'#F59E0B',fontWeight:700,letterSpacing:0.5}}>
+              🔒 KEY-IN LOCKOUT · shift to P to remove
+            </span>}
+          </div>
           <div className="zonepick">
             {ZONE_BTNS.map(({z,label,c})=>{
               const isActive=zone===z;
+              const blocked = keyStuckHere && z !== 'KeyCylinder';
               return <button key={z}
                 className={`zpbtn${isActive?' zp-active':''}`}
-                style={{borderColor:isActive?c:'',background:isActive?c:'',color:isActive?'#0a0f18':''}}
-                onClick={()=>set(`${dev.pfx}.Zone`,z)}>
+                disabled={blocked}
+                style={{borderColor:isActive?c:'',background:isActive?c:'',
+                        color:isActive?'#0a0f18':'',
+                        opacity:blocked?0.35:1,
+                        cursor:blocked?'not-allowed':'pointer'}}
+                onClick={()=>{ if(!blocked) set(`${dev.pfx}.Zone`,z); }}>
                 {label}
               </button>;
             })}
@@ -3438,15 +3514,22 @@ function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
                 KeyCylinder is the dash cylinder antenna; used as the
                 only auth path on KeyCylinder builds and as a backup
                 (low-battery fob) path on PEPS builds. */}
-            <div style={{display:'flex',alignItems:'center',gap:6,marginTop:4}}>
-              <span style={{fontFamily:'var(--fm)',fontSize:'8px',color:'var(--dim)'}}>ZONE</span>
-              <select className="peps-btn" style={{flex:1,padding:'2px 4px',fontFamily:'var(--fm)',fontSize:'9px'}}
-                value={zone}
-                onChange={e=>set(`${pfx}.Zone`, e.target.value)}>
-                {['OutOfRange','RfRange','Approach','LeftFront','RightFront','Cabin','Hood','Trunk','TrunkInside','KeyCylinder']
-                  .map(z=><option key={z} value={z}>{z}</option>)}
-              </select>
-            </div>
+            {(()=>{
+              const removalInhibited = !!s['Body.Switches.IgnitionCylinder.RemovalInhibited'];
+              const stuck = removalInhibited && zone === 'KeyCylinder';
+              return <div style={{display:'flex',alignItems:'center',gap:6,marginTop:4}}>
+                <span style={{fontFamily:'var(--fm)',fontSize:'8px',color:stuck?'#F59E0B':'var(--dim)'}}>{stuck?'ZONE 🔒':'ZONE'}</span>
+                <select className="peps-btn" style={{flex:1,padding:'2px 4px',fontFamily:'var(--fm)',fontSize:'9px',
+                          opacity:stuck?0.55:1, cursor:stuck?'not-allowed':'pointer'}}
+                  value={zone}
+                  disabled={stuck}
+                  title={stuck?'Key locked in cylinder — shift to PARK to remove':undefined}
+                  onChange={e=>set(`${pfx}.Zone`, e.target.value)}>
+                  {['OutOfRange','RfRange','Approach','LeftFront','RightFront','Cabin','Hood','Trunk','TrunkInside','KeyCylinder']
+                    .map(z=><option key={z} value={z}>{z}</option>)}
+                </select>
+              </div>;
+            })()}
             <div className="peps-btnrow">
               {PEPS_BTN_OPTS.map(b=>(
                 <button key={b.val} className="peps-btn" onClick={()=>set(`${pfx}.ButtonPress`,b.val)}>{b.label}</button>
@@ -3474,14 +3557,21 @@ function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
               <span style={{marginLeft:'auto',fontFamily:'var(--fm)',fontSize:'9px',color:'var(--dim)'}}>{zone}</span>
             </div>
             <div style={{fontFamily:'var(--fm)',fontSize:'7px',color:'var(--muted)',marginTop:1}}>{fobSubtitle}</div>
-            <div style={{display:'flex',alignItems:'center',gap:6,marginTop:4}}>
-              <span style={{fontFamily:'var(--fm)',fontSize:'8px',color:'var(--dim)'}}>ZONE</span>
-              <select className="peps-btn" style={{flex:1,padding:'2px 4px',fontFamily:'var(--fm)',fontSize:'9px'}}
-                value={zone}
-                onChange={e=>set(`${pfx}.Zone`, e.target.value)}>
-                {zoneOpts.map(z=><option key={z} value={z}>{z}</option>)}
-              </select>
-            </div>
+            {(()=>{
+              const removalInhibited = !!s['Body.Switches.IgnitionCylinder.RemovalInhibited'];
+              const stuck = removalInhibited && zone === 'KeyCylinder';
+              return <div style={{display:'flex',alignItems:'center',gap:6,marginTop:4}}>
+                <span style={{fontFamily:'var(--fm)',fontSize:'8px',color:stuck?'#F59E0B':'var(--dim)'}}>{stuck?'ZONE 🔒':'ZONE'}</span>
+                <select className="peps-btn" style={{flex:1,padding:'2px 4px',fontFamily:'var(--fm)',fontSize:'9px',
+                          opacity:stuck?0.55:1, cursor:stuck?'not-allowed':'pointer'}}
+                  value={zone}
+                  disabled={stuck}
+                  title={stuck?'Key locked in cylinder — shift to PARK to remove':undefined}
+                  onChange={e=>set(`${pfx}.Zone`, e.target.value)}>
+                  {zoneOpts.map(z=><option key={z} value={z}>{z}</option>)}
+                </select>
+              </div>;
+            })()}
           </div>;
         })}
       </SG>

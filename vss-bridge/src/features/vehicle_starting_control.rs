@@ -61,9 +61,14 @@ use crate::signal_bus::{SignalBus, VssPath};
 const START_STOP_IN: VssPath = "Body.Switches.StartStop.IsPressed";
 const CYLINDER_IN: VssPath = "Body.Switches.IgnitionCylinder.Position";
 const BRAKE_IN: VssPath = "Chassis.Brake.IsApplied";
+const CURRENT_GEAR_IN: VssPath = "Powertrain.Transmission.CurrentGear";
 
 const POWER_STATE_OUT: VssPath = "Vehicle.LowVoltageSystemState";
 const IMMOBILIZER_OUT: VssPath = "Vehicle.Starting.ImmobilizerStatus";
+const REMOVAL_INHIBITED_OUT: VssPath = "Body.Switches.IgnitionCylinder.RemovalInhibited";
+
+/// PRND/S code for Park, matching `TransmissionPlant`.
+const GEAR_PARK: i16 = 126;
 
 // ── Enums ──────────────────────────────────────────────────────────────────
 
@@ -198,15 +203,28 @@ impl<B: SignalBus + Send + Sync + 'static> VehicleStartingControl<B> {
         let mut start_stop_rx = self.bus.subscribe(START_STOP_IN).await;
         let mut cylinder_rx = self.bus.subscribe(CYLINDER_IN).await;
         let mut brake_rx = self.bus.subscribe(BRAKE_IN).await;
+        let mut gear_rx = self.bus.subscribe(CURRENT_GEAR_IN).await;
 
         // Deterministic boot publishes — late subscribers always see a
         // defined value rather than `None`.
         let mut power = PowerState::Off;
         let mut immobilizer = Immobilizer::Locked;
+        let mut last_cyl_pos = CylinderPos::Lock; // boot value
         self.publish_power(power).await;
         self.publish_immobilizer(immobilizer).await;
+        // Boot value: not inhibited.  We don't yet know the gear, but
+        // assuming PARK at boot (matches TransmissionPlant) and any
+        // mode → false.  Updated on the first CurrentGear edge.
+        let _ = self
+            .bus
+            .publish(REMOVAL_INHIBITED_OUT, SignalValue::Bool(false))
+            .await;
 
         let mut brake_applied = false;
+        // Current engaged gear — published by TransmissionPlant.
+        // Defaults to PARK to match the plant's boot value.
+        let mut current_gear: i16 = GEAR_PARK;
+        let mut removal_inhibited = false;
         // True after a successful cylinder-mode authentication — survives
         // until the user returns the cylinder to LOCK.
         let mut cylinder_session_authed = false;
@@ -218,6 +236,22 @@ impl<B: SignalBus + Send + Sync + 'static> VehicleStartingControl<B> {
                 Some(val) = brake_rx.next() => {
                     if let SignalValue::Bool(b) = val {
                         brake_applied = b;
+                    }
+                }
+
+                Some(val) = gear_rx.next() => {
+                    let g: Option<i16> = match val {
+                        SignalValue::Int16(v) => Some(v),
+                        SignalValue::Uint8(v) => Some(v as i16),
+                        SignalValue::Uint16(v) => v.try_into().ok(),
+                        _ => None,
+                    };
+                    if let Some(g) = g {
+                        current_gear = g;
+                        self.update_removal_inhibited(
+                            current_gear,
+                            &mut removal_inhibited,
+                        ).await;
                     }
                 }
 
@@ -250,6 +284,8 @@ impl<B: SignalBus + Send + Sync + 'static> VehicleStartingControl<B> {
                         &mut power,
                         &mut immobilizer,
                         &mut cylinder_session_authed,
+                        &mut last_cyl_pos,
+                        current_gear,
                     ).await;
                 }
 
@@ -325,8 +361,44 @@ impl<B: SignalBus + Send + Sync + 'static> VehicleStartingControl<B> {
         power: &mut PowerState,
         immobilizer: &mut Immobilizer,
         session_authed: &mut bool,
+        last_pos: &mut CylinderPos,
+        current_gear: i16,
     ) {
         if pos == CylinderPos::Lock {
+            // Key-in-Ignition Inhibit: rotation to LOCK (the "key
+            // removable" detent) is only permitted when the
+            // transmission is in PARK.  Otherwise the cylinder snaps
+            // to OFF — the user can rotate freely between OFF/ACC/
+            // ON/START while not in Park, but cannot remove the key
+            // until they shift back to P.  PEPS builds don't have a
+            // physical cylinder so this branch is unreachable for
+            // them (the select! arm gates on key_source_cfg).
+            if current_gear != GEAR_PARK {
+                tracing::info!(
+                    current_gear,
+                    "VehicleStartingControl: key-removal inhibited (not in PARK) — snapping to OFF"
+                );
+                // Republish OFF so the HMI rotary visually moves to
+                // OFF rather than staying at LOCK.
+                let _ = self
+                    .bus
+                    .publish(
+                        CYLINDER_IN,
+                        SignalValue::String("OFF".into()),
+                    )
+                    .await;
+                // Fall through to OFF semantics below.
+                return self
+                    .handle_cylinder_change_inner(
+                        CylinderPos::Off,
+                        power,
+                        immobilizer,
+                        session_authed,
+                        last_pos,
+                    )
+                    .await;
+            }
+            *last_pos = CylinderPos::Lock;
             // Returning to LOCK clears the session and forces re-auth
             // on the next "live" rotation.
             *session_authed = false;
@@ -339,9 +411,32 @@ impl<B: SignalBus + Send + Sync + 'static> VehicleStartingControl<B> {
             return;
         }
 
+        self.handle_cylinder_change_inner(
+            pos,
+            power,
+            immobilizer,
+            session_authed,
+            last_pos,
+        )
+        .await;
+    }
+
+    /// Common path for non-LOCK rotations (and the LOCK-blocked
+    /// fall-through which is resolved to OFF).  Extracted so the
+    /// inhibit branch above can re-enter without duplicating the
+    /// OFF / ACC / ON / START logic.
+    async fn handle_cylinder_change_inner(
+        &self,
+        pos: CylinderPos,
+        power: &mut PowerState,
+        immobilizer: &mut Immobilizer,
+        session_authed: &mut bool,
+        last_pos: &mut CylinderPos,
+    ) {
         if pos == CylinderPos::Off {
-            // Mechanical detent — no auth, keep session as-is.  Just
-            // drop power to OFF if not already.
+            // Mechanical detent — no auth, keep session as-is.  Drop
+            // power to OFF if not already.
+            *last_pos = CylinderPos::Off;
             if *power != PowerState::Off {
                 *power = PowerState::Off;
                 self.publish_power(*power).await;
@@ -367,6 +462,7 @@ impl<B: SignalBus + Send + Sync + 'static> VehicleStartingControl<B> {
             self.publish_immobilizer(*immobilizer).await;
         }
 
+        *last_pos = pos;
         let next = pos.to_power();
         if next != *power {
             *power = next;
@@ -376,6 +472,27 @@ impl<B: SignalBus + Send + Sync + 'static> VehicleStartingControl<B> {
             state = power.as_str(),
             "VehicleStartingControl: cylinder accepted"
         );
+    }
+
+    /// Recompute the key-removal-inhibit flag and publish on change.
+    /// Engaged only on KeyCylinder builds and only while the
+    /// transmission is out of PARK.  PEPS builds always publish
+    /// `false`.
+    async fn update_removal_inhibited(
+        &self,
+        current_gear: i16,
+        last: &mut bool,
+    ) {
+        let want = self.key_source() == KeySource::KeyCylinder
+            && current_gear != GEAR_PARK;
+        if want == *last {
+            return;
+        }
+        *last = want;
+        let _ = self
+            .bus
+            .publish(REMOVAL_INHIBITED_OUT, SignalValue::Bool(want))
+            .await;
     }
 
     /// Run an authenticated key search via the arbiter; returns true
@@ -722,6 +839,89 @@ mod tests {
         bus.inject(CYLINDER_IN, SignalValue::String("ON".into()));
         settle().await;
         assert_eq!(latest_power(&bus).as_deref(), Some("ON"));
+    }
+
+    #[tokio::test]
+    async fn cylinder_lock_inhibited_when_not_in_park() {
+        // Real-world: vehicle in Drive, driver tries to rotate the
+        // cylinder to LOCK to remove the key.  Must be blocked —
+        // cylinder snaps to OFF instead, key stays in.
+        let bus = setup(cfg_cylinder()).await;
+        place_fob_in_cylinder(&bus, 1);
+        settle().await;
+        bus.inject(CYLINDER_IN, SignalValue::String("ON".into()));
+        settle().await;
+        // Shift out of PARK.  TransmissionPlant isn't in this setup,
+        // so inject CurrentGear directly to simulate it.
+        bus.inject(
+            "Powertrain.Transmission.CurrentGear",
+            SignalValue::Int16(127), // Drive
+        );
+        settle().await;
+        // Verify inhibit was published.
+        assert_eq!(
+            bus.latest_value("Body.Switches.IgnitionCylinder.RemovalInhibited"),
+            Some(SignalValue::Bool(true))
+        );
+        // Try to rotate to LOCK.
+        bus.inject(CYLINDER_IN, SignalValue::String("LOCK".into()));
+        settle().await;
+        // Position should snap to OFF (republished by VSC).
+        assert_eq!(
+            bus.latest_value(CYLINDER_IN),
+            Some(SignalValue::String("OFF".into())),
+            "LOCK must be reverted to OFF while not in PARK"
+        );
+        // Power stays at OFF (OFF semantics).
+        assert_eq!(latest_power(&bus).as_deref(), Some("OFF"));
+    }
+
+    #[tokio::test]
+    async fn cylinder_lock_allowed_after_returning_to_park() {
+        let bus = setup(cfg_cylinder()).await;
+        place_fob_in_cylinder(&bus, 1);
+        settle().await;
+        bus.inject(CYLINDER_IN, SignalValue::String("ON".into()));
+        settle().await;
+        bus.inject(
+            "Powertrain.Transmission.CurrentGear",
+            SignalValue::Int16(127),
+        );
+        settle().await;
+        // Try LOCK while in D — blocked.
+        bus.inject(CYLINDER_IN, SignalValue::String("LOCK".into()));
+        settle().await;
+        // Shift back to PARK.
+        bus.inject(
+            "Powertrain.Transmission.CurrentGear",
+            SignalValue::Int16(126),
+        );
+        settle().await;
+        assert_eq!(
+            bus.latest_value("Body.Switches.IgnitionCylinder.RemovalInhibited"),
+            Some(SignalValue::Bool(false))
+        );
+        // Now LOCK is accepted.
+        bus.inject(CYLINDER_IN, SignalValue::String("LOCK".into()));
+        settle().await;
+        assert_eq!(latest_power(&bus).as_deref(), Some("OFF"));
+        assert_eq!(latest_immo(&bus).as_deref(), Some("LOCKED"));
+    }
+
+    #[tokio::test]
+    async fn peps_never_publishes_removal_inhibited_true() {
+        // PEPS builds have no physical cylinder — the inhibit flag
+        // must stay false even if the transmission leaves PARK.
+        let bus = setup(cfg_peps()).await;
+        bus.inject(
+            "Powertrain.Transmission.CurrentGear",
+            SignalValue::Int16(127),
+        );
+        settle().await;
+        assert_eq!(
+            bus.latest_value("Body.Switches.IgnitionCylinder.RemovalInhibited"),
+            Some(SignalValue::Bool(false))
+        );
     }
 
     #[tokio::test]
