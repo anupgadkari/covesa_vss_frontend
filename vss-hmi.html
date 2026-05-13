@@ -1348,32 +1348,31 @@ function CombinedView({s,set,onDeviceSelect}){
         matching the way real fold motors swing the housing rearward
         against the door without the mirror appearing to cross
         through the cabin. */}
-    {/* Rotation magnitude is capped at ±32° to stay BELOW the
-        outboard-bulge peak of the 16×12 housing rotating about its
-        rear-inboard corner.  The peak is at ≈arctan(12/16) ≈ 36.87°
-        — beyond that the outboard-front corner traces an arc that
-        sweeps further outboard than rest position and then curls
-        back, visually reading as "the mirror detached, pulled away
-        from the car, and then reattached".  Below the peak the
-        corner moves monotonically outboard during the fold, which
-        looks like a clean rotation.  Combined with 1.6 s
-        ease-in-out timing this matches real power-fold motors. */}
-    <g transform={mlf?'rotate(-32 54 146)':undefined} style={{transition:'transform 1.6s ease-in-out'}}>
+    {/* Mirror housings — anatomically thin (16×6) so a clean ±90°
+        rotation flips them from horizontal to vertical against the
+        body without the diagonal corner sweeping a noticeable arc.
+        Pivot at the rear-inboard corner of the housing — that
+        corner stays put through the entire fold and the rest of
+        the housing rotates 90° rearward into the door's outboard
+        plane.  Real mirror housings viewed from the top are
+        considerably wider than they are deep; the previous 16×12
+        rectangle was too square. */}
+    <g transform={mlf?'rotate(-90 54 140)':undefined} style={{transition:'transform 1.6s ease-in-out'}}>
       <title>{mlf?'Left side mirror — folded':'Left side mirror'}</title>
-      <rect x="38" y="134" width="16" height="12" rx="2" fill="#0F1A28" stroke="#1A2838" strokeWidth="0.5"/>
-      <rect x="38" y="138" width="5" height="6" rx="1" fill={li?'#F59E0B':'#1A1208'} opacity={(mlf?0:1)*(li?0.95:.28)}>
+      <rect x="38" y="134" width="16" height="6" rx="2" fill="#0F1A28" stroke="#1A2838" strokeWidth="0.5"/>
+      <rect x="38" y="135" width="5" height="4" rx="1" fill={li?'#F59E0B':'#1A1208'} opacity={(mlf?0:1)*(li?0.95:.28)}>
         <title>{li?'Left mirror turn indicator — signaling':'Left mirror turn indicator — off'}</title>
       </rect>
     </g>
-    <g transform={mrf?'rotate(32 306 146)':undefined} style={{transition:'transform 1.6s ease-in-out'}}>
+    <g transform={mrf?'rotate(90 306 140)':undefined} style={{transition:'transform 1.6s ease-in-out'}}>
       <title>{mrf?'Right side mirror — folded':'Right side mirror'}</title>
-      <rect x="306" y="134" width="16" height="12" rx="2" fill="#0F1A28" stroke="#1A2838" strokeWidth="0.5"/>
-      <rect x="317" y="138" width="5" height="6" rx="1" fill={ri?'#F59E0B':'#1A1208'} opacity={(mrf?0:1)*(ri?0.95:.28)}>
+      <rect x="306" y="134" width="16" height="6" rx="2" fill="#0F1A28" stroke="#1A2838" strokeWidth="0.5"/>
+      <rect x="317" y="135" width="5" height="4" rx="1" fill={ri?'#F59E0B':'#1A1208'} opacity={(mrf?0:1)*(ri?0.95:.28)}>
         <title>{ri?'Right mirror turn indicator — signaling':'Right mirror turn indicator — off'}</title>
       </rect>
     </g>
-    {s['Body.Mirror.Left.IsHeatingOn']&&<circle cx="46" cy="140" r="10" fill="none" stroke="#FF4040" strokeWidth="1" opacity=".6" className="pulse"><title>Left mirror heating — active</title></circle>}
-    {s['Body.Mirror.Right.IsHeatingOn']&&<circle cx="314" cy="140" r="10" fill="none" stroke="#FF4040" strokeWidth="1" opacity=".6" className="pulse"><title>Right mirror heating — active</title></circle>}
+    {s['Body.Mirror.Left.IsHeatingOn']&&<circle cx="46" cy="137" r="10" fill="none" stroke="#FF4040" strokeWidth="1" opacity=".6" className="pulse"><title>Left mirror heating — active</title></circle>}
+    {s['Body.Mirror.Right.IsHeatingOn']&&<circle cx="314" cy="137" r="10" fill="none" stroke="#FF4040" strokeWidth="1" opacity=".6" className="pulse"><title>Right mirror heating — active</title></circle>}
 
     <text x="180" y="-58" textAnchor="middle" fill="#1E2C3C" fontSize="8" fontFamily="Share Tech Mono" fontWeight="bold">▲ FRONT</text>
     <text x="180" y="605" textAnchor="middle" fill="#1E2C3C" fontSize="8" fontFamily="Share Tech Mono" fontWeight="bold">REAR ▼</text>
