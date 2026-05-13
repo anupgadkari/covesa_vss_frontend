@@ -3082,6 +3082,10 @@ function DevicePanel({s, set, sel, setSel}){
           {z:'Hood',        label:'HOOD',          c:'#10D98A'},
           {z:'Trunk',       label:'TRUNK\nOUTSIDE',c:'#A78BFA'},
           {z:'TrunkInside', label:'TRUNK\nINSIDE', c:'#EC4899'},
+          // Cylinder / backup antenna — KeyCylinder line-cal uses
+          // this as the only auth path; PEPS line-cal uses it as a
+          // low-battery fallback (auth still works without fob RF).
+          {z:'KeyCylinder', label:'CYLINDER\n/ BACKUP', c:'#4A9EF5'},
         ];
         return <>
           <div className="devpanel-section">PLACE IN ZONE</div>
@@ -3337,7 +3341,7 @@ function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
       </SG>
 
       <SG title="PEPS Devices" vss="Body.PEPS.Plant">
-        <div className="peps-section" style={{padding:'0 0 4px',fontFamily:'var(--fm)',fontSize:'9px',color:'var(--dim)'}}>KEY FOBS — button press</div>
+        <div className="peps-section" style={{padding:'0 0 4px',fontFamily:'var(--fm)',fontSize:'9px',color:'var(--dim)'}}>KEY FOBS — button press + zone</div>
         {[1,2,3,4].map(i=>{
           const pfx=`Body.PEPS.Plant.KeyFob.${i}`;
           const zone=s[`${pfx}.Zone`]||'OutOfRange';
@@ -3347,6 +3351,19 @@ function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
               <span style={{marginLeft:'auto',fontFamily:'var(--fm)',fontSize:'9px',color:'var(--dim)'}}>{zone}</span>
             </div>
             {rssi&&<div style={{fontFamily:'var(--fm)',fontSize:'8px',color:'var(--dim)',wordBreak:'break-all'}}>{rssi.slice(0,60)}</div>}
+            {/* Zone select — quick placement without leaving the panel.
+                KeyCylinder is the dash cylinder antenna; used as the
+                only auth path on KeyCylinder builds and as a backup
+                (low-battery fob) path on PEPS builds. */}
+            <div style={{display:'flex',alignItems:'center',gap:6,marginTop:4}}>
+              <span style={{fontFamily:'var(--fm)',fontSize:'8px',color:'var(--dim)'}}>ZONE</span>
+              <select className="peps-btn" style={{flex:1,padding:'2px 4px',fontFamily:'var(--fm)',fontSize:'9px'}}
+                value={zone}
+                onChange={e=>set(`${pfx}.Zone`, e.target.value)}>
+                {['OutOfRange','RfRange','Approach','LeftFront','RightFront','Cabin','Hood','Trunk','TrunkInside','KeyCylinder']
+                  .map(z=><option key={z} value={z}>{z}</option>)}
+              </select>
+            </div>
             <div className="peps-btnrow">
               {PEPS_BTN_OPTS.map(b=>(
                 <button key={b.val} className="peps-btn" onClick={()=>set(`${pfx}.ButtonPress`,b.val)}>{b.label}</button>
@@ -3360,6 +3377,15 @@ function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
           return <div key={i} className="peps-card intruder">
             <div className="peps-title">FOB {i} <span className="peps-badge unpaired">INTRUDER</span>
               <span style={{marginLeft:'auto',fontFamily:'var(--fm)',fontSize:'9px',color:'var(--dim)'}}>{zone}</span>
+            </div>
+            <div style={{display:'flex',alignItems:'center',gap:6,marginTop:4}}>
+              <span style={{fontFamily:'var(--fm)',fontSize:'8px',color:'var(--dim)'}}>ZONE</span>
+              <select className="peps-btn" style={{flex:1,padding:'2px 4px',fontFamily:'var(--fm)',fontSize:'9px'}}
+                value={zone}
+                onChange={e=>set(`${pfx}.Zone`, e.target.value)}>
+                {['OutOfRange','RfRange','Approach','LeftFront','RightFront','Cabin','Hood','Trunk','TrunkInside','KeyCylinder']
+                  .map(z=><option key={z} value={z}>{z}</option>)}
+              </select>
             </div>
           </div>;
         })}
