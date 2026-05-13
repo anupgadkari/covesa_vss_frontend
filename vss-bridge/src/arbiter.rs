@@ -131,6 +131,21 @@ impl DomainArbiter {
         gates: Vec<PhysicalGate>,
         bus: Arc<B>,
     ) -> (Self, impl std::future::Future<Output = ()>) {
+        Self::new_with_gates_and_defaults(name, allow_list, gates, HashMap::new(), bus)
+    }
+
+    /// Like `new_with_gates`, plus per-signal default values that
+    /// override the global `Bool(false)` fallback when no claims are
+    /// active.  Required for non-boolean actuators (e.g. the window
+    /// motor-direction String enum where the off-state is `STOPPED`,
+    /// not `Bool(false)`).
+    pub fn new_with_gates_and_defaults<B: SignalBus>(
+        name: &'static str,
+        allow_list: Vec<AllowEntry>,
+        gates: Vec<PhysicalGate>,
+        defaults: HashMap<VssPath, SignalValue>,
+        bus: Arc<B>,
+    ) -> (Self, impl std::future::Future<Output = ()>) {
         let (tx, rx) = mpsc::channel::<ArbiterMsg>(256);
 
         // Spawn one watcher per gate that subscribes to the gate signal
@@ -161,7 +176,7 @@ impl DomainArbiter {
         }
 
         let arbiter = Self { name, tx };
-        let loop_fut = arbiter_loop(name, allow_list, bus, rx);
+        let loop_fut = arbiter_loop(name, allow_list, defaults, bus, rx);
 
         (arbiter, loop_fut)
     }
@@ -207,6 +222,7 @@ struct Claim {
 async fn arbiter_loop<B: SignalBus>(
     name: &'static str,
     allow_list: Vec<AllowEntry>,
+    defaults: HashMap<VssPath, SignalValue>,
     bus: Arc<B>,
     mut rx: mpsc::Receiver<ArbiterMsg>,
 ) {
@@ -220,6 +236,16 @@ async fn arbiter_loop<B: SignalBus>(
     let mut next_seq: u64 = 0;
 
     tracing::info!(domain = name, signals = allow_list.len(), "arbiter started");
+
+    // Seed each configured default on boot so consumers (HMI, plant
+    // models) see a defined value before any feature claims.  No-op
+    // if `defaults` is empty — preserves the legacy behaviour for
+    // arbiters that don't configure a non-Bool default.
+    for (sig, val) in defaults.iter() {
+        if bus.publish(sig, val.clone()).await.is_ok() {
+            last_published.insert(sig, val.clone());
+        }
+    }
 
     while let Some(msg) = rx.recv().await {
         match msg {
@@ -268,6 +294,7 @@ async fn arbiter_loop<B: SignalBus>(
                     req.signal,
                     &claims,
                     &gates_closed,
+                    &defaults,
                     &mut last_published,
                     &bus,
                 )
@@ -291,6 +318,7 @@ async fn arbiter_loop<B: SignalBus>(
                         signal,
                         &claims,
                         &gates_closed,
+                        &defaults,
                         &mut last_published,
                         &bus,
                     )
@@ -311,6 +339,7 @@ async fn arbiter_loop<B: SignalBus>(
                         target,
                         &claims,
                         &gates_closed,
+                        &defaults,
                         &mut last_published,
                         &bus,
                     )
@@ -333,16 +362,25 @@ async fn publish_resolved<B: SignalBus>(
     signal: VssPath,
     claims: &HashMap<VssPath, HashMap<FeatureId, Claim>>,
     gates_closed: &HashMap<VssPath, bool>,
+    defaults: &HashMap<VssPath, SignalValue>,
     last_published: &mut HashMap<VssPath, SignalValue>,
     bus: &Arc<B>,
 ) {
-    // Physical gate forces the target to default-off regardless of any
+    // Per-signal default — used both when a physical gate forces the
+    // target off and when no claims remain.  Falls back to `Bool(false)`
+    // (the legacy off-state for boolean actuators).
+    let default = defaults
+        .get(signal)
+        .cloned()
+        .unwrap_or(SignalValue::Bool(false));
+
+    // Physical gate forces the target to its default regardless of any
     // active claims.  This models hardware constraints (mirror folded,
     // etc.) that no feature should have to know about.
     let gated = gates_closed.get(signal).copied().unwrap_or(false);
 
     let resolved = if gated {
-        SignalValue::Bool(false)
+        default.clone()
     } else {
         claims
             .get(signal)
@@ -351,7 +389,7 @@ async fn publish_resolved<B: SignalBus>(
                     .max_by_key(|c| (c.priority as u8, c.seq))
                     .map(|c| c.value.clone())
             })
-            .unwrap_or(SignalValue::Bool(false))
+            .unwrap_or(default)
     };
 
     let changed = last_published.get(signal) != Some(&resolved);
@@ -1122,6 +1160,16 @@ pub fn courtesy_arbiter<B: SignalBus>(
             signal: "Cabin.Lights.IsDomeOn",
             priority: Priority::High,
         },
+        // DomeSwitch owns the default ("user intent") claim at LOW so
+        // Welcome / Farewell / PerimeterAlarm naturally pre-empt for
+        // their courtesy sequences.  When no higher claimant is
+        // active, this dictates the lamp state from the OFF/DOOR/ON
+        // switch + any-door-open inputs.
+        AllowEntry {
+            feature_id: FeatureId::DomeSwitch,
+            signal: "Cabin.Lights.IsDomeOn",
+            priority: Priority::Low,
+        },
     ];
 
     DomainArbiter::new("Courtesy", allow_list, bus)
@@ -1274,6 +1322,74 @@ pub fn trunk_arbiter<B: SignalBus>(
     }];
 
     DomainArbiter::new_with_gates("Trunk", allow_list, gates, bus)
+}
+
+/// Create the Window domain arbiter.
+///
+/// Resolves contention between several sources that all want to drive
+/// a window's commanded motor direction
+/// (`Body.Doors.Row{1,2}.{Left,Right}.Window.MotorDirection` — String
+/// enum UP / DOWN / STOPPED).  Priority order from highest to lowest:
+///
+/// | Source | FeatureId | Priority | Built today? |
+/// |---|---|---|---|
+/// | Anti-pinch | `WindowAntiPinch` | Critical | reserved — comment |
+/// | Security override | `WindowSecurityOverride` | High | reserved — comment |
+/// | Driver master + local (combined) | `PowerWindow` | Medium | **yes** |
+/// | Global (RKE / phone vent) | `WindowGlobalRemote` | Low | reserved — comment |
+///
+/// The `PowerWindow` feature handles cross-source conflict
+/// **internally**: when both the driver-master and local switches
+/// have active intent on the same window, it stops the motor and
+/// puts both sources into AwaitingRelease.  That means only one
+/// claim per window ever reaches the arbiter from PowerWindow.
+/// Anti-pinch (Critical) and a security override (High) will
+/// pre-empt that single claim; RKE / phone-app global requests
+/// (Low) yield to any occupant switch.
+pub fn window_arbiter<B: SignalBus>(
+    bus: Arc<B>,
+) -> (DomainArbiter, impl std::future::Future<Output = ()>) {
+    const MOTOR_SIGNALS: [&str; 4] = [
+        "Body.Doors.Row1.Left.Window.MotorDirection",
+        "Body.Doors.Row1.Right.Window.MotorDirection",
+        "Body.Doors.Row2.Left.Window.MotorDirection",
+        "Body.Doors.Row2.Right.Window.MotorDirection",
+    ];
+
+    let mut allow_list = Vec::with_capacity(4);
+    for &sig in MOTOR_SIGNALS.iter() {
+        allow_list.push(AllowEntry {
+            feature_id: FeatureId::PowerWindow,
+            signal: sig,
+            priority: Priority::Medium,
+        });
+        // ---- Reserved slots for future participants ----
+        // AllowEntry {
+        //     feature_id: FeatureId::WindowAntiPinch,
+        //     signal: sig,
+        //     priority: Priority::Critical,
+        // },
+        // AllowEntry {
+        //     feature_id: FeatureId::WindowSecurityOverride,
+        //     signal: sig,
+        //     priority: Priority::High,
+        // },
+        // AllowEntry {
+        //     feature_id: FeatureId::WindowGlobalRemote,
+        //     signal: sig,
+        //     priority: Priority::Low,
+        // },
+    }
+
+    // Per-signal default: STOPPED.  When no feature is claiming a
+    // window's motor, the arbiter publishes STOPPED so the plant
+    // holds the window in place.
+    let mut defaults: HashMap<VssPath, SignalValue> = HashMap::new();
+    for &sig in MOTOR_SIGNALS.iter() {
+        defaults.insert(sig, SignalValue::String("STOPPED".into()));
+    }
+
+    DomainArbiter::new_with_gates_and_defaults("Window", allow_list, Vec::new(), defaults, bus)
 }
 
 // ---------------------------------------------------------------------------

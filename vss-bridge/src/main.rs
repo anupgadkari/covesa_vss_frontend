@@ -43,6 +43,8 @@ use vss_bridge::features::auto_high_beam::AutoHighBeam;
 use vss_bridge::features::auto_relock::AutoRelock;
 use vss_bridge::features::brake_reverse_lamps::BrakeReverseLamps;
 use vss_bridge::features::cabin_trunk_release::CabinTrunkRelease;
+use vss_bridge::features::delayed_accessory::DelayedAccessory;
+use vss_bridge::features::dome_switch::DomeSwitch;
 use vss_bridge::features::door_open_assist::DoorOpenAssist;
 use vss_bridge::features::door_trim_button::DoorTrimButton;
 use vss_bridge::features::double_lock_release::DoubleLockRelease;
@@ -59,8 +61,11 @@ use vss_bridge::features::mirror_fold::MirrorFold;
 use vss_bridge::features::panic_alarm::PanicAlarm;
 use vss_bridge::features::passive_entry::{DeviceKind, PairedDevice, PassiveEntry};
 use vss_bridge::features::perimeter_alarm::PerimeterAlarm;
+use vss_bridge::features::power_child_lock::PowerChildLock;
+use vss_bridge::features::power_window::PowerWindow;
 use vss_bridge::features::rke::{PairedFob, RkeFeature};
 use vss_bridge::features::slam_lock::SlamLock;
+use vss_bridge::features::sunroof_control::SunroofControl;
 use vss_bridge::features::thumb_pad_lock::ThumbPadLock;
 use vss_bridge::features::turn_indicator::TurnIndicator;
 use vss_bridge::features::walk_away_lock::WalkAwayLock;
@@ -70,6 +75,7 @@ use vss_bridge::kuksa_sync;
 use vss_bridge::nvm::NvmStore;
 use vss_bridge::plant_models::blink_relay::BlinkRelay;
 use vss_bridge::plant_models::chime::ChimePlantModel;
+use vss_bridge::plant_models::day_night_mode::DayNightModePlant;
 use vss_bridge::plant_models::door_handle::DoorHandlePlantModel;
 use vss_bridge::plant_models::door_lock::DoorLockPlantModel;
 use vss_bridge::plant_models::hood::HoodPlantModel;
@@ -77,7 +83,9 @@ use vss_bridge::plant_models::mirror_adjust::MirrorAdjustPlantModel;
 use vss_bridge::plant_models::mirror_fold::MirrorFoldPlantModel;
 use vss_bridge::plant_models::peps::PepsPlantModel;
 use vss_bridge::plant_models::sunroof::SunroofPlantModel;
+use vss_bridge::plant_models::transmission::TransmissionPlant;
 use vss_bridge::plant_models::trunk::TrunkPlantModel;
+use vss_bridge::plant_models::window::WindowPlant;
 use vss_bridge::signal_bus::SignalBus;
 use vss_bridge::signal_ids;
 use vss_bridge::ws_bridge::WsBridge;
@@ -251,6 +259,7 @@ async fn boot_simulation_stack(
     let (courtesy_arb, courtesy_fut) = arbiter::courtesy_arbiter(Arc::clone(&bus));
     let (puddle_arb, puddle_fut) = arbiter::puddle_arbiter(Arc::clone(&bus));
     let (trunk_arb, trunk_fut) = arbiter::trunk_arbiter(Arc::clone(&bus));
+    let (window_arb, window_fut) = arbiter::window_arbiter(Arc::clone(&bus));
 
     set.spawn(lighting_fut);
     set.spawn(low_beam_fut);
@@ -260,6 +269,7 @@ async fn boot_simulation_stack(
     set.spawn(courtesy_fut);
     set.spawn(puddle_fut);
     set.spawn(trunk_fut);
+    set.spawn(window_fut);
 
     let lighting_arb = Arc::new(lighting_arb);
     let low_beam_arb = Arc::new(low_beam_arb);
@@ -268,6 +278,7 @@ async fn boot_simulation_stack(
     let courtesy_arb = Arc::new(courtesy_arb);
     let puddle_arb = Arc::new(puddle_arb);
     let trunk_arb = Arc::new(trunk_arb);
+    let window_arb = Arc::new(window_arb);
 
     // ── Feature Business Logic ──────────────────────────────────────
     let lux_threshold = cfg.vehicle_line.auto_headlamp_lux_threshold;
@@ -368,6 +379,50 @@ async fn boot_simulation_stack(
     );
     set.spawn(AutoRelock::from_config(Arc::clone(&door_lock_arb), Arc::clone(&bus), &cfg).run());
 
+    // DomeSwitch — 3-position interior dome-light switch (OFF / DOOR /
+    // ON).  Owns the Low-priority default claim on
+    // Cabin.Lights.IsDomeOn; Welcome / Farewell / PerimeterAlarm
+    // pre-empt cleanly via the courtesy arbiter.
+    set.spawn(DomeSwitch::new(Arc::clone(&bus), Arc::clone(&courtesy_arb)).run());
+
+    // TransmissionPlant — mirrors driver's SelectedGear into the
+    // actual engaged CurrentGear.  Stands in for the TCU on dev hosts;
+    // future extensions will add brake interlock + speed-based shift
+    // logic.  Single writer of CurrentGear.
+    set.spawn(TransmissionPlant::new(Arc::clone(&bus)).run());
+
+    // PowerChildLock — single momentary push toggles the master
+    // child-lock state and fans out to both rear-door
+    // IsChildLockActive outputs.  Door-handle plant + PowerWindow
+    // observe these to gate inside pulls and local rear window
+    // switches respectively.  Door-side mechanical feedback is TBD.
+    set.spawn(PowerChildLock::new(Arc::clone(&bus)).run());
+
+    // DelayedAccessory — gates power accessories (windows today;
+    // sunroof / radio later) so they only respond while the
+    // ignition is on OR within a courtesy window after switching
+    // off, terminated early on any cabin door opening.
+    set.spawn(DelayedAccessory::new(Arc::clone(&bus)).run());
+
+    // PowerWindow — combined driver-master + local 5-detent rocker
+    // controller for all 4 windows.  Handles cross-source conflicts
+    // internally (both active → motor STOPPED, both must re-press)
+    // and runs a 5 s stuck-switch watchdog per source per window.
+    // Claims the window arbiter at Medium for the single resolved
+    // motor direction.  Future anti-pinch (Critical) and security
+    // override (High) can pre-empt via the arbiter.
+    set.spawn(PowerWindow::new(Arc::clone(&bus), Arc::clone(&window_arb)).run());
+
+    // SunroofControl — overhead-console rocker → coordinated roof +
+    // shade motors.  Sequencing: shade opens first then roof; roof
+    // closes first then shade.  Auto-mode latching with cancel-on-press.
+    set.spawn(SunroofControl::new(Arc::clone(&bus)).run());
+
+    // WindowPlant — 4 per-window motor → position ramps at 10 %/s.
+    // Reads MotorDirection (window arbiter output) and integrates
+    // Window.Position.
+    set.spawn(WindowPlant::new(Arc::clone(&bus)).run());
+
     // PassiveEntry — handle-pull authenticated unlock.
     let pe_devices: Vec<PairedDevice> = {
         fn secret(device_type: u8, index: u8) -> [u8; 16] {
@@ -442,6 +497,11 @@ async fn boot_simulation_stack(
     // Body.Chime.IsSounding (actuator state).  HMI watches IsSounding
     // for the ripple visualisation.
     set.spawn(ChimePlantModel::new(Arc::clone(&bus)).run());
+    // Day/Night HMI mode: subscribes to Body.Lights.Beam.Low.IsOn,
+    // publishes Vehicle.Cabin.Infotainment.HMI.DayNightMode (VSS v4.0).
+    // Drives the cockpit view's night-backlit rendering style.  Future
+    // extensions: ambient light sensor, GPS sunset, tunnel detection.
+    set.spawn(DayNightModePlant::new(Arc::clone(&bus)).run());
     set.spawn(
         DoorLockPlantModel::with_ack_and_nvm(Arc::clone(&bus), door_lock_ack_tx, nvm.clone())
             .with_cfg(Arc::clone(&cfg))
@@ -458,7 +518,7 @@ async fn boot_simulation_stack(
             .with_response_stagger_ms(vss_bridge::plant_models::peps::PRODUCTION_STAGGER_MS)
             .run(),
     );
-    tracing::info!("plant models spawned: BlinkRelay, ChimePlantModel, DoorLockPlantModel, DoorHandlePlantModel, TrunkPlantModel, HoodPlantModel, SunroofPlantModel, PepsPlantModel");
+    tracing::info!("plant models spawned: BlinkRelay, ChimePlantModel, DayNightModePlant, DoorLockPlantModel, DoorHandlePlantModel, TrunkPlantModel, HoodPlantModel, SunroofPlantModel, PepsPlantModel");
 
     // ── WebSocket bridge ────────────────────────────────────────────
     let ws_port: u16 = std::env::var("VSS_BRIDGE_WS_PORT")

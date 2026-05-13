@@ -36,7 +36,10 @@ const INPUT_SIGNALS: &[VssPath] = &[
     "Body.Switches.Fog.Rear.IsEngaged",
     "Chassis.ParkingBrake.IsEngaged",
     "Chassis.Brake.PedalPosition",
-    "Powertrain.Transmission.CurrentGear",
+    // Driver's gear-selector intent — written by HMI cockpit shifter
+    // + sidebar gear control.  Consumed by the TransmissionPlant
+    // which publishes the actual engaged CurrentGear in OUTPUT_SIGNALS.
+    "Powertrain.Transmission.SelectedGear",
     "Body.Lights.LightSwitch",
     "Body.PEPS.KeyPresent",
     "Body.Switches.Keyfob.LockButton",
@@ -152,6 +155,38 @@ const INPUT_SIGNALS: &[VssPath] = &[
     "Body.Switches.Mirror.Fold",
     "Body.Switches.Mirror.Select",
     "Body.Switches.Mirror.Direction",
+    // 3-position interior dome-light switch (String enum OFF/DOOR/ON).
+    // Driven by the cockpit HMI; consumed by the DomeSwitch feature.
+    "Cabin.Lights.Dome.SwitchPosition",
+    // Actual engaged gear — published by the TransmissionPlant from
+    // the driver's SelectedGear input.  HMI reads for cluster PRND
+    // text and the sidebar Gear display.
+    "Powertrain.Transmission.CurrentGear",
+    // Master child-lock momentary push — HMI writes this; the
+    // PowerChildLock feature observes the rising edge and toggles
+    // MasterStatus + the per-door IsChildLockActive fan-out.
+    "Body.Switches.PowerChildLock.IsPressed",
+    // Sunroof rocker detent (String enum NEUTRAL / OPEN_HOLD /
+    // OPEN_AUTO / CLOSE_HOLD / CLOSE_AUTO).  Written by the cockpit
+    // OVERHEAD CONSOLE rocker; the SunroofControl feature sequences
+    // the two motors from it.
+    "Body.Switches.Sunroof.Detent",
+    // Driver-master per-window Detent rockers (4 total — one per
+    // window).  Consumed by PowerWindow which claims the window
+    // arbiter at Medium.  String enum: NEUTRAL / UP_HOLD / UP_AUTO /
+    // DOWN_HOLD / DOWN_AUTO.
+    "Body.Switches.Window.DriverMaster.Row1.Left.Detent",
+    "Body.Switches.Window.DriverMaster.Row1.Right.Detent",
+    "Body.Switches.Window.DriverMaster.Row2.Left.Detent",
+    "Body.Switches.Window.DriverMaster.Row2.Right.Detent",
+    // Local per-door Detent rockers (4 total).  All 4 sides defined
+    // symmetrically.  Cockpit only writes the front-passenger and
+    // rear sides in production; Local.Row1.{driver-side} is reserved
+    // for tests and stays at NEUTRAL otherwise.
+    "Body.Switches.Window.Local.Row1.Left.Detent",
+    "Body.Switches.Window.Local.Row1.Right.Detent",
+    "Body.Switches.Window.Local.Row2.Left.Detent",
+    "Body.Switches.Window.Local.Row2.Right.Detent",
 ];
 
 /// Signals the bridge pushes back to the HMI (actuator outputs from arbiters).
@@ -264,6 +299,41 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     // "PRE_ARMED" | "ARMED" | "ACTIVATED".  HMI subscribes for the
     // status pill + countdown banners.
     "Vehicle.Body.Alarm.State",
+    // VSS v4.0 HMI display mode — "DAY" or "NIGHT".  Published by the
+    // DayNightModePlant; drives the cockpit view's night-backlit style.
+    "Vehicle.Cabin.Infotainment.HMI.DayNightMode",
+    // VSS v4.0 per-wheel TPMS low-pressure flags.  Default false at
+    // boot — no producer yet (a real TPMS feature will set these).
+    // Cockpit aggregates these into a single TPMS warning lamp.
+    "Vehicle.Chassis.Axle.Row1.Wheel.Left.Tire.IsPressureLow",
+    "Vehicle.Chassis.Axle.Row1.Wheel.Right.Tire.IsPressureLow",
+    "Vehicle.Chassis.Axle.Row2.Wheel.Left.Tire.IsPressureLow",
+    "Vehicle.Chassis.Axle.Row2.Wheel.Right.Tire.IsPressureLow",
+    // Power child-lock outputs — written by the PowerChildLock
+    // feature.  HMI subscribes to render the master indicator + the
+    // per-door child-lock state (used to dim local rear window
+    // switches in the cockpit).
+    "Body.PowerChildLock.MasterStatus",
+    "Body.Doors.Row2.Left.IsChildLockActive",
+    "Body.Doors.Row2.Right.IsChildLockActive",
+    // Per-window motor direction (String UP / DOWN / STOPPED).
+    // Published by the window arbiter from the winning claim.  HMI
+    // can show an "active drive" indicator if desired.
+    "Body.Doors.Row1.Left.Window.MotorDirection",
+    "Body.Doors.Row1.Right.Window.MotorDirection",
+    "Body.Doors.Row2.Left.Window.MotorDirection",
+    "Body.Doors.Row2.Right.Window.MotorDirection",
+    // Delayed-accessory power gate.  Published by the
+    // DelayedAccessory feature; consumed by PowerWindow (and any
+    // future accessory feature that needs the gate).  HMI subscribes
+    // for the status indicator in the cockpit.
+    "Body.Power.DelayedAccessory.IsActive",
+    // Per-window position (uint 0..100).  Published by the window
+    // plant from the motor direction.
+    "Body.Doors.Row1.Left.Window.Position",
+    "Body.Doors.Row1.Right.Window.Position",
+    "Body.Doors.Row2.Left.Window.Position",
+    "Body.Doors.Row2.Right.Window.Position",
     // Panic switch — set by RKE on PANIC press, cleared by PanicAlarm
     // on cancel-via-unlock.  HMI consumes this to keep its own alarm
     // toggle state in sync.

@@ -201,7 +201,15 @@ const INIT_STATE={
   // Braking & transmission
   'Chassis.Brake.PedalPosition':0,
   'Chassis.ParkingBrake.IsEngaged':true,
-  'Powertrain.Transmission.CurrentGear':0,
+  // VSS encoding: 126=Park, -1=Reverse, 0=Neutral, 127=Drive, 128=Sport.
+  // Boot to Park to match a real vehicle at rest.  Driver intent
+  // (SelectedGear) and the plant's actual engaged gear (CurrentGear)
+  // both start at Park.
+  'Powertrain.Transmission.SelectedGear':126,
+  'Powertrain.Transmission.CurrentGear':126,
+  // 3-position dome switch — DOOR is the typical default in a real
+  // car so the lamp comes on while loading the cabin.
+  'Cabin.Lights.Dome.SwitchPosition':'DOOR',
   // ADAS
   'Vehicle.ADAS.HighBeam.OncomingVehicleDetected':false,
   // Safety
@@ -247,6 +255,24 @@ const INIT_STATE={
   'Body.Doors.Row1.Right.Window.Position':0,'Body.Doors.Row1.Right.Handle.Inside.IsPulled':false,'Body.Doors.Row1.Right.Handle.Outside.IsPulled':false,
   'Body.Doors.Row2.Left.IsChildLockActive':false,'Body.Doors.Row2.Left.Window.Position':0,'Body.Doors.Row2.Left.Handle.Inside.IsPulled':false,'Body.Doors.Row2.Left.Handle.Outside.IsPulled':false,
   'Body.Doors.Row2.Right.IsChildLockActive':false,'Body.Doors.Row2.Right.Window.Position':0,'Body.Doors.Row2.Right.Handle.Inside.IsPulled':false,'Body.Doors.Row2.Right.Handle.Outside.IsPulled':false,
+  // Window-switch 5-detent rocker defaults (NEUTRAL = at-rest centre).
+  'Body.Switches.Window.DriverMaster.Row1.Left.Detent':'NEUTRAL',
+  'Body.Switches.Window.DriverMaster.Row1.Right.Detent':'NEUTRAL',
+  'Body.Switches.Window.DriverMaster.Row2.Left.Detent':'NEUTRAL',
+  'Body.Switches.Window.DriverMaster.Row2.Right.Detent':'NEUTRAL',
+  'Body.Switches.Window.Local.Row1.Left.Detent':'NEUTRAL',
+  'Body.Switches.Window.Local.Row1.Right.Detent':'NEUTRAL',
+  'Body.Switches.Window.Local.Row2.Left.Detent':'NEUTRAL',
+  'Body.Switches.Window.Local.Row2.Right.Detent':'NEUTRAL',
+  // Power child-lock + window-motor outputs (owned by features /
+  // plant — seeded here so the cockpit indicators have a defined
+  // initial state before the bridge publishes them).
+  'Body.PowerChildLock.MasterStatus':false,
+  // Delayed-accessory gate (DAP).  Published by the DelayedAccessory
+  // feature; gates PowerWindow (and future accessory features).
+  'Body.Power.DelayedAccessory.IsActive':false,
+  'Body.Doors.Row1.Left.Window.MotorDirection':'STOPPED','Body.Doors.Row1.Right.Window.MotorDirection':'STOPPED',
+  'Body.Doors.Row2.Left.Window.MotorDirection':'STOPPED','Body.Doors.Row2.Right.Window.MotorDirection':'STOPPED',
   // ── Body — HMI-owned inputs only ─────────────────────────────────────
   // Body.Trunk.IsOpen, Body.Trunk.IsLocked, Body.Horn.IsActive are
   // bridge-owned (TrunkPlantModel + Horn arbiter) and likewise omitted.
@@ -254,7 +280,7 @@ const INIT_STATE={
   // Anti-theft alarm + auto-relock status (project extensions) — bridge-owned,
   // omitted.  PanicAlarm and AutoRelock features publish them.
   // Sunroof
-  'Body.Sunroof.Position':0,'Body.Sunroof.Shade.Position':0,
+  'Body.Sunroof.Position':0,'Body.Sunroof.Shade.Position':0,'Body.Switches.Sunroof.Detent':'NEUTRAL',
   // Wipers
   'Body.Windshield.Front.Wiping.Mode':'OFF','Body.Windshield.Front.Wiping.Intensity':0,'Body.Windshield.Front.Washing.IsActive':false,
   'Body.Windshield.Rear.Wiping.Mode':'OFF','Body.Windshield.Rear.Washing.IsActive':false,
@@ -268,8 +294,11 @@ const INIT_STATE={
   'Body.Trunk.ExteriorButton.IsPressed':false,
   // HVAC
   'Cabin.HVAC.IsAirConditioningActive':false,'Cabin.HVAC.IsRecirculationActive':false,'Cabin.HVAC.IsFrontDefrosterActive':false,'Cabin.HVAC.IsRearDefrosterActive':false,
-  'Cabin.HVAC.Station.Row1.Left.Temperature':22,'Cabin.HVAC.Station.Row1.Left.FanSpeed':0,'Cabin.HVAC.Station.Row1.Left.AirDistribution':'DASHBOARD',
-  'Cabin.HVAC.Station.Row1.Right.Temperature':22,'Cabin.HVAC.Station.Row1.Right.FanSpeed':0,'Cabin.HVAC.Station.Row1.Right.AirDistribution':'DASHBOARD',
+  // AirDistribution uses the VSS-canonical enum:
+  //   AUTO / FACE / FACE_FEET / FEET / FEET_DEF / DEF
+  // Default to FACE so the cockpit displays "Panel" at boot.
+  'Cabin.HVAC.Station.Row1.Left.Temperature':22,'Cabin.HVAC.Station.Row1.Left.FanSpeed':0,'Cabin.HVAC.Station.Row1.Left.AirDistribution':'FACE',
+  'Cabin.HVAC.Station.Row1.Right.Temperature':22,'Cabin.HVAC.Station.Row1.Right.FanSpeed':0,'Cabin.HVAC.Station.Row1.Right.AirDistribution':'FACE',
   // Seats
   'Cabin.Seat.Row1.Left.HeatingLevel':0,'Cabin.Seat.Row1.Left.IsVentilationOn':false,
   'Cabin.Seat.Row1.Right.HeatingLevel':0,'Cabin.Seat.Row1.Right.IsVentilationOn':false,
@@ -522,7 +551,10 @@ function DoorCard({label,pfx,s,set}){
     <div className="dcr"><span className="dcl">DblLock</span><Tog val={s[`${p}.IsDoubleLocked`]} on={()=>set('Body.Doors.CentralLock.Command',s[`${p}.IsDoubleLocked`]?'release_double':'lock_double')} c="r"/></div>
     <div className="dcr"><span className="dcl">Latched</span><Tog val={s[`${p}.Latch.IsLatched`]} c="v"/></div>
     {isRearDoor && (
-      <div className="dcr"><span className="dcl">ChildLk</span><Tog val={s[`${p}.IsChildLockActive`]} on={()=>set(`${p}.IsChildLockActive`,!s[`${p}.IsChildLockActive`])} c="v"/></div>
+      // Read-only indicator — IsChildLockActive is now an output of
+      // the `PowerChildLock` feature.  Toggle from the cockpit
+      // DRIVER DOOR TRIM BUTTONS's CHILD LOCK button.
+      <div className="dcr"><span className="dcl">ChildLk</span><Tog val={s[`${p}.IsChildLockActive`]} c="v"/></div>
     )}
     {!isRearDoor && (
       <div className="ebrow" style={{display:'flex',gap:4,marginTop:3}}
@@ -1502,15 +1534,30 @@ function SideView({s,set}){
     {hood&&<path d="M 82,372 L 87,310 L 120,265 L 150,248 L 268,228"
       stroke="#F59E0B" strokeWidth="3" fill="none" opacity=".6"/>}
 
-    {/* ── Front door panel & open status ── */}
+    {/* ── Front door panel & open status ──
+         When the door is open, the whole panel becomes a click target
+         that fires CloseCmd via the DoorHandle plant model (same path
+         the top view uses for door-clicks).  Cursor + tooltip cue
+         appears only while open so we don't imply the panel does
+         anything when the door is shut. */}
     <rect x="430" y="233" width="135" height="157" fill="#0C1825"
-      stroke={d1?'#F59E0B':'#1A2838'} strokeWidth={d1?2.5:1.2} rx="2"/>
-    {d1&&<text x="497" y="322" textAnchor="middle" fill="#F59E0B" fontSize="8" fontWeight="bold">DOOR OPEN</text>}
+      stroke={d1?'#F59E0B':'#1A2838'} strokeWidth={d1?2.5:1.2} rx="2"
+      style={d1?{cursor:'pointer'}:undefined}
+      onClick={d1?()=>set(r1pfx+'.CloseCmd',true):undefined}>
+      {d1 && <title>Click to close {side} Row 1 door</title>}
+    </rect>
+    {d1&&<text x="497" y="322" textAnchor="middle" fill="#F59E0B" fontSize="8" fontWeight="bold"
+              style={{pointerEvents:'none'}}>DOOR OPEN — CLICK TO CLOSE</text>}
 
     {/* ── Rear door panel & open status ── */}
     <rect x="589" y="233" width="183" height="157" fill="#0C1825"
-      stroke={d2?'#F59E0B':'#1A2838'} strokeWidth={d2?2.5:1.2} rx="2"/>
-    {d2&&<text x="680" y="322" textAnchor="middle" fill="#F59E0B" fontSize="8" fontWeight="bold">DOOR OPEN</text>}
+      stroke={d2?'#F59E0B':'#1A2838'} strokeWidth={d2?2.5:1.2} rx="2"
+      style={d2?{cursor:'pointer'}:undefined}
+      onClick={d2?()=>set(r2pfx+'.CloseCmd',true):undefined}>
+      {d2 && <title>Click to close {side} Row 2 door</title>}
+    </rect>
+    {d2&&<text x="680" y="322" textAnchor="middle" fill="#F59E0B" fontSize="8" fontWeight="bold"
+              style={{pointerEvents:'none'}}>DOOR OPEN — CLICK TO CLOSE</text>}
 
     {/* ── Door handles — always pullable.  When the door is locked the
          pull won't open the door (plant model decides), but it still
@@ -1711,8 +1758,262 @@ function SideView({s,set}){
   </div>;
 }
 
-/* ══════ COCKPIT VIEW ══════ */
-function CockpitView({s,set}){
+/* ══════ COCKPIT VIEW ══════
+ *
+ * Scrollable vertical layout of zones an occupant in the front row can
+ * see and reach.  Zones are stubbed with placeholder content today and
+ * fleshed out in follow-up commits.  Each zone is dimmed/tinted when
+ * the bus is in NIGHT mode (published by the DayNightModePlant from
+ * `Body.Lights.Beam.Low.IsOn`).
+ */
+// Module-scope so its component identity is stable across renders.
+// (If defined inside CockpitView it would be re-created on every state
+// update, causing React to unmount/remount every button — which made
+// the panel feel sluggish and could drop mouse-up events on
+// press-and-hold buttons such as the horn / hood release / inside
+// pulls.)
+const cockpitBtnSty=(on,night,opts={})=>({
+  background: on?(night?'#3A2C0A':'#1E3A52'):(night?'#0A1018':'#0E1625'),
+  border: `1px solid ${on?(night?'#F59E0B':'#4A9EF5'):(night?'#2A3A50':'#1A2838')}`,
+  color: on?(night?'#F59E0B':'#4A9EF5'):(night?'#D7A03A':'#3A5070'),
+  fontFamily:'Share Tech Mono',fontSize:opts.sz||9,fontWeight:600,
+  padding:opts.pad||'6px 10px',borderRadius:3,cursor:'pointer',
+  minWidth:opts.min||0,letterSpacing:.5,whiteSpace:'nowrap',
+});
+function Btn({on,night,onClick,onMouseDown,onMouseUp,onMouseLeave,children,sz,pad,min}){
+  return <button onClick={onClick} onMouseDown={onMouseDown} onMouseUp={onMouseUp}
+    onMouseLeave={onMouseLeave} style={cockpitBtnSty(on,night,{sz,pad,min})}>{children}</button>;
+}
+
+// ISO/SAE-style headlamp telltale icons for the instrument cluster.
+//
+// The lamp body points LEFT — curve on the right side, flat diameter
+// on the left, with 3 "beam" lines emanating leftward.  This matches
+// the standard ISO 2575 telltale orientation seen in real clusters.
+//
+//   kind="lo"   — beams slope down-and-out (low beam aim).
+//   kind="hi"   — beams are horizontal (high beam reach).
+//   kind="fog"  — low-beam style + a vertical wavy line through the
+//                 beams representing fog (front fog, green).
+//   kind="rfog" — high-beam-style horizontal beams + the same wavy
+//                 fog line (rear fog, amber).  Distinguished from
+//                 front fog only by the beam geometry, per ISO 2575.
+//
+// Drawn in a 24×16 local box centred on the caller's (cx, cy).  The
+// caller passes `on` and the active/inactive colours; we render the
+// faint inactive icon when off so the cluster layout stays stable.
+function HeadlampTelltale({cx, cy, kind, on, onColor, offColor='#1F2C40'}){
+  const c = on ? onColor : offColor;
+  const op = on ? 1 : 0.45;
+  const sw = 1.6;
+  // Semicircle body — flat side on the left (x = cx-1), curve on
+  // the right.  Filled so it reads as a solid lamp lens.
+  const body = `M ${cx-1},${cy-7} A 7,7 0 0,1 ${cx-1},${cy+7} Z`;
+  // Three beam endpoints differ per kind.  All beams start at the
+  // flat diameter on the left and extend further left.
+  // Horizontal for hi/rfog, slanted down-and-out for lo/fog.
+  const horiz = kind === 'hi' || kind === 'rfog';
+  const beams = horiz
+    ? [[cx-1,cy-4,cx-13,cy-4],[cx-1,cy,cx-13,cy],[cx-1,cy+4,cx-13,cy+4]]
+    : [[cx-1,cy-4,cx-13,cy-1],[cx-1,cy,  cx-13,cy+3],[cx-1,cy+4,cx-13,cy+7]];
+  return <g opacity={op}>
+    <path d={body} fill={c} stroke={c} strokeWidth="0.6"/>
+    {beams.map(([x1,y1,x2,y2],i)=>(
+      <line key={i} x1={x1} y1={y1} x2={x2} y2={y2}
+        stroke={c} strokeWidth={sw} strokeLinecap="round"/>
+    ))}
+    {(kind === 'fog' || kind === 'rfog') && (
+      // Wavy vertical line cutting across the 3 beams to indicate fog.
+      <path d={`M ${cx-7},${cy-7} Q ${cx-11},${cy-3.5} ${cx-7},${cy} T ${cx-7},${cy+7}`}
+        fill="none" stroke={c} strokeWidth={sw} strokeLinecap="round"/>
+    )}
+  </g>;
+}
+
+// Turn-signal telltale — a solid filled triangle arrow pointing in
+// the direction of travel (ISO 2575 convention).  Amber, blinks
+// while active, dim grey when off so the cluster layout stays
+// stable.  Drawn in a 30×30 local box centred on (cx, cy).
+function TurnArrowTelltale({cx, cy, direction, on, onColor='#F59E0B', offColor='#1F2C40'}){
+  const c = on ? onColor : offColor;
+  const r = 9;
+  const points = direction === 'right'
+    ? `${cx-r},${cy-r} ${cx-r},${cy+r} ${cx+r},${cy}`
+    : `${cx+r},${cy-r} ${cx+r},${cy+r} ${cx-r},${cy}`;
+  return <polygon points={points} fill={c} opacity={on ? 1 : 0.45}
+    className={on ? 'blink' : undefined}/>;
+}
+
+// TPMS (tire-pressure-low) telltale — ISO 2575 convention.  A thick
+// "(!) " bracket shape representing a tire viewed from the side
+// (open at the top, walls curving down to the contact patch), with
+// a short wavy "tread / road" line across the bottom and an
+// exclamation mark centred inside.  Amber when active, dim grey
+// when not.  Drawn in a 30×30 local box centred on (cx, cy).
+function TpmsTelltale({cx, cy, on, onColor='#F59E0B', offColor='#1F2C40'}){
+  const c = on ? onColor : offColor;
+  const op = on ? 1 : 0.45;
+  const tx = cx - 15, ty = cy - 15;
+  return <g opacity={op} transform={`translate(${tx} ${ty})`}>
+    {/* Tire-section U-shape — open at the top, rounded shoulders, sits
+        flat on the ground at the bottom. */}
+    <path d="M 6 8 L 6 17 Q 6 23 13 23 L 17 23 Q 24 23 24 17 L 24 8"
+      fill="none" stroke={c} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+    {/* Wavy tread / road line at the contact patch. */}
+    <path d="M 9.5 25 q 1.3 -1.6 2.6 0 t 2.6 0 t 2.6 0 t 2.6 0"
+      fill="none" stroke={c} strokeWidth="1.3" strokeLinecap="round"/>
+    {/* Exclamation mark centred inside the U. */}
+    <line x1="15" y1="11" x2="15" y2="17.5" stroke={c} strokeWidth="1.8" strokeLinecap="round"/>
+    <circle cx="15" cy="20" r="0.95" fill={c}/>
+  </g>;
+}
+
+// Door-ajar telltale — top-view car silhouette with the driver-side
+// front door swung outward.  The drawing is intentionally fixed
+// (single open door) regardless of which actual doors are open;
+// the lamp is the "any door open" warning, not a per-door indicator.
+// Drawn inside a 30x30 local box centred on (cx, cy).
+function DoorAjarTelltale({cx, cy, on, onColor='#EF4444', offColor='#1F2C40'}){
+  const c = on ? onColor : offColor;
+  const op = on ? 1 : 0.45;
+  // Translate the 30x30 icon so its centre sits at (cx, cy).
+  const tx = cx - 15, ty = cy - 15;
+  return <g opacity={op} transform={`translate(${tx} ${ty})`}>
+    {/* Car body — rounded rect, longer than wide (top view). */}
+    <rect x="11" y="6" width="8" height="18" rx="2" fill="none" stroke={c} strokeWidth="1.4"/>
+    {/* Windshield + rear-glass split lines. */}
+    <line x1="11" y1="11" x2="19" y2="11" stroke={c} strokeWidth="0.9"/>
+    <line x1="11" y1="20" x2="19" y2="20" stroke={c} strokeWidth="0.9"/>
+    {/* Faint door-split mid line. */}
+    <line x1="11" y1="15.5" x2="19" y2="15.5" stroke={c} strokeWidth="0.6" opacity="0.55"/>
+    {/* Driver-side front door swung outward ~55°. */}
+    <g transform="rotate(55 11 12)">
+      <rect x="9.2" y="12" width="1.8" height="4" fill={c} stroke={c} strokeWidth="0.5"/>
+    </g>
+  </g>;
+}
+
+// Compact vertical 5-detent rocker for window switches.  Press writes
+// the corresponding Detent enum value; release returns to NEUTRAL
+// (spring action).  The PowerWindow feature owns the state machine
+// and writes the motor command via the window arbiter — this
+// component is purely UI.
+function WindowRocker({ s, set, night, detentKey, posKey, motorKey, label, dimmed = false }) {
+  const detent = s[detentKey] || 'NEUTRAL';
+  const pos = s[posKey] ?? 0;
+  const motor = motorKey ? (s[motorKey] || 'STOPPED') : 'STOPPED';
+  const press = (v) => ({
+    onMouseDown:  () => set(detentKey, v),
+    onMouseUp:    () => set(detentKey, 'NEUTRAL'),
+    onMouseLeave: () => set(detentKey, 'NEUTRAL'),
+    onTouchStart: (e) => { e.preventDefault(); set(detentKey, v); },
+    onTouchEnd:   (e) => { e.preventDefault(); set(detentKey, 'NEUTRAL'); },
+  });
+  // Handle Y offset per detent — spring-back animation handled by CSS transition.
+  const handleY = {
+    UP_AUTO:   -22,
+    UP_HOLD:   -10,
+    NEUTRAL:     0,
+    DOWN_HOLD:  10,
+    DOWN_AUTO:  22,
+  }[detent] ?? 0;
+  const zone = (v) => ({
+    fill: detent === v ? '#F59E0B' : (night ? '#0A1018' : '#0E1625'),
+    stroke: detent === v ? '#F59E0B' : (night ? '#2A3A50' : '#1A2838'),
+  });
+  const txtDim = night ? '#5A7090' : '#3A5070';
+  const accent = motor === 'UP'   ? '#F59E0B'
+               : motor === 'DOWN' ? '#4A9EF5'
+               :                    txtDim;
+  return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, opacity: dimmed ? 0.55 : 1, userSelect:'none' }}>
+      {label && <span style={{ fontFamily:'Share Tech Mono', fontSize:7, color:txtDim, letterSpacing:.5 }}>{label}</span>}
+      <svg viewBox="0 0 36 88" style={{ width:32, height:80, touchAction:'none' }}>
+        {/* Outer track */}
+        <rect x="10" y="4" width="16" height="80" rx="4"
+          fill={night?'#070F1C':'#070F1C'} stroke={night?'#2A3A50':'#1A2838'} strokeWidth="1"/>
+        {/* 2nd-detent UP (close) */}
+        <rect x="11" y="6"  width="14" height="12" rx="2" {...press('UP_AUTO')}
+          fill={zone('UP_AUTO').fill} stroke={zone('UP_AUTO').stroke} strokeWidth="0.8"
+          style={{ cursor:'pointer' }}>
+          <title>2nd detent — AUTO CLOSE (latches; runs to fully closed)</title>
+        </rect>
+        {/* 1st-detent UP */}
+        <rect x="11" y="20" width="14" height="12" rx="2" {...press('UP_HOLD')}
+          fill={zone('UP_HOLD').fill} stroke={zone('UP_HOLD').stroke} strokeWidth="0.8"
+          style={{ cursor:'pointer' }}>
+          <title>Hold to close (proportional)</title>
+        </rect>
+        {/* 1st-detent DOWN */}
+        <rect x="11" y="56" width="14" height="12" rx="2" {...press('DOWN_HOLD')}
+          fill={zone('DOWN_HOLD').fill} stroke={zone('DOWN_HOLD').stroke} strokeWidth="0.8"
+          style={{ cursor:'pointer' }}>
+          <title>Hold to open (proportional)</title>
+        </rect>
+        {/* 2nd-detent DOWN (open) */}
+        <rect x="11" y="70" width="14" height="12" rx="2" {...press('DOWN_AUTO')}
+          fill={zone('DOWN_AUTO').fill} stroke={zone('DOWN_AUTO').stroke} strokeWidth="0.8"
+          style={{ cursor:'pointer' }}>
+          <title>2nd detent — AUTO OPEN (latches; runs to fully open)</title>
+        </rect>
+        {/* Arrow hints up = close, down = open */}
+        <polygon points="18,2 15,6 21,6" fill={txtDim}/>
+        <polygon points="18,86 15,82 21,82" fill={txtDim}/>
+        {/* Spring-returning handle bar */}
+        <rect x="9" y={42 + handleY} width="18" height="6" rx="2"
+          fill={night?'#D7A03A':'#F59E0B'} opacity="0.95"
+          style={{ transition:'y 80ms ease-out' }}/>
+      </svg>
+      <span style={{ fontFamily:'Share Tech Mono', fontSize:8, fontWeight:600, color:accent }}>
+        {pos|0}%
+      </span>
+    </div>
+  );
+}
+
+// VSS Powertrain.Transmission.CurrentGear / SelectedGear encoding:
+//   126 = Park, -1 = Reverse, 0 = Neutral, 127 = Drive, 128 = Sport
+//   (custom).  Positive 1..N are forward gears (manual transmission).
+//   Hoisted to module scope so any view (cockpit cluster, sidebar Gear
+//   row, etc.) can use the same label rendering.
+function gearLabelGlobal(g){
+  if(g===126) return 'P';
+  if(g===127) return 'D';
+  if(g===128) return 'S';
+  if(g===0)   return 'N';
+  if(g<0)     return 'R';
+  return String(g);
+}
+
+function CockpitZone({title,subtitle,night,children}){
+  return <div style={{
+    background: night?'#080F18':'#0A1320',
+    border:`1px solid ${night?'#15243A':'#1A2838'}`,
+    borderRadius:6, padding:'10px 14px', marginBottom:10,
+    boxShadow: night?'inset 0 0 24px rgba(245,158,11,0.04)':'none',
+    transition:'background 200ms ease, box-shadow 200ms ease',
+  }}>
+    <div style={{
+      display:'flex',justifyContent:'space-between',alignItems:'baseline',
+      borderBottom:`1px solid ${night?'#1A2A3E':'#15202F'}`,paddingBottom:4,marginBottom:8,
+    }}>
+      <span style={{fontFamily:'Share Tech Mono',fontSize:10,letterSpacing:2,
+        color: night?'#F59E0B':'#3A5070', fontWeight:600}}>{title}</span>
+      {subtitle && <span style={{fontFamily:'Share Tech Mono',fontSize:8,
+        color: night?'#5A7090':'#2A3A50'}}>{subtitle}</span>}
+    </div>
+    {children}
+  </div>;
+}
+
+function CockpitView({s,set,cfg}){
+  // Driver-door side — drives trim-zone labelling and which Local
+  // window switch the cockpit exposes for the front passenger door.
+  // Defaults to Left (LHD) when cfg is missing for any reason.
+  const driverSide = cfg?.dealer?.driver_door_side === 'Right' ? 'Right' : 'Left';
+  const passengerSide = driverSide === 'Right' ? 'Left' : 'Right';
+  const mode=s['Vehicle.Cabin.Infotainment.HMI.DayNightMode'];
+  const night=mode==='NIGHT';
   const lo=s['Body.Lights.Beam.Low.IsOn'],hi=s['Body.Lights.Beam.High.IsOn'];
   const lLamp=s['Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn'];
   const rLamp=s['Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn'];
@@ -1733,77 +2034,808 @@ function CockpitView({s,set}){
   const trunk=s['Body.Trunk.IsOpen'],fuel=s['Body.FuelLid.IsOpen'];
   const wf=s['Body.Windshield.Front.Wiping.Mode'];
   const horn=s['Body.Horn.IsActive'],dome=s['Cabin.Lights.IsDomeOn'];
-  const fanBars=(f,x)=>Array.from({length:7},(_,i)=>(
-    <rect key={i} x={x+i*12} y={232-(i*4)} width={9} height={16+i*4} rx="1" fill={i<f?'#3B82F6':'#101E30'} opacity={i<f?1:.5}/>
-  ));
-  return <svg viewBox="0 0 800 500" style={{width:'100%',maxWidth:'800px'}}>
-    <rect x="0" y="0" width="800" height="500" fill="#06101C"/>
-    <path d="M0,60 Q400,100 800,60 L800,500 L0,500 Z" fill="#091424"/>
-    <rect x="280" y="80" width="240" height="160" rx="8" fill="#070F1C" stroke="#1A2838" strokeWidth="1.2"/>
-    <text x="400" y="105" textAnchor="middle" fill="#1C3050" fontSize="11" fontFamily="Share Tech Mono" fontWeight="600" letterSpacing="2">SPEED</text>
-    <text x="400" y="155" textAnchor="middle" fill="#F59E0B" fontSize="52" fontFamily="Orbitron" fontWeight="700">0</text>
-    <text x="400" y="180" textAnchor="middle" fill="#1C3050" fontSize="12" fontFamily="Share Tech Mono">km/h</text>
-    <text x="400" y="215" textAnchor="middle" fill="#10D98A" fontSize="13" fontFamily="Share Tech Mono" fontWeight="600">● PARK</text>
-    <text x="50" y="105" fill="#1C3050" fontSize="9" fontFamily="Share Tech Mono" fontWeight="600">WARNINGS:</text>
-    {[
-      {active:lo,color:'#22C55E',label:'LO',cx:50},
-      {active:hi,color:'#4A9EF5',label:'HI',cx:110},
-      {active:ffog,color:'#BAD6FE',label:'FOG',cx:170},
-      {active:rfog,color:'#EF4444',label:'RFOG',cx:230},
-    ].map(({active,color,label,cx})=>(
-      <g key={label}>
-        <circle cx={cx} cy={130} r={12} fill={active?color:'#1A2838'} opacity={active?0.6:0.25} stroke={active?color:'#3A4D5C'} strokeWidth="1.2"/>
-        <text x={cx} y={135} textAnchor="middle" fill={active?color:'#3A5060'} fontSize={label.length>3?7:8} fontFamily="Share Tech Mono" fontWeight="600">{label}</text>
-      </g>
-    ))}
-    {li&&<g><circle cx={290} cy={130} r={12} fill="#F59E0B" opacity="0.3" stroke="#F59E0B" strokeWidth="1.2" className="blink"/>
-      <text x={290} y={135} textAnchor="middle" fill="#F59E0B" fontSize="10" fontFamily="Share Tech Mono" fontWeight="600">◄</text></g>}
-    {ri&&<g><circle cx={350} cy={130} r={12} fill="#F59E0B" opacity="0.3" stroke="#F59E0B" strokeWidth="1.2" className="blink"/>
-      <text x={350} y={135} textAnchor="middle" fill="#F59E0B" fontSize="10" fontFamily="Share Tech Mono" fontWeight="600">►</text></g>}
-    {doorAjar&&<g><circle cx={410} cy={130} r={12} fill="#EF4444" opacity="0.3" stroke="#EF4444" strokeWidth="1.2"/>
-      <text x={410} y={135} textAnchor="middle" fill="#EF4444" fontSize="8" fontFamily="Share Tech Mono" fontWeight="600">DOOR</text></g>}
-    {brake&&<g><circle cx={470} cy={130} r={12} fill="#EF4444" opacity="0.3" stroke="#EF4444" strokeWidth="1.2"/>
-      <text x={470} y={135} textAnchor="middle" fill="#EF4444" fontSize="8" fontFamily="Share Tech Mono" fontWeight="600">BRK</text></g>}
-    <rect x="20" y="260" width="240" height="140" rx="6" fill="#060E1A" stroke="#1A2838" strokeWidth="1"/>
-    <text x="140" y="280" textAnchor="middle" fill="#1C3050" fontSize="10" fontFamily="Share Tech Mono" fontWeight="600">CLIMATE</text>
-    <text x="50"  y="310" fill="#2A3A50" fontSize="8" fontFamily="Share Tech Mono">DRIVER:</text>
-    <text x="50"  y="330" fill="#F59E0B" fontSize="20" fontFamily="Orbitron" fontWeight="600">{dT.toFixed(0)}°</text>
-    <text x="175" y="310" fill="#2A3A50" fontSize="8" fontFamily="Share Tech Mono">PASS:</text>
-    <text x="175" y="330" fill="#F59E0B" fontSize="20" fontFamily="Orbitron" fontWeight="600">{pT.toFixed(0)}°</text>
-    <text x="50"  y="360" fill={ac?'#4A9EF5':'#1C3050'} fontSize="7" fontFamily="Share Tech Mono">{ac?'[A/C]':'a/c'}</text>
-    <text x="110" y="360" fill={recirc?'#10D98A':'#1C3050'} fontSize="7" fontFamily="Share Tech Mono">{recirc?'[RECIRC]':'recirc'}</text>
-    <text x="175" y="360" fill={defF?'#4A9EF5':'#1C3050'} fontSize="7" fontFamily="Share Tech Mono">{defF?'[DEF-F]':'def-f'}</text>
-    <text x="50"  y="375" fill={defR?'#4A9EF5':'#1C3050'} fontSize="7" fontFamily="Share Tech Mono">{defR?'[DEF-R]':'def-r'}</text>
-    <rect x="540" y="260" width="240" height="140" rx="6" fill="#060E1A" stroke="#1A2838" strokeWidth="1"/>
-    <text x="660" y="280" textAnchor="middle" fill="#1C3050" fontSize="10" fontFamily="Share Tech Mono" fontWeight="600">SEATS</text>
-    <g onClick={()=>set('Cabin.Seat.Row1.Left.HeatingLevel',[3,0,1,2][heatL])} style={{cursor:'pointer'}}>
-      <rect x="555" y="295" width="45" height="32" rx="2" fill={heatL>0?'#6B1E1E':'#0E1625'} stroke={heatL>0?'#EF6020':'#1A2838'} strokeWidth="1.2"/>
-      <text x="577" y="314" textAnchor="middle" fill={heatL>0?'#FF6B35':'#1C3050'} fontSize="14" fontFamily="Orbitron" fontWeight="600">{heatL}</text>
-      <text x="577" y="326" textAnchor="middle" fill={heatL>0?'#FF6B35':'#1C3050'} fontSize="6" fontFamily="Share Tech Mono">Heat</text>
-    </g>
-    <g onClick={()=>set('Cabin.Seat.Row1.Right.HeatingLevel',[3,0,1,2][heatR])} style={{cursor:'pointer'}}>
-      <rect x="670" y="295" width="45" height="32" rx="2" fill={heatR>0?'#6B1E1E':'#0E1625'} stroke={heatR>0?'#EF6020':'#1A2838'} strokeWidth="1.2"/>
-      <text x="692" y="314" textAnchor="middle" fill={heatR>0?'#FF6B35':'#1C3050'} fontSize="14" fontFamily="Orbitron" fontWeight="600">{heatR}</text>
-      <text x="692" y="326" textAnchor="middle" fill={heatR>0?'#FF6B35':'#1C3050'} fontSize="6" fontFamily="Share Tech Mono">Heat</text>
-    </g>
-    <g onClick={()=>set('Cabin.Seat.Row1.Left.IsVentilationOn',!vent1L)} style={{cursor:'pointer'}}>
-      <rect x="555" y="345" width="45" height="32" rx="2" fill={vent1L?'#1E3A52':'#0E1625'} stroke={vent1L?'#4A9EF5':'#1A2838'} strokeWidth="1.2"/>
-      <text x="577" y="368" textAnchor="middle" fill={vent1L?'#4A9EF5':'#1C3050'} fontSize="11" fontFamily="Share Tech Mono" fontWeight="600">{vent1L?'●':'○'}</text>
-      <text x="577" y="378" textAnchor="middle" fill={vent1L?'#4A9EF5':'#1C3050'} fontSize="6" fontFamily="Share Tech Mono">Vent</text>
-    </g>
-    <g onClick={()=>set('Cabin.Seat.Row1.Right.IsVentilationOn',!vent1R)} style={{cursor:'pointer'}}>
-      <rect x="670" y="345" width="45" height="32" rx="2" fill={vent1R?'#1E3A52':'#0E1625'} stroke={vent1R?'#4A9EF5':'#1A2838'} strokeWidth="1.2"/>
-      <text x="692" y="368" textAnchor="middle" fill={vent1R?'#4A9EF5':'#1C3050'} fontSize="11" fontFamily="Share Tech Mono" fontWeight="600">{vent1R?'●':'○'}</text>
-      <text x="692" y="378" textAnchor="middle" fill={vent1R?'#4A9EF5':'#1C3050'} fontSize="6" fontFamily="Share Tech Mono">Vent</text>
-    </g>
-    <rect x="20" y="410" width="760" height="70" rx="6" fill="#060E1A" stroke="#1A2838" strokeWidth="1"/>
-    <text x="400" y="430" textAnchor="middle" fill="#1C3050" fontSize="8" fontFamily="Share Tech Mono" fontWeight="600">STATUS</text>
-    <text x="50"  y="455" fill={wf!=='OFF'?'#4A9EF5':'#1C3050'} fontSize="8" fontFamily="Share Tech Mono">WIPERS: <tspan fontWeight="600">{wf}</tspan></text>
-    <text x="200" y="455" fill={horn?'#EF4444':'#1C3050'} fontSize="8" fontFamily="Share Tech Mono">HORN: <tspan fontWeight="600">{horn?'●':'-'}</tspan></text>
-    <text x="340" y="455" fill={dome?'#FCD34D':'#1C3050'} fontSize="8" fontFamily="Share Tech Mono">DOME: <tspan fontWeight="600">{dome?'ON':'OFF'}</tspan></text>
-    <text x="480" y="455" fill={fuel?'#F59E0B':'#1C3050'} fontSize="8" fontFamily="Share Tech Mono">FUEL: <tspan fontWeight="600">{fuel?'OPEN':'-'}</tspan></text>
-    <text x="50"  y="475" fill={trunk?'#F59E0B':'#1C3050'} fontSize="8" fontFamily="Share Tech Mono">GATE: <tspan fontWeight="600">{trunk?'OPEN':'-'}</tspan></text>
-  </svg>;
+  // 3-position dome switch — drives `Cabin.Lights.IsDomeOn` via the
+  // DomeSwitch feature (OFF / DOOR=on-when-any-door-open / ON).
+  const domeSw=s['Cabin.Lights.Dome.SwitchPosition']||'OFF';
+  // TPMS: lamp lights if ANY of the 4 wheels reports low pressure.
+  const tpms=['Vehicle.Chassis.Axle.Row1.Wheel.Left.Tire.IsPressureLow',
+              'Vehicle.Chassis.Axle.Row1.Wheel.Right.Tire.IsPressureLow',
+              'Vehicle.Chassis.Axle.Row2.Wheel.Left.Tire.IsPressureLow',
+              'Vehicle.Chassis.Axle.Row2.Wheel.Right.Tire.IsPressureLow'].some(k=>s[k]);
+  // Interior door release pulls — mirror the inside handle signals.
+  const pullL=s['Body.Doors.Row1.Left.Handle.Inside.IsPulled'];
+  const pullR=s['Body.Doors.Row1.Right.Handle.Inside.IsPulled'];
+  // Switches + supplementary state for the fleshed-out zones.
+  const sigDir=s['Body.Switches.TurnIndicator.Direction']||'OFF';
+  const hbSw=s['Body.Switches.HighBeam.IsEngaged'];
+  const hazSw=s['Body.Switches.Hazard.IsEngaged'];
+  const ffogSw=s['Body.Switches.Fog.Front.IsEngaged'];
+  const rfogSw=s['Body.Switches.Fog.Rear.IsEngaged'];
+  const lightSw=s['Body.Lights.LightSwitch']||'OFF';
+  // CurrentGear = actual engaged gear (published by TransmissionPlant);
+  // drives the instrument-cluster PRND readout.
+  // SelectedGear = driver's selector position (what the HMI writes);
+  // drives the gear-selector highlight for instant feedback before
+  // the plant catches up.
+  const gear=s['Powertrain.Transmission.CurrentGear']??126;
+  const selGear=s['Powertrain.Transmission.SelectedGear']??126;
+  const lockL=s['Body.Doors.Row1.Left.IsLocked'];
+  const lockR=s['Body.Doors.Row1.Right.IsLocked'];
+  const dblL=s['Body.Doors.Row1.Left.IsDoubleLocked'];
+  const fanL=s['Cabin.HVAC.Station.Row1.Left.FanSpeed']??0;
+  const distL=s['Cabin.HVAC.Station.Row1.Left.AirDistribution']||'AUTO';
+  const mirL=s['Body.Mirror.Left.IsFolded'],mirR=s['Body.Mirror.Right.IsFolded'];
+  // Mirror selector — String enum "NONE" / "LEFT" / "RIGHT".  Same
+  // signal as the top-view MirrorAdjustControls; clicking SEL toggles
+  // the chosen side, second click clears.
+  const mirSel=s['Body.Switches.Mirror.Select']||'NONE';
+  const mirDir=s['Body.Switches.Mirror.Direction']||'NONE';
+  // Power child-lock state — written by the PowerChildLock feature.
+  // `masterChildLock` drives the cockpit indicator LED; the per-door
+  // fan-out signals drive per-window indicator dimming and (via the
+  // door-handle plant on the bridge) inside-pull suppression.
+  const masterChildLock=s['Body.PowerChildLock.MasterStatus'];
+  const childRL=s['Body.Doors.Row2.Left.IsChildLockActive'];
+  const childRR=s['Body.Doors.Row2.Right.IsChildLockActive'];
+  // Per-window motor + position read-back (plant outputs).
+  const winPos=(k)=>s[k]??0;
+  const winMotor=(motor)=>s[motor]||'STOPPED';
+  // Press-and-hold helpers for a switch signal: write true on press,
+  // false on release / leave.  Returns the event handler bundle so
+  // it can be spread onto a `<button>`.
+  const holdSwitch=(switchKey)=>({
+    onMouseDown:()=>set(switchKey,true),
+    onMouseUp:  ()=>set(switchKey,false),
+    onMouseLeave:()=>set(switchKey,false),
+  });
+
+  const txt = night?'#F59E0B':'#1C3050';
+  const txtDim = night?'#8A6020':'#2A3A50';
+  // Btn is hoisted to module scope so its component identity is stable
+  // across renders (a locally-defined wrapper would be re-created each
+  // render and force React to unmount/remount every button, which
+  // dropped mouse-up events on press-and-hold buttons).  Pass
+  // `night={night}` at every call site.
+  const WIPER_CYCLE={OFF:'INTERMITTENT',INTERMITTENT:'SLOW',SLOW:'MEDIUM',MEDIUM:'FAST',FAST:'OFF'};
+  // OFF → DRL → POSITION → AUTO → BEAM → OFF (matches the angular
+  // order of the icons around the rotary knob).
+  const LIGHT_CYCLE={OFF:'DRL',DRL:'POSITION',POSITION:'AUTO',AUTO:'BEAM',BEAM:'OFF'};
+  const DIST_CYCLE={AUTO:'FACE',FACE:'FACE_FEET',FACE_FEET:'FEET',FEET:'FEET_DEF',FEET_DEF:'DEF',DEF:'AUTO'};
+  // Friendlier display labels for the VSS AirDistribution enum.
+  // The on-wire signal value still uses the canonical VSS strings
+  // (AUTO / FACE / FACE_FEET / FEET / FEET_DEF / DEF); only the HMI
+  // label is rewritten.
+  const DIST_LABEL={AUTO:'Auto',FACE:'Panel',FACE_FEET:'Floor+Panel',FEET:'Floor',FEET_DEF:'Windshield_Floor',DEF:'Windshield'};
+  const DOME_CYCLE={OFF:'DOOR',DOOR:'ON',ON:'OFF'};
+  const gearLabel=gearLabelGlobal;
+  // Word + tint for the under-speedo readout.
+  const gearWord=g=>{
+    const lab=gearLabel(g);
+    if(lab==='P') return {t:'PARK',  c:'#10D98A'};
+    if(lab==='R') return {t:'REVERSE',c:'#EF4444'};
+    if(lab==='N') return {t:'NEUTRAL',c:'#4A9EF5'};
+    if(lab==='D') return {t:'DRIVE',  c:'#F59E0B'};
+    if(lab==='S') return {t:'SPORT',  c:'#EF6020'};
+    return {t:`GEAR ${lab}`,c:'#F59E0B'};   // manual 1..N
+  };
+  const gw=gearWord(gear);
+  const placeholder=(label)=><div style={{
+    fontFamily:'Share Tech Mono', fontSize:9, color:night?'#5A7090':'#2A3A50',
+    fontStyle:'italic', padding:'14px 0', textAlign:'center',
+    border:`1px dashed ${night?'#1A2A3E':'#15202F'}`, borderRadius:4,
+  }}>{label}</div>;
+
+  return <div style={{
+    width:'100%', maxWidth:800, height:'calc(100vh - 100px)',
+    overflowY:'auto', paddingRight:6,
+    background: night?'#040810':'#06101C',
+    transition:'background 200ms ease',
+  }}>
+
+    {/* ── Overhead console: 3-position dome switch + map lights placeholder ── */}
+    <CockpitZone title="OVERHEAD CONSOLE" subtitle={night?'NIGHT':'DAY'} night={night}>
+      <div style={{display:'flex',gap:10,alignItems:'center',justifyContent:'space-around',flexWrap:'wrap'}}>
+        {/* 3-position dome switch: tap to cycle OFF → DOOR → ON.  The
+            DomeSwitch feature converts position + door state into the
+            actual `Cabin.Lights.IsDomeOn` claim via the courtesy
+            arbiter — Welcome / Farewell / PerimeterAlarm pre-empt. */}
+        <div style={{display:'flex',gap:4,alignItems:'center'}}>
+          <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1,marginRight:4}}>DOME:</span>
+          {['OFF','DOOR','ON'].map(p=>(
+            <Btn night={night} key={p} on={domeSw===p}
+              onClick={()=>set('Cabin.Lights.Dome.SwitchPosition',p)}
+              sz={9} pad={'6px 10px'} min={48}>{p}</Btn>
+          ))}
+          <span style={{fontFamily:'Share Tech Mono',fontSize:9,color:dome?'#FCD34D':txtDim,marginLeft:8}}>
+            ☼ {dome?'LAMP ON':'lamp off'}
+          </span>
+        </div>
+        {/* Sunroof rocker — vertical spring-return switch, 4 detents:
+            outer-top  = CLOSE_AUTO (latches; runs roof closed then shade)
+            inner-top  = CLOSE_HOLD (proportional close while held)
+            inner-bot  = OPEN_HOLD  (proportional open while held)
+            outer-bot  = OPEN_AUTO  (latches; runs shade open then roof)
+            Center is the rest position; any press in auto mode cancels.
+            Writes `Body.Switches.Sunroof.Detent` (enum).  The
+            SunroofControl feature owns the state machine and writes
+            both Body.Sunroof.MoveCmd and Body.Sunroof.Shade.MoveCmd
+            in the correct sequence. */}
+        {(() => {
+          const sr = s['Body.Sunroof.Position'] ?? 0;
+          const sh = s['Body.Sunroof.Shade.Position'] ?? 0;
+          const detent = s['Body.Switches.Sunroof.Detent'] || 'NEUTRAL';
+          // Press writes the corresponding detent value; release
+          // returns to NEUTRAL (spring action).
+          const press = (v) => ({
+            onMouseDown:  () => set('Body.Switches.Sunroof.Detent', v),
+            onMouseUp:    () => set('Body.Switches.Sunroof.Detent', 'NEUTRAL'),
+            onMouseLeave: () => set('Body.Switches.Sunroof.Detent', 'NEUTRAL'),
+            onTouchStart: (e) => { e.preventDefault(); set('Body.Switches.Sunroof.Detent', v); },
+            onTouchEnd:   (e) => { e.preventDefault(); set('Body.Switches.Sunroof.Detent', 'NEUTRAL'); },
+          });
+          // Map current detent → handle Y offset for the visual spring.
+          const handleY = {
+            CLOSE_AUTO: -22, CLOSE_HOLD: -10,
+            NEUTRAL:      0,
+            OPEN_HOLD:   10,  OPEN_AUTO:   22,
+          }[detent] ?? 0;
+          // Active region color tint.
+          const active = (v) => detent === v;
+          const zoneFill = (v) => active(v) ? '#F59E0B' : (night?'#0A1018':'#0E1625');
+          const zoneStroke = (v) => active(v) ? '#F59E0B' : (night?'#2A3A50':'#1A2838');
+          return <div style={{display:'flex',gap:8,alignItems:'center'}}>
+            <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1}}>SUNROOF</span>
+            <svg viewBox="0 0 50 100" style={{width:46,height:92,userSelect:'none',touchAction:'none'}}>
+              {/* Track */}
+              <rect x="14" y="4" width="22" height="92" rx="6"
+                fill={night?'#070F1C':'#070F1C'} stroke={night?'#2A3A50':'#1A2838'} strokeWidth="1.2"/>
+              {/* 2nd detent zones (outer) */}
+              <rect x="15" y="6"  width="20" height="14" rx="3"
+                fill={zoneFill('CLOSE_AUTO')} stroke={zoneStroke('CLOSE_AUTO')} strokeWidth="0.8"
+                style={{cursor:'pointer'}} {...press('CLOSE_AUTO')}>
+                <title>2nd detent — AUTO CLOSE (roof closes fully, then shade)</title>
+              </rect>
+              <rect x="15" y="80" width="20" height="14" rx="3"
+                fill={zoneFill('OPEN_AUTO')} stroke={zoneStroke('OPEN_AUTO')} strokeWidth="0.8"
+                style={{cursor:'pointer'}} {...press('OPEN_AUTO')}>
+                <title>2nd detent — AUTO OPEN (shade opens fully, then roof)</title>
+              </rect>
+              {/* 1st detent zones (inner) */}
+              <rect x="15" y="22" width="20" height="14" rx="3"
+                fill={zoneFill('CLOSE_HOLD')} stroke={zoneStroke('CLOSE_HOLD')} strokeWidth="0.8"
+                style={{cursor:'pointer'}} {...press('CLOSE_HOLD')}>
+                <title>Hold to close (proportional)</title>
+              </rect>
+              <rect x="15" y="64" width="20" height="14" rx="3"
+                fill={zoneFill('OPEN_HOLD')} stroke={zoneStroke('OPEN_HOLD')} strokeWidth="0.8"
+                style={{cursor:'pointer'}} {...press('OPEN_HOLD')}>
+                <title>Hold to open (proportional)</title>
+              </rect>
+              {/* Detent guide markings */}
+              <line x1="11" y1="20" x2="14" y2="20" stroke={txtDim} strokeWidth="0.8"/>
+              <line x1="36" y1="20" x2="39" y2="20" stroke={txtDim} strokeWidth="0.8"/>
+              <line x1="11" y1="38" x2="14" y2="38" stroke={txtDim} strokeWidth="0.6" opacity="0.6"/>
+              <line x1="36" y1="38" x2="39" y2="38" stroke={txtDim} strokeWidth="0.6" opacity="0.6"/>
+              <line x1="11" y1="62" x2="14" y2="62" stroke={txtDim} strokeWidth="0.6" opacity="0.6"/>
+              <line x1="36" y1="62" x2="39" y2="62" stroke={txtDim} strokeWidth="0.6" opacity="0.6"/>
+              <line x1="11" y1="80" x2="14" y2="80" stroke={txtDim} strokeWidth="0.8"/>
+              <line x1="36" y1="80" x2="39" y2="80" stroke={txtDim} strokeWidth="0.8"/>
+              {/* Up arrow (close = forward) and down arrow (open = back). */}
+              <polygon points="25,2 22,7 28,7" fill={txtDim}/>
+              <polygon points="25,98 22,93 28,93" fill={txtDim}/>
+              {/* Spring-returning handle bar — slides between detents
+                  while pressed, snaps back to center on release. */}
+              <rect x="13" y={50 + handleY - 4} width="24" height="8" rx="2"
+                fill={night?'#D7A03A':'#F59E0B'} opacity="0.95"
+                style={{transition:'y 80ms ease-out'}}/>
+            </svg>
+            {/* Position readouts. */}
+            <div style={{display:'flex',flexDirection:'column',gap:1,fontFamily:'Share Tech Mono',fontSize:8,color:txtDim}}>
+              <span>ROOF  <b style={{color:sr>0?'#F59E0B':txtDim}}>{sr}%</b></span>
+              <span>SHADE <b style={{color:sh>0?'#F59E0B':txtDim}}>{sh}%</b></span>
+              <span style={{fontSize:7,color:detent==='NEUTRAL'?txtDim:'#F59E0B',marginTop:2}}>
+                {detent==='NEUTRAL' ? '— idle —' : detent.replace('_',' ')}
+              </span>
+            </div>
+          </div>;
+        })()}
+      </div>
+    </CockpitZone>
+
+    {/* ── Instrument cluster ── */}
+    <CockpitZone title="INSTRUMENT CLUSTER" night={night}>
+      <svg viewBox="0 0 760 220" style={{width:'100%'}}>
+        <rect x="260" y="30" width="240" height="160" rx="8" fill={night?'#050B14':'#070F1C'} stroke={night?'#2A3A50':'#1A2838'} strokeWidth="1.2"/>
+        <text x="380" y="55" textAnchor="middle" fill={txtDim} fontSize="11" fontFamily="Share Tech Mono" fontWeight="600" letterSpacing="2">SPEED</text>
+        <text x="380" y="105" textAnchor="middle" fill="#F59E0B" fontSize="52" fontFamily="Orbitron" fontWeight="700">0</text>
+        <text x="380" y="130" textAnchor="middle" fill={txtDim} fontSize="12" fontFamily="Share Tech Mono">km/h</text>
+        <text x="380" y="165" textAnchor="middle" fill={gw.c} fontSize="13" fontFamily="Share Tech Mono" fontWeight="600">● {gw.t}</text>
+        <text x="30" y="55" fill={txtDim} fontSize="9" fontFamily="Share Tech Mono" fontWeight="600">WARNINGS:</text>
+        {/* Real ISO-style headlamp telltales.  Colour cues per ISO
+            2575 convention: green = low beam, blue = high beam,
+            green = front fog (distinguished from low beam by the
+            wavy fog line), amber = rear fog (distinguished from
+            front fog by the horizontal beams). */}
+        {/* When high beams are on the high-beam telltale takes
+            precedence; the low-beam telltale is suppressed even
+            though Beam.Low.IsOn may still be true. */}
+        <HeadlampTelltale cx={30}  cy={80} kind="lo"  on={lo && !hi} onColor="#22C55E"/>
+        <HeadlampTelltale cx={90}  cy={80} kind="hi"  on={hi}   onColor="#4A9EF5"/>
+        {/* Front fog: green (same hue as low beam — the wavy line
+            distinguishes it).  Rear fog: amber (same wavy line, but
+            horizontal beams distinguish it from front fog). */}
+        <HeadlampTelltale cx={150} cy={80} kind="fog"  on={ffog} onColor="#22C55E"/>
+        <HeadlampTelltale cx={210} cy={80} kind="rfog" on={rfog} onColor="#F59E0B"/>
+        {/* Turn-signal telltales — filled triangle arrows, ISO 2575.
+            Blink amber while the indicator is active, dim grey when
+            idle so the warnings row layout stays stable. */}
+        <TurnArrowTelltale cx={30} cy={120} direction="left"  on={li}/>
+        <TurnArrowTelltale cx={90} cy={120} direction="right" on={ri}/>
+        {/* Door-ajar telltale — fixed top-view silhouette with the
+            driver-side front door swung out.  Single drawing regardless
+            of which door is actually open; the lamp is the "any door"
+            warning.  Dim when closed so the cluster layout stays stable. */}
+        <DoorAjarTelltale cx={150} cy={120} on={doorAjar}/>
+        {brake&&<g><circle cx={210} cy={120} r={12} fill="#EF4444" opacity="0.3" stroke="#EF4444" strokeWidth="1.2"/>
+          <text x={210} y={125} textAnchor="middle" fill="#EF4444" fontSize="8" fontFamily="Share Tech Mono" fontWeight="600">BRK</text></g>}
+        {/* TPMS warning — off by default, amber when any wheel reports
+            low pressure.  Real ISO 2575 telltale: tire-section "U"
+            with a tread / road line + "!" inside. */}
+        <g><title>{tpms?'Tire pressure low':'TPMS normal'}</title>
+          <TpmsTelltale cx={30} cy={170} on={tpms}/>
+        </g>
+        <text x="540" y="55" fill={txtDim} fontSize="9" fontFamily="Share Tech Mono">ODO</text>
+        <text x="540" y="75" fill={night?'#D7A03A':'#5A6A80'} fontSize="14" fontFamily="Orbitron" fontWeight="600">000000</text>
+        <text x="540" y="105" fill={txtDim} fontSize="9" fontFamily="Share Tech Mono">FUEL</text>
+        <text x="540" y="125" fill={night?'#D7A03A':'#5A6A80'} fontSize="14" fontFamily="Orbitron" fontWeight="600">— %</text>
+        <text x="640" y="55" fill={txtDim} fontSize="9" fontFamily="Share Tech Mono">RPM</text>
+        <text x="640" y="75" fill={night?'#D7A03A':'#5A6A80'} fontSize="14" fontFamily="Orbitron" fontWeight="600">0</text>
+        <text x="640" y="105" fill={txtDim} fontSize="9" fontFamily="Share Tech Mono">COOL</text>
+        <text x="640" y="125" fill={night?'#D7A03A':'#5A6A80'} fontSize="14" fontFamily="Orbitron" fontWeight="600">— °</text>
+      </svg>
+    </CockpitZone>
+
+    {/* ── Steering wheel + stalks ── */}
+    <CockpitZone title="STEERING" subtitle="wheel · stalks · paddles" night={night}>
+      <div style={{display:'grid',gridTemplateColumns:'120px 1fr 120px',gap:10,alignItems:'center'}}>
+        {/* Left stalk: turn signals + high-beam pull */}
+        <div style={{display:'flex',flexDirection:'column',gap:5}}>
+          <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1}}>LEFT STALK</span>
+          <Btn night={night} on={sigDir==='LEFT'} onClick={()=>set('Body.Switches.TurnIndicator.Direction', sigDir==='LEFT'?'OFF':'LEFT')}>◄ TURN L</Btn>
+          <Btn night={night} on={sigDir==='RIGHT'} onClick={()=>set('Body.Switches.TurnIndicator.Direction', sigDir==='RIGHT'?'OFF':'RIGHT')}>TURN R ►</Btn>
+          <Btn night={night} on={hbSw} onClick={()=>set('Body.Switches.HighBeam.IsEngaged',!hbSw)}>HI-BEAM {hbSw?'●':'○'}</Btn>
+        </div>
+        {/* Wheel SVG with embedded button pads */}
+        <svg viewBox="0 0 240 200" style={{width:'100%',maxHeight:200}}>
+          <circle cx="120" cy="105" r="85" fill="none" stroke={night?'#2A1A08':'#15202F'} strokeWidth="14"/>
+          <circle cx="120" cy="105" r="32" fill={night?'#0F1726':'#0C1825'} stroke={night?'#3A2A12':'#1A2838'} strokeWidth="2"/>
+          <text x="120" y="111" textAnchor="middle" fill={txtDim} fontSize="11" fontFamily="Share Tech Mono">⊕</text>
+          <line x1="120" y1="73" x2="120" y2="58" stroke={night?'#3A2A12':'#1A2838'} strokeWidth="3"/>
+          <line x1="92" y1="115" x2="50" y2="135" stroke={night?'#3A2A12':'#1A2838'} strokeWidth="3"/>
+          <line x1="148" y1="115" x2="190" y2="135" stroke={night?'#3A2A12':'#1A2838'} strokeWidth="3"/>
+          {/* Left pad: volume + voice */}
+          <rect x="42" y="78" width="40" height="54" rx="3" fill={night?'#0F1726':'#0C1825'} stroke={night?'#3A2A12':'#1A2838'}/>
+          <text x="62" y="92" textAnchor="middle" fill={txt} fontSize="9" fontFamily="Share Tech Mono">VOL +</text>
+          <text x="62" y="107" textAnchor="middle" fill={txt} fontSize="9" fontFamily="Share Tech Mono">VOL −</text>
+          <text x="62" y="124" textAnchor="middle" fill={txt} fontSize="8" fontFamily="Share Tech Mono">VOICE</text>
+          {/* Right pad: cruise */}
+          <rect x="158" y="78" width="40" height="54" rx="3" fill={night?'#0F1726':'#0C1825'} stroke={night?'#3A2A12':'#1A2838'}/>
+          <text x="178" y="92" textAnchor="middle" fill={txt} fontSize="7" fontFamily="Share Tech Mono">CRS ON</text>
+          <text x="178" y="107" textAnchor="middle" fill={txt} fontSize="7" fontFamily="Share Tech Mono">SET +</text>
+          <text x="178" y="122" textAnchor="middle" fill={txt} fontSize="7" fontFamily="Share Tech Mono">RES −</text>
+          {/* Paddles */}
+          <rect x="40" y="148" width="50" height="11" rx="3" fill={night?'#0F1726':'#0C1825'} stroke={night?'#3A2A12':'#1A2838'}/>
+          <rect x="150" y="148" width="50" height="11" rx="3" fill={night?'#0F1726':'#0C1825'} stroke={night?'#3A2A12':'#1A2838'}/>
+          <text x="65" y="157" textAnchor="middle" fill={txtDim} fontSize="7" fontFamily="Share Tech Mono">◄ −1</text>
+          <text x="175" y="157" textAnchor="middle" fill={txtDim} fontSize="7" fontFamily="Share Tech Mono">+1 ►</text>
+          {/* Horn target on center pad */}
+          <circle cx="120" cy="105" r="32" fill="transparent" style={{cursor:'pointer'}}
+            onMouseDown={()=>set('Body.Horn.IsActive',true)}
+            onMouseUp={()=>set('Body.Horn.IsActive',false)}
+            onMouseLeave={()=>set('Body.Horn.IsActive',false)}>
+            <title>Press and hold for horn</title>
+          </circle>
+          {horn&&<circle cx="120" cy="105" r="34" fill="none" stroke="#EF4444" strokeWidth="2" className="blink"/>}
+        </svg>
+        {/* Right stalk: wiper + washer */}
+        <div style={{display:'flex',flexDirection:'column',gap:5}}>
+          <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1}}>WIPER STALK</span>
+          <Btn night={night} on={wf&&wf!=='OFF'} onClick={()=>set('Body.Windshield.Front.Wiping.Mode', WIPER_CYCLE[wf||'OFF']||'OFF')}>WIPE: {wf||'OFF'}</Btn>
+          <Btn night={night} on={false} onClick={()=>{}}>WASHER ⇣</Btn>
+          <Btn night={night} on={horn} onMouseDown={()=>set('Body.Horn.IsActive',true)} onMouseUp={()=>set('Body.Horn.IsActive',false)} onMouseLeave={()=>set('Body.Horn.IsActive',false)}>🔊 HORN</Btn>
+        </div>
+      </div>
+    </CockpitZone>
+
+    {/* ── Headlamp / lighting switches ── */}
+    <CockpitZone title="LIGHTING SWITCHES" subtitle="left dash cluster" night={night}>
+      <div style={{display:'flex',gap:14,alignItems:'center',flexWrap:'wrap'}}>
+        {/* Headlamp rotary — cycles Body.Lights.LightSwitch.
+            Static white ISO-style icons sit just outside the knob at
+            each valid position so the driver sees what each detent
+            does without having to read the enum text.  The amber
+            pointer + the printed enum below give the current value. */}
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4}}>
+          <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1}}>HEADLAMP</span>
+          <svg viewBox="0 0 130 130" style={{width:110,height:110,cursor:'pointer'}} onClick={()=>set('Body.Lights.LightSwitch', LIGHT_CYCLE[lightSw]||'OFF')}>
+            {/* Knob disc */}
+            <circle cx="65" cy="65" r="34" fill={night?'#0F1726':'#0C1825'} stroke={night?'#3A2A12':'#1A2838'} strokeWidth="2"/>
+            <circle cx="65" cy="65" r="5" fill="#F59E0B" opacity={lightSw==='OFF'?.2:.9}/>
+            {/* Static position icons (white).  The matching enum lights
+                amber.  Where no widely-recognised ISO icon exists we
+                fall back to a short text label per the user spec. */}
+            {[
+              {p:'OFF',      kind:'text',   label:'OFF'},
+              {p:'DRL',      kind:'text',   label:'DRL'},
+              {p:'POSITION', kind:'parking'},
+              {p:'AUTO',     kind:'text',   label:'AUTO'},
+              {p:'BEAM',     kind:'beam'},
+            ].map(({p,kind,label},i)=>{
+              const a=-Math.PI/2 + i*(2*Math.PI/5);
+              // Place icons just outside the knob disc (radius 48).
+              const x=65+Math.cos(a)*48, y=65+Math.sin(a)*48;
+              const active=lightSw===p;
+              const c = active ? '#F59E0B' : '#E5E7EB';
+              if (kind==='text'){
+                return <text key={p} x={x} y={y+3} textAnchor="middle" fontSize="7"
+                  fontFamily="Share Tech Mono" fontWeight="700" fill={c}>{label}</text>;
+              }
+              if (kind==='parking'){
+                // ISO parking / position-light icon — two lamps facing
+                // outward (mirror images of each other), like the
+                // headlamp telltale duplicated.  Each lamp is a
+                // semicircle with 3 short rays emanating outward.
+                return <g key={p}>
+                  {/* Left lamp — body bulges left, rays point left */}
+                  <path d={`M ${x-2},${y-4} A 4,4 0 0,0 ${x-2},${y+4} Z`} fill={c} stroke={c} strokeWidth="0.4"/>
+                  <line x1={x-3} y1={y-3} x2={x-8}  y2={y-3} stroke={c} strokeWidth="1.2" strokeLinecap="round"/>
+                  <line x1={x-3} y1={y}   x2={x-9}  y2={y}   stroke={c} strokeWidth="1.2" strokeLinecap="round"/>
+                  <line x1={x-3} y1={y+3} x2={x-8}  y2={y+3} stroke={c} strokeWidth="1.2" strokeLinecap="round"/>
+                  {/* Right lamp — body bulges right, rays point right */}
+                  <path d={`M ${x+2},${y-4} A 4,4 0 0,1 ${x+2},${y+4} Z`} fill={c} stroke={c} strokeWidth="0.4"/>
+                  <line x1={x+3} y1={y-3} x2={x+8}  y2={y-3} stroke={c} strokeWidth="1.2" strokeLinecap="round"/>
+                  <line x1={x+3} y1={y}   x2={x+9}  y2={y}   stroke={c} strokeWidth="1.2" strokeLinecap="round"/>
+                  <line x1={x+3} y1={y+3} x2={x+8}  y2={y+3} stroke={c} strokeWidth="1.2" strokeLinecap="round"/>
+                </g>;
+              }
+              if (kind==='beam'){
+                // Low-beam telltale — same geometry as the cluster
+                // telltale (semicircle + 3 down-slanted beams) but in
+                // miniature.  Always points left.
+                return <g key={p}>
+                  <path d={`M ${x+1},${y-5} A 5,5 0 0,1 ${x+1},${y+5} Z`} fill={c} stroke={c} strokeWidth="0.5"/>
+                  <line x1={x-1} y1={y-3} x2={x-9} y2={y-1}  stroke={c} strokeWidth="1.3" strokeLinecap="round"/>
+                  <line x1={x-1} y1={y}   x2={x-9} y2={y+2}  stroke={c} strokeWidth="1.3" strokeLinecap="round"/>
+                  <line x1={x-1} y1={y+3} x2={x-9} y2={y+5}  stroke={c} strokeWidth="1.3" strokeLinecap="round"/>
+                </g>;
+              }
+              return null;
+            })}
+            {/* Amber pointer — points from the center toward the active position. */}
+            {(()=>{const i=['OFF','DRL','POSITION','AUTO','BEAM'].indexOf(lightSw);
+              const a=-Math.PI/2 + (i<0?0:i)*(2*Math.PI/5);
+              return <line x1="65" y1="65" x2={65+Math.cos(a)*26} y2={65+Math.sin(a)*26}
+                stroke="#F59E0B" strokeWidth="2.5" strokeLinecap="round"/>;})()}
+          </svg>
+          <span style={{fontFamily:'Share Tech Mono',fontSize:8,color:txt,fontWeight:600}}>{lightSw}</span>
+        </div>
+        {/* Switch column */}
+        <div style={{display:'grid',gridTemplateColumns:'repeat(2,auto)',gap:6}}>
+          <Btn night={night} on={ffogSw} onClick={()=>set('Body.Switches.Fog.Front.IsEngaged',!ffogSw)} min={110}>FOG FRONT {ffogSw?'●':'○'}</Btn>
+          <Btn night={night} on={rfogSw} onClick={()=>set('Body.Switches.Fog.Rear.IsEngaged',!rfogSw)} min={110}>FOG REAR {rfogSw?'●':'○'}</Btn>
+          <Btn night={night} on={hazSw} onClick={()=>set('Body.Switches.Hazard.IsEngaged',!hazSw)} min={110}>⚠ HAZARD {hazSw?'●':'○'}</Btn>
+        </div>
+        {/* Status readout */}
+        <div style={{fontFamily:'Share Tech Mono',fontSize:8,color:txtDim,display:'flex',flexDirection:'column',gap:3}}>
+          <span>LO BEAM: <b style={{color:lo?'#22C55E':txtDim}}>{lo?'ON':'-'}</b></span>
+          <span>HI BEAM: <b style={{color:hi?'#4A9EF5':txtDim}}>{hi?'ON':'-'}</b></span>
+          <span>PARK: <b style={{color:s['Body.Lights.Parking.IsOn']?'#F59E0B':txtDim}}>{s['Body.Lights.Parking.IsOn']?'ON':'-'}</b></span>
+          <span>DRL: <b style={{color:s['Body.Lights.Running.IsOn']?'#22C55E':txtDim}}>{s['Body.Lights.Running.IsOn']?'ON':'-'}</b></span>
+        </div>
+      </div>
+    </CockpitZone>
+
+    {/* ── Dash-mounted body-opening release pulls ── */}
+    <CockpitZone title="BODY CLOSURE RELEASES" subtitle="dash lower-left pulls" night={night}>
+      <div style={{display:'flex',gap:8,alignItems:'center'}}>
+        <Btn night={night} on={s['Body.Switches.Trunk.Release.IsPressed']}
+             onMouseDown={()=>set('Body.Switches.Trunk.Release.IsPressed',true)}
+             onMouseUp={()=>set('Body.Switches.Trunk.Release.IsPressed',false)}
+             onMouseLeave={()=>set('Body.Switches.Trunk.Release.IsPressed',false)} min={130}>TRUNK ⇧</Btn>
+        <Btn night={night} on={s['Body.Switches.Hood.Release.IsPulled']}
+             onMouseDown={()=>set('Body.Switches.Hood.Release.IsPulled',true)}
+             onMouseUp={()=>set('Body.Switches.Hood.Release.IsPulled',false)}
+             onMouseLeave={()=>set('Body.Switches.Hood.Release.IsPulled',false)} min={130}>HOOD ⇧</Btn>
+        <span style={{fontFamily:'Share Tech Mono',fontSize:8,color:txtDim,marginLeft:8}}>
+          press-and-hold — momentary switches feed the trunk/hood release features
+        </span>
+      </div>
+    </CockpitZone>
+
+    {/* ── HVAC panel ── */}
+    <CockpitZone title="HVAC" night={night}>
+      <div style={{display:'flex',gap:14,marginBottom:8,alignItems:'flex-end',flexWrap:'wrap'}}>
+        {/* Driver temp +/- */}
+        <div>
+          <div style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,marginBottom:2}}>DRIVER</div>
+          <div style={{display:'flex',alignItems:'center',gap:4}}>
+            <Btn night={night} on={false} onClick={()=>set('Cabin.HVAC.Station.Row1.Left.Temperature',Math.max(16,dT-1))} sz={11} pad={'4px 8px'}>−</Btn>
+            <span style={{fontFamily:'Orbitron',fontSize:22,fontWeight:600,color:'#F59E0B',minWidth:48,textAlign:'center'}}>{dT.toFixed(0)}°</span>
+            <Btn night={night} on={false} onClick={()=>set('Cabin.HVAC.Station.Row1.Left.Temperature',Math.min(30,dT+1))} sz={11} pad={'4px 8px'}>+</Btn>
+          </div>
+        </div>
+        {/* Passenger temp +/- */}
+        <div>
+          <div style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,marginBottom:2}}>PASSENGER</div>
+          <div style={{display:'flex',alignItems:'center',gap:4}}>
+            <Btn night={night} on={false} onClick={()=>set('Cabin.HVAC.Station.Row1.Right.Temperature',Math.max(16,pT-1))} sz={11} pad={'4px 8px'}>−</Btn>
+            <span style={{fontFamily:'Orbitron',fontSize:22,fontWeight:600,color:'#F59E0B',minWidth:48,textAlign:'center'}}>{pT.toFixed(0)}°</span>
+            <Btn night={night} on={false} onClick={()=>set('Cabin.HVAC.Station.Row1.Right.Temperature',Math.min(30,pT+1))} sz={11} pad={'4px 8px'}>+</Btn>
+          </div>
+        </div>
+        {/* Fan +/- with bars */}
+        <div>
+          <div style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,marginBottom:2}}>FAN</div>
+          <div style={{display:'flex',alignItems:'center',gap:4}}>
+            <Btn night={night} on={false} onClick={()=>set('Cabin.HVAC.Station.Row1.Left.FanSpeed',Math.max(0,fanL-1))} sz={11} pad={'4px 8px'}>−</Btn>
+            <svg viewBox="0 0 84 24" style={{width:84,height:24}}>
+              {Array.from({length:7},(_,i)=>(
+                <rect key={i} x={i*12} y={20-(i*2)} width={9} height={4+i*2} rx="1"
+                  fill={i<fanL?'#3B82F6':(night?'#0F1726':'#101E30')} opacity={i<fanL?1:.55}/>
+              ))}
+            </svg>
+            <Btn night={night} on={false} onClick={()=>set('Cabin.HVAC.Station.Row1.Left.FanSpeed',Math.min(7,fanL+1))} sz={11} pad={'4px 8px'}>+</Btn>
+          </div>
+        </div>
+        {/* Air distribution mode cycle */}
+        <div>
+          <div style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,marginBottom:2}}>MODE</div>
+          <Btn night={night} on={distL!=='AUTO'} onClick={()=>set('Cabin.HVAC.Station.Row1.Left.AirDistribution',DIST_CYCLE[distL]||'AUTO')} min={120}>{DIST_LABEL[distL]||distL}</Btn>
+        </div>
+      </div>
+      <div style={{display:'flex',gap:6,marginBottom:8,flexWrap:'wrap'}}>
+        <Btn night={night} on={ac} onClick={()=>set('Cabin.HVAC.IsAirConditioningActive',!ac)}>A/C {ac?'●':'○'}</Btn>
+        <Btn night={night} on={recirc} onClick={()=>set('Cabin.HVAC.IsRecirculationActive',!recirc)}>RECIRC {recirc?'●':'○'}</Btn>
+        <Btn night={night} on={defF} onClick={()=>set('Cabin.HVAC.IsFrontDefrosterActive',!defF)}>DEF-FRONT {defF?'●':'○'}</Btn>
+        <Btn night={night} on={defR} onClick={()=>set('Cabin.HVAC.IsRearDefrosterActive',!defR)}>DEF-REAR {defR?'●':'○'}</Btn>
+      </div>
+      <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+        <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,alignSelf:'center',marginRight:4,letterSpacing:1}}>SEATS:</span>
+        <Btn night={night} on={heatL>0} onClick={()=>set('Cabin.Seat.Row1.Left.HeatingLevel',[3,0,1,2][heatL])}>DRV HEAT {heatL}</Btn>
+        <Btn night={night} on={heatR>0} onClick={()=>set('Cabin.Seat.Row1.Right.HeatingLevel',[3,0,1,2][heatR])}>PAS HEAT {heatR}</Btn>
+        <Btn night={night} on={vent1L} onClick={()=>set('Cabin.Seat.Row1.Left.IsVentilationOn',!vent1L)}>DRV VENT {vent1L?'●':'○'}</Btn>
+        <Btn night={night} on={vent1R} onClick={()=>set('Cabin.Seat.Row1.Right.IsVentilationOn',!vent1R)}>PAS VENT {vent1R?'●':'○'}</Btn>
+      </div>
+    </CockpitZone>
+
+    {/* ── Center stack / infotainment ── */}
+    <CockpitZone title="CENTER STACK" subtitle="infotainment · media · nav" night={night}>
+      <div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:10}}>
+        {/* Mock display */}
+        <div style={{
+          border:`1px solid ${night?'#2A3A50':'#1A2838'}`, borderRadius:4,
+          padding:'8px 10px', background: night?'#050B14':'#070F1C',
+          fontFamily:'Share Tech Mono',fontSize:9,color:txt,minHeight:88,
+        }}>
+          <div style={{display:'flex',justifyContent:'space-between',color:txtDim,fontSize:7,letterSpacing:1}}>
+            <span>♬ MEDIA</span><span>FM 98.5 · NPR</span>
+          </div>
+          <div style={{textAlign:'center',marginTop:8,color:'#F59E0B',fontSize:11,fontWeight:600}}>— No track —</div>
+          <div style={{display:'flex',justifyContent:'center',gap:8,marginTop:8}}>
+            <Btn night={night} on={false} onClick={()=>{}} sz={10} pad={'3px 9px'}>⏮</Btn>
+            <Btn night={night} on={false} onClick={()=>{}} sz={10} pad={'3px 9px'}>▶</Btn>
+            <Btn night={night} on={false} onClick={()=>{}} sz={10} pad={'3px 9px'}>⏭</Btn>
+          </div>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:5}}>
+          <Btn night={night} on={false} onClick={()=>{}}>RADIO</Btn>
+          <Btn night={night} on={false} onClick={()=>{}}>MEDIA</Btn>
+          <Btn night={night} on={false} onClick={()=>{}}>PHONE</Btn>
+          <Btn night={night} on={false} onClick={()=>{}}>NAV</Btn>
+          <Btn night={night} on={false} onClick={()=>{}}>APPS</Btn>
+          <Btn night={night} on={false} onClick={()=>{}}>SETUP</Btn>
+        </div>
+      </div>
+    </CockpitZone>
+
+    {/* ── Gear shifter ── */}
+    <CockpitZone title="GEAR SHIFTER" subtitle="SelectedGear → TransmissionPlant → CurrentGear" night={night}>
+      <div style={{display:'flex',gap:6,alignItems:'center'}}>
+        {[{lab:'P',g:126},{lab:'R',g:-1},{lab:'N',g:0},{lab:'D',g:127},{lab:'S',g:128}].map(({lab,g})=>(
+          <Btn night={night} key={lab} on={gearLabel(selGear)===lab}
+            onClick={()=>set('Powertrain.Transmission.SelectedGear',g)}
+            sz={14} pad={'10px 18px'} min={50}>{lab}</Btn>
+        ))}
+        <span style={{flex:1}}/>
+        {/* Driver-intent readout — mirrors the highlighted button.
+            The cluster PRND under the speedometer is the authoritative
+            "actual engaged gear" indicator (bound to CurrentGear). */}
+        <div style={{fontFamily:'Orbitron',fontSize:24,fontWeight:700,color:'#F59E0B',
+          border:`1px solid ${night?'#3A2A12':'#1A2838'}`,padding:'4px 18px',borderRadius:4,minWidth:60,textAlign:'center'}}>
+          {gearLabel(selGear)}
+        </div>
+      </div>
+    </CockpitZone>
+
+    {/* ── Row-1 door trim panels — left + right side-by-side. ──
+         Layout is fixed (LEFT=Row1.Left, RIGHT=Row1.Right physically);
+         labels and contents flip based on `driver_door_side`.  Each
+         side carries the inside pull and lock pad.  The passenger
+         side also carries its own local window switch writing
+         Body.Switches.Window.Local.Row1.{passenger-side}.*; the
+         driver side has no local window switch (the master pack on
+         the driver door card covers it via DriverMaster.*).
+         Central locking is cabin-wide — pressing LOCK or UNLOCK on
+         either side feeds the DoorTrimButton feature which applies
+         the two-stage policy.  Mirror master pad and 4-window
+         switch pack live in the DRIVER DOOR TRIM BUTTONS below. */}
+    {(() => {
+      const Side = ({side, isDriver}) => {
+        const pull = side==='Left' ? pullL : pullR;
+        const pullKey = `Body.Doors.Row1.${side}.Handle.Inside.IsPulled`;
+        const lockKey   = `Body.Switches.DoorTrim.Row1.${side}.LockButton`;
+        const unlockKey = `Body.Switches.DoorTrim.Row1.${side}.UnlockButton`;
+        const dbl = side==='Left' ? dblL : false;
+        const winKey = `Body.Doors.Row1.${side}.Window.Position`;
+        const motorKey = `Body.Doors.Row1.${side}.Window.MotorDirection`;
+        const localDetent = `Body.Switches.Window.Local.Row1.${side}.Detent`;
+        return <CockpitZone
+          title={`${side.toUpperCase()} DOOR TRIM`}
+          subtitle={isDriver ? 'driver' : 'passenger'}
+          night={night}>
+          <div style={{display:'flex',flexDirection:'column',gap:6}}>
+            <Btn night={night} on={pull} {...holdSwitch(pullKey)}
+              sz={10} pad={'8px 12px'}>
+              {side==='Left'?'⇲':'⇱'} INSIDE PULL {pull?'●':''}
+            </Btn>
+            <div style={{display:'flex',gap:6}}>
+              {/* Momentary push: highlight tracks the switch input
+                  (true while held), not the resulting lock state.
+                  The persistent lock state shows elsewhere (top view
+                  IsLocked / IsDoubleLocked + the LOCK label suffix). */}
+              <Btn night={night} on={!!s[unlockKey]} {...holdSwitch(unlockKey)} sz={9} pad={'6px 10px'} min={90}>UNLOCK</Btn>
+              <Btn night={night} on={!!s[lockKey]}   {...holdSwitch(lockKey)}   sz={9} pad={'6px 10px'} min={90}>LOCK {dbl?'⊕⊕':''}</Btn>
+            </div>
+            {/* Passenger side: own local window switch (hold-to-move).
+                Driver side: no local switch — the master pack handles it. */}
+            {isDriver
+              ? <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,fontStyle:'italic'}}>
+                  Window + mirror master controls are in the DRIVER DOOR TRIM BUTTONS below.
+                </span>
+              : <div style={{display:'flex',gap:8,alignItems:'flex-end'}}>
+                  <WindowRocker s={s} set={set} night={night}
+                    detentKey={localDetent} posKey={winKey} motorKey={motorKey}
+                    label="LOCAL"/>
+                  <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,maxWidth:90}}>
+                    5-detent: outer detents latch AUTO; both-source presses STOP
+                  </span>
+                </div>
+            }
+          </div>
+        </CockpitZone>;
+      };
+      return <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+        <Side side="Left"  isDriver={driverSide==='Left'}/>
+        <Side side="Right" isDriver={driverSide==='Right'}/>
+      </div>;
+    })()}
+
+    {/* ── Row-2 rear-door trim panels — local window switches only. ──
+         The inside pull on rear doors is already exercisable from the
+         top view; the cockpit just exposes the per-door local window
+         5-detent rocker so child-lock gating in `PowerWindow` can be
+         demonstrated.  The rocker stays clickable when the door is
+         child-locked — it still writes the Detent signal — so a
+         tester can confirm the feature observes the write and
+         declines to claim the motor arbiter.  Only the visual is
+         dimmed; the wiring is identical to the unlocked case. */}
+    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+      {[
+        {side:'Left',  childLock:childRL},
+        {side:'Right', childLock:childRR},
+      ].map(({side,childLock})=>{
+        const winKey      = `Body.Doors.Row2.${side}.Window.Position`;
+        const motorKey    = `Body.Doors.Row2.${side}.Window.MotorDirection`;
+        const localDetent = `Body.Switches.Window.Local.Row2.${side}.Detent`;
+        return <CockpitZone key={side}
+          title={`REAR ${side.toUpperCase()} TRIM`}
+          subtitle={childLock?'child-locked — writes ignored by feature':'local window'}
+          night={night}>
+          <div style={{display:'flex',gap:8,alignItems:'flex-end'}}>
+            <WindowRocker s={s} set={set} night={night}
+              detentKey={localDetent} posKey={winKey} motorKey={motorKey}
+              label="LOCAL" dimmed={childLock}/>
+            <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,maxWidth:130,fontStyle:childLock?'italic':'normal'}}>
+              {childLock
+                ? 'Switch still writes Detent — PowerWindow observes and refuses to claim arbiter while child-locked.'
+                : '5-detent: outer = AUTO. Cancel via any press.'}
+            </span>
+          </div>
+        </CockpitZone>;
+      })}
+    </div>
+
+    {/* ── Driver master panel ──
+         The cluster of master controls physically located on the
+         driver's door card: mirror controls + 4-way window switches
+         + power child-lock master button.
+         - Mirrors: master fold, side select, 4-way direction dpad
+           on Body.Switches.Mirror.{Fold,Select,Direction}.
+           Direction is press-and-hold; releasing writes NONE.
+         - Windows: 2×2 grid of 5-detent rockers writing
+           Body.Switches.Window.DriverMaster.Row{1,2}.{L,R}.Detent.
+           The PowerWindow feature owns the state machine, cross-
+           source conflict resolution, and the stuck-switch
+           watchdog; the WindowPlant ramps the position at 10 %/s.
+         - Power child lock: momentary push on
+           Body.Switches.PowerChildLock.IsPressed.  The
+           PowerChildLock feature toggles MasterStatus + both rear
+           IsChildLockActive on each rising edge.  Door plant
+           suppresses inside-pull on a child-locked door; the local
+           rear window switches are also suppressed by
+           PowerWindow. */}
+    <CockpitZone title="DRIVER DOOR TRIM BUTTONS" subtitle="mirrors · windows · child locks" night={night}>
+      <div style={{display:'flex',gap:14,alignItems:'center',flexWrap:'wrap'}}>
+        <div style={{display:'flex',flexDirection:'column',gap:5}}>
+          {/* Momentary toggle — write true then immediately false so
+              the bridge sees a clean rising edge.  The button label
+              suffix (● / ○) reflects the resulting fold state from
+              the bus; the button itself is never "on" (no persistent
+              highlight on a momentary push). */}
+          <Btn night={night} on={false}
+            onClick={()=>{set('Body.Switches.Mirror.Fold',true);setTimeout(()=>set('Body.Switches.Mirror.Fold',false),60);}}
+            sz={9} pad={'7px 12px'} min={90}>FOLD {(mirL&&mirR)?'●':'○'}</Btn>
+          <div style={{display:'flex',gap:5}}>
+            <Btn night={night} on={mirSel==='LEFT'}  onClick={()=>set('Body.Switches.Mirror.Select', mirSel==='LEFT' ?'NONE':'LEFT')}  sz={9} pad={'6px 10px'} min={42}>SEL L</Btn>
+            <Btn night={night} on={mirSel==='RIGHT'} onClick={()=>set('Body.Switches.Mirror.Select', mirSel==='RIGHT'?'NONE':'RIGHT')} sz={9} pad={'6px 10px'} min={42}>SEL R</Btn>
+          </div>
+          <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1}}>
+            {mirSel==='NONE'?'no side selected':`adjusting ${mirSel}`}
+          </span>
+        </div>
+        {/* 4-way direction dpad — disabled when no side is selected.
+            Press-and-hold: press writes the direction; release/leave
+            writes NONE so the plant stops integrating. */}
+        {(() => {
+          const enabled = mirSel !== 'NONE';
+          const dirBtn = (v, label) => {
+            const lit = mirDir === v;
+            const press = enabled ? {
+              onMouseDown: () => set('Body.Switches.Mirror.Direction', v),
+              onMouseUp:   () => set('Body.Switches.Mirror.Direction', 'NONE'),
+              onMouseLeave:() => { if (mirDir === v) set('Body.Switches.Mirror.Direction', 'NONE'); },
+            } : {};
+            return <button {...press} disabled={!enabled} style={{
+              width:36,height:36,padding:0,borderRadius:6,
+              background: lit?(night?'#3A2C0A':'#1E3A52'):(night?'#0A1018':'#0E1625'),
+              border: `1px solid ${lit?(night?'#F59E0B':'#4A9EF5'):(night?'#2A3A50':'#1A2838')}`,
+              color: lit?(night?'#F59E0B':'#4A9EF5'):(night?'#D7A03A':'#3A5070'),
+              fontFamily:'Share Tech Mono',fontSize:14,fontWeight:700,
+              cursor:enabled?'pointer':'not-allowed',opacity:enabled?1:0.35,
+              userSelect:'none',touchAction:'none',
+            }}>{label}</button>;
+          };
+          return <div style={{display:'grid',gridTemplateColumns:'36px 36px 36px',
+            gridTemplateRows:'36px 36px 36px',gap:4,justifyContent:'center'}}>
+            <div/>{dirBtn('UP','▲')}<div/>
+            {dirBtn('LEFT','◀')}
+            <div style={{width:36,height:36,opacity:0.25,display:'flex',alignItems:'center',
+              justifyContent:'center',fontFamily:'Share Tech Mono',fontSize:10,
+              color:txtDim,border:`1px dashed ${night?'#2A3A50':'#1A2838'}`,borderRadius:6}}>
+              {mirSel==='NONE'?'—':mirSel[0]}
+            </div>
+            {dirBtn('RIGHT','▶')}
+            <div/>{dirBtn('DOWN','▼')}<div/>
+          </div>;
+        })()}
+      </div>
+
+      {/* Driver-master window switch pack — 4 vertical 5-detent
+          rockers arranged in a 2×2 grid (FL/FR top row, RL/RR
+          bottom row), matching the physical pack layout on a real
+          door card.  Each rocker writes
+          Body.Switches.Window.DriverMaster.Row{1,2}.{L,R}.Detent.
+          The PowerWindow feature owns the state machine + cross-
+          source conflict resolution.  Rear positions dim when the
+          matching rear door is child-locked — visual cue only; the
+          driver master is not actually blocked by child lock. */}
+      <div style={{marginTop:10}}>
+        <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1,display:'block',marginBottom:4}}>WINDOWS — 2×2 master pack (UP = close, DOWN = open; outer detents latch AUTO):</span>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,maxWidth:260}}>
+          {[
+            {pos:'Body.Doors.Row1.Left.Window.Position',  motor:'Body.Doors.Row1.Left.Window.MotorDirection',  det:'Body.Switches.Window.DriverMaster.Row1.Left.Detent',  l:driverSide==='Left' ?'FL (drv)':'FL (pas)'},
+            {pos:'Body.Doors.Row1.Right.Window.Position', motor:'Body.Doors.Row1.Right.Window.MotorDirection', det:'Body.Switches.Window.DriverMaster.Row1.Right.Detent', l:driverSide==='Right'?'FR (drv)':'FR (pas)'},
+            {pos:'Body.Doors.Row2.Left.Window.Position',  motor:'Body.Doors.Row2.Left.Window.MotorDirection',  det:'Body.Switches.Window.DriverMaster.Row2.Left.Detent',  l:'RL', childLock:childRL},
+            {pos:'Body.Doors.Row2.Right.Window.Position', motor:'Body.Doors.Row2.Right.Window.MotorDirection', det:'Body.Switches.Window.DriverMaster.Row2.Right.Detent', l:'RR', childLock:childRR},
+          ].map(({pos,motor,det,l,childLock})=>(
+            <WindowRocker key={pos} s={s} set={set} night={night}
+              detentKey={det} posKey={pos} motorKey={motor}
+              label={l} dimmed={!!childLock}/>
+          ))}
+        </div>
+      </div>
+
+      {/* Master child-lock indicator + push.  Single momentary
+          button on Body.Switches.PowerChildLock.IsPressed; the
+          PowerChildLock feature toggles MasterStatus on each rising
+          edge and fans it out to both rear-door IsChildLockActive
+          outputs.  The LED reflects MasterStatus (feature output —
+          read-only); the click writes the input. */}
+      {(() => {
+        const press = {
+          onMouseDown: () => set('Body.Switches.PowerChildLock.IsPressed', true),
+          onMouseUp:   () => set('Body.Switches.PowerChildLock.IsPressed', false),
+          onMouseLeave:() => set('Body.Switches.PowerChildLock.IsPressed', false),
+        };
+        return <div style={{display:'flex',gap:10,marginTop:10,alignItems:'center',flexWrap:'wrap'}}>
+          <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1}}>SAFETY:</span>
+          <button {...press}
+            title={`Master child lock — ${masterChildLock?'engaged':'released'} (tap to toggle).  Disables inside-pull on rear doors and suppresses rear local window switches.`}
+            style={{
+              display:'flex',alignItems:'center',gap:8,
+              background: masterChildLock?(night?'#3A2C0A':'#1E3A52'):(night?'#0A1018':'#0E1625'),
+              border: `1px solid ${masterChildLock?(night?'#F59E0B':'#4A9EF5'):(night?'#2A3A50':'#1A2838')}`,
+              color: masterChildLock?(night?'#F59E0B':'#4A9EF5'):(night?'#5A7090':'#3A5070'),
+              fontFamily:'Share Tech Mono',fontSize:9,fontWeight:600,
+              padding:'8px 14px',borderRadius:4,cursor:'pointer',
+              userSelect:'none',touchAction:'none',
+            }}>
+            {/* LED dot — bright amber when engaged, dim grey otherwise. */}
+            <span style={{
+              width:10,height:10,borderRadius:'50%',
+              background: masterChildLock ? '#F59E0B' : (night?'#1A2838':'#3A4D5C'),
+              boxShadow: masterChildLock ? '0 0 6px rgba(245,158,11,0.7)' : 'none',
+            }}/>
+            <span style={{fontSize:16,lineHeight:1}}>{masterChildLock?'🔒':'🔓'}</span>
+            <span>CHILD LOCK</span>
+            <span style={{fontSize:7,color:txtDim,fontStyle:'italic',marginLeft:4}}>
+              {masterChildLock?'engaged · rear inside-pulls + local windows inert':'released'}
+            </span>
+          </button>
+          <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,fontStyle:'italic'}}>
+            LED = PowerChildLock.MasterStatus · click = momentary push
+          </span>
+        </div>;
+      })()}
+    </CockpitZone>
+
+    {/* ── Ambient / footwell lighting ── */}
+    <CockpitZone title="AMBIENT LIGHTING" subtitle="footwell · console · door piping" night={night}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:6}}>
+        {[
+          {k:'Cabin.Lights.Ambient.Footwell.Left.IsOn',l:'FOOTWELL L'},
+          {k:'Cabin.Lights.Ambient.Footwell.Right.IsOn',l:'FOOTWELL R'},
+          {k:'Cabin.Lights.Ambient.CenterConsole.IsOn',l:'CONSOLE'},
+          {k:'Cabin.Lights.Ambient.DoorCard.IsOn',l:'DOOR PIPING'},
+        ].map(({k,l})=>{
+          const on=!!s[k];
+          return <Btn key={k} on={on} onClick={()=>set(k,!on)}>{l} {on?'●':'○'}</Btn>;
+        })}
+      </div>
+      <div style={{marginTop:6,fontFamily:'Share Tech Mono',fontSize:8,color:txtDim,fontStyle:'italic'}}>
+        Each lamp will be backlit-tied to the LightSwitch feature in a follow-up.
+      </div>
+    </CockpitZone>
+
+    {/* ── Status bar ── */}
+    <CockpitZone title="STATUS" night={night}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:6,fontFamily:'Share Tech Mono',fontSize:9}}>
+        <span style={{color: wf!=='OFF'?'#4A9EF5':txtDim}}>WIPERS: <b>{wf}</b></span>
+        <span style={{color: horn?'#EF4444':txtDim}}>HORN: <b>{horn?'●':'-'}</b></span>
+        <span style={{color: dome?'#FCD34D':txtDim}}>DOME: <b>{dome?'ON':'OFF'}</b></span>
+        <span style={{color: fuel?'#F59E0B':txtDim}}>FUEL: <b>{fuel?'OPEN':'-'}</b></span>
+        <span style={{color: trunk?'#F59E0B':txtDim}}>GATE: <b>{trunk?'OPEN':'-'}</b></span>
+        {/* DAP — gates PowerWindow (and other accessory features later).
+            Active when ign is on, OR within 2 min after ign off provided
+            no door has opened.  When OFF the cockpit windows won't move. */}
+        <span style={{color: s['Body.Power.DelayedAccessory.IsActive']?'#10D98A':'#EF4444'}}
+              title="Delayed accessory power: ign-on, or 2-min courtesy window after ign-off (kills on door-open).">
+          ACC PWR: <b>{s['Body.Power.DelayedAccessory.IsActive']?'ON':'OFF'}</b>
+        </span>
+      </div>
+    </CockpitZone>
+
+  </div>;
 }
 
 /* ══════ CONTROL PANEL ══════ */
@@ -1969,7 +3001,7 @@ function ControlPanelContent({s,set,anyDoor,anyLight,lux}){
 
       <SG title="Vehicle Power" vss="Vehicle" def={true}>
         <EnumR label="Power Mode" k="Vehicle.LowVoltageSystemState" s={s} set={set}
-          opts={['OFF','LOCK','ACC','ON','START']}/>
+          opts={['LOCK','OFF','ACC','ON','START']}/>
         <EnumR label="Powertrain" k="Vehicle.Powertrain.Type" s={s} set={set}
           opts={['COMBUSTION','HYBRID','ELECTRIC']}/>
         {/* Valet mode — published by infotainment in production.
@@ -2051,8 +3083,12 @@ function ControlPanelContent({s,set,anyDoor,anyLight,lux}){
           <span className="cn">Parking Brake</span>
           <Tog val={s['Chassis.ParkingBrake.IsEngaged']} on={()=>set('Chassis.ParkingBrake.IsEngaged',!s['Chassis.ParkingBrake.IsEngaged'])} c="r"/>
         </div>
-        <EnumR label="Gear" k="Powertrain.Transmission.CurrentGear" s={s} set={set}
-          opts={[-2,-1,0,1,2,3,4,5,6]}/>
+        {/* Driver writes SelectedGear (intent); TransmissionPlant
+            mirrors it to CurrentGear (actual).  The label appends the
+            actual gear so the simulator panel shows both at a glance. */}
+        <EnumR label={`Gear  (actual: ${gearLabelGlobal(s['Powertrain.Transmission.CurrentGear']??126)})`}
+          k="Powertrain.Transmission.SelectedGear" s={s} set={set}
+          opts={[-1,0,1,2,3,4,5,6,126,127,128]}/>
       </SG>
 
       <SG title="ADAS" vss="Vehicle.ADAS">
@@ -2234,11 +3270,11 @@ function ControlPanelContent({s,set,anyDoor,anyLight,lux}){
         <div className="hdiv2"/>
         <SlR label="Driver temp"   k="Cabin.HVAC.Station.Row1.Left.Temperature"  s={s} set={set} min={16} max={30} step={0.5} unit="°C"/>
         <SlR label="Driver fan"    k="Cabin.HVAC.Station.Row1.Left.FanSpeed"     s={s} set={set} min={0} max={7} step={1} unit="/7"/>
-        <EnumR label="Driver vent" k="Cabin.HVAC.Station.Row1.Left.AirDistribution" s={s} set={set} opts={['DASHBOARD','FLOOR','DEFROST','COMBINED']}/>
+        <EnumR label="Driver vent" k="Cabin.HVAC.Station.Row1.Left.AirDistribution" s={s} set={set} opts={['AUTO','FACE','FACE_FEET','FEET','FEET_DEF','DEF']}/>
         <div className="hdiv2"/>
         <SlR label="Pass temp"    k="Cabin.HVAC.Station.Row1.Right.Temperature"  s={s} set={set} min={16} max={30} step={0.5} unit="°C"/>
         <SlR label="Pass fan"     k="Cabin.HVAC.Station.Row1.Right.FanSpeed"     s={s} set={set} min={0} max={7} step={1} unit="/7"/>
-        <EnumR label="Pass vent"  k="Cabin.HVAC.Station.Row1.Right.AirDistribution" s={s} set={set} opts={['DASHBOARD','FLOOR','DEFROST','COMBINED']}/>
+        <EnumR label="Pass vent"  k="Cabin.HVAC.Station.Row1.Right.AirDistribution" s={s} set={set} opts={['AUTO','FACE','FACE_FEET','FEET','FEET_DEF','DEF']}/>
       </SG>
 
       <SG title="Seats" vss="Cabin.Seat">
@@ -2544,7 +3580,7 @@ function ConfigView({cfg, onSet, staged, setStaged, onApplyReboot}){
 const VIEWS=[
   {id:'top',    label:'TOP',    icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="5" y="3" width="14" height="18" rx="3"/><line x1="5" y1="9" x2="19" y2="9"/><line x1="5" y1="15" x2="19" y2="15"/></svg>},
   {id:'side',   label:'SIDE',   icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3,16 L6,8 L8,5 L18,5 L21,8 L21,16 Z"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg>},
-  {id:'cockpit',label:'DASH',   icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/><circle cx="12" cy="12" r="2"/></svg>},
+  {id:'cockpit',label:'COCKPIT',icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/><circle cx="12" cy="12" r="2"/></svg>},
   {id:'config', label:'CONFIG', icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg>},
 ];
 
@@ -2944,7 +3980,7 @@ function App(){
         <div className={view==='config'?'':' svgwrap'} style={view==='config'?{flex:1,display:'flex',minHeight:0}:{}}>
           {view==='top'     &&<CombinedView s={s} set={set} onDeviceSelect={setSelDev}/>}
           {view==='side'    &&<SideView s={s} set={set}/>}
-          {view==='cockpit' &&<CockpitView s={s} set={set}/>}
+          {view==='cockpit' &&<CockpitView s={s} set={set} cfg={cfg}/>}
           {view==='config'  &&<ConfigView cfg={cfg} onSet={setCfgKey}
             staged={cfgStaged} setStaged={setCfgStaged} onApplyReboot={applyAndReboot}/>}
         </div>

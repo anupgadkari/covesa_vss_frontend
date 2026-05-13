@@ -163,6 +163,60 @@ pub enum FeatureId {
     /// `INTERNAL_UNLOCK_SOURCES` — neither flow can disarm a running
     /// alarm or trigger a tampering chime.
     SlamLock = 0x22,
+    /// 3-position interior dome-light switch (OFF / DOOR / ON).
+    /// Owns the default claim on `Cabin.Lights.IsDomeOn` at LOW
+    /// priority — Welcome / Farewell (MEDIUM) and PerimeterAlarm
+    /// (HIGH) preempt cleanly via the courtesy arbiter.
+    DomeSwitch = 0x23,
+    /// Master "power child lock" latching feature.  Consumes the
+    /// driver-master momentary push
+    /// `Body.Switches.PowerChildLock.IsPressed` and toggles, on each
+    /// press edge, the latched master output
+    /// `Body.PowerChildLock.MasterStatus` plus the per-rear-door
+    /// fan-out signals `Body.Doors.Row2.{Left,Right}.IsChildLockActive`.
+    /// When `IsChildLockActive` is true the door-handle plant ignores
+    /// inside pulls and the `PowerWindowLocal` feature suppresses
+    /// that door's local window switch.  Door-side mechanical-latch
+    /// feedback signals are still TODO — for now the per-door output
+    /// IS the commanded state.
+    PowerChildLock = 0x24,
+    /// Delayed-accessory power.  Publishes a single latched output
+    /// `Body.Power.DelayedAccessory.IsActive` that gates accessory
+    /// features (PowerWindow today; sunroof + radio in the future).
+    /// Active when `Vehicle.LowVoltageSystemState` is ON / START, or
+    /// when it has transitioned to OFF / ACC / LOCK within the last
+    /// `timeout` (default 2 min) **and** no cabin door has opened
+    /// since the transition.  Door-open or timer expiry kills the
+    /// delayed window immediately.
+    DelayedAccessory = 0x26,
+    /// Combined power-window control.  Owns the 5-detent rocker state
+    /// machine for both driver-master and per-door local switches on
+    /// all 4 windows, with internal conflict resolution (any time both
+    /// sources have active intent on a window the motor is STOPPED and
+    /// both sources must re-press to start anything), a 5-second
+    /// stuck-switch watchdog per source per window, and a Row2
+    /// child-lock gate that forces the local intent to None on the
+    /// affected rear door.  Claims the window arbiter at Medium for
+    /// the single resolved motor direction per window.
+    PowerWindow = 0x25,
+    /// Sunroof + shade coordinated control.  Consumes the
+    /// overhead-console rocker detent (`Body.Switches.Sunroof.Detent`),
+    /// resolves the sequencing rule (shade opens before roof when
+    /// opening; roof closes before shade when closing), and writes
+    /// `Body.Sunroof.MoveCmd` + `Body.Sunroof.Shade.MoveCmd` so the
+    /// existing SunroofPlantModel stays unchanged.
+    SunroofControl = 0x27,
+    // ---- Future window-arbiter participants (allow-list reserved) ----
+    // WindowAntiPinch       = 0x28 — Priority::Critical, observes a
+    //   future per-window anti-pinch detection signal and forces
+    //   DOWN (or STOPPED) to release the obstruction.
+    // WindowSecurityOverride = 0x29 — Priority::High, detects repeated
+    //   UP presses immediately after an anti-pinch event and
+    //   temporarily preempts anti-pinch so the user can force-close
+    //   the window for security reasons.
+    // WindowGlobalRemote    = 0x2A — Priority::Low, RKE / phone-app
+    //   "vent" or "close all" requests.  Yields to any occupant
+    //   switch (driver master or local) at Medium.
 }
 
 impl std::fmt::Display for FeatureId {
@@ -214,6 +268,11 @@ impl FeatureId {
             0x20 => Some(Self::ManualHorn),
             0x21 => Some(Self::PerimeterAlarm),
             0x22 => Some(Self::SlamLock),
+            0x23 => Some(Self::DomeSwitch),
+            0x24 => Some(Self::PowerChildLock),
+            0x25 => Some(Self::PowerWindow),
+            0x26 => Some(Self::DelayedAccessory),
+            0x27 => Some(Self::SunroofControl),
             _ => None,
         }
     }
@@ -223,9 +282,15 @@ impl FeatureId {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum Priority {
+    /// Below Low — used today by `PowerWindowGlobal` (RKE / phone-app
+    /// vent / close-all requests) so they yield to any local occupant.
+    VeryLow = 0,
     Low = 1,
     Medium = 2,
     High = 3,
+    /// Above High — reserved for safety-class overrides.  Used by
+    /// `WindowAntiPinch` to preempt every other window claimant.
+    Critical = 4,
 }
 
 impl Priority {

@@ -12,6 +12,7 @@
 //! the arbiter, since they represent physical hardware.
 pub mod blink_relay;
 pub mod chime;
+pub mod day_night_mode;
 pub mod door_handle;
 pub mod door_lock;
 pub mod hood;
@@ -19,4 +20,6 @@ pub mod mirror_adjust;
 pub mod mirror_fold;
 pub mod peps;
 pub mod sunroof;
+pub mod transmission;
 pub mod trunk;
+pub mod window;

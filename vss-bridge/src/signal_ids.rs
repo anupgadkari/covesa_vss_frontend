@@ -192,6 +192,11 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Cabin.Lights.IsGloveBoxOn" => Some(0x0008_0002),
         "Cabin.Lights.Ambient.Intensity" => Some(0x0008_0003),
         "Cabin.Lights.Ambient.Color" => Some(0x0008_0004),
+        // 3-position interior dome-light switch (String enum:
+        // "OFF" / "DOOR" / "ON").  Driven by the cockpit HMI;
+        // consumed by the `DomeSwitch` feature which arbitrates
+        // `Cabin.Lights.IsDomeOn`.
+        "Cabin.Lights.Dome.SwitchPosition" => Some(0x0008_0005),
 
         // HVAC
         "Cabin.HVAC.IsAirConditioningActive" => Some(0x0009_0001),
@@ -268,6 +273,11 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Powertrain.Transmission.CurrentGear" => Some(0x000C_0002),
         "Vehicle.Speed" => Some(0x000C_0003),
         "Body.Lights.LightSwitch" => Some(0x000C_0004),
+        // Driver's gear-selector position (intent).  Same VSS encoding
+        // as CurrentGear: 126=P, -1=R, 0=N, 127=D, 128=S, 1..N=manual.
+        // Consumed by `TransmissionPlant`, which publishes the actual
+        // engaged gear back as CurrentGear.
+        "Powertrain.Transmission.SelectedGear" => Some(0x000C_0005),
 
         // Door lock inputs (overlay — DoorLockInputs.vspec)
         "Body.Switches.DoorTrim.Row1.Left.LockButton" => Some(0x000E_0001),
@@ -388,6 +398,13 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // qualifying press, not just on state transitions.
         "Cabin.LockStatus.EventNum" => Some(0x0014_0007),
 
+        // Power child-lock momentary push (driver master panel) +
+        // latched master output.  PowerChildLock feature observes the
+        // press, toggles MasterStatus and fans it out to the per-door
+        // Body.Doors.Row2.{Left,Right}.IsChildLockActive signals.
+        "Body.Switches.PowerChildLock.IsPressed" => Some(0x0014_0008),
+        "Body.PowerChildLock.MasterStatus" => Some(0x0014_0009),
+
         // Ambient light sensor (OEM custom — not in standard VSS v4.x).
         // Used by ManualLighting AUTO mode to gate low-beam activation.
         "Body.Lights.AmbientLightSensor.Illuminance" => Some(0x0015_0001),
@@ -405,6 +422,71 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // ADAS camera signals (OEM custom — block 0x0016).
         // OncomingVehicleDetected: true when forward camera sees oncoming headlights.
         "Vehicle.ADAS.HighBeam.OncomingVehicleDetected" => Some(0x0016_0001),
+
+        // ── Standard COVESA VSS v4.0 paths (block 0x0018) ──────────────
+        //
+        // `Vehicle.Cabin.Infotainment.HMI.DayNightMode` — String enum
+        // (`"DAY"` / `"NIGHT"`).  Published by the `DayNightMode` plant
+        // model in `plant_models/day_night_mode.rs`.  HMI subscribes and
+        // applies the "night backlit" rendering style to the cockpit
+        // view buttons / indicators while NIGHT.
+        "Vehicle.Cabin.Infotainment.HMI.DayNightMode" => Some(0x0018_0001),
+
+        // Per-wheel tire-pressure low warnings — bool.  Default false at
+        // boot; no producer yet (a real TPMS feature will set these
+        // based on the per-wheel pressure sensors).  The cockpit TPMS
+        // indicator subscribes to all four and lights if ANY is true.
+        "Vehicle.Chassis.Axle.Row1.Wheel.Left.Tire.IsPressureLow" => Some(0x0018_0010),
+        "Vehicle.Chassis.Axle.Row1.Wheel.Right.Tire.IsPressureLow" => Some(0x0018_0011),
+        "Vehicle.Chassis.Axle.Row2.Wheel.Left.Tire.IsPressureLow" => Some(0x0018_0012),
+        "Vehicle.Chassis.Axle.Row2.Wheel.Right.Tire.IsPressureLow" => Some(0x0018_0013),
+
+        // ── Power-window switches + motors (block 0x001A) ──────────────
+        //
+        // 5-detent rocker per physical switch (String enum):
+        //   NEUTRAL / UP_HOLD / UP_AUTO / DOWN_HOLD / DOWN_AUTO
+        // UP closes the window (Position 0 → 100), DOWN opens it.
+        // A single Detent signal per switch replaces the legacy 2-bool
+        // (Is{Up,Down}Pressed) pair — see commit history if porting.
+        //
+        // Driver-master pack: one Detent per window.  Always defined
+        // for all 4 windows regardless of LHD/RHD — the master pack
+        // sits on the driver's door card and covers every window.
+        "Body.Switches.Window.DriverMaster.Row1.Left.Detent" => Some(0x001A_0001),
+        "Body.Switches.Window.DriverMaster.Row1.Right.Detent" => Some(0x001A_0002),
+        "Body.Switches.Window.DriverMaster.Row2.Left.Detent" => Some(0x001A_0003),
+        "Body.Switches.Window.DriverMaster.Row2.Right.Detent" => Some(0x001A_0004),
+        // Local per-door switches — defined symmetrically for all 4
+        // doors.  The HMI only writes the side configured as
+        // **passenger** for the driver's row (Local.Row1.{!driver}) so
+        // there's no double-write from the driver's own door (which
+        // is covered by DriverMaster).  Local.Row1.{driver-side}
+        // stays defined so tests can inject it.
+        "Body.Switches.Window.Local.Row1.Left.Detent" => Some(0x001A_0011),
+        "Body.Switches.Window.Local.Row1.Right.Detent" => Some(0x001A_0012),
+        "Body.Switches.Window.Local.Row2.Left.Detent" => Some(0x001A_0013),
+        "Body.Switches.Window.Local.Row2.Right.Detent" => Some(0x001A_0014),
+        // Window-motor commanded direction (String enum UP / DOWN /
+        // STOPPED).  Published by the `window_arbiter` from the
+        // winning claim; consumed by the per-window plant which
+        // integrates the motor into Window.Position.
+        "Body.Doors.Row1.Left.Window.MotorDirection" => Some(0x001A_0021),
+        "Body.Doors.Row1.Right.Window.MotorDirection" => Some(0x001A_0022),
+        "Body.Doors.Row2.Left.Window.MotorDirection" => Some(0x001A_0023),
+        "Body.Doors.Row2.Right.Window.MotorDirection" => Some(0x001A_0024),
+
+        // Sunroof rocker detent — String enum:
+        //   NEUTRAL / OPEN_HOLD / OPEN_AUTO / CLOSE_HOLD / CLOSE_AUTO
+        // Written by the cockpit OVERHEAD CONSOLE rocker (and the
+        // simulator-panel SunroofMotorRow) on every press / release.
+        // Consumed by the `SunroofControl` feature which sequences
+        // the two motors and handles auto-mode latching.
+        "Body.Switches.Sunroof.Detent" => Some(0x001B_0001),
+
+        // Delayed-accessory power latch.  Published by the
+        // DelayedAccessory feature.  Gates PowerWindow today; other
+        // accessory features can subscribe later.
+        "Body.Power.DelayedAccessory.IsActive" => Some(0x001C_0001),
 
         _ => None,
     }
@@ -578,6 +660,7 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Cabin.Lights.IsGloveBoxOn", 0x0008_0002),
     ("Cabin.Lights.Ambient.Intensity", 0x0008_0003),
     ("Cabin.Lights.Ambient.Color", 0x0008_0004),
+    ("Cabin.Lights.Dome.SwitchPosition", 0x0008_0005),
     ("Cabin.HVAC.IsAirConditioningActive", 0x0009_0001),
     ("Cabin.HVAC.IsRecirculationActive", 0x0009_0002),
     ("Cabin.HVAC.IsFrontDefrosterActive", 0x0009_0003),
@@ -614,6 +697,7 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Powertrain.Transmission.CurrentGear", 0x000C_0002),
     ("Vehicle.Speed", 0x000C_0003),
     ("Body.Lights.LightSwitch", 0x000C_0004),
+    ("Powertrain.Transmission.SelectedGear", 0x000C_0005),
     // Door lock inputs (overlay — DoorLockInputs.vspec)
     ("Body.Switches.DoorTrim.Row1.Left.LockButton", 0x000E_0001),
     ("Body.Switches.DoorTrim.Row1.Right.LockButton", 0x000E_0002),
@@ -708,9 +792,55 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Cabin.LockStatus", 0x0014_0005),
     ("Cabin.LockStatus.LastRequestor", 0x0014_0006),
     ("Cabin.LockStatus.EventNum", 0x0014_0007),
+    ("Body.Switches.PowerChildLock.IsPressed", 0x0014_0008),
+    ("Body.PowerChildLock.MasterStatus", 0x0014_0009),
     ("Body.Lights.AmbientLightSensor.Illuminance", 0x0015_0001),
     ("Vehicle.ADAS.HighBeam.OncomingVehicleDetected", 0x0016_0001),
+    ("Vehicle.Cabin.Infotainment.HMI.DayNightMode", 0x0018_0001),
+    (
+        "Vehicle.Chassis.Axle.Row1.Wheel.Left.Tire.IsPressureLow",
+        0x0018_0010,
+    ),
+    (
+        "Vehicle.Chassis.Axle.Row1.Wheel.Right.Tire.IsPressureLow",
+        0x0018_0011,
+    ),
+    (
+        "Vehicle.Chassis.Axle.Row2.Wheel.Left.Tire.IsPressureLow",
+        0x0018_0012,
+    ),
+    (
+        "Vehicle.Chassis.Axle.Row2.Wheel.Right.Tire.IsPressureLow",
+        0x0018_0013,
+    ),
     ("Cabin.ValetMode.IsActive", 0x0017_0001),
+    // Power-window block (0x001A) — Detent enums per switch.
+    (
+        "Body.Switches.Window.DriverMaster.Row1.Left.Detent",
+        0x001A_0001,
+    ),
+    (
+        "Body.Switches.Window.DriverMaster.Row1.Right.Detent",
+        0x001A_0002,
+    ),
+    (
+        "Body.Switches.Window.DriverMaster.Row2.Left.Detent",
+        0x001A_0003,
+    ),
+    (
+        "Body.Switches.Window.DriverMaster.Row2.Right.Detent",
+        0x001A_0004,
+    ),
+    ("Body.Switches.Window.Local.Row1.Left.Detent", 0x001A_0011),
+    ("Body.Switches.Window.Local.Row1.Right.Detent", 0x001A_0012),
+    ("Body.Switches.Window.Local.Row2.Left.Detent", 0x001A_0013),
+    ("Body.Switches.Window.Local.Row2.Right.Detent", 0x001A_0014),
+    ("Body.Doors.Row1.Left.Window.MotorDirection", 0x001A_0021),
+    ("Body.Doors.Row1.Right.Window.MotorDirection", 0x001A_0022),
+    ("Body.Doors.Row2.Left.Window.MotorDirection", 0x001A_0023),
+    ("Body.Doors.Row2.Right.Window.MotorDirection", 0x001A_0024),
+    ("Body.Switches.Sunroof.Detent", 0x001B_0001),
+    ("Body.Power.DelayedAccessory.IsActive", 0x001C_0001),
 ];
 
 #[cfg(test)]
