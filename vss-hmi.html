@@ -3080,6 +3080,11 @@ function DevicePanel({s, set, sel, setSel}){
 
       {/* Zone quick-assign */}
       {(()=>{
+        // Fob 6 is modelled as a physically-incompatible key blank
+        // (wrong cut / no transponder) — it cannot be inserted into
+        // the cylinder, so the CYLINDER / BACKUP tile is omitted for
+        // this slot.  All other devices show the full set.
+        const isIncompatibleKey = dev.type==='fob' && dev.index===6;
         const ZONE_BTNS=[
           {z:'OutOfRange',  label:'OUT',          c:'#2E3E55'},
           {z:'RfRange',     label:'RF RANGE',      c:'#4A9EF5'},
@@ -3097,7 +3102,7 @@ function DevicePanel({s, set, sel, setSel}){
           // Cylinder / backup antenna — KeyCylinder line-cal uses
           // this as the only auth path; PEPS line-cal uses it as a
           // low-battery fallback (auth still works without fob RF).
-          {z:'KeyCylinder', label:'CYLINDER\n/ BACKUP', c:'#4A9EF5'},
+          ...(isIncompatibleKey ? [] : [{z:'KeyCylinder', label:'CYLINDER\n/ BACKUP', c:'#4A9EF5'}]),
         ];
         return <>
           <div className="devpanel-section">PLACE IN ZONE</div>
@@ -3386,17 +3391,29 @@ function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
         {[5,6].map(i=>{
           const pfx=`Body.PEPS.Plant.KeyFob.${i}`;
           const zone=s[`${pfx}.Zone`]||'OutOfRange';
+          // Fob 5: mechanically-compatible key blank — fits the
+          //   cylinder but fails the immobilizer challenge, so the
+          //   cylinder rotates without authorising a state change.
+          // Fob 6: physically incompatible (wrong key blank / no
+          //   transponder) — can't be inserted, so the KeyCylinder
+          //   zone is omitted from its dropdown entirely.
+          const zoneOpts = i === 5
+            ? ['OutOfRange','RfRange','Approach','LeftFront','RightFront','Cabin','Hood','Trunk','TrunkInside','KeyCylinder']
+            : ['OutOfRange','RfRange','Approach','LeftFront','RightFront','Cabin','Hood','Trunk','TrunkInside'];
+          const fobSubtitle = i === 5
+            ? 'mechanically compatible · unauthorised'
+            : 'incompatible key blank';
           return <div key={i} className="peps-card intruder">
             <div className="peps-title">FOB {i} <span className="peps-badge unpaired">INTRUDER</span>
               <span style={{marginLeft:'auto',fontFamily:'var(--fm)',fontSize:'9px',color:'var(--dim)'}}>{zone}</span>
             </div>
+            <div style={{fontFamily:'var(--fm)',fontSize:'7px',color:'var(--muted)',marginTop:1}}>{fobSubtitle}</div>
             <div style={{display:'flex',alignItems:'center',gap:6,marginTop:4}}>
               <span style={{fontFamily:'var(--fm)',fontSize:'8px',color:'var(--dim)'}}>ZONE</span>
               <select className="peps-btn" style={{flex:1,padding:'2px 4px',fontFamily:'var(--fm)',fontSize:'9px'}}
                 value={zone}
                 onChange={e=>set(`${pfx}.Zone`, e.target.value)}>
-                {['OutOfRange','RfRange','Approach','LeftFront','RightFront','Cabin','Hood','Trunk','TrunkInside','KeyCylinder']
-                  .map(z=><option key={z} value={z}>{z}</option>)}
+                {zoneOpts.map(z=><option key={z} value={z}>{z}</option>)}
               </select>
             </div>
           </div>;

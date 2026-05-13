@@ -283,8 +283,17 @@ impl<B: SignalBus + Send + Sync + 'static> KeySearchArbiter<B> {
         // Per-fob position cache, updated from continuous Zone signals.
         let zones: Arc<tokio::sync::Mutex<HashMap<KeySlot, Zone>>> =
             Arc::new(tokio::sync::Mutex::new(HashMap::new()));
+        // Per-fob pairing cache.  `SearchMode::Authenticated` filters
+        // out unpaired fobs — a stranger's fob (or a mechanically-
+        // compatible blank cut to fit the cylinder, like Fob 5 in the
+        // simulator) ack's the LF ping at the physical level but
+        // fails the HMAC challenge, so it must not pass auth scans.
+        // `SearchMode::Presence` does not filter — physical RF
+        // detection is independent of cryptographic pairing.
+        let paired: Arc<tokio::sync::Mutex<HashMap<KeySlot, bool>>> =
+            Arc::new(tokio::sync::Mutex::new(HashMap::new()));
 
-        // Subscribe to every fob's Zone signal once.
+        // Subscribe to every fob's Zone + Paired signals once.
         for slot in 0..NUM_KEY_SLOTS as KeySlot {
             let path = fob_zone_signal(slot);
             let mut rx_zone = self.bus.subscribe(path).await;
@@ -295,6 +304,16 @@ impl<B: SignalBus + Send + Sync + 'static> KeySearchArbiter<B> {
                         if let Some(z) = Zone::from_str_value(&s) {
                             zones_clone.lock().await.insert(slot, z);
                         }
+                    }
+                }
+            });
+            let pair_path = fob_paired_signal(slot);
+            let mut rx_pair = self.bus.subscribe(pair_path).await;
+            let paired_clone = Arc::clone(&paired);
+            tokio::spawn(async move {
+                while let Some(v) = rx_pair.next().await {
+                    if let SignalValue::Bool(b) = v {
+                        paired_clone.lock().await.insert(slot, b);
                     }
                 }
             });
@@ -367,17 +386,19 @@ impl<B: SignalBus + Send + Sync + 'static> KeySearchArbiter<B> {
 
                 // Feature-submitted search request.
                 Some(req) = rx.recv() => {
-                    handle_request(req, &zones, &mut cache).await;
+                    handle_request(req, &zones, &paired, &mut cache).await;
                 }
 
                 // Periodic approach poll.
                 _ = sleep_until(next_deadline), if !ign_suspended => {
                     let zones_snapshot = zones.lock().await.clone();
+                    let paired_snapshot = paired.lock().await.clone();
                     let started = Instant::now();
                     let result = run_scan(
                         &AntennaSet::AllApproach,
                         SearchMode::Presence,
                         &zones_snapshot,
+                        &paired_snapshot,
                     ).await;
                     let now_any = !result.keys_found.is_empty();
                     let now_count = result.keys_found.len() as u8;
@@ -428,6 +449,7 @@ impl<B: SignalBus + Send + Sync + 'static> KeySearchArbiter<B> {
 async fn handle_request(
     req: KeySearchRequest,
     zones: &Arc<tokio::sync::Mutex<HashMap<KeySlot, Zone>>>,
+    paired: &Arc<tokio::sync::Mutex<HashMap<KeySlot, bool>>>,
     cache: &mut Vec<(AntennaSet, SearchMode, KeySearchResult, Instant)>,
 ) {
     // Drop cache entries older than the coalesce window.
@@ -447,7 +469,8 @@ async fn handle_request(
 
     let started = Instant::now();
     let zones_snapshot = zones.lock().await.clone();
-    let result = run_scan(&req.antennas, req.mode, &zones_snapshot).await;
+    let paired_snapshot = paired.lock().await.clone();
+    let result = run_scan(&req.antennas, req.mode, &zones_snapshot, &paired_snapshot).await;
     let result = KeySearchResult {
         took: started.elapsed(),
         ..result
@@ -506,12 +529,13 @@ fn run_scan<'a>(
     antennas: &'a AntennaSet,
     mode: SearchMode,
     zones_snapshot: &'a HashMap<KeySlot, Zone>,
+    paired_snapshot: &'a HashMap<KeySlot, bool>,
 ) -> std::pin::Pin<Box<dyn std::future::Future<Output = KeySearchResult> + Send + 'a>> {
     Box::pin(async move {
         if let AntennaSet::Sequence(legs) = antennas {
             let mut combined: Vec<KeyFinding> = Vec::new();
             for (leg, leg_mode) in legs {
-                let leg_result = run_scan(leg, *leg_mode, zones_snapshot).await;
+                let leg_result = run_scan(leg, *leg_mode, zones_snapshot, paired_snapshot).await;
                 combined.extend(leg_result.keys_found);
             }
             return KeySearchResult {
@@ -529,18 +553,25 @@ fn run_scan<'a>(
         let coverage = coverage_zones(antennas);
         let mut found: Vec<KeyFinding> = Vec::new();
         for (slot, zone) in zones_snapshot.iter() {
-            if coverage.contains(zone) {
-                // For SearchMode::Presence: every fob in coverage acks.
-                // For SearchMode::Authenticated: every fob in coverage
-                // also passes (phase 7 will plumb real HMAC verify
-                // through this branch using the existing
-                // plant_models/peps/crypto module).
-                found.push(KeyFinding {
-                    slot: *slot,
-                    zone: *zone,
-                    rssi: rssi_for_zone(*zone),
-                });
+            if !coverage.contains(zone) {
+                continue;
             }
+            // Authenticated scans require the fob to be paired —
+            // unpaired fobs ack at the physical LF layer but fail
+            // the HMAC challenge.  Default `true` if we haven't
+            // received the Paired signal yet (avoids dropping fobs
+            // before the boot snapshot lands).
+            if mode == SearchMode::Authenticated {
+                let is_paired = paired_snapshot.get(slot).copied().unwrap_or(true);
+                if !is_paired {
+                    continue;
+                }
+            }
+            found.push(KeyFinding {
+                slot: *slot,
+                zone: *zone,
+                rssi: rssi_for_zone(*zone),
+            });
         }
 
         KeySearchResult {
@@ -573,6 +604,28 @@ fn fob_zone_signal(slot: KeySlot) -> VssPath {
         4 => "Body.PEPS.Plant.BlePhone.1.Zone",
         5 => "Body.PEPS.Plant.BlePhone.2.Zone",
         _ => "Body.PEPS.Plant.KeyFob.1.Zone", // defensive; never hit at runtime
+    }
+}
+
+/// Paired-flag signal path for the same slot indexing as
+/// `fob_zone_signal`.  BlePhones don't publish a `.Paired` signal
+/// in the current model (they're "always paired" once provisioned),
+/// so we fall back to the always-`true` KeyFob.1 path — the run
+/// loop only ever reads `SignalValue::Bool` here, and a steady
+/// `true` keeps phones in the authenticated cohort by default.
+fn fob_paired_signal(slot: KeySlot) -> VssPath {
+    match slot {
+        0 => "Body.PEPS.Plant.KeyFob.1.Paired",
+        1 => "Body.PEPS.Plant.KeyFob.2.Paired",
+        2 => "Body.PEPS.Plant.KeyFob.3.Paired",
+        3 => "Body.PEPS.Plant.KeyFob.4.Paired",
+        // Phones: no .Paired signal in the simulator today — point at
+        // a fob path that we never write `false` to so the subscription
+        // is harmless.  Filter defaults to "paired" when no value
+        // arrives, so phones remain eligible for Authenticated scans.
+        4 => "Body.PEPS.Plant.KeyFob.1.Paired",
+        5 => "Body.PEPS.Plant.KeyFob.1.Paired",
+        _ => "Body.PEPS.Plant.KeyFob.1.Paired",
     }
 }
 

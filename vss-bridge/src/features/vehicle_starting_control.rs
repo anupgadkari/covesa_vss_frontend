@@ -579,6 +579,25 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn peps_unpaired_fob_in_cabin_fails_auth() {
+        // Mechanically-compatible but unauthorized key: it's at the
+        // cabin antenna (so it would normally appear in a scan) but
+        // its Paired flag is false.  Authenticated scans must filter
+        // it out so the immobilizer goes FAILED and power stays OFF.
+        let bus = setup(cfg_peps()).await;
+        bus.inject(
+            "Body.PEPS.Plant.KeyFob.1.Paired",
+            SignalValue::Bool(false),
+        );
+        place_fob_in_cabin(&bus, 1);
+        settle().await;
+        bus.inject(START_STOP_IN, SignalValue::Bool(true));
+        settle().await;
+        assert_eq!(latest_power(&bus).as_deref(), Some("OFF"));
+        assert_eq!(latest_immo(&bus).as_deref(), Some("FAILED"));
+    }
+
+    #[tokio::test]
     async fn peps_press_with_brake_at_on_state_turns_off() {
         // Real-world scenario: engine running, driver sitting at a
         // stoplight with foot on the brake.  Pressing the start
