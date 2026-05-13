@@ -2060,7 +2060,26 @@ function CockpitView({s,set,cfg}){
             ☼ {dome?'LAMP ON':'lamp off'}
           </span>
         </div>
-        <span style={{fontFamily:'Share Tech Mono',fontSize:8,color:txtDim}}>MAP-L · MAP-R · SUNROOF · GARAGE (todo)</span>
+        {/* Sunroof OPEN / STOP / CLOSE — press-and-hold momentary
+            commands on `Body.Sunroof.MoveCmd` (enum OPEN / CLOSE /
+            STOP), same signal as the simulator-panel Roof Position
+            row.  The SunroofPlantModel integrates Position. */}
+        {(() => {
+          const sr = s['Body.Sunroof.Position'] ?? 0;
+          const send = v => set('Body.Sunroof.MoveCmd', v);
+          const hold = v => ({
+            onMouseDown: () => send(v),
+            onMouseUp:   () => send('STOP'),
+            onMouseLeave:() => send('STOP'),
+          });
+          return <div style={{display:'flex',gap:4,alignItems:'center'}}>
+            <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1,marginRight:4}}>SUNROOF:</span>
+            <Btn night={night} on={false} {...hold('OPEN')}  sz={9} pad={'6px 10px'} min={56}>▲ OPEN</Btn>
+            <Btn night={night} on={false} onClick={()=>send('STOP')} sz={9} pad={'6px 10px'} min={50}>■ STOP</Btn>
+            <Btn night={night} on={false} {...hold('CLOSE')} sz={9} pad={'6px 10px'} min={56}>▼ CLOSE</Btn>
+            <span style={{fontFamily:'Share Tech Mono',fontSize:9,color:sr>0?'#F59E0B':txtDim,marginLeft:6,minWidth:32,textAlign:'right'}}>{sr}%</span>
+          </div>;
+        })()}
       </div>
     </CockpitZone>
 
