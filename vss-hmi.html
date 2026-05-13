@@ -764,16 +764,13 @@ function CombinedView({s,set,cfg,onDeviceSelect}){
   }
 
   function startDrag(e,device){
-    // Key-in-Ignition Inhibit applies only to **fobs** parked at the
-    // KeyCylinder slot (i.e. KeyCylinder vehicles where the fob's
-    // mechanical bow is physically inserted in the cylinder).  In
-    // PEPS configurations RemovalInhibited stays false so this
-    // branch is moot; phones at the cylinder are NFC taps that
-    // don't physically insert anything, so they're never stuck.
-    const removalInhibited = !!s['Body.Switches.IgnitionCylinder.RemovalInhibited'];
-    if (removalInhibited
-        && device.type === 'fob'
-        && device.zone === 'KeyCylinder') {
+    // Key removal lockout — a fob can only leave the cylinder when
+    // the cylinder is rotated to LOCK on KeyCylinder vehicles.  PEPS
+    // vehicles aren't affected.  Phones at the cylinder are NFC
+    // taps and never physically insert, so they're never stuck.
+    if (device.type === 'fob'
+        && device.zone === 'KeyCylinder'
+        && isFobLockedInCylinder(s, cfg)) {
       return;
     }
     e.preventDefault();
@@ -3096,6 +3093,20 @@ function fobOccupyingCylinder(s){
   return 0;
 }
 
+/* Fob-stuck-in-cylinder predicate.
+   A fob can be pulled out of the cylinder only when the cylinder is
+   actually rotated to LOCK — which on KeyCylinder vehicles also
+   requires the transmission to be in PARK (the bridge enforces that
+   rotation gate via RemovalInhibited).  Position-based check here
+   covers the case where the driver shifts to P but hasn't yet
+   rotated to LOCK; in real cars the key still won't come out. */
+function isFobLockedInCylinder(s, cfg){
+  const keySource = cfg?.vehicle_line?.key_source_cfg || 'PEPS';
+  if(keySource !== 'KeyCylinder') return false;
+  const pos = s['Body.Switches.IgnitionCylinder.Position'] || 'LOCK';
+  return pos !== 'LOCK';
+}
+
 /* ── Dedicated Auth Device Panel ──────────────────────────────── */
 function DevicePanel({s, set, sel, setSel}){
   const [firedBtn, setFiredBtn]=useState(null);
@@ -3249,16 +3260,14 @@ function DevicePanel({s, set, sel, setSel}){
           // low-battery fallback (auth still works without fob RF).
           ...(noCylinderSlot ? [] : [{z:'KeyCylinder', label:'CYLINDER\n/ BACKUP', c:'#4A9EF5'}]),
         ];
-        // Key-in-Ignition Inhibit: only applies to **fobs** parked at
-        // the KeyCylinder slot — those carry a mechanical key bow
-        // that's physically inserted in the cylinder.  Phones tap
-        // the cylinder NFC pad and are never "stuck".  PEPS-mode
-        // vehicles keep RemovalInhibited at false so this branch is
-        // a no-op for them too.
-        const removalInhibited = !!s['Body.Switches.IgnitionCylinder.RemovalInhibited'];
-        const keyStuckHere = removalInhibited
-                          && dev.type === 'fob'
-                          && zone === 'KeyCylinder';
+        // Key removal lockout — only fobs parked at the KeyCylinder
+        // slot are physically inserted.  They can be removed only
+        // once the cylinder is rotated to LOCK (KeyCylinder vehicles
+        // only).  Phones at the cylinder are NFC taps and never
+        // stuck.  PEPS vehicles never reach this branch.
+        const keyStuckHere = dev.type === 'fob'
+                          && zone === 'KeyCylinder'
+                          && isFobLockedInCylinder(s, cfg);
         // Single-slot cylinder occupancy.  Only relevant when the
         // selected device is a fob trying to *enter* the cylinder.
         const cylOccupant = fobOccupyingCylinder(s);
@@ -3272,7 +3281,7 @@ function DevicePanel({s, set, sel, setSel}){
             {keyStuckHere && <span style={{
               marginLeft:6,fontFamily:'var(--fm)',fontSize:'7px',
               color:'#F59E0B',fontWeight:700,letterSpacing:0.5}}>
-              🔒 KEY-IN LOCKOUT · shift to P to remove
+              🔒 KEY-IN LOCKOUT · rotate cylinder to LOCK to remove
             </span>}
             {cylBlockedByOther && !keyStuckHere && <span style={{
               marginLeft:6,fontFamily:'var(--fm)',fontSize:'7px',
@@ -3557,8 +3566,7 @@ function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
                 only auth path on KeyCylinder builds and as a backup
                 (low-battery fob) path on PEPS builds. */}
             {(()=>{
-              const removalInhibited = !!s['Body.Switches.IgnitionCylinder.RemovalInhibited'];
-              const stuck = removalInhibited && zone === 'KeyCylinder';
+              const stuck = zone === 'KeyCylinder' && isFobLockedInCylinder(s, cfg);
               // Single-slot cylinder: hide the KeyCylinder option if
               // another fob is already inserted.  The current occupant
               // sees the option (so they can stay/leave); everyone
@@ -3573,7 +3581,7 @@ function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
                           opacity:stuck?0.55:1, cursor:stuck?'not-allowed':'pointer'}}
                   value={zone}
                   disabled={stuck}
-                  title={stuck?'Key locked in cylinder — shift to PARK to remove'
+                  title={stuck?'Key locked in cylinder — rotate to LOCK to remove'
                          : cylBlocked?`Cylinder occupied by Fob ${cylOccupant}`
                          : undefined}
                   onChange={e=>set(`${pfx}.Zone`, e.target.value)}>
@@ -3609,8 +3617,7 @@ function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
             </div>
             <div style={{fontFamily:'var(--fm)',fontSize:'7px',color:'var(--muted)',marginTop:1}}>{fobSubtitle}</div>
             {(()=>{
-              const removalInhibited = !!s['Body.Switches.IgnitionCylinder.RemovalInhibited'];
-              const stuck = removalInhibited && zone === 'KeyCylinder';
+              const stuck = zone === 'KeyCylinder' && isFobLockedInCylinder(s, cfg);
               const cylOccupant = fobOccupyingCylinder(s);
               const cylBlocked = cylOccupant !== 0 && cylOccupant !== i;
               const opts = cylBlocked ? zoneOpts.filter(z=>z!=='KeyCylinder') : zoneOpts;
@@ -3620,7 +3627,7 @@ function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
                           opacity:stuck?0.55:1, cursor:stuck?'not-allowed':'pointer'}}
                   value={zone}
                   disabled={stuck}
-                  title={stuck?'Key locked in cylinder — shift to PARK to remove'
+                  title={stuck?'Key locked in cylinder — rotate to LOCK to remove'
                          : cylBlocked?`Cylinder occupied by Fob ${cylOccupant}`
                          : undefined}
                   onChange={e=>set(`${pfx}.Zone`, e.target.value)}>
