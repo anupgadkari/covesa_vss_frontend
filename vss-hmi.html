@@ -1818,6 +1818,31 @@ function HeadlampTelltale({cx, cy, kind, on, onColor, offColor='#1F2C40'}){
   </g>;
 }
 
+// Door-ajar telltale — top-view car silhouette with the driver-side
+// front door swung outward.  The drawing is intentionally fixed
+// (single open door) regardless of which actual doors are open;
+// the lamp is the "any door open" warning, not a per-door indicator.
+// Drawn inside a 30x30 local box centred on (cx, cy).
+function DoorAjarTelltale({cx, cy, on, onColor='#EF4444', offColor='#1F2C40'}){
+  const c = on ? onColor : offColor;
+  const op = on ? 1 : 0.45;
+  // Translate the 30x30 icon so its centre sits at (cx, cy).
+  const tx = cx - 15, ty = cy - 15;
+  return <g opacity={op} transform={`translate(${tx} ${ty})`}>
+    {/* Car body — rounded rect, longer than wide (top view). */}
+    <rect x="11" y="6" width="8" height="18" rx="2" fill="none" stroke={c} strokeWidth="1.4"/>
+    {/* Windshield + rear-glass split lines. */}
+    <line x1="11" y1="11" x2="19" y2="11" stroke={c} strokeWidth="0.9"/>
+    <line x1="11" y1="20" x2="19" y2="20" stroke={c} strokeWidth="0.9"/>
+    {/* Faint door-split mid line. */}
+    <line x1="11" y1="15.5" x2="19" y2="15.5" stroke={c} strokeWidth="0.6" opacity="0.55"/>
+    {/* Driver-side front door swung outward ~55°. */}
+    <g transform="rotate(55 11 12)">
+      <rect x="9.2" y="12" width="1.8" height="4" fill={c} stroke={c} strokeWidth="0.5"/>
+    </g>
+  </g>;
+}
+
 // VSS Powertrain.Transmission.CurrentGear / SelectedGear encoding:
 //   126 = Park, -1 = Reverse, 0 = Neutral, 127 = Drive, 128 = Sport
 //   (custom).  Positive 1..N are forward gears (manual transmission).
@@ -2027,8 +2052,11 @@ function CockpitView({s,set,cfg}){
           <text x={30} y={125} textAnchor="middle" fill="#F59E0B" fontSize="10" fontFamily="Share Tech Mono" fontWeight="600">◄</text></g>}
         {ri&&<g><circle cx={90} cy={120} r={12} fill="#F59E0B" opacity="0.3" stroke="#F59E0B" strokeWidth="1.2" className="blink"/>
           <text x={90} y={125} textAnchor="middle" fill="#F59E0B" fontSize="10" fontFamily="Share Tech Mono" fontWeight="600">►</text></g>}
-        {doorAjar&&<g><circle cx={150} cy={120} r={12} fill="#EF4444" opacity="0.3" stroke="#EF4444" strokeWidth="1.2"/>
-          <text x={150} y={125} textAnchor="middle" fill="#EF4444" fontSize="8" fontFamily="Share Tech Mono" fontWeight="600">DOOR</text></g>}
+        {/* Door-ajar telltale — fixed top-view silhouette with the
+            driver-side front door swung out.  Single drawing regardless
+            of which door is actually open; the lamp is the "any door"
+            warning.  Dim when closed so the cluster layout stays stable. */}
+        <DoorAjarTelltale cx={150} cy={120} on={doorAjar}/>
         {brake&&<g><circle cx={210} cy={120} r={12} fill="#EF4444" opacity="0.3" stroke="#EF4444" strokeWidth="1.2"/>
           <text x={210} y={125} textAnchor="middle" fill="#EF4444" fontSize="8" fontFamily="Share Tech Mono" fontWeight="600">BRK</text></g>}
         {/* TPMS warning — off by default, lit if any wheel reports low pressure. */}
