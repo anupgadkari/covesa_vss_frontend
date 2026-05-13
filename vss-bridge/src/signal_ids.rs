@@ -479,6 +479,14 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Body.Doors.Row2.Left.Window.MotorDirection" => Some(0x001A_0023),
         "Body.Doors.Row2.Right.Window.MotorDirection" => Some(0x001A_0024),
 
+        // Sunroof rocker detent — String enum:
+        //   NEUTRAL / OPEN_HOLD / OPEN_AUTO / CLOSE_HOLD / CLOSE_AUTO
+        // Written by the cockpit OVERHEAD CONSOLE rocker (and the
+        // simulator-panel SunroofMotorRow) on every press / release.
+        // Consumed by the `SunroofControl` feature which sequences
+        // the two motors and handles auto-mode latching.
+        "Body.Switches.Sunroof.Detent" => Some(0x001B_0001),
+
         _ => None,
     }
 }
@@ -874,6 +882,7 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Body.Doors.Row1.Right.Window.MotorDirection", 0x001A_0022),
     ("Body.Doors.Row2.Left.Window.MotorDirection", 0x001A_0023),
     ("Body.Doors.Row2.Right.Window.MotorDirection", 0x001A_0024),
+    ("Body.Switches.Sunroof.Detent", 0x001B_0001),
 ];
 
 #[cfg(test)]

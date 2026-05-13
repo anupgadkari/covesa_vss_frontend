@@ -25,6 +25,7 @@ pub mod power_window_driver;
 pub mod power_window_local;
 pub mod rke;
 pub mod slam_lock;
+pub mod sunroof_control;
 pub mod thumb_pad_lock;
 pub mod turn_indicator;
 pub mod walk_away_lock;

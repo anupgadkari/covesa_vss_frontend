@@ -189,6 +189,13 @@ pub enum FeatureId {
     /// matching `IsChildLockActive` output — local rear switches are
     /// suppressed while the door is child-locked.
     PowerWindowLocal = 0x26,
+    /// Sunroof + shade coordinated control.  Consumes the
+    /// overhead-console rocker detent (`Body.Switches.Sunroof.Detent`),
+    /// resolves the sequencing rule (shade opens before roof when
+    /// opening; roof closes before shade when closing), and writes
+    /// `Body.Sunroof.MoveCmd` + `Body.Sunroof.Shade.MoveCmd` so the
+    /// existing SunroofPlantModel stays unchanged.
+    SunroofControl = 0x27,
     // ---- Future window-arbiter participants (allow-list reserved) ----
     // WindowAntiPinch       = 0x27 — Priority::Critical, observes a
     //   future per-window anti-pinch detection signal and forces
@@ -255,6 +262,7 @@ impl FeatureId {
             0x24 => Some(Self::PowerChildLock),
             0x25 => Some(Self::PowerWindowDriver),
             0x26 => Some(Self::PowerWindowLocal),
+            0x27 => Some(Self::SunroofControl),
             _ => None,
         }
     }

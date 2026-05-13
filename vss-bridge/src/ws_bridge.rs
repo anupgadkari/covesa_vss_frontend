@@ -166,6 +166,11 @@ const INPUT_SIGNALS: &[VssPath] = &[
     // PowerChildLock feature observes the rising edge and toggles
     // MasterStatus + the per-door IsChildLockActive fan-out.
     "Body.Switches.PowerChildLock.IsPressed",
+    // Sunroof rocker detent (String enum NEUTRAL / OPEN_HOLD /
+    // OPEN_AUTO / CLOSE_HOLD / CLOSE_AUTO).  Written by the cockpit
+    // OVERHEAD CONSOLE rocker; the SunroofControl feature sequences
+    // the two motors from it.
+    "Body.Switches.Sunroof.Detent",
     // Driver-master per-window momentary pushes (8 total).  Consumed
     // by PowerWindowDriver feeding the window arbiter at Medium.
     "Body.Switches.Window.DriverMaster.Row1.Left.IsUpPressed",

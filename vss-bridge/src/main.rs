@@ -63,6 +63,7 @@ use vss_bridge::features::perimeter_alarm::PerimeterAlarm;
 use vss_bridge::features::power_child_lock::PowerChildLock;
 use vss_bridge::features::power_window_driver::PowerWindowDriver;
 use vss_bridge::features::power_window_local::PowerWindowLocal;
+use vss_bridge::features::sunroof_control::SunroofControl;
 use vss_bridge::features::rke::{PairedFob, RkeFeature};
 use vss_bridge::features::slam_lock::SlamLock;
 use vss_bridge::features::thumb_pad_lock::ThumbPadLock;
@@ -405,6 +406,11 @@ async fn boot_simulation_stack(
     // Low.  For Row2 doors the claim is suppressed while the matching
     // IsChildLockActive output (from PowerChildLock) is true.
     set.spawn(PowerWindowLocal::new(Arc::clone(&bus), Arc::clone(&window_arb)).run());
+
+    // SunroofControl — overhead-console rocker → coordinated roof +
+    // shade motors.  Sequencing: shade opens first then roof; roof
+    // closes first then shade.  Auto-mode latching with cancel-on-press.
+    set.spawn(SunroofControl::new(Arc::clone(&bus)).run());
 
     // WindowPlant — 4 per-window motor → position ramps at 10 %/s.
     // Reads MotorDirection (window arbiter output) and integrates
