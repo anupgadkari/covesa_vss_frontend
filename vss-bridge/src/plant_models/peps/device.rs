@@ -214,6 +214,18 @@ impl RssiResponse {
                 trunk_dbm: -75,
                 cabin_dbm: -80,
             },
+            // Short-range cylinder antenna — only the dedicated cylinder
+            // antenna actually picks the fob up; report a strong reading
+            // on a single bucket so callers can recognise the cylinder
+            // hit without a new RSSI field.  Reuse the cabin slot since
+            // the cylinder antenna sits inside the cabin physically.
+            Zone::KeyCylinder => RssiResponse {
+                driver_door_dbm: -90,
+                passenger_door_dbm: -90,
+                hood_dbm: -90,
+                trunk_dbm: -90,
+                cabin_dbm: -20,
+            },
             // No LF coverage — shouldn't be called, but return floor values.
             Zone::RfRange | Zone::OutOfRange => RssiResponse {
                 driver_door_dbm: -100,

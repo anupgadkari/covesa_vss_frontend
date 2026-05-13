@@ -53,6 +53,7 @@ use vss_bridge::features::farewell::Farewell;
 use vss_bridge::features::fog_lamps::FogLamps;
 use vss_bridge::features::follow_me_home::FollowMeHome;
 use vss_bridge::features::hazard_lighting::HazardLighting;
+use vss_bridge::features::key_search_arbiter::KeySearchArbiter;
 use vss_bridge::features::lock_feedback::LockFeedback;
 use vss_bridge::features::manual_horn::ManualHorn;
 use vss_bridge::features::manual_lighting::ManualLighting;
@@ -68,12 +69,14 @@ use vss_bridge::features::slam_lock::SlamLock;
 use vss_bridge::features::sunroof_control::SunroofControl;
 use vss_bridge::features::thumb_pad_lock::ThumbPadLock;
 use vss_bridge::features::turn_indicator::TurnIndicator;
+use vss_bridge::features::vehicle_starting_control::VehicleStartingControl;
 use vss_bridge::features::walk_away_lock::WalkAwayLock;
 use vss_bridge::features::welcome::Welcome;
 use vss_bridge::ipc_message::SignalValue;
 use vss_bridge::kuksa_sync;
 use vss_bridge::nvm::NvmStore;
 use vss_bridge::plant_models::blink_relay::BlinkRelay;
+use vss_bridge::plant_models::brake::BrakePlant;
 use vss_bridge::plant_models::chime::ChimePlantModel;
 use vss_bridge::plant_models::day_night_mode::DayNightModePlant;
 use vss_bridge::plant_models::door_handle::DoorHandlePlantModel;
@@ -489,7 +492,23 @@ async fn boot_simulation_stack(
     set.spawn(CabinTrunkRelease::new(Arc::clone(&bus), Arc::clone(&trunk_arb)).run());
     set.spawn(ExteriorTrunkButton::new(Arc::clone(&bus), Arc::clone(&trunk_arb)).run());
 
-    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome, MirrorFold, MirrorAdjust, Farewell, DoorOpenAssist, ExteriorTrunkButton, CabinTrunkRelease, ManualHorn, PerimeterAlarm");
+    // KeySearch arbiter — owns LF airtime for PEPS searches and runs
+    // the adaptive approach-poll loop.  Today its only feature
+    // consumer is `VehicleStartingControl`; phase 8+ migrates the
+    // legacy passive-entry / exterior-trunk-button paths onto it.
+    let (key_search_arb, key_search_handle, key_search_rx) =
+        KeySearchArbiter::new_with_rx(Arc::clone(&bus));
+    set.spawn(key_search_arb.run(key_search_rx));
+    set.spawn(
+        VehicleStartingControl::new(
+            Arc::clone(&bus),
+            Arc::clone(&cfg),
+            key_search_handle.clone(),
+        )
+        .run(),
+    );
+
+    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome, MirrorFold, MirrorAdjust, Farewell, DoorOpenAssist, ExteriorTrunkButton, CabinTrunkRelease, ManualHorn, PerimeterAlarm, KeySearchArbiter, VehicleStartingControl");
 
     // ── Plant Models ────────────────────────────────────────────────
     set.spawn(BlinkRelay::new(Arc::clone(&bus)).run());
@@ -502,6 +521,10 @@ async fn boot_simulation_stack(
     // Drives the cockpit view's night-backlit rendering style.  Future
     // extensions: ambient light sensor, GPS sunset, tunnel detection.
     set.spawn(DayNightModePlant::new(Arc::clone(&bus)).run());
+    // Brake plant: derives Chassis.Brake.IsApplied (bool) from
+    // Chassis.Brake.PedalPosition (Uint8 %) with hysteresis.
+    // Consumed by the upcoming VehicleStartingControl feature.
+    set.spawn(BrakePlant::new(Arc::clone(&bus)).run());
     set.spawn(
         DoorLockPlantModel::with_ack_and_nvm(Arc::clone(&bus), door_lock_ack_tx, nvm.clone())
             .with_cfg(Arc::clone(&cfg))
@@ -518,7 +541,7 @@ async fn boot_simulation_stack(
             .with_response_stagger_ms(vss_bridge::plant_models::peps::PRODUCTION_STAGGER_MS)
             .run(),
     );
-    tracing::info!("plant models spawned: BlinkRelay, ChimePlantModel, DayNightModePlant, DoorLockPlantModel, DoorHandlePlantModel, TrunkPlantModel, HoodPlantModel, SunroofPlantModel, PepsPlantModel");
+    tracing::info!("plant models spawned: BlinkRelay, BrakePlant, ChimePlantModel, DayNightModePlant, DoorLockPlantModel, DoorHandlePlantModel, TrunkPlantModel, HoodPlantModel, SunroofPlantModel, PepsPlantModel");
 
     // ── WebSocket bridge ────────────────────────────────────────────
     let ws_port: u16 = std::env::var("VSS_BRIDGE_WS_PORT")
@@ -539,11 +562,8 @@ async fn boot_simulation_stack(
     });
 
     // ── Initial signal state ────────────────────────────────────────
-    bus.publish(
-        "Vehicle.LowVoltageSystemState",
-        SignalValue::String("OFF".to_string()),
-    )
-    .await?;
+    // `Vehicle.LowVoltageSystemState` is seeded by `VehicleStartingControl`
+    // (sole writer); no top-level publish here.
     bus.publish("Body.Switches.Panic.IsEngaged", SignalValue::Bool(false))
         .await?;
     bus.publish("Vehicle.Body.Alarm.IsActive", SignalValue::Bool(false))

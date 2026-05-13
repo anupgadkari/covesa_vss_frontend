@@ -41,6 +41,12 @@ pub enum Zone {
     Cabin,
     /// ~5m approach range — LF antennas active but only RSSI polling (no crypto challenge).
     Approach,
+    /// Short-range (~5 cm) LF antenna at the cylinder / start button.
+    /// On `KeySource::Peps` vehicles, the cylinder antenna is a backup
+    /// auth path (low-battery fob, etc.); on `KeySource::KeyCylinder`
+    /// vehicles it is the *only* auth path for ignition.  Always
+    /// supports challenge-response.
+    KeyCylinder,
     /// ~100m RF range — fob button presses only (rolling code).
     RfRange,
     /// Beyond all communication range.
@@ -48,7 +54,8 @@ pub enum Zone {
 }
 
 impl Zone {
-    /// Whether this zone has LF antenna coverage (proximity or approach).
+    /// Whether this zone has LF antenna coverage (proximity, approach,
+    /// or the short-range cylinder antenna).
     pub fn has_lf(self) -> bool {
         matches!(
             self,
@@ -59,11 +66,12 @@ impl Zone {
                 | Zone::TrunkInside
                 | Zone::Cabin
                 | Zone::Approach
+                | Zone::KeyCylinder
         )
     }
 
     /// Whether this zone supports full AES-128 challenge-response authentication.
-    /// Only the ~1m proximity zones do; Approach only supports RSSI polling.
+    /// Proximity + cylinder zones do; Approach only supports RSSI polling.
     pub fn supports_challenge_response(self) -> bool {
         matches!(
             self,
@@ -73,6 +81,7 @@ impl Zone {
                 | Zone::Trunk
                 | Zone::TrunkInside
                 | Zone::Cabin
+                | Zone::KeyCylinder
         )
     }
 
@@ -102,6 +111,7 @@ impl Zone {
             "TrunkInside" => Some(Zone::TrunkInside),
             "Cabin" => Some(Zone::Cabin),
             "Approach" => Some(Zone::Approach),
+            "KeyCylinder" => Some(Zone::KeyCylinder),
             "RfRange" => Some(Zone::RfRange),
             "OutOfRange" => Some(Zone::OutOfRange),
             _ => None,
@@ -118,6 +128,7 @@ impl Zone {
             Zone::TrunkInside => "TrunkInside",
             Zone::Cabin => "Cabin",
             Zone::Approach => "Approach",
+            Zone::KeyCylinder => "KeyCylinder",
             Zone::RfRange => "RfRange",
             Zone::OutOfRange => "OutOfRange",
         }
@@ -234,6 +245,7 @@ mod tests {
             Zone::TrunkInside,
             Zone::Cabin,
             Zone::Approach,
+            Zone::KeyCylinder,
             Zone::RfRange,
             Zone::OutOfRange,
         ] {

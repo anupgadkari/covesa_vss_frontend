@@ -175,6 +175,14 @@ const {useState,useEffect,useRef}=React;
 const INIT_STATE={
   'Vehicle.LowVoltageSystemState':'OFF',
   'Vehicle.Powertrain.Type':'COMBUSTION',
+  // Vehicle starting / ignition (owned by VehicleStartingControl).
+  'Body.Switches.StartStop.IsPressed':false,
+  'Body.Switches.IgnitionCylinder.Position':'LOCK',
+  'Chassis.Brake.IsApplied':false,
+  'Vehicle.Starting.ImmobilizerStatus':'LOCKED',
+  // BTSI + Key-in-Ignition Inhibit derived flags.
+  'Powertrain.Transmission.ShiftLockEngaged':true,
+  'Body.Switches.IgnitionCylinder.RemovalInhibited':false,
   // Lights — outputs
   'Body.Lights.Beam.Low.IsOn':false,
   'Body.Lights.Beam.High.IsOn':false,
@@ -646,6 +654,9 @@ function getDevicePos(zone, idx, total){
     case 'Trunk':        return {x:VCX+off,   y:600};        // below rear bumper (y=580)
     case 'TrunkInside':  return {x:VCX+off,   y:550};        // inside trunk rect (y=440–560)
     case 'Cabin':        return {x:VCX+off,   y:330};        // mid-cabin
+    // Short-range cylinder antenna — physically at the steering column
+    // / start-button area.  Park chips just above the dashboard.
+    case 'KeyCylinder':  return {x:VCX-22+off, y:170};
     case 'OutOfRange':   return {x:-150+idx*52, y:755};
     default:             return {x:-150+idx*52, y:755};
   }
@@ -674,6 +685,11 @@ function hitTestZone(x,y){
   if(x>=60&&x<=300&&y>=80&&y<=580){
     if(y<=140) return 'Hood';
     if(y>=440) return 'TrunkInside';
+    // KeyCylinder — small dashboard / steering-column region between
+    // the firewall and the front-seat area.  Tested before the door
+    // edge bands so a chip dropped right at the start-button stays
+    // KeyCylinder rather than collapsing to LeftFront / RightFront.
+    if(x>=140&&x<=220&&y>=150&&y<=195) return 'KeyCylinder';
     if(x<=112) return 'LeftFront';
     if(x>=248) return 'RightFront';
     return 'Cabin';
@@ -701,7 +717,7 @@ function DeviceChip({device, pos, dimmed, onPointerDown}){
   </g>;
 }
 
-function CombinedView({s,set,onDeviceSelect}){
+function CombinedView({s,set,cfg,onDeviceSelect}){
   const svgRef=useRef(null);
   const [drag,setDrag]=useState(null);
   // drag={key,type,label,color,paired,isNfc,x,y,ox,oy}
@@ -719,7 +735,12 @@ function CombinedView({s,set,onDeviceSelect}){
   }
   for(let i=1;i<=2;i++){
     const pos=s[`Body.PEPS.Plant.NfcCard.${i}.Position`]||'NotPresent';
-    const zone=pos==='DriverHandle'?'LeftFront':pos==='PushButton'?'Cabin':'OutOfRange';
+    // Render NFC card chip at the *driver-side* B-pillar zone — uses
+    // the same dealer.driver_door_side cal as PEPS handle routing so
+    // the chip moves to the correct side on RHD vehicles.
+    const driverSideForChip = cfg?.dealer?.driver_door_side === 'Right' ? 'Right' : 'Left';
+    const driverZoneForChip = driverSideForChip === 'Right' ? 'RightFront' : 'LeftFront';
+    const zone=pos==='DriverHandle'?driverZoneForChip:pos==='PushButton'?'Cabin':'OutOfRange';
     allDevices.push({key:`Body.PEPS.Plant.NfcCard.${i}.Position`,type:'nfc',label:`N${i}`,
       zone,paired:true,color:'#0DC8C8',isNfc:true,nfcPos:pos});
   }
@@ -743,6 +764,15 @@ function CombinedView({s,set,onDeviceSelect}){
   }
 
   function startDrag(e,device){
+    // Key removal lockout — a fob can only leave the cylinder when
+    // the cylinder is rotated to LOCK on KeyCylinder vehicles.  PEPS
+    // vehicles aren't affected.  Phones at the cylinder are NFC
+    // taps and never physically insert, so they're never stuck.
+    if (device.type === 'fob'
+        && device.zone === 'KeyCylinder'
+        && isFobLockedInCylinder(s, cfg)) {
+      return;
+    }
     e.preventDefault();
     const {x,y}=svgCoords(e);
     setDrag({...device,x,y,ox:x,oy:y});
@@ -769,9 +799,33 @@ function CombinedView({s,set,onDeviceSelect}){
     }
     const zone=hitTestZone(x,y);
     if(drag.isNfc){
-      const nfcPos=zone==='LeftFront'?'DriverHandle':zone==='Cabin'?'PushButton':'NotPresent';
+      // NFC card → reader position mapping, side-aware via the same
+      // `dealer.driver_door_side` cal that PEPS uses to route handle
+      // pulls.  Only the driver-side B-pillar carries the NFC reader
+      // hardware in production; dropping on the passenger side
+      // therefore reads as `NotPresent` (no reader to tap).
+      // Defaults to Left when cfg is missing or driver_door_side
+      // hasn't arrived yet from the broadcast.
+      const driverSide = cfg?.dealer?.driver_door_side === 'Right' ? 'Right' : 'Left';
+      const driverZone = driverSide === 'Right' ? 'RightFront' : 'LeftFront';
+      const nfcPos = zone===driverZone ? 'DriverHandle'
+                   : zone==='Cabin'     ? 'PushButton'
+                   : 'NotPresent';
       set(drag.key,nfcPos);
     } else {
+      // Single-slot cylinder: refuse drops on KeyCylinder when a
+      // different fob is already inserted there.  Applies to fobs
+      // only; phones can "tap" the NFC pad regardless.
+      if(zone==='KeyCylinder' && drag.type==='fob'){
+        const mFob=drag.key.match(/KeyFob\.(\d+)/);
+        const myIdx=mFob?parseInt(mFob[1]):0;
+        const occupant=fobOccupyingCylinder(s);
+        if(occupant && occupant !== myIdx){
+          // Slot occupied by a different fob — silently bounce.
+          setDrag(null);
+          return;
+        }
+      }
       set(drag.key,zone);
     }
     setDrag(null);
@@ -911,6 +965,19 @@ function CombinedView({s,set,onDeviceSelect}){
       stroke="#F59E0B" strokeWidth={dropZone==='Approach'?2:1}
       opacity={dropZone==='Approach'?0.6:0.2} strokeDasharray="5,3"/>
     <text x={VCX+110} y={VCY-100-300+20} fill="#F59E0B" fontSize="9" fontFamily="Share Tech Mono" opacity={dropZone==='Approach'?0.8:0.4}>APPROACH</text>
+
+    {/* KeyCylinder — short-range LF antenna at the steering column /
+        start button.  Drop zone is a small rectangle in the dashboard
+        region.  Used by VehicleStartingControl on KeyCylinder builds
+        (fob authenticates only when sitting at the cylinder) and as a
+        low-battery fallback on PEPS builds. */}
+    <rect x={140} y={150} width={80} height={45} rx={6}
+      fill={dropZone==='KeyCylinder'?'rgba(74,158,245,0.18)':'rgba(74,158,245,0.05)'}
+      stroke="#4A9EF5" strokeWidth={dropZone==='KeyCylinder'?2:1}
+      opacity={dropZone==='KeyCylinder'?0.9:0.45} strokeDasharray="3,2"/>
+    <text x={180} y={167} textAnchor="middle" fill="#4A9EF5" fontSize="8"
+      fontFamily="Share Tech Mono" fontWeight="700"
+      opacity={dropZone==='KeyCylinder'?1:0.55}>KEY CYLINDER</text>
 
     {/* ── Vehicle top view ── */}
     {/* Headlamp beam cones — fan forward from each headlight in top
@@ -2296,8 +2363,8 @@ function CockpitView({s,set,cfg}){
     </CockpitZone>
 
     {/* ── Steering wheel + stalks ── */}
-    <CockpitZone title="STEERING" subtitle="wheel · stalks · paddles" night={night}>
-      <div style={{display:'grid',gridTemplateColumns:'120px 1fr 120px',gap:10,alignItems:'center'}}>
+    <CockpitZone title="STEERING" subtitle="wheel · stalks · paddles · start button" night={night}>
+      <div style={{display:'grid',gridTemplateColumns:'120px 1fr 120px 80px',gap:10,alignItems:'center'}}>
         {/* Left stalk: turn signals + high-beam pull */}
         <div style={{display:'flex',flexDirection:'column',gap:5}}>
           <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1}}>LEFT STALK</span>
@@ -2344,6 +2411,146 @@ function CockpitView({s,set,cfg}){
           <Btn night={night} on={false} onClick={()=>{}}>WASHER ⇣</Btn>
           <Btn night={night} on={horn} onMouseDown={()=>set('Body.Horn.IsActive',true)} onMouseUp={()=>set('Body.Horn.IsActive',false)} onMouseLeave={()=>set('Body.Horn.IsActive',false)}>🔊 HORN</Btn>
         </div>
+        {/* Ignition control — circular Start/Stop button on PEPS builds,
+            4-position rotary key cylinder on KeyCylinder builds.  Sits
+            to the right of the wiper stalk, mirroring real-world
+            dashboard layouts where the ignition lives outboard of the
+            wiper stalk on the driver side. */}
+        {(()=>{
+          const keySource = cfg?.vehicle_line?.key_source_cfg || 'PEPS';
+          const power     = s['Vehicle.LowVoltageSystemState'] || 'OFF';
+          const running   = power === 'ON' || power === 'START';
+          if (keySource === 'PEPS') {
+            const pressed = !!s['Body.Switches.StartStop.IsPressed'];
+            const ringColor = pressed ? '#EF4444'
+                            : running ? '#10B981'
+                            : night   ? '#3A2A12' : '#1A2838';
+            const fillColor = pressed
+              ? (night?'#3a0e0e':'#fee2e2')
+              : (night?'#0F1726':'#0C1825');
+            const textColor = pressed ? '#EF4444'
+                            : running ? '#10B981'
+                            : night   ? '#7A5A1A' : '#9CA3AF';
+            return <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4}}>
+              <span style={{fontFamily:'Share Tech Mono',fontSize:7,
+                color:night?'#7A5A1A':'#6B7E99',letterSpacing:1}}>START / STOP</span>
+              <svg viewBox="0 0 70 70" style={{width:68,height:68,cursor:'pointer',userSelect:'none'}}
+                onMouseDown={()=>set('Body.Switches.StartStop.IsPressed',true)}
+                onMouseUp={()=>set('Body.Switches.StartStop.IsPressed',false)}
+                onMouseLeave={()=>set('Body.Switches.StartStop.IsPressed',false)}
+                onTouchStart={(e)=>{e.preventDefault();set('Body.Switches.StartStop.IsPressed',true);}}
+                onTouchEnd={()=>set('Body.Switches.StartStop.IsPressed',false)}>
+                <title>Press & hold — Engine Start / Stop</title>
+                <circle cx="35" cy="35" r="30" fill={fillColor}
+                  stroke={ringColor} strokeWidth={pressed?3:2}/>
+                <circle cx="35" cy="36" r="12" fill="none"
+                  stroke={textColor} strokeWidth="2.5" strokeLinecap="round"
+                  strokeDasharray="60 8" transform="rotate(-90 35 36)"/>
+                <line x1="35" y1="20" x2="35" y2="34"
+                  stroke={textColor} strokeWidth="2.8" strokeLinecap="round"/>
+                <text x="35" y="58" textAnchor="middle"
+                  fill={textColor} fontSize="6" fontFamily="Share Tech Mono"
+                  fontWeight="700" letterSpacing="0.5">ENGINE</text>
+                {running && !pressed && <circle cx="35" cy="35" r="33"
+                  fill="none" stroke="#10B981" strokeWidth="1" opacity="0.5"
+                  className="blink"/>}
+              </svg>
+            </div>;
+          }
+          // KeyCylinder — rotary knob with 4 positions.  Click a label
+          // to rotate to that detent.  START is spring-loaded: mousedown
+          // sets START, mouseup returns to ON (matching real cylinders).
+          const pos = s['Body.Switches.IgnitionCylinder.Position'] || 'LOCK';
+          // Five detents arranged like a real automotive cylinder:
+          //   LOCK   at 7 o'clock   (clockwise rotation away from rest)
+          //   OFF    at 9 o'clock
+          //   ACC    at 10:30
+          //   ON     at 12 o'clock
+          //   START  at 1 o'clock   (spring-loaded — releases back to ON)
+          // SVG angle convention: 0° = 3 o'clock, 90° = 6 o'clock,
+          // 180° = 9 o'clock, -90° (or 270°) = 12 o'clock.  Clock-hour
+          // h maps to angle (h-3)*30°.
+          const POSITIONS = [
+            {p:'LOCK',  angle: 120},  // 7   o'clock
+            {p:'OFF',   angle: 180},  // 9   o'clock
+            {p:'ACC',   angle: 225},  // 10:30
+            {p:'ON',    angle: 270},  // 12  o'clock
+            {p:'START', angle: 300},  // 1   o'clock
+          ];
+          const cur = POSITIONS.find(x=>x.p===pos) || POSITIONS[0];
+          const ringColor = night?'#3A2A12':'#1A2838';
+          const knobFill  = night?'#0F1726':'#0C1825';
+          const accentColor = running ? '#10B981'
+                            : pos==='ACC' ? '#F59E0B'
+                            : '#9CA3AF';
+          return <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4}}>
+            <span style={{fontFamily:'Share Tech Mono',fontSize:7,
+              color:night?'#7A5A1A':'#6B7E99',letterSpacing:1}}>IGNITION</span>
+            <svg viewBox="0 0 90 90" style={{width:84,height:84,userSelect:'none'}}>
+              <title>Key cylinder rotary — click a position (START is spring-loaded)</title>
+              {/* Outer ring */}
+              <circle cx="45" cy="45" r="28" fill={knobFill}
+                stroke={ringColor} strokeWidth="2"/>
+              {/* Position dots (on ring) + labels (outside ring) */}
+              {(()=>{
+                // Key-in-Ignition Inhibit: when the transmission isn't
+                // in PARK, the LOCK detent is blocked (the bridge will
+                // bounce the rotation to OFF anyway).  Render LOCK in
+                // a muted red and short-circuit its click so the user
+                // sees the disabled state and doesn't trigger the
+                // bridge revert.
+                const removalInhibited = !!s['Body.Switches.IgnitionCylinder.RemovalInhibited'];
+                return POSITIONS.map(({p,angle})=>{
+                const rad = angle * Math.PI/180;
+                const dotR = 28;
+                const labR = 39;
+                const dx = 45 + Math.cos(rad)*dotR;
+                const dy = 45 + Math.sin(rad)*dotR;
+                const lx = 45 + Math.cos(rad)*labR;
+                const ly = 45 + Math.sin(rad)*labR + 2; // baseline tweak
+                const active = p === pos;
+                const lockBlocked = p === 'LOCK' && removalInhibited;
+                const c = lockBlocked
+                  ? (night?'#5A2828':'#8A4848')
+                  : (active ? accentColor : (night?'#5A4416':'#5A6878'));
+                const isStart = p === 'START';
+                const handlers = lockBlocked
+                  ? { onClick: ()=>{/* swallowed — gear interlock */} }
+                  : isStart
+                  ? {
+                      onMouseDown: ()=>set('Body.Switches.IgnitionCylinder.Position','START'),
+                      onMouseUp:   ()=>set('Body.Switches.IgnitionCylinder.Position','ON'),
+                      onMouseLeave:()=>set('Body.Switches.IgnitionCylinder.Position','ON'),
+                      onTouchStart:(e)=>{e.preventDefault();set('Body.Switches.IgnitionCylinder.Position','START');},
+                      onTouchEnd:  ()=>set('Body.Switches.IgnitionCylinder.Position','ON'),
+                    }
+                  : { onClick: ()=>set('Body.Switches.IgnitionCylinder.Position',p) };
+                return <g key={p}
+                  style={{cursor:lockBlocked?'not-allowed':'pointer',
+                          opacity:lockBlocked?0.55:1}}
+                  {...handlers}>
+                  {lockBlocked && <title>Shift to PARK to remove the key</title>}
+                  {/* Larger transparent hitbox so the small dots are easy to tap. */}
+                  <circle cx={dx} cy={dy} r="9" fill="transparent"/>
+                  <circle cx={dx} cy={dy} r={active?3:2} fill={c}/>
+                  <text x={lx} y={ly} textAnchor="middle" fill={c}
+                    fontSize="6" fontFamily="Share Tech Mono" fontWeight="700">{p}</text>
+                </g>;
+                });
+              })()}
+              {/* Pointer needle — rotates to indicate current position.
+                  Pivot is at the cylinder centre (45,45). */}
+              <g transform={`rotate(${cur.angle} 45 45)`}>
+                <line x1="45" y1="45" x2="68" y2="45"
+                  stroke={accentColor} strokeWidth="2.8" strokeLinecap="round"/>
+                <circle cx="45" cy="45" r="4" fill={accentColor}/>
+              </g>
+              {/* Key bow — small notched flange at the centre to evoke a key */}
+              <rect x="42" y="42" width="6" height="6" rx="1"
+                fill="none" stroke={night?'#3A2A12':'#1A2838'} strokeWidth="0.8"/>
+            </svg>
+          </div>;
+        })()}
       </div>
     </CockpitZone>
 
@@ -2540,21 +2747,42 @@ function CockpitView({s,set,cfg}){
 
     {/* ── Gear shifter ── */}
     <CockpitZone title="GEAR SHIFTER" subtitle="SelectedGear → TransmissionPlant → CurrentGear" night={night}>
-      <div style={{display:'flex',gap:6,alignItems:'center'}}>
-        {[{lab:'P',g:126},{lab:'R',g:-1},{lab:'N',g:0},{lab:'D',g:127},{lab:'S',g:128}].map(({lab,g})=>(
-          <Btn night={night} key={lab} on={gearLabel(selGear)===lab}
-            onClick={()=>set('Powertrain.Transmission.SelectedGear',g)}
-            sz={14} pad={'10px 18px'} min={50}>{lab}</Btn>
-        ))}
-        <span style={{flex:1}}/>
-        {/* Driver-intent readout — mirrors the highlighted button.
-            The cluster PRND under the speedometer is the authoritative
-            "actual engaged gear" indicator (bound to CurrentGear). */}
-        <div style={{fontFamily:'Orbitron',fontSize:24,fontWeight:700,color:'#F59E0B',
-          border:`1px solid ${night?'#3A2A12':'#1A2838'}`,padding:'4px 18px',borderRadius:4,minWidth:60,textAlign:'center'}}>
-          {gearLabel(selGear)}
-        </div>
-      </div>
+      {(()=>{
+        // BTSI status — true while P is engaged but brake + ignition
+        // haven't both been satisfied.  Drives a small inline chip so
+        // the driver understands why a P→D shift is being rejected.
+        const shiftLock = !!s['Powertrain.Transmission.ShiftLockEngaged'];
+        return <div style={{display:'flex',gap:6,alignItems:'center'}}>
+          {[{lab:'P',g:126},{lab:'R',g:-1},{lab:'N',g:0},{lab:'D',g:127},{lab:'S',g:128}].map(({lab,g})=>{
+            // Grey out non-P chips while the shift lock is engaged so
+            // the user can see the interlock at a glance.
+            const isP = lab === 'P';
+            const blocked = shiftLock && !isP;
+            return <span key={lab}
+              style={{opacity:blocked?0.4:1,
+                      cursor:blocked?'not-allowed':'pointer',
+                      display:'inline-block'}}>
+              <Btn night={night} on={gearLabel(selGear)===lab}
+                onClick={()=>set('Powertrain.Transmission.SelectedGear',g)}
+                sz={14} pad={'10px 18px'} min={50}>{lab}</Btn>
+            </span>;
+          })}
+          {shiftLock && <div style={{fontFamily:'Share Tech Mono',fontSize:9,
+            color:'#F59E0B',fontWeight:700,padding:'4px 8px',borderRadius:3,
+            border:'1px solid #F59E0B',background:'rgba(245,158,11,0.08)',
+            letterSpacing:0.5,marginLeft:6}}>
+            🔒 SHIFT-LOCK · press brake + ignition ON
+          </div>}
+          <span style={{flex:1}}/>
+          {/* Driver-intent readout — mirrors the highlighted button.
+              The cluster PRND under the speedometer is the authoritative
+              "actual engaged gear" indicator (bound to CurrentGear). */}
+          <div style={{fontFamily:'Orbitron',fontSize:24,fontWeight:700,color:'#F59E0B',
+            border:`1px solid ${night?'#3A2A12':'#1A2838'}`,padding:'4px 18px',borderRadius:4,minWidth:60,textAlign:'center'}}>
+            {gearLabel(selGear)}
+          </div>
+        </div>;
+      })()}
     </CockpitZone>
 
     {/* ── Row-1 door trim panels — left + right side-by-side. ──
@@ -2853,19 +3081,63 @@ const ZONE_PROX=[
 ];
 const INTERIOR_ZONES=new Set(['Hood','Trunk','TrunkInside','LeftFront','RightFront','Cabin']);
 
+/* The cylinder is a single physical slot — only one fob's mechanical
+   key bow can be inserted at a time.  Returns the slot index (1-6) of
+   the fob currently at KeyCylinder, or 0 if empty.  Phones and NFC
+   cards don't count: their "presence" at the cylinder is an NFC tap,
+   not a mechanical insertion. */
+function fobOccupyingCylinder(s){
+  for(let i=1;i<=6;i++){
+    if(s[`Body.PEPS.Plant.KeyFob.${i}.Zone`]==='KeyCylinder') return i;
+  }
+  return 0;
+}
+
+/* Fob-stuck-in-cylinder predicate.
+   A fob can be pulled out of the cylinder at either LOCK or OFF —
+   both are mechanical "no electrical activity" detents.  LOCK
+   additionally engages the steering-column lock (anti-theft); OFF
+   leaves the column free but the key still releases.  ACC / ON /
+   START all trap the key bow.  PEPS vehicles have no physical
+   cylinder so the lockout never applies. */
+function isFobLockedInCylinder(s, cfg){
+  const keySource = cfg?.vehicle_line?.key_source_cfg || 'PEPS';
+  if(keySource !== 'KeyCylinder') return false;
+  const pos = s['Body.Switches.IgnitionCylinder.Position'] || 'LOCK';
+  return pos !== 'LOCK' && pos !== 'OFF';
+}
+
 /* ── Dedicated Auth Device Panel ──────────────────────────────── */
-function DevicePanel({s, set, sel, setSel}){
+function DevicePanel({s, set, cfg, sel, setSel}){
   const [firedBtn, setFiredBtn]=useState(null);
 
-  // Device selector list: fobs 1-4 (paired) + phones 1-2
+  // Device selector list: paired fobs 1-4 + intruder fobs 5-6 + phones 1-2.
+  // Intruder fobs are coloured red to distinguish them from authorised
+  // (amber) fobs.  Fob 5 is a mechanically-compatible / unauthorised key;
+  // Fob 6 is an incompatible key blank (modelled in the zone-button
+  // filter — its CYLINDER tile is hidden).
   const devices=[
-    ...[1,2,3,4].map(i=>({type:'fob',  index:i, label:`F${i}`, color:'#F59E0B', pfx:`Body.PEPS.Plant.KeyFob.${i}`})),
-    ...[1,2]    .map(i=>({type:'phone',index:i, label:`P${i}`, color:'#4A9EF5', pfx:`Body.PEPS.Plant.BlePhone.${i}`})),
+    ...[1,2,3,4].map(i=>({type:'fob',  index:i, label:`F${i}`, color:'#F59E0B', pfx:`Body.PEPS.Plant.KeyFob.${i}`,  sigKey:'Zone'})),
+    ...[5,6]    .map(i=>({type:'fob',  index:i, label:`F${i}`, color:'#F04040', pfx:`Body.PEPS.Plant.KeyFob.${i}`,  sigKey:'Zone', intruder:true})),
+    ...[1,2]    .map(i=>({type:'phone',index:i, label:`P${i}`, color:'#4A9EF5', pfx:`Body.PEPS.Plant.BlePhone.${i}`, sigKey:'Zone'})),
+    // NFC cards — signal is `.Position` (NfcPosition enum), not `.Zone`.
+    // Default value `NotPresent` represents "no NFC reader contact".
+    ...[1,2]    .map(i=>({type:'nfc',  index:i, label:`N${i}`, color:'#0DC8C8', pfx:`Body.PEPS.Plant.NfcCard.${i}`,  sigKey:'Position', isNfc:true})),
   ];
 
   const dev=devices.find(d=>d.type===sel.type&&d.index===sel.index)||devices[0];
-  const zone=s[`${dev.pfx}.Zone`]||'OutOfRange';
-  const rssi=s[`${dev.pfx}.RssiResponse`]||'';
+  const isNfc = dev.type === 'nfc';
+  // Raw signal value (Zone enum for fobs/phones, NfcPosition enum for cards).
+  const rawSlot=s[`${dev.pfx}.${dev.sigKey}`] || (isNfc?'NotPresent':'OutOfRange');
+  // Logical "zone" used by the proximity bar + colour code.  NFC
+  // positions translate into a representative zone (LeftFront for
+  // DriverHandle, Cabin for PushButton) just for the colour band —
+  // the actual signal write goes through the NFC-specific quick-
+  // assign buttons below, not the zone grid.
+  const zone = isNfc
+    ? (rawSlot==='DriverHandle' ? 'LeftFront' : rawSlot==='PushButton' ? 'Cabin' : 'OutOfRange')
+    : rawSlot;
+  const rssi=isNfc?'':(s[`${dev.pfx}.RssiResponse`]||'');
   const rfMsg=dev.type==='fob'?(s[`${dev.pfx}.RfMessage`]||''):'';
   const btnPress=dev.type==='fob'?(s[`${dev.pfx}.ButtonPress`]||'NONE'):null;
 
@@ -2892,8 +3164,8 @@ function DevicePanel({s, set, sel, setSel}){
       {/* Device chips — tap to select */}
       <div style={{display:'flex',flexWrap:'wrap',gap:4}}>
         {devices.map(d=>{
-          const dZone=s[`${d.pfx}.Zone`]||'OutOfRange';
-          const inRange=dZone!=='OutOfRange';
+          const dSlot=s[`${d.pfx}.${d.sigKey}`] || (d.isNfc?'NotPresent':'OutOfRange');
+          const inRange = d.isNfc ? dSlot!=='NotPresent' : dSlot!=='OutOfRange';
           const isSel=d.type===sel.type&&d.index===sel.index;
           return <div key={d.type+d.index}
             className={`devchip${isSel?' active':''}${inRange?' inrange':''}`}
@@ -2906,10 +3178,12 @@ function DevicePanel({s, set, sel, setSel}){
         })}
       </div>
 
-      {/* Zone display */}
+      {/* Zone display — for NFC, displays the NfcPosition enum value
+          (DriverHandle / PushButton / NotPresent) instead of the
+          zone name, since cards have no physical "zone". */}
       <div className="devpanel-zone">
-        <div className="devpanel-section">ZONE</div>
-        <div className="devpanel-zoneval" style={{color:zoneColor}}>{zone}</div>
+        <div className="devpanel-section">{isNfc?'NFC POSITION':'ZONE'}</div>
+        <div className="devpanel-zoneval" style={{color:zoneColor}}>{isNfc?rawSlot:zone}</div>
         {/* Proximity bar */}
         <div className="devpanel-prox">
           {ZONE_PROX.map(seg=>{
@@ -2930,8 +3204,43 @@ function DevicePanel({s, set, sel, setSel}){
         </div>
       </div>
 
+      {/* NFC quick-assign — only 3 valid NfcPosition values.
+          Bypasses the zone-based grid entirely. */}
+      {isNfc && (()=>{
+        const NFC_BTNS=[
+          {z:'NotPresent',  label:'NOT\nPRESENT',  c:'#2E3E55'},
+          {z:'DriverHandle',label:'DRIVER\nHANDLE',c:'#10D98A'},
+          {z:'PushButton',  label:'PUSH\nBUTTON',  c:'#4A9EF5'},
+        ];
+        return <>
+          <div className="devpanel-section">PLACE AT READER</div>
+          <div className="zonepick">
+            {NFC_BTNS.map(({z,label,c})=>{
+              const isActive=rawSlot===z;
+              return <button key={z}
+                className={`zpbtn${isActive?' zp-active':''}`}
+                style={{borderColor:isActive?c:'',background:isActive?c:'',color:isActive?'#0a0f18':''}}
+                onClick={()=>set(`${dev.pfx}.${dev.sigKey}`,z)}>
+                {label}
+              </button>;
+            })}
+          </div>
+        </>;
+      })()}
+
       {/* Zone quick-assign */}
-      {(()=>{
+      {!isNfc && (()=>{
+        // CYLINDER / BACKUP represents the short-range LF + NFC pad
+        // at the start button / cylinder.  Devices that can sit there:
+        //   - Authorised fobs (F1-F4) via the LF transponder.
+        //   - Fob 5 mechanically fits but fails the immobilizer check.
+        //   - Phones (P1, P2) tap the cylinder NFC pad — same model
+        //     as a phone tapped on the driver-door NFC reader for
+        //     unlock, just at the start-button NFC pad for ignition.
+        // Excluded:
+        //   - Fob 6 — physically incompatible key blank, can't even
+        //     be inserted into the cylinder.
+        const noCylinderSlot = dev.type==='fob' && dev.index===6;
         const ZONE_BTNS=[
           {z:'OutOfRange',  label:'OUT',          c:'#2E3E55'},
           {z:'RfRange',     label:'RF RANGE',      c:'#4A9EF5'},
@@ -2946,16 +3255,57 @@ function DevicePanel({s, set, sel, setSel}){
           {z:'Hood',        label:'HOOD',          c:'#10D98A'},
           {z:'Trunk',       label:'TRUNK\nOUTSIDE',c:'#A78BFA'},
           {z:'TrunkInside', label:'TRUNK\nINSIDE', c:'#EC4899'},
+          // Cylinder / backup antenna — KeyCylinder line-cal uses
+          // this as the only auth path; PEPS line-cal uses it as a
+          // low-battery fallback (auth still works without fob RF).
+          ...(noCylinderSlot ? [] : [{z:'KeyCylinder', label:'CYLINDER\n/ BACKUP', c:'#4A9EF5'}]),
         ];
+        // Key removal lockout — only fobs parked at the KeyCylinder
+        // slot are physically inserted.  They can be removed only
+        // once the cylinder is rotated to LOCK (KeyCylinder vehicles
+        // only).  Phones at the cylinder are NFC taps and never
+        // stuck.  PEPS vehicles never reach this branch.
+        const keyStuckHere = dev.type === 'fob'
+                          && zone === 'KeyCylinder'
+                          && isFobLockedInCylinder(s, cfg);
+        // Single-slot cylinder occupancy.  Only relevant when the
+        // selected device is a fob trying to *enter* the cylinder.
+        const cylOccupant = fobOccupyingCylinder(s);
+        const selectedFobIdx = dev.type==='fob' ? dev.index : 0;
+        const cylBlockedByOther = dev.type==='fob'
+                               && cylOccupant !== 0
+                               && cylOccupant !== selectedFobIdx;
         return <>
-          <div className="devpanel-section">PLACE IN ZONE</div>
+          <div className="devpanel-section">
+            PLACE IN ZONE
+            {keyStuckHere && <span style={{
+              marginLeft:6,fontFamily:'var(--fm)',fontSize:'7px',
+              color:'#F59E0B',fontWeight:700,letterSpacing:0.5}}>
+              🔒 KEY-IN LOCKOUT · rotate cylinder to OFF or LOCK to remove
+            </span>}
+            {cylBlockedByOther && !keyStuckHere && <span style={{
+              marginLeft:6,fontFamily:'var(--fm)',fontSize:'7px',
+              color:'#4A9EF5',fontWeight:700,letterSpacing:0.5}}>
+              🔑 CYLINDER OCCUPIED BY F{cylOccupant}
+            </span>}
+          </div>
           <div className="zonepick">
             {ZONE_BTNS.map(({z,label,c})=>{
               const isActive=zone===z;
+              const blockedByLockout = keyStuckHere && z !== 'KeyCylinder';
+              const blockedByOccupant = z === 'KeyCylinder' && cylBlockedByOther;
+              const blocked = blockedByLockout || blockedByOccupant;
               return <button key={z}
                 className={`zpbtn${isActive?' zp-active':''}`}
-                style={{borderColor:isActive?c:'',background:isActive?c:'',color:isActive?'#0a0f18':''}}
-                onClick={()=>set(`${dev.pfx}.Zone`,z)}>
+                disabled={blocked}
+                title={blockedByOccupant
+                  ? `Cylinder occupied by Fob ${cylOccupant} — remove that key first`
+                  : undefined}
+                style={{borderColor:isActive?c:'',background:isActive?c:'',
+                        color:isActive?'#0a0f18':'',
+                        opacity:blocked?0.35:1,
+                        cursor:blocked?'not-allowed':'pointer'}}
+                onClick={()=>{ if(!blocked) set(`${dev.pfx}.Zone`,z); }}>
                 {label}
               </button>;
             })}
@@ -2996,12 +3346,89 @@ function DevicePanel({s, set, sel, setSel}){
   </div>;
 }
 
-function ControlPanelContent({s,set,anyDoor,anyLight,lux}){
+function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
+  // VehicleStartingControl is the sole writer of Vehicle.LowVoltageSystemState
+  // and Vehicle.Starting.ImmobilizerStatus.  The HMI displays these read-only
+  // and writes the input signals the feature subscribes to:
+  //   - Body.Switches.StartStop.IsPressed       (PEPS mode)
+  //   - Body.Switches.IgnitionCylinder.Position (KeyCylinder mode)
+  const keySource = cfg?.vehicle_line?.key_source_cfg || 'PEPS';
+  const powerMode = s['Vehicle.LowVoltageSystemState'] || 'OFF';
+  const immo      = s['Vehicle.Starting.ImmobilizerStatus'] || 'LOCKED';
+  const cylPos    = s['Body.Switches.IgnitionCylinder.Position'] || 'LOCK';
+  const startPressed = !!s['Body.Switches.StartStop.IsPressed'];
+  const immoColor = {
+    'AUTHENTICATED':'#10B981', 'AUTHENTICATING':'#F59E0B',
+    'FAILED':'#EF4444',        'LOCKED':'#6B7E99',
+  }[immo] || '#6B7E99';
+  const powerColor = powerMode==='START' ? '#EF4444'
+                   : powerMode==='ON'    ? '#10B981'
+                   : powerMode==='ACC'   ? '#F59E0B'
+                   : '#6B7E99';
   return <>
 
       <SG title="Vehicle Power" vss="Vehicle" def={true}>
-        <EnumR label="Power Mode" k="Vehicle.LowVoltageSystemState" s={s} set={set}
-          opts={['LOCK','OFF','ACC','ON','START']}/>
+        {/* Power Mode + Immobilizer are read-only — VehicleStartingControl
+            owns them.  Driver inputs (start button or cylinder rotary)
+            are below this row. */}
+        <div style={{display:'flex',flexDirection:'column',gap:3}}>
+          <span className="cn">Power Mode <span style={{color:'var(--muted)',fontSize:9}}>(read-only)</span></span>
+          <div style={{display:'flex',gap:6,alignItems:'center'}}>
+            <span style={{fontFamily:'var(--fm)',fontSize:11,fontWeight:700,
+              padding:'4px 10px',borderRadius:4,
+              background:'var(--s2)',border:`1px solid ${powerColor}`,color:powerColor}}>
+              {powerMode}
+            </span>
+            {/* Immobilizer status is only meaningful when the
+                vehicle is in ACC / ON / START.  Hide it at OFF or
+                LOCK — neither powers the auth path, and stale
+                AUTHENTICATED chips from a prior cycle read as
+                misleading noise. */}
+            {powerMode !== 'OFF' && powerMode !== 'LOCK' && <>
+              <span style={{fontFamily:'var(--fm)',fontSize:9,color:'var(--muted)'}}>Immobilizer:</span>
+              <span style={{fontFamily:'var(--fm)',fontSize:10,fontWeight:700,color:immoColor}}>
+                {immo}
+              </span>
+            </>}
+          </div>
+        </div>
+
+        {/* Key source — read-only display.  Changing requires a reboot
+            with an edited vehicle_line.json. */}
+        <div className="cr" style={{marginTop:4}}>
+          <span className="cn">Key Source <span style={{color:'var(--muted)',fontSize:9}}>(line-cal)</span></span>
+          <span style={{fontFamily:'var(--fm)',fontSize:10,fontWeight:700,
+            padding:'2px 8px',borderRadius:3,background:'var(--s2)',
+            border:'1px solid var(--bdr)',color:'#4A9EF5'}}>
+            {keySource}
+          </span>
+        </div>
+
+        {keySource==='PEPS' && (
+          <div style={{display:'flex',flexDirection:'column',gap:3,marginTop:4}}>
+            <span className="cn">Start / Stop Button <span style={{color:'var(--muted)',fontSize:9}}>(press & hold)</span></span>
+            <button className={`eb ${startPressed?'on':''}`}
+              onMouseDown={()=>set('Body.Switches.StartStop.IsPressed',true)}
+              onMouseUp={()=>set('Body.Switches.StartStop.IsPressed',false)}
+              onMouseLeave={()=>set('Body.Switches.StartStop.IsPressed',false)}
+              style={{cursor:'pointer',userSelect:'none',touchAction:'none'}}>
+              ⏻ ENGINE START / STOP
+            </button>
+          </div>
+        )}
+
+        {keySource==='KeyCylinder' && (
+          <div style={{display:'flex',flexDirection:'column',gap:3,marginTop:4}}>
+            <span className="cn">Cylinder Rotary <span style={{color:'var(--muted)',fontSize:9}}>(spring-loaded START)</span></span>
+            <div className="ebrow">
+              {['LOCK','OFF','ACC','ON','START'].map(p=>(
+                <button key={p} className={`eb ${cylPos===p?'on':''}`}
+                  onClick={()=>set('Body.Switches.IgnitionCylinder.Position',p)}>{p}</button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <EnumR label="Powertrain" k="Vehicle.Powertrain.Type" s={s} set={set}
           opts={['COMBUSTION','HYBRID','ELECTRIC']}/>
         {/* Valet mode — published by infotainment in production.
@@ -3131,7 +3558,7 @@ function ControlPanelContent({s,set,anyDoor,anyLight,lux}){
       </SG>
 
       <SG title="PEPS Devices" vss="Body.PEPS.Plant">
-        <div className="peps-section" style={{padding:'0 0 4px',fontFamily:'var(--fm)',fontSize:'9px',color:'var(--dim)'}}>KEY FOBS — button press</div>
+        <div className="peps-section" style={{padding:'0 0 4px',fontFamily:'var(--fm)',fontSize:'9px',color:'var(--dim)'}}>KEY FOBS — button press + zone</div>
         {[1,2,3,4].map(i=>{
           const pfx=`Body.PEPS.Plant.KeyFob.${i}`;
           const zone=s[`${pfx}.Zone`]||'OutOfRange';
@@ -3141,6 +3568,34 @@ function ControlPanelContent({s,set,anyDoor,anyLight,lux}){
               <span style={{marginLeft:'auto',fontFamily:'var(--fm)',fontSize:'9px',color:'var(--dim)'}}>{zone}</span>
             </div>
             {rssi&&<div style={{fontFamily:'var(--fm)',fontSize:'8px',color:'var(--dim)',wordBreak:'break-all'}}>{rssi.slice(0,60)}</div>}
+            {/* Zone select — quick placement without leaving the panel.
+                KeyCylinder is the dash cylinder antenna; used as the
+                only auth path on KeyCylinder builds and as a backup
+                (low-battery fob) path on PEPS builds. */}
+            {(()=>{
+              const stuck = zone === 'KeyCylinder' && isFobLockedInCylinder(s, cfg);
+              // Single-slot cylinder: hide the KeyCylinder option if
+              // another fob is already inserted.  The current occupant
+              // sees the option (so they can stay/leave); everyone
+              // else does not.
+              const cylOccupant = fobOccupyingCylinder(s);
+              const cylBlocked = cylOccupant !== 0 && cylOccupant !== i;
+              const allZones = ['OutOfRange','RfRange','Approach','LeftFront','RightFront','Cabin','Hood','Trunk','TrunkInside','KeyCylinder'];
+              const opts = cylBlocked ? allZones.filter(z=>z!=='KeyCylinder') : allZones;
+              return <div style={{display:'flex',alignItems:'center',gap:6,marginTop:4}}>
+                <span style={{fontFamily:'var(--fm)',fontSize:'8px',color:stuck?'#F59E0B':'var(--dim)'}}>{stuck?'ZONE 🔒':'ZONE'}</span>
+                <select className="peps-btn" style={{flex:1,padding:'2px 4px',fontFamily:'var(--fm)',fontSize:'9px',
+                          opacity:stuck?0.55:1, cursor:stuck?'not-allowed':'pointer'}}
+                  value={zone}
+                  disabled={stuck}
+                  title={stuck?'Key locked in cylinder — rotate to OFF or LOCK to remove'
+                         : cylBlocked?`Cylinder occupied by Fob ${cylOccupant}`
+                         : undefined}
+                  onChange={e=>set(`${pfx}.Zone`, e.target.value)}>
+                  {opts.map(z=><option key={z} value={z}>{z}</option>)}
+                </select>
+              </div>;
+            })()}
             <div className="peps-btnrow">
               {PEPS_BTN_OPTS.map(b=>(
                 <button key={b.val} className="peps-btn" onClick={()=>set(`${pfx}.ButtonPress`,b.val)}>{b.label}</button>
@@ -3151,10 +3606,42 @@ function ControlPanelContent({s,set,anyDoor,anyLight,lux}){
         {[5,6].map(i=>{
           const pfx=`Body.PEPS.Plant.KeyFob.${i}`;
           const zone=s[`${pfx}.Zone`]||'OutOfRange';
+          // Fob 5: mechanically-compatible key blank — fits the
+          //   cylinder but fails the immobilizer challenge, so the
+          //   cylinder rotates without authorising a state change.
+          // Fob 6: physically incompatible (wrong key blank / no
+          //   transponder) — can't be inserted, so the KeyCylinder
+          //   zone is omitted from its dropdown entirely.
+          const zoneOpts = i === 5
+            ? ['OutOfRange','RfRange','Approach','LeftFront','RightFront','Cabin','Hood','Trunk','TrunkInside','KeyCylinder']
+            : ['OutOfRange','RfRange','Approach','LeftFront','RightFront','Cabin','Hood','Trunk','TrunkInside'];
+          const fobSubtitle = i === 5
+            ? 'mechanically compatible · unauthorised'
+            : 'incompatible key blank';
           return <div key={i} className="peps-card intruder">
             <div className="peps-title">FOB {i} <span className="peps-badge unpaired">INTRUDER</span>
               <span style={{marginLeft:'auto',fontFamily:'var(--fm)',fontSize:'9px',color:'var(--dim)'}}>{zone}</span>
             </div>
+            <div style={{fontFamily:'var(--fm)',fontSize:'7px',color:'var(--muted)',marginTop:1}}>{fobSubtitle}</div>
+            {(()=>{
+              const stuck = zone === 'KeyCylinder' && isFobLockedInCylinder(s, cfg);
+              const cylOccupant = fobOccupyingCylinder(s);
+              const cylBlocked = cylOccupant !== 0 && cylOccupant !== i;
+              const opts = cylBlocked ? zoneOpts.filter(z=>z!=='KeyCylinder') : zoneOpts;
+              return <div style={{display:'flex',alignItems:'center',gap:6,marginTop:4}}>
+                <span style={{fontFamily:'var(--fm)',fontSize:'8px',color:stuck?'#F59E0B':'var(--dim)'}}>{stuck?'ZONE 🔒':'ZONE'}</span>
+                <select className="peps-btn" style={{flex:1,padding:'2px 4px',fontFamily:'var(--fm)',fontSize:'9px',
+                          opacity:stuck?0.55:1, cursor:stuck?'not-allowed':'pointer'}}
+                  value={zone}
+                  disabled={stuck}
+                  title={stuck?'Key locked in cylinder — rotate to OFF or LOCK to remove'
+                         : cylBlocked?`Cylinder occupied by Fob ${cylOccupant}`
+                         : undefined}
+                  onChange={e=>set(`${pfx}.Zone`, e.target.value)}>
+                  {opts.map(z=><option key={z} value={z}>{z}</option>)}
+                </select>
+              </div>;
+            })()}
           </div>;
         })}
       </SG>
@@ -3296,12 +3783,12 @@ function ControlPanelContent({s,set,anyDoor,anyLight,lux}){
   </>;
 }
 
-function ControlPanel({s,set,inline=false}){
+function ControlPanel({s,set,cfg,inline=false}){
   const anyDoor=['Row1.Left','Row1.Right','Row2.Left','Row2.Right'].some(d=>s[`Body.Doors.${d}.IsOpen`]);
   const anyLight=Object.keys(s).some(k=>k.startsWith('Body.Lights')&&s[k]===true);
   const lux=s['Body.Lights.AmbientLightSensor.Illuminance']??10000;
   if(inline) return <div style={{flex:1,overflowY:'auto',padding:'16px 20px',scrollbarWidth:'thin',scrollbarColor:'var(--bdr2) transparent'}}>
-    <ControlPanelContent s={s} set={set} anyDoor={anyDoor} anyLight={anyLight} lux={lux}/>
+    <ControlPanelContent s={s} set={set} cfg={cfg} anyDoor={anyDoor} anyLight={anyLight} lux={lux}/>
   </div>;
   return <div className="cp">
     <div className="cphdr">
@@ -3309,7 +3796,7 @@ function ControlPanel({s,set,inline=false}){
       <span className="cptitle">VSS SIGNAL CONTROL</span>
     </div>
     <div className="cpscroll">
-      <ControlPanelContent s={s} set={set} anyDoor={anyDoor} anyLight={anyLight} lux={lux}/>
+      <ControlPanelContent s={s} set={set} cfg={cfg} anyDoor={anyDoor} anyLight={anyLight} lux={lux}/>
     </div>
   </div>;
 }
@@ -3337,6 +3824,7 @@ const INIT_CONFIG={
     auto_headlamp_lux_threshold:200, peps_rear_capacitive_handles:false,
     panic_press_mode:'SINGLE',
     slam_lock_protect:true,
+    key_source_cfg:'PEPS',
   },
 };
 
@@ -3537,6 +4025,13 @@ function ConfigView({cfg, onSet, staged, setStaged, onApplyReboot}){
         hint="ON (EU default): trim Lock with a door open is undone by the SlamLock feature (driver-side respects two-stage; passenger-side always UnlockAll). OFF (US slam-lock allowed): trim Lock with door open dispatches as FeatureId::SlamLock — when the door slams shut the perimeter alarm arms."
         dirty={isVLDirty('slam_lock_protect')}>
         <CfgBool val={!!vlVal('slam_lock_protect')} onChange={b=>stageVL('slam_lock_protect',b)}/>
+      </CfgRow>
+      <CfgRow label="Key source"
+        hint="PEPS: push-button start with cabin LF antennas; fobs work passively (passive entry, passive start). KeyCylinder: physical rotary cylinder with short-range LF only at the cylinder; fobs degrade to remote-only (RKE buttons still work) and the driver must place a fob in the KeyCylinder zone to start."
+        dirty={isVLDirty('key_source_cfg')}>
+        <CfgSelect val={vlVal('key_source_cfg')||'PEPS'}
+          opts={['PEPS','KeyCylinder']}
+          onChange={p=>stageVL('key_source_cfg',p)}/>
       </CfgRow>
     </CfgSection>
 
@@ -3978,7 +4473,7 @@ function App(){
           <span className="ctright">NXP S32G2 · BODY DOMAIN · QM+ASIL-B</span>
         </div>
         <div className={view==='config'?'':' svgwrap'} style={view==='config'?{flex:1,display:'flex',minHeight:0}:{}}>
-          {view==='top'     &&<CombinedView s={s} set={set} onDeviceSelect={setSelDev}/>}
+          {view==='top'     &&<CombinedView s={s} set={set} cfg={cfg} onDeviceSelect={setSelDev}/>}
           {view==='side'    &&<SideView s={s} set={set}/>}
           {view==='cockpit' &&<CockpitView s={s} set={set} cfg={cfg}/>}
           {view==='config'  &&<ConfigView cfg={cfg} onSet={setCfgKey}
@@ -4047,8 +4542,8 @@ function App(){
         </div>
       </div>
 
-      {view!=='config'&&<DevicePanel s={s} set={set} sel={selDev} setSel={setSelDev}/>}
-      {view!=='config'&&<ControlPanel s={s} set={set}/>}
+      {view!=='config'&&<DevicePanel s={s} set={set} cfg={cfg} sel={selDev} setSel={setSelDev}/>}
+      {view!=='config'&&<ControlPanel s={s} set={set} cfg={cfg}/>}
     </div>
   </div>;
 }

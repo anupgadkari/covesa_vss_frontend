@@ -488,6 +488,57 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // accessory features can subscribe later.
         "Body.Power.DelayedAccessory.IsActive" => Some(0x001C_0001),
 
+        // KeySearch arbiter derived signals (block 0x001D).
+        // Published by the arbiter's adaptive approach-poll loop.
+        // ApproachState: any paired fob currently observed in any
+        //   approach-class zone (Approach / proximity / RfRange).
+        // ApproachKeys:  count of such fobs.
+        // ApproachPollInterval: current cadence in ms (700 when no
+        //   key, 10_000 when a key is detected, 0 while suspended
+        //   on ACC/ON/START).
+        "Body.PEPS.ApproachState" => Some(0x001D_0001),
+        "Body.PEPS.ApproachKeys" => Some(0x001D_0002),
+        "Body.PEPS.ApproachPollInterval" => Some(0x001D_0003),
+
+        // Vehicle starting / ignition (block 0x001E).
+        //
+        // `Body.Switches.StartStop.IsPressed` — momentary push of the
+        //   start/stop button.  Only meaningful when
+        //   `VehicleLineCal::key_source_cfg == Peps`; on KeyCylinder
+        //   builds the HMI omits the button entirely.
+        // `Body.Switches.IgnitionCylinder.Position` — String enum
+        //   ("LOCK" | "ACC" | "ON" | "START") published by the cockpit
+        //   rotary cylinder.  Only used when `key_source_cfg ==
+        //   KeyCylinder`.  Spring-loaded START detent returns to ON
+        //   when released.
+        // `Chassis.Brake.IsApplied` — bool, derived by the brake plant
+        //   from `Chassis.Brake.PedalPosition` (threshold-debounced).
+        //   VehicleStartingControl reads this to decide jump-to-RUN.
+        // `Vehicle.Starting.ImmobilizerStatus` — String enum
+        //   ("LOCKED" | "AUTHENTICATING" | "AUTHENTICATED" | "FAILED")
+        //   published by VehicleStartingControl based on the result of
+        //   the immobilizer challenge issued via the KeySearchArbiter.
+        "Body.Switches.StartStop.IsPressed" => Some(0x001E_0001),
+        "Body.Switches.IgnitionCylinder.Position" => Some(0x001E_0002),
+        "Chassis.Brake.IsApplied" => Some(0x001E_0003),
+        "Vehicle.Starting.ImmobilizerStatus" => Some(0x001E_0004),
+
+        // Brake / Transmission Shift Interlock (BTSI) + Key-in-Ignition
+        // Inhibit derived flags.  Both bool, both bridge-published.
+        //
+        // ShiftLockEngaged: true while the transmission is in PARK
+        //   and (brake not applied OR ignition not live).  Auto
+        //   transmissions only release the gear selector once brake
+        //   + ignition are satisfied; the HMI uses this flag to grey
+        //   out non-P gear chips and explain the lockout.
+        // IgnitionCylinder.RemovalInhibited: true on KeyCylinder
+        //   builds when CurrentGear != PARK.  Blocks rotation to
+        //   LOCK (the "key removal" detent) — the cylinder snaps to
+        //   OFF instead, matching real automotive key-in-ignition
+        //   lockout behaviour.  Always false on PEPS builds.
+        "Powertrain.Transmission.ShiftLockEngaged" => Some(0x001E_0005),
+        "Body.Switches.IgnitionCylinder.RemovalInhibited" => Some(0x001E_0006),
+
         _ => None,
     }
 }
@@ -841,6 +892,19 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Body.Doors.Row2.Right.Window.MotorDirection", 0x001A_0024),
     ("Body.Switches.Sunroof.Detent", 0x001B_0001),
     ("Body.Power.DelayedAccessory.IsActive", 0x001C_0001),
+    ("Body.PEPS.ApproachState", 0x001D_0001),
+    ("Body.PEPS.ApproachKeys", 0x001D_0002),
+    ("Body.PEPS.ApproachPollInterval", 0x001D_0003),
+    // Vehicle starting / ignition (block 0x001E).
+    ("Body.Switches.StartStop.IsPressed", 0x001E_0001),
+    ("Body.Switches.IgnitionCylinder.Position", 0x001E_0002),
+    ("Chassis.Brake.IsApplied", 0x001E_0003),
+    ("Vehicle.Starting.ImmobilizerStatus", 0x001E_0004),
+    ("Powertrain.Transmission.ShiftLockEngaged", 0x001E_0005),
+    (
+        "Body.Switches.IgnitionCylinder.RemovalInhibited",
+        0x001E_0006,
+    ),
 ];
 
 #[cfg(test)]

@@ -251,6 +251,25 @@ pub struct VehicleLineCal {
     /// silently cancel the alarm via the EU inversion path.
     #[serde(default = "default_slam_lock_protect")]
     pub slam_lock_protect: bool,
+
+    /// How the driver authenticates to start the vehicle.
+    ///
+    /// - [`KeySource::Peps`] (default) — push-button start.  Vehicle
+    ///   has cabin LF antennas that detect the fob's presence in the
+    ///   cabin / approach zones.  The cylinder antenna serves as a
+    ///   backup (low-battery fob, etc.).
+    /// - [`KeySource::KeyCylinder`] — physical rotary cylinder + a
+    ///   short-range LF antenna at the cylinder.  Cabin LF antennas
+    ///   are not installed; fobs degrade to remote-only (RKE buttons
+    ///   still work) and the driver must place a fob in the
+    ///   `KeyCylinder` zone to start.
+    ///
+    /// `VehicleStartingControl` owns `Vehicle.LowVoltageSystemState`
+    /// and swaps its state machine based on this cal so downstream
+    /// features (`DelayedAccessory`, `ManualLighting`, etc.) don't
+    /// have to know which input flavour drove the ignition change.
+    #[serde(default)]
+    pub key_source_cfg: KeySource,
 }
 
 /// Default value for [`VehicleLineCal::slam_lock_protect`].  Defaults
@@ -260,6 +279,22 @@ pub struct VehicleLineCal {
 /// override to `false`.
 fn default_slam_lock_protect() -> bool {
     true
+}
+
+/// Authentication source for vehicle start.  See
+/// [`VehicleLineCal::key_source_cfg`].
+#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub enum KeySource {
+    /// Push-button start with PEPS LF cabin antennas + cylinder backup.
+    /// Most modern vehicles.  Default.
+    #[default]
+    #[serde(rename = "PEPS")]
+    Peps,
+    /// Physical rotary cylinder + short-range LF only at the cylinder.
+    /// Fobs degrade to remote-only (RKE works, passive entry / passive
+    /// start do not).  User must place a fob at the cylinder to start.
+    #[serde(rename = "KeyCylinder")]
+    KeyCylinder,
 }
 
 /// Activation gesture for the paired-fob PANIC button.  See
@@ -299,6 +334,9 @@ impl Default for VehicleLineCal {
             // toggles immediately.
             panic_press_mode: PanicPressMode::Single,
             slam_lock_protect: default_slam_lock_protect(),
+            // Default is push-button start with PEPS LF; vehicle lines
+            // shipping a physical rotary cylinder override to KeyCylinder.
+            key_source_cfg: KeySource::Peps,
         }
     }
 }
@@ -682,6 +720,23 @@ impl PlatformConfig {
             dealer_config_tx,
             dealer_config_rx,
         })
+    }
+
+    /// Build a `PlatformConfig` directly from its components (for
+    /// unit tests that need to vary the line-cal in ways the existing
+    /// `defaults_*` helpers don't cover).
+    pub fn test_construct(
+        vehicle_line: VehicleLineCal,
+        variant: VariantCal,
+        dealer_config_tx: watch::Sender<DealerConfig>,
+        dealer_config_rx: watch::Receiver<DealerConfig>,
+    ) -> Self {
+        Self {
+            vehicle_line,
+            variant: std::sync::RwLock::new(variant),
+            dealer_config_tx,
+            dealer_config_rx,
+        }
     }
 
     /// Create with a custom lane-change flash count (for unit tests).

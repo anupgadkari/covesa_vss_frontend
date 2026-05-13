@@ -187,6 +187,12 @@ const INPUT_SIGNALS: &[VssPath] = &[
     "Body.Switches.Window.Local.Row1.Right.Detent",
     "Body.Switches.Window.Local.Row2.Left.Detent",
     "Body.Switches.Window.Local.Row2.Right.Detent",
+    // Vehicle starting inputs — consumed by VehicleStartingControl.
+    //   • StartStop.IsPressed       — PEPS push-button momentary.
+    //   • IgnitionCylinder.Position — KeyCylinder rotary (String enum
+    //     "LOCK" | "ACC" | "ON" | "START"; spring-loaded START).
+    "Body.Switches.StartStop.IsPressed",
+    "Body.Switches.IgnitionCylinder.Position",
 ];
 
 /// Signals the bridge pushes back to the HMI (actuator outputs from arbiters).
@@ -344,6 +350,14 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     // the matching client-side countdown.
     "Body.Doors.AutoRelock.IsArmed",
     "Body.Doors.AutoRelock.TimeoutSeconds",
+    // Vehicle starting outputs — derived by the brake plant + sole
+    // writer VehicleStartingControl.  The HMI displays the immobilizer
+    // status next to the Power Mode chip.
+    "Chassis.Brake.IsApplied",
+    "Vehicle.Starting.ImmobilizerStatus",
+    // BTSI + Key-in-Ignition Inhibit derived flags.
+    "Powertrain.Transmission.ShiftLockEngaged",
+    "Body.Switches.IgnitionCylinder.RemovalInhibited",
 ];
 
 /// Subset of `OUTPUT_SIGNALS` whose authoritative boot value comes from
@@ -724,6 +738,10 @@ fn build_config_msg(cfg: &PlatformConfig) -> String {
                 "peps_rear_capacitive_handles":vl.peps_rear_capacitive_handles,
                 "panic_press_mode":           format!("{:?}", vl.panic_press_mode).to_uppercase(),
                 "slam_lock_protect":          vl.slam_lock_protect,
+                "key_source_cfg":             match vl.key_source_cfg {
+                    crate::config::KeySource::Peps        => "PEPS",
+                    crate::config::KeySource::KeyCylinder => "KeyCylinder",
+                },
             }
         }
     });
