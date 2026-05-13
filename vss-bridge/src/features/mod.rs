@@ -13,6 +13,7 @@ pub mod farewell;
 pub mod fog_lamps;
 pub mod follow_me_home;
 pub mod hazard_lighting;
+pub mod key_search_arbiter;
 pub mod lock_feedback;
 pub mod manual_horn;
 pub mod manual_lighting;
