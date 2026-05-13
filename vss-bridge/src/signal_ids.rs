@@ -500,6 +500,29 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Body.PEPS.ApproachKeys" => Some(0x001D_0002),
         "Body.PEPS.ApproachPollInterval" => Some(0x001D_0003),
 
+        // Vehicle starting / ignition (block 0x001E).
+        //
+        // `Body.Switches.StartStop.IsPressed` — momentary push of the
+        //   start/stop button.  Only meaningful when
+        //   `VehicleLineCal::key_source_cfg == Peps`; on KeyCylinder
+        //   builds the HMI omits the button entirely.
+        // `Body.Switches.IgnitionCylinder.Position` — String enum
+        //   ("LOCK" | "ACC" | "ON" | "START") published by the cockpit
+        //   rotary cylinder.  Only used when `key_source_cfg ==
+        //   KeyCylinder`.  Spring-loaded START detent returns to ON
+        //   when released.
+        // `Chassis.Brake.IsApplied` — bool, derived by the brake plant
+        //   from `Chassis.Brake.PedalPosition` (threshold-debounced).
+        //   VehicleStartingControl reads this to decide jump-to-RUN.
+        // `Vehicle.Starting.ImmobilizerStatus` — String enum
+        //   ("LOCKED" | "AUTHENTICATING" | "AUTHENTICATED" | "FAILED")
+        //   published by VehicleStartingControl based on the result of
+        //   the immobilizer challenge issued via the KeySearchArbiter.
+        "Body.Switches.StartStop.IsPressed" => Some(0x001E_0001),
+        "Body.Switches.IgnitionCylinder.Position" => Some(0x001E_0002),
+        "Chassis.Brake.IsApplied" => Some(0x001E_0003),
+        "Vehicle.Starting.ImmobilizerStatus" => Some(0x001E_0004),
+
         _ => None,
     }
 }
@@ -856,6 +879,11 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Body.PEPS.ApproachState", 0x001D_0001),
     ("Body.PEPS.ApproachKeys", 0x001D_0002),
     ("Body.PEPS.ApproachPollInterval", 0x001D_0003),
+    // Vehicle starting / ignition (block 0x001E).
+    ("Body.Switches.StartStop.IsPressed", 0x001E_0001),
+    ("Body.Switches.IgnitionCylinder.Position", 0x001E_0002),
+    ("Chassis.Brake.IsApplied", 0x001E_0003),
+    ("Vehicle.Starting.ImmobilizerStatus", 0x001E_0004),
 ];
 
 #[cfg(test)]
