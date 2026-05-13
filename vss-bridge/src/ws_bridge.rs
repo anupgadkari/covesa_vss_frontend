@@ -187,6 +187,12 @@ const INPUT_SIGNALS: &[VssPath] = &[
     "Body.Switches.Window.Local.Row1.Right.Detent",
     "Body.Switches.Window.Local.Row2.Left.Detent",
     "Body.Switches.Window.Local.Row2.Right.Detent",
+    // Vehicle starting inputs — consumed by VehicleStartingControl.
+    //   • StartStop.IsPressed       — PEPS push-button momentary.
+    //   • IgnitionCylinder.Position — KeyCylinder rotary (String enum
+    //     "LOCK" | "ACC" | "ON" | "START"; spring-loaded START).
+    "Body.Switches.StartStop.IsPressed",
+    "Body.Switches.IgnitionCylinder.Position",
 ];
 
 /// Signals the bridge pushes back to the HMI (actuator outputs from arbiters).
@@ -344,6 +350,11 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     // the matching client-side countdown.
     "Body.Doors.AutoRelock.IsArmed",
     "Body.Doors.AutoRelock.TimeoutSeconds",
+    // Vehicle starting outputs — derived by the brake plant + sole
+    // writer VehicleStartingControl.  The HMI displays the immobilizer
+    // status next to the Power Mode chip.
+    "Chassis.Brake.IsApplied",
+    "Vehicle.Starting.ImmobilizerStatus",
 ];
 
 /// Subset of `OUTPUT_SIGNALS` whose authoritative boot value comes from
