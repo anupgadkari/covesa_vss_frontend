@@ -782,7 +782,14 @@ function CombinedView({s,set,onDeviceSelect}){
     }
     const zone=hitTestZone(x,y);
     if(drag.isNfc){
-      const nfcPos=zone==='LeftFront'?'DriverHandle':zone==='Cabin'?'PushButton':'NotPresent';
+      // NFC card → reader position mapping.  The handle reader sits
+      // on the driver-door B-pillar, but the HMI is side-agnostic —
+      // either LeftFront or RightFront maps to `DriverHandle` so this
+      // works for LHD and RHD without the HMI needing to know
+      // cfg.driver_door_side.  Same applies to phones with NFC: the
+      // user can tap either side B-pillar interchangeably.
+      const nfcPos=(zone==='LeftFront'||zone==='RightFront')?'DriverHandle'
+                  :zone==='Cabin'?'PushButton':'NotPresent';
       set(drag.key,nfcPos);
     } else {
       set(drag.key,zone);
