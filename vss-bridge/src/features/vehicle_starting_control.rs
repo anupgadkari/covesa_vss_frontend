@@ -120,9 +120,21 @@ impl Immobilizer {
 }
 
 /// Cylinder rotary position parsed from the HMI signal.
+///
+/// Five physical detents on a typical key cylinder:
+///   * `LOCK`  — key insertable / removable, steering column locked.
+///                Clears the immobilizer session (next rotation away
+///                forces a fresh authenticate).
+///   * `OFF`   — key in cylinder, accessories off.  Same power state
+///                as `LOCK` but the auth session is preserved so the
+///                driver can rotate to ACC/ON without re-authenticating.
+///   * `ACC`   — accessories (radio, power windows in some vehicles).
+///   * `ON`    — full ignition / "RUN".
+///   * `START` — spring-loaded crank position; releases back to `ON`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CylinderPos {
     Lock,
+    Off,
     Acc,
     On,
     Start,
@@ -132,6 +144,7 @@ impl CylinderPos {
     fn from_str_value(s: &str) -> Option<Self> {
         match s {
             "LOCK" => Some(Self::Lock),
+            "OFF" => Some(Self::Off),
             "ACC" => Some(Self::Acc),
             "ON" => Some(Self::On),
             "START" => Some(Self::Start),
@@ -141,7 +154,7 @@ impl CylinderPos {
 
     fn to_power(self) -> PowerState {
         match self {
-            CylinderPos::Lock => PowerState::Off,
+            CylinderPos::Lock | CylinderPos::Off => PowerState::Off,
             CylinderPos::Acc => PowerState::Acc,
             CylinderPos::On => PowerState::On,
             CylinderPos::Start => PowerState::Start,
@@ -294,8 +307,18 @@ impl<B: SignalBus + Send + Sync + 'static> VehicleStartingControl<B> {
         );
     }
 
-    /// Cylinder rotation handler.  First non-LOCK rotation in a session
-    /// re-authenticates; LOCK clears the session flag.
+    /// Cylinder rotation handler.
+    ///
+    ///   * `LOCK` — clears the auth session and parks power at `OFF`.
+    ///     Mechanical only — no authentication required.
+    ///   * `OFF`  — parks power at `OFF` without touching the session.
+    ///     Mechanical only (the steering column is unlocked but no
+    ///     accessories are powered).  No authentication required.
+    ///   * `ACC` / `ON` / `START` — driver intends to use accessories
+    ///     or start the engine.  Requires an authenticated session;
+    ///     the first such rotation runs an authenticated cylinder
+    ///     search, and subsequent rotations within the same session
+    ///     are accepted without re-auth.
     async fn handle_cylinder_change(
         &self,
         pos: CylinderPos,
@@ -305,10 +328,20 @@ impl<B: SignalBus + Send + Sync + 'static> VehicleStartingControl<B> {
     ) {
         if pos == CylinderPos::Lock {
             // Returning to LOCK clears the session and forces re-auth
-            // on the next rotation away.
+            // on the next "live" rotation.
             *session_authed = false;
             *immobilizer = Immobilizer::Locked;
             self.publish_immobilizer(*immobilizer).await;
+            if *power != PowerState::Off {
+                *power = PowerState::Off;
+                self.publish_power(*power).await;
+            }
+            return;
+        }
+
+        if pos == CylinderPos::Off {
+            // Mechanical detent — no auth, keep session as-is.  Just
+            // drop power to OFF if not already.
             if *power != PowerState::Off {
                 *power = PowerState::Off;
                 self.publish_power(*power).await;
@@ -617,6 +650,52 @@ mod tests {
         settle().await;
         // Remove fob, then rotate to ON.  Session flag should still
         // accept the rotation because we already authenticated.
+        bus.inject(
+            "Body.PEPS.Plant.KeyFob.1.Zone",
+            SignalValue::String("OutOfRange".into()),
+        );
+        bus.inject(CYLINDER_IN, SignalValue::String("ON".into()));
+        settle().await;
+        assert_eq!(latest_power(&bus).as_deref(), Some("ON"));
+    }
+
+    #[tokio::test]
+    async fn cylinder_off_position_no_auth_no_session_change() {
+        // OFF is mechanical — rotating to OFF without a key in the
+        // cylinder must NOT fail-immobilize and must NOT touch the
+        // session flag.  Power stays at OFF.
+        let bus = setup(cfg_cylinder()).await;
+        bus.inject(CYLINDER_IN, SignalValue::String("OFF".into()));
+        settle().await;
+        assert_eq!(latest_power(&bus).as_deref(), Some("OFF"));
+        assert_eq!(latest_immo(&bus).as_deref(), Some("LOCKED"),
+            "OFF must not trigger FAILED — it's a mechanical-only detent");
+        // Now place a key and rotate to ACC — must still authenticate
+        // (OFF did not establish a session).
+        place_fob_in_cylinder(&bus, 1);
+        settle().await;
+        bus.inject(CYLINDER_IN, SignalValue::String("ACC".into()));
+        settle().await;
+        assert_eq!(latest_power(&bus).as_deref(), Some("ACC"));
+        assert_eq!(latest_immo(&bus).as_deref(), Some("AUTHENTICATED"));
+    }
+
+    #[tokio::test]
+    async fn cylinder_off_preserves_authenticated_session() {
+        // Once authenticated, rotating to OFF and back to ON must not
+        // require a fresh auth — the key is still in the cylinder
+        // mechanically.
+        let bus = setup(cfg_cylinder()).await;
+        place_fob_in_cylinder(&bus, 1);
+        settle().await;
+        bus.inject(CYLINDER_IN, SignalValue::String("ON".into()));
+        settle().await;
+        assert_eq!(latest_power(&bus).as_deref(), Some("ON"));
+        bus.inject(CYLINDER_IN, SignalValue::String("OFF".into()));
+        settle().await;
+        assert_eq!(latest_power(&bus).as_deref(), Some("OFF"));
+        // Remove the key — session was already established, OFF→ON
+        // must still work.
         bus.inject(
             "Body.PEPS.Plant.KeyFob.1.Zone",
             SignalValue::String("OutOfRange".into()),

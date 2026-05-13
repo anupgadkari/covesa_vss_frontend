@@ -2420,14 +2420,21 @@ function CockpitView({s,set,cfg}){
           // to rotate to that detent.  START is spring-loaded: mousedown
           // sets START, mouseup returns to ON (matching real cylinders).
           const pos = s['Body.Switches.IgnitionCylinder.Position'] || 'LOCK';
-          // 12-o-clock = LOCK, then clockwise: ACC (3), ON (6), START (9).
-          // Real cylinders run this way so the driver rotates clockwise
-          // through LOCK → ACC → ON → START.
+          // Five detents arranged like a real automotive cylinder:
+          //   LOCK   at 7 o'clock   (clockwise rotation away from rest)
+          //   OFF    at 9 o'clock
+          //   ACC    at 10:30
+          //   ON     at 12 o'clock
+          //   START  at 1 o'clock   (spring-loaded — releases back to ON)
+          // SVG angle convention: 0° = 3 o'clock, 90° = 6 o'clock,
+          // 180° = 9 o'clock, -90° (or 270°) = 12 o'clock.  Clock-hour
+          // h maps to angle (h-3)*30°.
           const POSITIONS = [
-            {p:'LOCK',  angle:-90},
-            {p:'ACC',   angle:  0},
-            {p:'ON',    angle: 90},
-            {p:'START', angle:180},
+            {p:'LOCK',  angle: 120},  // 7   o'clock
+            {p:'OFF',   angle: 180},  // 9   o'clock
+            {p:'ACC',   angle: 225},  // 10:30
+            {p:'ON',    angle: 270},  // 12  o'clock
+            {p:'START', angle: 300},  // 1   o'clock
           ];
           const cur = POSITIONS.find(x=>x.p===pos) || POSITIONS[0];
           const ringColor = night?'#3A2A12':'#1A2838';
@@ -2438,18 +2445,22 @@ function CockpitView({s,set,cfg}){
           return <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4}}>
             <span style={{fontFamily:'Share Tech Mono',fontSize:7,
               color:night?'#7A5A1A':'#6B7E99',letterSpacing:1}}>IGNITION</span>
-            <svg viewBox="0 0 70 70" style={{width:68,height:68,userSelect:'none'}}>
-              <title>Key cylinder rotary — click a position</title>
+            <svg viewBox="0 0 90 90" style={{width:84,height:84,userSelect:'none'}}>
+              <title>Key cylinder rotary — click a position (START is spring-loaded)</title>
               {/* Outer ring */}
-              <circle cx="35" cy="35" r="30" fill={knobFill}
+              <circle cx="45" cy="45" r="28" fill={knobFill}
                 stroke={ringColor} strokeWidth="2"/>
-              {/* Position dots + labels */}
+              {/* Position dots (on ring) + labels (outside ring) */}
               {POSITIONS.map(({p,angle})=>{
                 const rad = angle * Math.PI/180;
-                const lx = 35 + Math.cos(rad)*24;
-                const ly = 35 + Math.sin(rad)*24;
+                const dotR = 28;
+                const labR = 39;
+                const dx = 45 + Math.cos(rad)*dotR;
+                const dy = 45 + Math.sin(rad)*dotR;
+                const lx = 45 + Math.cos(rad)*labR;
+                const ly = 45 + Math.sin(rad)*labR + 2; // baseline tweak
                 const active = p === pos;
-                const c = active ? accentColor : (night?'#5A4416':'#3A4858');
+                const c = active ? accentColor : (night?'#5A4416':'#5A6878');
                 const isStart = p === 'START';
                 const handlers = isStart
                   ? {
@@ -2461,21 +2472,22 @@ function CockpitView({s,set,cfg}){
                     }
                   : { onClick: ()=>set('Body.Switches.IgnitionCylinder.Position',p) };
                 return <g key={p} style={{cursor:'pointer'}} {...handlers}>
-                  <circle cx={lx} cy={ly} r="6" fill="transparent"/>
-                  <circle cx={lx} cy={ly} r="2" fill={c}/>
-                  <text x={lx} y={ly+(angle===-90?-5:angle===90?12:3)}
-                    textAnchor="middle" fill={c} fontSize="5.5"
-                    fontFamily="Share Tech Mono" fontWeight="700">{p}</text>
+                  {/* Larger transparent hitbox so the small dots are easy to tap. */}
+                  <circle cx={dx} cy={dy} r="9" fill="transparent"/>
+                  <circle cx={dx} cy={dy} r={active?3:2} fill={c}/>
+                  <text x={lx} y={ly} textAnchor="middle" fill={c}
+                    fontSize="6" fontFamily="Share Tech Mono" fontWeight="700">{p}</text>
                 </g>;
               })}
-              {/* Pointer needle — rotates to indicate current position */}
-              <g transform={`rotate(${cur.angle} 35 35)`}>
-                <line x1="35" y1="35" x2="51" y2="35"
+              {/* Pointer needle — rotates to indicate current position.
+                  Pivot is at the cylinder centre (45,45). */}
+              <g transform={`rotate(${cur.angle} 45 45)`}>
+                <line x1="45" y1="45" x2="68" y2="45"
                   stroke={accentColor} strokeWidth="2.8" strokeLinecap="round"/>
-                <circle cx="35" cy="35" r="4" fill={accentColor}/>
+                <circle cx="45" cy="45" r="4" fill={accentColor}/>
               </g>
-              {/* Key bow — small notched flange at the center to evoke a key */}
-              <rect x="32" y="32" width="6" height="6" rx="1"
+              {/* Key bow — small notched flange at the centre to evoke a key */}
+              <rect x="42" y="42" width="6" height="6" rx="1"
                 fill="none" stroke={night?'#3A2A12':'#1A2838'} strokeWidth="0.8"/>
             </svg>
           </div>;
@@ -3204,7 +3216,7 @@ function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
           <div style={{display:'flex',flexDirection:'column',gap:3,marginTop:4}}>
             <span className="cn">Cylinder Rotary <span style={{color:'var(--muted)',fontSize:9}}>(spring-loaded START)</span></span>
             <div className="ebrow">
-              {['LOCK','ACC','ON','START'].map(p=>(
+              {['LOCK','OFF','ACC','ON','START'].map(p=>(
                 <button key={p} className={`eb ${cylPos===p?'on':''}`}
                   onClick={()=>set('Body.Switches.IgnitionCylinder.Position',p)}>{p}</button>
               ))}
