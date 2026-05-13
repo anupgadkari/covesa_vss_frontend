@@ -2323,7 +2323,7 @@ function CockpitView({s,set,cfg}){
 
     {/* ── Steering wheel + stalks ── */}
     <CockpitZone title="STEERING" subtitle="wheel · stalks · paddles · start button" night={night}>
-      <div style={{display:'grid',gridTemplateColumns:'120px 1fr 70px 120px',gap:10,alignItems:'center'}}>
+      <div style={{display:'grid',gridTemplateColumns:'120px 1fr 120px 80px',gap:10,alignItems:'center'}}>
         {/* Left stalk: turn signals + high-beam pull */}
         <div style={{display:'flex',flexDirection:'column',gap:5}}>
           <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1}}>LEFT STALK</span>
@@ -2363,56 +2363,6 @@ function CockpitView({s,set,cfg}){
           </circle>
           {horn&&<circle cx="120" cy="105" r="34" fill="none" stroke="#EF4444" strokeWidth="2" className="blink"/>}
         </svg>
-        {/* Engine Start / Stop button — circular, sits just to the
-            right of the steering wheel.  Press-and-hold writes
-            Body.Switches.StartStop.IsPressed (rising edge is what
-            VehicleStartingControl acts on; the release returns the
-            momentary input to false).  Only rendered in PEPS mode —
-            KeyCylinder builds physically lack the button. */}
-        {(()=>{
-          const keySource = cfg?.vehicle_line?.key_source_cfg || 'PEPS';
-          if (keySource !== 'PEPS') return <div/>;
-          const pressed = !!s['Body.Switches.StartStop.IsPressed'];
-          const power = s['Vehicle.LowVoltageSystemState'] || 'OFF';
-          const running = power === 'ON' || power === 'START';
-          const ringColor = pressed ? '#EF4444'
-                          : running ? '#10B981'
-                          : night   ? '#3A2A12' : '#1A2838';
-          const fillColor = pressed
-            ? (night?'#3a0e0e':'#fee2e2')
-            : (night?'#0F1726':'#0C1825');
-          const textColor = pressed ? '#EF4444'
-                          : running ? '#10B981'
-                          : night   ? '#7A5A1A' : '#9CA3AF';
-          return <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4}}>
-            <span style={{fontFamily:'Share Tech Mono',fontSize:7,
-              color:night?'#7A5A1A':'#6B7E99',letterSpacing:1}}>START / STOP</span>
-            <svg viewBox="0 0 70 70" style={{width:62,height:62,cursor:'pointer',userSelect:'none'}}
-              onMouseDown={()=>set('Body.Switches.StartStop.IsPressed',true)}
-              onMouseUp={()=>set('Body.Switches.StartStop.IsPressed',false)}
-              onMouseLeave={()=>set('Body.Switches.StartStop.IsPressed',false)}
-              onTouchStart={(e)=>{e.preventDefault();set('Body.Switches.StartStop.IsPressed',true);}}
-              onTouchEnd={()=>set('Body.Switches.StartStop.IsPressed',false)}>
-              <title>Press & hold — Engine Start / Stop</title>
-              {/* Outer ring */}
-              <circle cx="35" cy="35" r="30" fill={fillColor}
-                stroke={ringColor} strokeWidth={pressed?3:2}/>
-              {/* Power glyph: open circle with a short vertical line through the top */}
-              <circle cx="35" cy="36" r="12" fill="none"
-                stroke={textColor} strokeWidth="2.5" strokeLinecap="round"
-                strokeDasharray="60 8" transform="rotate(-90 35 36)"/>
-              <line x1="35" y1="20" x2="35" y2="34"
-                stroke={textColor} strokeWidth="2.8" strokeLinecap="round"/>
-              <text x="35" y="58" textAnchor="middle"
-                fill={textColor} fontSize="6" fontFamily="Share Tech Mono"
-                fontWeight="700" letterSpacing="0.5">ENGINE</text>
-              {/* Active ring pulse when engine running */}
-              {running && !pressed && <circle cx="35" cy="35" r="33"
-                fill="none" stroke="#10B981" strokeWidth="1" opacity="0.5"
-                className="blink"/>}
-            </svg>
-          </div>;
-        })()}
         {/* Right stalk: wiper + washer */}
         <div style={{display:'flex',flexDirection:'column',gap:5}}>
           <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1}}>WIPER STALK</span>
@@ -2420,6 +2370,116 @@ function CockpitView({s,set,cfg}){
           <Btn night={night} on={false} onClick={()=>{}}>WASHER ⇣</Btn>
           <Btn night={night} on={horn} onMouseDown={()=>set('Body.Horn.IsActive',true)} onMouseUp={()=>set('Body.Horn.IsActive',false)} onMouseLeave={()=>set('Body.Horn.IsActive',false)}>🔊 HORN</Btn>
         </div>
+        {/* Ignition control — circular Start/Stop button on PEPS builds,
+            4-position rotary key cylinder on KeyCylinder builds.  Sits
+            to the right of the wiper stalk, mirroring real-world
+            dashboard layouts where the ignition lives outboard of the
+            wiper stalk on the driver side. */}
+        {(()=>{
+          const keySource = cfg?.vehicle_line?.key_source_cfg || 'PEPS';
+          const power     = s['Vehicle.LowVoltageSystemState'] || 'OFF';
+          const running   = power === 'ON' || power === 'START';
+          if (keySource === 'PEPS') {
+            const pressed = !!s['Body.Switches.StartStop.IsPressed'];
+            const ringColor = pressed ? '#EF4444'
+                            : running ? '#10B981'
+                            : night   ? '#3A2A12' : '#1A2838';
+            const fillColor = pressed
+              ? (night?'#3a0e0e':'#fee2e2')
+              : (night?'#0F1726':'#0C1825');
+            const textColor = pressed ? '#EF4444'
+                            : running ? '#10B981'
+                            : night   ? '#7A5A1A' : '#9CA3AF';
+            return <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4}}>
+              <span style={{fontFamily:'Share Tech Mono',fontSize:7,
+                color:night?'#7A5A1A':'#6B7E99',letterSpacing:1}}>START / STOP</span>
+              <svg viewBox="0 0 70 70" style={{width:68,height:68,cursor:'pointer',userSelect:'none'}}
+                onMouseDown={()=>set('Body.Switches.StartStop.IsPressed',true)}
+                onMouseUp={()=>set('Body.Switches.StartStop.IsPressed',false)}
+                onMouseLeave={()=>set('Body.Switches.StartStop.IsPressed',false)}
+                onTouchStart={(e)=>{e.preventDefault();set('Body.Switches.StartStop.IsPressed',true);}}
+                onTouchEnd={()=>set('Body.Switches.StartStop.IsPressed',false)}>
+                <title>Press & hold — Engine Start / Stop</title>
+                <circle cx="35" cy="35" r="30" fill={fillColor}
+                  stroke={ringColor} strokeWidth={pressed?3:2}/>
+                <circle cx="35" cy="36" r="12" fill="none"
+                  stroke={textColor} strokeWidth="2.5" strokeLinecap="round"
+                  strokeDasharray="60 8" transform="rotate(-90 35 36)"/>
+                <line x1="35" y1="20" x2="35" y2="34"
+                  stroke={textColor} strokeWidth="2.8" strokeLinecap="round"/>
+                <text x="35" y="58" textAnchor="middle"
+                  fill={textColor} fontSize="6" fontFamily="Share Tech Mono"
+                  fontWeight="700" letterSpacing="0.5">ENGINE</text>
+                {running && !pressed && <circle cx="35" cy="35" r="33"
+                  fill="none" stroke="#10B981" strokeWidth="1" opacity="0.5"
+                  className="blink"/>}
+              </svg>
+            </div>;
+          }
+          // KeyCylinder — rotary knob with 4 positions.  Click a label
+          // to rotate to that detent.  START is spring-loaded: mousedown
+          // sets START, mouseup returns to ON (matching real cylinders).
+          const pos = s['Body.Switches.IgnitionCylinder.Position'] || 'LOCK';
+          // 12-o-clock = LOCK, then clockwise: ACC (3), ON (6), START (9).
+          // Real cylinders run this way so the driver rotates clockwise
+          // through LOCK → ACC → ON → START.
+          const POSITIONS = [
+            {p:'LOCK',  angle:-90},
+            {p:'ACC',   angle:  0},
+            {p:'ON',    angle: 90},
+            {p:'START', angle:180},
+          ];
+          const cur = POSITIONS.find(x=>x.p===pos) || POSITIONS[0];
+          const ringColor = night?'#3A2A12':'#1A2838';
+          const knobFill  = night?'#0F1726':'#0C1825';
+          const accentColor = running ? '#10B981'
+                            : pos==='ACC' ? '#F59E0B'
+                            : '#9CA3AF';
+          return <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4}}>
+            <span style={{fontFamily:'Share Tech Mono',fontSize:7,
+              color:night?'#7A5A1A':'#6B7E99',letterSpacing:1}}>IGNITION</span>
+            <svg viewBox="0 0 70 70" style={{width:68,height:68,userSelect:'none'}}>
+              <title>Key cylinder rotary — click a position</title>
+              {/* Outer ring */}
+              <circle cx="35" cy="35" r="30" fill={knobFill}
+                stroke={ringColor} strokeWidth="2"/>
+              {/* Position dots + labels */}
+              {POSITIONS.map(({p,angle})=>{
+                const rad = angle * Math.PI/180;
+                const lx = 35 + Math.cos(rad)*24;
+                const ly = 35 + Math.sin(rad)*24;
+                const active = p === pos;
+                const c = active ? accentColor : (night?'#5A4416':'#3A4858');
+                const isStart = p === 'START';
+                const handlers = isStart
+                  ? {
+                      onMouseDown: ()=>set('Body.Switches.IgnitionCylinder.Position','START'),
+                      onMouseUp:   ()=>set('Body.Switches.IgnitionCylinder.Position','ON'),
+                      onMouseLeave:()=>set('Body.Switches.IgnitionCylinder.Position','ON'),
+                      onTouchStart:(e)=>{e.preventDefault();set('Body.Switches.IgnitionCylinder.Position','START');},
+                      onTouchEnd:  ()=>set('Body.Switches.IgnitionCylinder.Position','ON'),
+                    }
+                  : { onClick: ()=>set('Body.Switches.IgnitionCylinder.Position',p) };
+                return <g key={p} style={{cursor:'pointer'}} {...handlers}>
+                  <circle cx={lx} cy={ly} r="6" fill="transparent"/>
+                  <circle cx={lx} cy={ly} r="2" fill={c}/>
+                  <text x={lx} y={ly+(angle===-90?-5:angle===90?12:3)}
+                    textAnchor="middle" fill={c} fontSize="5.5"
+                    fontFamily="Share Tech Mono" fontWeight="700">{p}</text>
+                </g>;
+              })}
+              {/* Pointer needle — rotates to indicate current position */}
+              <g transform={`rotate(${cur.angle} 35 35)`}>
+                <line x1="35" y1="35" x2="51" y2="35"
+                  stroke={accentColor} strokeWidth="2.8" strokeLinecap="round"/>
+                <circle cx="35" cy="35" r="4" fill={accentColor}/>
+              </g>
+              {/* Key bow — small notched flange at the center to evoke a key */}
+              <rect x="32" y="32" width="6" height="6" rx="1"
+                fill="none" stroke={night?'#3A2A12':'#1A2838'} strokeWidth="0.8"/>
+            </svg>
+          </div>;
+        })()}
       </div>
     </CockpitZone>
 
