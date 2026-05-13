@@ -724,6 +724,10 @@ fn build_config_msg(cfg: &PlatformConfig) -> String {
                 "peps_rear_capacitive_handles":vl.peps_rear_capacitive_handles,
                 "panic_press_mode":           format!("{:?}", vl.panic_press_mode).to_uppercase(),
                 "slam_lock_protect":          vl.slam_lock_protect,
+                "key_source_cfg":             match vl.key_source_cfg {
+                    crate::config::KeySource::Peps        => "PEPS",
+                    crate::config::KeySource::KeyCylinder => "KeyCylinder",
+                },
             }
         }
     });

@@ -175,6 +175,11 @@ const {useState,useEffect,useRef}=React;
 const INIT_STATE={
   'Vehicle.LowVoltageSystemState':'OFF',
   'Vehicle.Powertrain.Type':'COMBUSTION',
+  // Vehicle starting / ignition (owned by VehicleStartingControl).
+  'Body.Switches.StartStop.IsPressed':false,
+  'Body.Switches.IgnitionCylinder.Position':'LOCK',
+  'Chassis.Brake.IsApplied':false,
+  'Vehicle.Starting.ImmobilizerStatus':'LOCKED',
   // Lights — outputs
   'Body.Lights.Beam.Low.IsOn':false,
   'Body.Lights.Beam.High.IsOn':false,
@@ -646,6 +651,9 @@ function getDevicePos(zone, idx, total){
     case 'Trunk':        return {x:VCX+off,   y:600};        // below rear bumper (y=580)
     case 'TrunkInside':  return {x:VCX+off,   y:550};        // inside trunk rect (y=440–560)
     case 'Cabin':        return {x:VCX+off,   y:330};        // mid-cabin
+    // Short-range cylinder antenna — physically at the steering column
+    // / start-button area.  Park chips just above the dashboard.
+    case 'KeyCylinder':  return {x:VCX-22+off, y:170};
     case 'OutOfRange':   return {x:-150+idx*52, y:755};
     default:             return {x:-150+idx*52, y:755};
   }
@@ -674,6 +682,11 @@ function hitTestZone(x,y){
   if(x>=60&&x<=300&&y>=80&&y<=580){
     if(y<=140) return 'Hood';
     if(y>=440) return 'TrunkInside';
+    // KeyCylinder — small dashboard / steering-column region between
+    // the firewall and the front-seat area.  Tested before the door
+    // edge bands so a chip dropped right at the start-button stays
+    // KeyCylinder rather than collapsing to LeftFront / RightFront.
+    if(x>=140&&x<=220&&y>=150&&y<=195) return 'KeyCylinder';
     if(x<=112) return 'LeftFront';
     if(x>=248) return 'RightFront';
     return 'Cabin';
@@ -911,6 +924,19 @@ function CombinedView({s,set,onDeviceSelect}){
       stroke="#F59E0B" strokeWidth={dropZone==='Approach'?2:1}
       opacity={dropZone==='Approach'?0.6:0.2} strokeDasharray="5,3"/>
     <text x={VCX+110} y={VCY-100-300+20} fill="#F59E0B" fontSize="9" fontFamily="Share Tech Mono" opacity={dropZone==='Approach'?0.8:0.4}>APPROACH</text>
+
+    {/* KeyCylinder — short-range LF antenna at the steering column /
+        start button.  Drop zone is a small rectangle in the dashboard
+        region.  Used by VehicleStartingControl on KeyCylinder builds
+        (fob authenticates only when sitting at the cylinder) and as a
+        low-battery fallback on PEPS builds. */}
+    <rect x={140} y={150} width={80} height={45} rx={6}
+      fill={dropZone==='KeyCylinder'?'rgba(74,158,245,0.18)':'rgba(74,158,245,0.05)'}
+      stroke="#4A9EF5" strokeWidth={dropZone==='KeyCylinder'?2:1}
+      opacity={dropZone==='KeyCylinder'?0.9:0.45} strokeDasharray="3,2"/>
+    <text x={180} y={167} textAnchor="middle" fill="#4A9EF5" fontSize="8"
+      fontFamily="Share Tech Mono" fontWeight="700"
+      opacity={dropZone==='KeyCylinder'?1:0.55}>KEY CYLINDER</text>
 
     {/* ── Vehicle top view ── */}
     {/* Headlamp beam cones — fan forward from each headlight in top
@@ -2996,12 +3022,82 @@ function DevicePanel({s, set, sel, setSel}){
   </div>;
 }
 
-function ControlPanelContent({s,set,anyDoor,anyLight,lux}){
+function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
+  // VehicleStartingControl is the sole writer of Vehicle.LowVoltageSystemState
+  // and Vehicle.Starting.ImmobilizerStatus.  The HMI displays these read-only
+  // and writes the input signals the feature subscribes to:
+  //   - Body.Switches.StartStop.IsPressed       (PEPS mode)
+  //   - Body.Switches.IgnitionCylinder.Position (KeyCylinder mode)
+  const keySource = cfg?.vehicle_line?.key_source_cfg || 'PEPS';
+  const powerMode = s['Vehicle.LowVoltageSystemState'] || 'OFF';
+  const immo      = s['Vehicle.Starting.ImmobilizerStatus'] || 'LOCKED';
+  const cylPos    = s['Body.Switches.IgnitionCylinder.Position'] || 'LOCK';
+  const startPressed = !!s['Body.Switches.StartStop.IsPressed'];
+  const immoColor = {
+    'AUTHENTICATED':'#10B981', 'AUTHENTICATING':'#F59E0B',
+    'FAILED':'#EF4444',        'LOCKED':'#6B7E99',
+  }[immo] || '#6B7E99';
+  const powerColor = powerMode==='START' ? '#EF4444'
+                   : powerMode==='ON'    ? '#10B981'
+                   : powerMode==='ACC'   ? '#F59E0B'
+                   : '#6B7E99';
   return <>
 
       <SG title="Vehicle Power" vss="Vehicle" def={true}>
-        <EnumR label="Power Mode" k="Vehicle.LowVoltageSystemState" s={s} set={set}
-          opts={['LOCK','OFF','ACC','ON','START']}/>
+        {/* Power Mode + Immobilizer are read-only — VehicleStartingControl
+            owns them.  Driver inputs (start button or cylinder rotary)
+            are below this row. */}
+        <div style={{display:'flex',flexDirection:'column',gap:3}}>
+          <span className="cn">Power Mode <span style={{color:'var(--muted)',fontSize:9}}>(read-only)</span></span>
+          <div style={{display:'flex',gap:6,alignItems:'center'}}>
+            <span style={{fontFamily:'var(--fm)',fontSize:11,fontWeight:700,
+              padding:'4px 10px',borderRadius:4,
+              background:'var(--s2)',border:`1px solid ${powerColor}`,color:powerColor}}>
+              {powerMode}
+            </span>
+            <span style={{fontFamily:'var(--fm)',fontSize:9,color:'var(--muted)'}}>Immobilizer:</span>
+            <span style={{fontFamily:'var(--fm)',fontSize:10,fontWeight:700,color:immoColor}}>
+              {immo}
+            </span>
+          </div>
+        </div>
+
+        {/* Key source — read-only display.  Changing requires a reboot
+            with an edited vehicle_line.json. */}
+        <div className="cr" style={{marginTop:4}}>
+          <span className="cn">Key Source <span style={{color:'var(--muted)',fontSize:9}}>(line-cal)</span></span>
+          <span style={{fontFamily:'var(--fm)',fontSize:10,fontWeight:700,
+            padding:'2px 8px',borderRadius:3,background:'var(--s2)',
+            border:'1px solid var(--bdr)',color:'#4A9EF5'}}>
+            {keySource}
+          </span>
+        </div>
+
+        {keySource==='PEPS' && (
+          <div style={{display:'flex',flexDirection:'column',gap:3,marginTop:4}}>
+            <span className="cn">Start / Stop Button <span style={{color:'var(--muted)',fontSize:9}}>(press & hold)</span></span>
+            <button className={`eb ${startPressed?'on':''}`}
+              onMouseDown={()=>set('Body.Switches.StartStop.IsPressed',true)}
+              onMouseUp={()=>set('Body.Switches.StartStop.IsPressed',false)}
+              onMouseLeave={()=>set('Body.Switches.StartStop.IsPressed',false)}
+              style={{cursor:'pointer',userSelect:'none',touchAction:'none'}}>
+              ⏻ ENGINE START / STOP
+            </button>
+          </div>
+        )}
+
+        {keySource==='KeyCylinder' && (
+          <div style={{display:'flex',flexDirection:'column',gap:3,marginTop:4}}>
+            <span className="cn">Cylinder Rotary <span style={{color:'var(--muted)',fontSize:9}}>(spring-loaded START)</span></span>
+            <div className="ebrow">
+              {['LOCK','ACC','ON','START'].map(p=>(
+                <button key={p} className={`eb ${cylPos===p?'on':''}`}
+                  onClick={()=>set('Body.Switches.IgnitionCylinder.Position',p)}>{p}</button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <EnumR label="Powertrain" k="Vehicle.Powertrain.Type" s={s} set={set}
           opts={['COMBUSTION','HYBRID','ELECTRIC']}/>
         {/* Valet mode — published by infotainment in production.
@@ -3296,12 +3392,12 @@ function ControlPanelContent({s,set,anyDoor,anyLight,lux}){
   </>;
 }
 
-function ControlPanel({s,set,inline=false}){
+function ControlPanel({s,set,cfg,inline=false}){
   const anyDoor=['Row1.Left','Row1.Right','Row2.Left','Row2.Right'].some(d=>s[`Body.Doors.${d}.IsOpen`]);
   const anyLight=Object.keys(s).some(k=>k.startsWith('Body.Lights')&&s[k]===true);
   const lux=s['Body.Lights.AmbientLightSensor.Illuminance']??10000;
   if(inline) return <div style={{flex:1,overflowY:'auto',padding:'16px 20px',scrollbarWidth:'thin',scrollbarColor:'var(--bdr2) transparent'}}>
-    <ControlPanelContent s={s} set={set} anyDoor={anyDoor} anyLight={anyLight} lux={lux}/>
+    <ControlPanelContent s={s} set={set} cfg={cfg} anyDoor={anyDoor} anyLight={anyLight} lux={lux}/>
   </div>;
   return <div className="cp">
     <div className="cphdr">
@@ -3309,7 +3405,7 @@ function ControlPanel({s,set,inline=false}){
       <span className="cptitle">VSS SIGNAL CONTROL</span>
     </div>
     <div className="cpscroll">
-      <ControlPanelContent s={s} set={set} anyDoor={anyDoor} anyLight={anyLight} lux={lux}/>
+      <ControlPanelContent s={s} set={set} cfg={cfg} anyDoor={anyDoor} anyLight={anyLight} lux={lux}/>
     </div>
   </div>;
 }
@@ -4048,7 +4144,7 @@ function App(){
       </div>
 
       {view!=='config'&&<DevicePanel s={s} set={set} sel={selDev} setSel={setSelDev}/>}
-      {view!=='config'&&<ControlPanel s={s} set={set}/>}
+      {view!=='config'&&<ControlPanel s={s} set={set} cfg={cfg}/>}
     </div>
   </div>;
 }
