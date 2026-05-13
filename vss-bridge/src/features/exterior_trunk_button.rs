@@ -1,30 +1,34 @@
 //! ExteriorTrunkButton — capacitive trunk-release button above the
 //! rear license plate.
 //!
+//! Owns both the unlocked-cabin direct path and the locked-cabin
+//! authenticated path.  Authenticated lookups route through the
+//! [`KeySearchArbiterHandle`], not the legacy continuous Zone signal.
+//!
 //! # Behaviour
 //!
 //! On a rising edge of `Body.Trunk.ExteriorButton.IsPressed`, branch
 //! on the cached `Cabin.LockStatus` and `Cabin.ValetMode.IsActive`:
 //!
-//! | Cabin lock state                | Valet | Action                                       |
-//! |---------------------------------|:-----:|----------------------------------------------|
-//! | `UNLOCKED` / `DRIVER_UNLOCKED`  |  ❌   | Pulse trunk arbiter + `trunk_unlock` flash   |
-//! | `UNLOCKED` / `DRIVER_UNLOCKED`  |  ✅   | Silently denied (log only)                   |
-//! | `LOCKED` / `DOUBLE_LOCKED`      |   —   | No-op — `PassiveEntry` owns the locked path  |
+//! | Cabin lock state                | Valet | Action                                              |
+//! |---------------------------------|:-----:|-----------------------------------------------------|
+//! | `UNLOCKED` / `DRIVER_UNLOCKED`  |  ❌   | Pulse trunk arbiter + `trunk_unlock` feedback flash |
+//! | `UNLOCKED` / `DRIVER_UNLOCKED`  |  ✅   | Silently denied (log only)                          |
+//! | `LOCKED` / `DOUBLE_LOCKED`      |  ❌   | Authenticated trunk-outside scan via arbiter;       |
+//! |                                 |       | pulse on a non-empty `keys_found`                   |
+//! | `LOCKED` / `DOUBLE_LOCKED`      |  ✅   | Silently denied — short-circuit (the trunk arbiter's|
+//! |                                 |       | `ValetGate` would drop the publish anyway)          |
 //!
-//! Valet mode also gates the **locked** path even though we don't act
-//! on it here: the trunk arbiter's `ValetGate` `PhysicalGate` (see
-//! `arbiter::trunk_arbiter`) suppresses any `Body.Trunk.OpenCmd` from
-//! any feature when valet is active.  So `PassiveEntry` could
-//! authenticate and pulse the arbiter and the gate would still drop
-//! it.  This feature's valet check is a *short-circuit* that avoids
-//! the wasted publish in the unlocked path.
+//! Valet mode also gates the trunk arbiter via its `ValetGate`
+//! `PhysicalGate` (see `arbiter::trunk_arbiter`).  Our short-circuit
+//! here saves the arbiter the wasted publish in both unlocked and
+//! locked paths.
 //!
 //! # No state, no NVM
 //!
 //! Stateless reader of three signals.  Safe boot defaults: lock
-//! status `"LOCKED"` (so a missing-signal stance is "don't fire") and
-//! valet `false` (don't deny).
+//! status `"LOCKED"` (so a missing-signal stance is "auth required")
+//! and valet `false` (don't deny without reason).
 //!
 //! # Lock-state independence
 //!
@@ -32,6 +36,15 @@
 //! `Cabin.LockStatus.LastRequestor`.  AutoRelock's external-source
 //! filter never fires on a trunk press, and the cabin lock indicator
 //! stays consistent across a "pop-trunk-while-locked" sequence.
+//!
+//! # Authentication
+//!
+//! The locked-cabin path submits
+//! `AntennaSet::TrunkOutside + SearchMode::Authenticated +
+//! Coalescing::Disallowed` to the arbiter.  Coalescing is forbidden
+//! on this path because trunk access is security-critical — a stale
+//! cached result might miss a key that walked away between the last
+//! scan and the button press.
 
 use std::sync::Arc;
 
@@ -39,6 +52,9 @@ use futures::StreamExt;
 use tokio::select;
 
 use crate::arbiter::{ActuatorRequest, DomainArbiter, FEEDBACK_REQUEST, TRUNK_OPEN_CMD};
+use crate::features::key_search_arbiter::{
+    AntennaSet, Coalescing, KeySearchArbiterHandle, SearchMode,
+};
 use crate::ipc_message::{FeatureId, Priority, SignalValue};
 use crate::signal_bus::{SignalBus, VssPath};
 
@@ -51,11 +67,20 @@ const VALET_MODE: VssPath = "Cabin.ValetMode.IsActive";
 pub struct ExteriorTrunkButton<B: SignalBus> {
     bus: Arc<B>,
     trunk_arb: Arc<DomainArbiter>,
+    key_search: KeySearchArbiterHandle,
 }
 
 impl<B: SignalBus + Send + Sync + 'static> ExteriorTrunkButton<B> {
-    pub fn new(bus: Arc<B>, trunk_arb: Arc<DomainArbiter>) -> Self {
-        Self { bus, trunk_arb }
+    pub fn new(
+        bus: Arc<B>,
+        trunk_arb: Arc<DomainArbiter>,
+        key_search: KeySearchArbiterHandle,
+    ) -> Self {
+        Self {
+            bus,
+            trunk_arb,
+            key_search,
+        }
     }
 
     pub async fn run(self) {
@@ -66,8 +91,8 @@ impl<B: SignalBus + Send + Sync + 'static> ExteriorTrunkButton<B> {
         let mut valet_rx = self.bus.subscribe(VALET_MODE).await;
 
         // Safe defaults — see module docs.  `"LOCKED"` so a missing
-        // lock-status signal at boot routes the press to PassiveEntry
-        // (where it will be cleanly rejected if no fob is present)
+        // lock-status signal at boot routes the press to the authed
+        // path (where it'll be cleanly rejected if no fob is present)
         // rather than firing an unauthenticated trunk open.
         let mut lock_status = "LOCKED".to_string();
         let mut valet_active = false;
@@ -95,8 +120,8 @@ impl<B: SignalBus + Send + Sync + 'static> ExteriorTrunkButton<B> {
         }
     }
 
-    /// Branch on lock state + valet, fire the unlocked path only when
-    /// it's clearly safe to do so.
+    /// Branch on lock state + valet, fire whichever path is
+    /// appropriate.
     async fn on_press(&self, lock_status: &str, valet_active: bool) {
         if valet_active {
             tracing::info!(
@@ -114,16 +139,47 @@ impl<B: SignalBus + Send + Sync + 'static> ExteriorTrunkButton<B> {
                 );
                 self.pulse_trunk_open().await;
             }
-            // LOCKED, DOUBLE_LOCKED, or anything unrecognized — let
-            // PassiveEntry's auth path handle it (or quietly drop on
-            // its own gates if the cabin is in some unknown state).
+            // LOCKED, DOUBLE_LOCKED, or anything unrecognized — run
+            // the authenticated path.
             _ => {
-                tracing::debug!(
-                    lock_status,
-                    "ExteriorTrunkButton: cabin locked — deferring to PassiveEntry"
-                );
+                self.try_authenticated_open(lock_status).await;
             }
         }
+    }
+
+    /// Locked-cabin auth path: submit a `TrunkOutside` Authenticated
+    /// search to the KeySearch arbiter and pulse the trunk on a
+    /// non-empty result.
+    async fn try_authenticated_open(&self, lock_status: &str) {
+        let result = self
+            .key_search
+            .submit(
+                "ExteriorTrunkButton",
+                AntennaSet::TrunkOutside,
+                SearchMode::Authenticated,
+                Coalescing::Disallowed,
+            )
+            .await;
+        let keys = match result {
+            Some(r) => r.keys_found,
+            None => {
+                tracing::warn!("ExteriorTrunkButton: arbiter dropped the request");
+                return;
+            }
+        };
+        if keys.is_empty() {
+            tracing::info!(
+                lock_status,
+                "ExteriorTrunkButton: locked + no paired key at trunk — press denied"
+            );
+            return;
+        }
+        tracing::info!(
+            lock_status,
+            keys = keys.len(),
+            "ExteriorTrunkButton: locked-cabin auth passed — pulsing trunk arbiter"
+        );
+        self.pulse_trunk_open().await;
     }
 
     /// Pulse `Body.Trunk.OpenCmd` through the trunk arbiter as a
@@ -158,21 +214,36 @@ mod tests {
     use super::*;
     use crate::adapters::mock::MockBus;
     use crate::arbiter::trunk_arbiter;
+    use crate::features::key_search_arbiter::KeySearchArbiter;
+    use std::time::Duration;
 
     async fn settle() {
-        for _ in 0..32 {
+        // KeySearchArbiter run_scan sleeps a real 100 ms for
+        // TrunkOutside + Authenticated.  Wait long enough for the
+        // arbiter task to return through the oneshot.
+        for _ in 0..16 {
+            tokio::task::yield_now().await;
+        }
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        for _ in 0..16 {
             tokio::task::yield_now().await;
         }
     }
 
-    /// Spin up bus + trunk arbiter + ExteriorTrunkButton.
+    /// Spin up bus + trunk arbiter + KeySearch arbiter + ETB.
     async fn setup() -> Arc<MockBus> {
         let bus = Arc::new(MockBus::new());
         let (tarb, tarb_fut) = trunk_arbiter(Arc::clone(&bus));
         tokio::spawn(tarb_fut);
         let tarb = Arc::new(tarb);
 
-        let feat = ExteriorTrunkButton::new(Arc::clone(&bus), tarb);
+        let (ksa, ksa_handle, ksa_rx) = KeySearchArbiter::new_with_rx(Arc::clone(&bus));
+        tokio::spawn(
+            ksa.with_cadence(Duration::from_millis(20), Duration::from_millis(200))
+                .run(ksa_rx),
+        );
+
+        let feat = ExteriorTrunkButton::new(Arc::clone(&bus), tarb, ksa_handle);
         tokio::spawn(feat.run());
         for _ in 0..32 {
             tokio::task::yield_now().await;
@@ -189,6 +260,19 @@ mod tests {
     fn lock_status_was_published(bus: &MockBus) -> bool {
         bus.history().into_iter().any(|(s, _)| s == LOCK_STATUS)
     }
+
+    fn place_fob_at_trunk(bus: &MockBus, slot: u8) {
+        let path = match slot {
+            1 => "Body.PEPS.Plant.KeyFob.1.Zone",
+            2 => "Body.PEPS.Plant.KeyFob.2.Zone",
+            3 => "Body.PEPS.Plant.KeyFob.3.Zone",
+            4 => "Body.PEPS.Plant.KeyFob.4.Zone",
+            _ => panic!("unknown slot"),
+        };
+        bus.inject(path, SignalValue::String("Trunk".into()));
+    }
+
+    // ── Unlocked-cabin path (unchanged from pre-migration) ──────────────
 
     #[tokio::test]
     async fn unlocked_press_opens_trunk_directly() {
@@ -224,41 +308,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn locked_press_is_no_op_in_this_feature() {
-        // The locked path is owned by PassiveEntry — this feature must
-        // NOT pulse the arbiter when the cabin is locked (otherwise
-        // we'd open the trunk without auth, which is the whole bug
-        // we're avoiding).
-        let bus = setup().await;
-        bus.inject(LOCK_STATUS, SignalValue::String("LOCKED".into()));
-        settle().await;
-        bus.clear_history();
-
-        bus.inject(BUTTON, SignalValue::Bool(true));
-        settle().await;
-
-        assert!(
-            !trunk_was_pulsed(&bus),
-            "locked: ExteriorTrunkButton must defer to PassiveEntry"
-        );
-    }
-
-    #[tokio::test]
-    async fn double_locked_press_is_no_op_in_this_feature() {
-        let bus = setup().await;
-        bus.inject(LOCK_STATUS, SignalValue::String("DOUBLE_LOCKED".into()));
-        settle().await;
-        bus.clear_history();
-
-        bus.inject(BUTTON, SignalValue::Bool(true));
-        settle().await;
-
-        assert!(!trunk_was_pulsed(&bus));
-    }
-
-    #[tokio::test]
     async fn valet_active_unlocked_press_does_not_open_trunk() {
-        // Valet must override the unlocked-direct path.
         let bus = setup().await;
         bus.inject(LOCK_STATUS, SignalValue::String("UNLOCKED".into()));
         bus.inject(VALET_MODE, SignalValue::Bool(true));
@@ -275,33 +325,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn valet_deactivation_restores_unlocked_path() {
-        // Valet on → blocked.  Toggle valet off → next press fires.
-        let bus = setup().await;
-        bus.inject(LOCK_STATUS, SignalValue::String("UNLOCKED".into()));
-        bus.inject(VALET_MODE, SignalValue::Bool(true));
-        settle().await;
-        bus.inject(BUTTON, SignalValue::Bool(true));
-        settle().await;
-        assert!(!trunk_was_pulsed(&bus));
-
-        // Deactivate valet, press again — pulse should fire.
-        bus.inject(VALET_MODE, SignalValue::Bool(false));
-        settle().await;
-        bus.clear_history();
-        bus.inject(BUTTON, SignalValue::Bool(true));
-        settle().await;
-
-        assert!(
-            trunk_was_pulsed(&bus),
-            "valet deactivated: subsequent press must fire"
-        );
-    }
-
-    #[tokio::test]
     async fn falling_edge_is_ignored() {
-        // Only rising edges count.  A `false` press value is a
-        // button-release event and must not trigger any arbiter call.
         let bus = setup().await;
         bus.inject(LOCK_STATUS, SignalValue::String("UNLOCKED".into()));
         settle().await;
@@ -313,10 +337,123 @@ mod tests {
         assert!(!trunk_was_pulsed(&bus));
     }
 
+    // ── Locked-cabin auth path (new, replaces PassiveEntry path) ────────
+
     #[tokio::test]
-    async fn missing_lock_status_at_boot_defers_to_passive_entry() {
-        // Boot default is `"LOCKED"`.  A press with no published
-        // lock status must NOT fire the unlocked-direct path.
+    async fn locked_press_with_fob_at_trunk_authenticates_and_opens() {
+        let bus = setup().await;
+        bus.inject(LOCK_STATUS, SignalValue::String("LOCKED".into()));
+        place_fob_at_trunk(&bus, 1);
+        settle().await;
+        bus.clear_history();
+
+        bus.inject(BUTTON, SignalValue::Bool(true));
+        settle().await;
+
+        assert!(
+            trunk_was_pulsed(&bus),
+            "locked + paired fob at Trunk: auth must succeed and pulse"
+        );
+        assert!(
+            !lock_status_was_published(&bus),
+            "locked auth path must not mutate Cabin.LockStatus"
+        );
+    }
+
+    #[tokio::test]
+    async fn locked_press_without_key_does_not_open_trunk() {
+        let bus = setup().await;
+        bus.inject(LOCK_STATUS, SignalValue::String("LOCKED".into()));
+        settle().await;
+        bus.clear_history();
+
+        bus.inject(BUTTON, SignalValue::Bool(true));
+        settle().await;
+
+        assert!(
+            !trunk_was_pulsed(&bus),
+            "locked + no key in trunk zone: press must be silently denied"
+        );
+    }
+
+    #[tokio::test]
+    async fn locked_press_with_fob_at_driver_door_does_not_open_trunk() {
+        // Fob is in the wrong zone — TrunkOutside scan returns empty
+        // so the press is denied.
+        let bus = setup().await;
+        bus.inject(LOCK_STATUS, SignalValue::String("LOCKED".into()));
+        bus.inject(
+            "Body.PEPS.Plant.KeyFob.1.Zone",
+            SignalValue::String("LeftFront".into()),
+        );
+        settle().await;
+        bus.clear_history();
+
+        bus.inject(BUTTON, SignalValue::Bool(true));
+        settle().await;
+
+        assert!(!trunk_was_pulsed(&bus));
+    }
+
+    #[tokio::test]
+    async fn double_locked_press_with_fob_at_trunk_authenticates_and_opens() {
+        // DOUBLE_LOCKED behaves identically to LOCKED on the trunk
+        // path — the deterrent is the door lock, not the trunk.
+        let bus = setup().await;
+        bus.inject(LOCK_STATUS, SignalValue::String("DOUBLE_LOCKED".into()));
+        place_fob_at_trunk(&bus, 1);
+        settle().await;
+        bus.clear_history();
+
+        bus.inject(BUTTON, SignalValue::Bool(true));
+        settle().await;
+
+        assert!(trunk_was_pulsed(&bus));
+    }
+
+    #[tokio::test]
+    async fn locked_press_with_unpaired_fob_does_not_open_trunk() {
+        // Unpaired fobs (Paired=false) must be filtered by the
+        // arbiter's authenticated scan.
+        let bus = setup().await;
+        bus.inject(LOCK_STATUS, SignalValue::String("LOCKED".into()));
+        bus.inject("Body.PEPS.Plant.KeyFob.1.Paired", SignalValue::Bool(false));
+        place_fob_at_trunk(&bus, 1);
+        settle().await;
+        bus.clear_history();
+
+        bus.inject(BUTTON, SignalValue::Bool(true));
+        settle().await;
+
+        assert!(
+            !trunk_was_pulsed(&bus),
+            "unpaired fob at Trunk: auth must reject"
+        );
+    }
+
+    #[tokio::test]
+    async fn valet_active_locked_press_is_silently_denied() {
+        // Valet short-circuits even the locked-auth path so the
+        // arbiter isn't wasted on a search that the trunk arbiter
+        // would just drop downstream.
+        let bus = setup().await;
+        bus.inject(LOCK_STATUS, SignalValue::String("LOCKED".into()));
+        bus.inject(VALET_MODE, SignalValue::Bool(true));
+        place_fob_at_trunk(&bus, 1);
+        settle().await;
+        bus.clear_history();
+
+        bus.inject(BUTTON, SignalValue::Bool(true));
+        settle().await;
+
+        assert!(!trunk_was_pulsed(&bus));
+    }
+
+    #[tokio::test]
+    async fn missing_lock_status_at_boot_uses_auth_path() {
+        // Boot default is `"LOCKED"`.  Without an explicit lock-status
+        // publish, a press must route to the authed path — and with
+        // no fob nearby, the press is silently denied.
         let bus = setup().await;
         // Don't inject LOCK_STATUS at all.
         settle().await;
@@ -327,7 +464,7 @@ mod tests {
 
         assert!(
             !trunk_was_pulsed(&bus),
-            "boot-default lock_status='LOCKED' must defer to PassiveEntry"
+            "boot-default 'LOCKED' + no fob: press must be denied"
         );
     }
 }

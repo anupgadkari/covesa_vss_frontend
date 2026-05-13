@@ -71,12 +71,9 @@ use futures::StreamExt;
 use rand::rngs::OsRng;
 use rand::Rng;
 
-use crate::arbiter::{
-    ActuatorRequest, DomainArbiter, DoorLockArbiter, DoorLockRequest, LockCommand,
-    FEEDBACK_REQUEST, TRUNK_OPEN_CMD,
-};
+use crate::arbiter::{DoorLockArbiter, DoorLockRequest, LockCommand, FEEDBACK_REQUEST};
 use crate::config::PlatformConfig;
-use crate::ipc_message::{FeatureId, Priority, SignalValue};
+use crate::ipc_message::{FeatureId, SignalValue};
 use crate::plant_models::peps::crypto::{
     compute_challenge_response, Challenge, ChallengeResponse, SharedSecret,
 };
@@ -267,29 +264,15 @@ struct PendingStageTwo {
     device_slot: usize,
 }
 
-/// VSS path for the exterior trunk-release button (above the licence
-/// plate).  Subscribed here as a fifth trigger source — when the cabin
-/// is locked, a press kicks off an LF challenge in the trunk zone and
-/// pulses `Body.Trunk.OpenCmd` (via the trunk arbiter) on success.
-/// When the cabin is unlocked, the press is handled directly by the
-/// `ExteriorTrunkButton` feature without auth.
-const TRUNK_BUTTON: VssPath = "Body.Trunk.ExteriorButton.IsPressed";
-
-/// Cabin lock-state signal — used to gate the trunk-button auth path.
-/// Auth runs only when the cabin is `LOCKED` or `DOUBLE_LOCKED`; the
-/// unlocked cases bypass PassiveEntry entirely.
+/// Cabin lock-state signal — used to short-circuit handle-pull auth
+/// when the requested door is already unlocked.  See the
+/// `auth_needed_for_door` matrix.
 const LOCK_STATUS: VssPath = "Cabin.LockStatus";
 
 /// Passive-entry feature.
 pub struct PassiveEntry<B: SignalBus> {
     bus: Arc<B>,
     arbiter: Arc<DoorLockArbiter>,
-    /// Trunk-open arbiter — pulsed on a successful authenticated press
-    /// of the exterior trunk button while the cabin is locked.  The
-    /// arbiter's `ValetGate` further suppresses the publish when valet
-    /// mode is active, so a stolen-fob-while-valet scenario can't open
-    /// the trunk.
-    trunk_arb: Arc<DomainArbiter>,
     config: Arc<PlatformConfig>,
     paired_devices: Vec<PairedDevice>,
     /// Last-seen zone per paired device — kept up to date by the
@@ -300,11 +283,10 @@ pub struct PassiveEntry<B: SignalBus> {
     /// State for two-stage unlock — set when stage-1 (driver-door
     /// unlock) succeeds; cleared on stage-2 success or window expiry.
     pending_stage_two: Option<PendingStageTwo>,
-    /// Cached cabin lock state.  Updated by the lock-status branch of
-    /// the main loop; read on a trunk-button press to decide whether
-    /// to even attempt auth.  Default `"LOCKED"` is the safe boot
-    /// stance — if the bus hasn't published yet, we'd rather attempt
-    /// auth (and fail cheaply) than skip a legitimate press.
+    /// Cached cabin lock state.  Read by `auth_needed_for_door` on
+    /// each handle pull to short-circuit auth when the requested door
+    /// is already unlocked.  Default `"LOCKED"` is the safe boot
+    /// stance.
     last_lock_status: String,
 }
 
@@ -312,7 +294,6 @@ impl<B: SignalBus + Send + Sync + 'static> PassiveEntry<B> {
     pub fn new(
         bus: Arc<B>,
         arbiter: Arc<DoorLockArbiter>,
-        trunk_arb: Arc<DomainArbiter>,
         config: Arc<PlatformConfig>,
         paired_devices: Vec<PairedDevice>,
     ) -> Self {
@@ -320,7 +301,6 @@ impl<B: SignalBus + Send + Sync + 'static> PassiveEntry<B> {
         Self {
             bus,
             arbiter,
-            trunk_arb,
             config,
             paired_devices,
             device_zones,
@@ -351,26 +331,21 @@ impl<B: SignalBus + Send + Sync + 'static> PassiveEntry<B> {
             zone_streams.push(self.bus.subscribe(dev.zone_signal()).await);
         }
 
-        // Fifth trigger source: the exterior trunk button.  Same auth
-        // machinery, different action (pulse trunk arbiter instead of
-        // door-lock arbiter).
-        let mut trunk_button_rx = self.bus.subscribe(TRUNK_BUTTON).await;
-        // Track cabin lock state to gate the trunk-button auth path —
-        // we only authenticate when the cabin is LOCKED / DOUBLE_LOCKED;
-        // the unlocked cases are handled by `ExteriorTrunkButton`
-        // directly.
+        // Track cabin lock state — used by `auth_needed_for_door` to
+        // skip auth when the requested door is already unlocked.
+        // (Previously this also gated a trunk-button auth path; that
+        // path now lives in `ExteriorTrunkButton`, which routes its
+        // own authenticated search through the KeySearchArbiter.)
         let mut lock_status_rx = self.bus.subscribe(LOCK_STATUS).await;
 
         // Index layout for the racer below:
         //   0..n_handles               — handle-pull streams
         //   n_handles..n_handles+n_zones — zone update streams
-        //   trunk_idx                  — trunk-button stream
         //   lock_idx                   — lock-status stream
         loop {
             let n_handles = handle_streams.len();
             let n_zones = zone_streams.len();
-            let trunk_idx = n_handles + n_zones;
-            let lock_idx = trunk_idx + 1;
+            let lock_idx = n_handles + n_zones;
 
             let mut futs: Vec<_> = handle_streams
                 .iter_mut()
@@ -383,9 +358,6 @@ impl<B: SignalBus + Send + Sync + 'static> PassiveEntry<B> {
             for (j, s) in zone_streams.iter_mut().enumerate() {
                 futs.push(Box::pin(async move { (n_handles + j, s.next().await) }));
             }
-            futs.push(Box::pin(async {
-                (trunk_idx, trunk_button_rx.next().await)
-            }));
             futs.push(Box::pin(async { (lock_idx, lock_status_rx.next().await) }));
 
             let ((idx, val), _, _) = futures::future::select_all(futs.drain(..)).await;
@@ -446,7 +418,7 @@ impl<B: SignalBus + Send + Sync + 'static> PassiveEntry<B> {
                     continue;
                 }
                 self.try_unlock_for_door(door).await;
-            } else if idx < trunk_idx {
+            } else if idx < lock_idx {
                 // Zone update for paired_devices[idx - n_handles].
                 let dev_idx = idx - n_handles;
                 if let SignalValue::String(s) = &val {
@@ -454,23 +426,6 @@ impl<B: SignalBus + Send + Sync + 'static> PassiveEntry<B> {
                         self.device_zones[dev_idx] = z;
                     }
                 }
-            } else if idx == trunk_idx {
-                // Exterior trunk button — only act on rising edge AND
-                // only when the cabin is currently locked.  The
-                // unlocked cases bypass PassiveEntry entirely (handled
-                // by the `ExteriorTrunkButton` feature, which pulses
-                // the trunk arbiter directly).
-                if !matches!(val, SignalValue::Bool(true)) {
-                    continue;
-                }
-                if !is_cabin_locked(&self.last_lock_status) {
-                    tracing::debug!(
-                        lock_status = %self.last_lock_status,
-                        "PassiveEntry: trunk button pressed but cabin is unlocked — ExteriorTrunkButton handles this path"
-                    );
-                    continue;
-                }
-                self.try_open_trunk_authenticated().await;
             } else {
                 // Lock-status update.
                 debug_assert_eq!(idx, lock_idx);
@@ -497,28 +452,6 @@ impl<B: SignalBus + Send + Sync + 'static> PassiveEntry<B> {
             "PassiveEntry: handle pull authenticated"
         );
         self.dispatch_unlock(door, &dev).await;
-    }
-
-    /// Trunk-button auth path.  Same challenge/response machinery as
-    /// the door-handle path, but scoped to the trunk zone and dispatching
-    /// to the **trunk arbiter** on success.  Crucially, this does NOT
-    /// touch `Cabin.LockStatus` or `Cabin.LockStatus.LastRequestor` —
-    /// the cabin stays locked, AutoRelock never sees a fresh "external
-    /// unlock" event, and the user gets trunk-only access exactly as
-    /// the spec requires.
-    async fn try_open_trunk_authenticated(&mut self) {
-        let dev = match self
-            .try_authenticate_in_zone(Zone::Trunk, "ExteriorTrunkButton")
-            .await
-        {
-            Some(d) => d,
-            None => return,
-        };
-        tracing::info!(
-            device = %dev.label(),
-            "PassiveEntry: trunk button authenticated — pulsing trunk arbiter"
-        );
-        self.dispatch_trunk_open().await;
     }
 
     /// Shared auth core — issue an LF/BLE challenge, race for a
@@ -667,32 +600,6 @@ impl<B: SignalBus + Send + Sync + 'static> PassiveEntry<B> {
         }
     }
 
-    /// Pulse `Body.Trunk.OpenCmd` through the trunk arbiter (request
-    /// true → release).  The arbiter's `ValetGate` will silently
-    /// suppress the publish when valet mode is active.  Also fires the
-    /// `trunk_unlock` lock-feedback flash so the user gets visual
-    /// confirmation matching the RKE TrunkRelease pattern.
-    ///
-    /// **Does not** mutate `Cabin.LockStatus` or `LastRequestor` — the
-    /// cabin remains in whatever state it was before this press.
-    async fn dispatch_trunk_open(&self) {
-        let _ = self
-            .trunk_arb
-            .request(ActuatorRequest {
-                signal: TRUNK_OPEN_CMD,
-                value: SignalValue::Bool(true),
-                priority: Priority::Medium,
-                feature_id: FEATURE_ID,
-            })
-            .await;
-        let _ = self.trunk_arb.release(TRUNK_OPEN_CMD, FEATURE_ID).await;
-
-        let _ = self
-            .bus
-            .publish(FEEDBACK_REQUEST, SignalValue::String("trunk_unlock".into()))
-            .await;
-    }
-
     async fn dispatch_unlock(&mut self, door: &Door, dev: &PairedDevice) {
         let dealer = self.config.dealer_config_watch().borrow().clone();
         let two_stage_enabled = dealer.two_stage_unlock;
@@ -805,21 +712,13 @@ fn rand_nonce() -> Challenge {
     OsRng.gen()
 }
 
-/// True if the given `Cabin.LockStatus` enum value represents a
-/// locked cabin (`LOCKED` or `DOUBLE_LOCKED`).  `UNLOCKED` /
-/// `DRIVER_UNLOCKED` are handled by `ExteriorTrunkButton` directly,
-/// so this gate keeps PassiveEntry off those code paths.
-fn is_cabin_locked(status: &str) -> bool {
-    matches!(status, "LOCKED" | "DOUBLE_LOCKED")
-}
-
 // ── Tests ──────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::adapters::mock::MockBus;
-    use crate::arbiter::{door_lock_arbiter, trunk_arbiter};
+    use crate::arbiter::door_lock_arbiter;
     use crate::config::PlatformConfig;
     use crate::plant_models::door_lock::DoorLockPlantModel;
     use crate::plant_models::peps::{crypto, PepsPlantModel};
@@ -869,14 +768,7 @@ mod tests {
             });
         }
 
-        // Trunk arbiter — spawned for completeness so PassiveEntry's
-        // trunk-button auth path has a working actuator domain.  Door
-        // tests never exercise the trunk path so the arbiter is dormant.
-        let (tarb, tarb_fut) = trunk_arbiter(Arc::clone(&bus));
-        tokio::spawn(tarb_fut);
-        let tarb = Arc::new(tarb);
-
-        let pe = PassiveEntry::new(Arc::clone(&bus), arb, tarb, config, paired);
+        let pe = PassiveEntry::new(Arc::clone(&bus), arb, config, paired);
         tokio::spawn(pe.run());
 
         // Yield until all spawned tasks have reached their first .await.
@@ -928,11 +820,7 @@ mod tests {
             });
         }
 
-        let (tarb, tarb_fut) = trunk_arbiter(Arc::clone(&bus));
-        tokio::spawn(tarb_fut);
-        let tarb = Arc::new(tarb);
-
-        let pe = PassiveEntry::new(Arc::clone(&bus), arb, tarb, Arc::clone(&config), paired);
+        let pe = PassiveEntry::new(Arc::clone(&bus), arb, Arc::clone(&config), paired);
         tokio::spawn(pe.run());
 
         for _ in 0..32 {
@@ -1265,9 +1153,6 @@ mod tests {
         tokio::spawn(dlpm.run());
         let plant = PepsPlantModel::new(Arc::clone(&bus2));
         tokio::spawn(plant.run());
-        let (tarb, tarb_fut) = trunk_arbiter(Arc::clone(&bus2));
-        tokio::spawn(tarb_fut);
-        let tarb = Arc::new(tarb);
         let mut paired = Vec::new();
         for i in 1u8..=4 {
             paired.push(PairedDevice {
@@ -1276,7 +1161,7 @@ mod tests {
                 secret: default_secret(b'F', i),
             });
         }
-        let pe = PassiveEntry::new(Arc::clone(&bus2), arb, tarb, Arc::clone(&cfg), paired);
+        let pe = PassiveEntry::new(Arc::clone(&bus2), arb, Arc::clone(&cfg), paired);
         tokio::spawn(pe.run());
         for _ in 0..32 {
             tokio::task::yield_now().await;
@@ -1496,171 +1381,6 @@ mod tests {
         assert_eq!(s[1], 1);
         // k=2 byte: 'F' * 17 + 1 * 31 + 2 = 70*17 + 31 + 2 = 1190 + 33 = 1223 → 199
         assert_eq!(s[2], 70u8.wrapping_mul(17).wrapping_add(33u8));
-    }
-
-    // ── Exterior trunk button — authenticated path ──────────────────
-
-    /// Helper: was `Body.Trunk.OpenCmd = true` ever published on this
-    /// bus?  The trunk arbiter pulses true→false on each request, so a
-    /// single press should leave at least one `true` in history.
-    fn trunk_open_was_pulsed(bus: &MockBus) -> bool {
-        bus.history()
-            .into_iter()
-            .any(|(s, v)| s == "Body.Trunk.OpenCmd" && v == SignalValue::Bool(true))
-    }
-
-    /// Helper: most recent `Cabin.LockStatus` publish, or None.
-    fn last_lock_status(bus: &MockBus) -> Option<String> {
-        bus.history().into_iter().rev().find_map(|(s, v)| {
-            if s == "Cabin.LockStatus" {
-                if let SignalValue::String(s) = v {
-                    return Some(s);
-                }
-            }
-            None
-        })
-    }
-
-    /// Locked cabin + paired fob in Trunk zone + button press → trunk
-    /// pulses open.  Cabin lock status is unchanged.
-    #[tokio::test]
-    async fn locked_trunk_button_with_fob_in_trunk_zone_opens_trunk() {
-        let bus = setup().await;
-
-        // Locked cabin.
-        bus.inject(LOCK_STATUS, SignalValue::String("LOCKED".into()));
-        // Fob 1 in Trunk zone.
-        bus.inject(
-            peps_signals::KEYFOB_1_ZONE,
-            SignalValue::String("Trunk".into()),
-        );
-        drain().await;
-        bus.clear_history();
-
-        // Press the exterior trunk button.
-        bus.inject(TRUNK_BUTTON, SignalValue::Bool(true));
-        drain().await;
-
-        assert!(
-            trunk_open_was_pulsed(&bus),
-            "locked + fob in trunk zone: button press must pulse Body.Trunk.OpenCmd=true"
-        );
-        // Cabin lock status untouched — no UNLOCKED publish.
-        assert_eq!(
-            last_lock_status(&bus),
-            None,
-            "trunk-only auth must NOT mutate Cabin.LockStatus"
-        );
-    }
-
-    /// Locked cabin + paired fob at the driver door (NOT trunk zone)
-    /// + button press → no trunk pulse.  Auth fails at the zone check.
-    #[tokio::test]
-    async fn locked_trunk_button_with_fob_at_driver_door_does_not_open_trunk() {
-        let bus = setup().await;
-
-        bus.inject(LOCK_STATUS, SignalValue::String("LOCKED".into()));
-        bus.inject(
-            peps_signals::KEYFOB_1_ZONE,
-            SignalValue::String("LeftFront".into()),
-        );
-        drain().await;
-        bus.clear_history();
-
-        bus.inject(TRUNK_BUTTON, SignalValue::Bool(true));
-        drain().await;
-
-        assert!(
-            !trunk_open_was_pulsed(&bus),
-            "locked + fob in driver zone: trunk button must NOT pulse open"
-        );
-    }
-
-    /// Locked cabin + NO paired fob anywhere + button press → no
-    /// trunk pulse.  Stops cold at "no candidates in zone".
-    #[tokio::test]
-    async fn locked_trunk_button_with_no_paired_fob_does_not_open_trunk() {
-        let bus = setup().await;
-
-        bus.inject(LOCK_STATUS, SignalValue::String("LOCKED".into()));
-        // All fobs default to OutOfRange.
-        drain().await;
-        bus.clear_history();
-
-        bus.inject(TRUNK_BUTTON, SignalValue::Bool(true));
-        drain().await;
-
-        assert!(
-            !trunk_open_was_pulsed(&bus),
-            "locked + no fob anywhere: trunk button must NOT pulse open"
-        );
-    }
-
-    /// Unlocked cabin + button press → PassiveEntry does NOT act
-    /// (this path is owned by `ExteriorTrunkButton`).  Even with a
-    /// fob in the trunk zone, no LF challenge fires from PE.
-    #[tokio::test]
-    async fn unlocked_trunk_button_press_is_ignored_by_passive_entry() {
-        let bus = setup().await;
-
-        bus.inject(LOCK_STATUS, SignalValue::String("UNLOCKED".into()));
-        bus.inject(
-            peps_signals::KEYFOB_1_ZONE,
-            SignalValue::String("Trunk".into()),
-        );
-        drain().await;
-        bus.clear_history();
-
-        bus.inject(TRUNK_BUTTON, SignalValue::Bool(true));
-        drain().await;
-
-        // No LF challenge published — PE skipped this press entirely.
-        let challenge_fired = bus
-            .history()
-            .into_iter()
-            .any(|(s, _)| s == peps_signals::PEPS_LF_CHALLENGE);
-        assert!(
-            !challenge_fired,
-            "unlocked cabin: PE must not fire LF challenge on trunk-button press"
-        );
-        // And trunk did not pulse via PE.
-        assert!(!trunk_open_was_pulsed(&bus));
-    }
-
-    /// Double-locked cabin + paired fob in Trunk zone + button press
-    /// → trunk pulses open.  DOUBLE_LOCKED is treated the same as
-    /// LOCKED for the auth gate.
-    #[tokio::test]
-    async fn double_locked_trunk_button_with_fob_in_trunk_zone_opens_trunk() {
-        let bus = setup().await;
-
-        bus.inject(LOCK_STATUS, SignalValue::String("DOUBLE_LOCKED".into()));
-        bus.inject(
-            peps_signals::KEYFOB_1_ZONE,
-            SignalValue::String("Trunk".into()),
-        );
-        drain().await;
-        bus.clear_history();
-
-        bus.inject(TRUNK_BUTTON, SignalValue::Bool(true));
-        drain().await;
-
-        assert!(
-            trunk_open_was_pulsed(&bus),
-            "double-locked + fob in trunk zone: button press must pulse open"
-        );
-    }
-
-    /// is_cabin_locked classifier — covers all four enum values.
-    #[test]
-    fn is_cabin_locked_classifier() {
-        assert!(is_cabin_locked("LOCKED"));
-        assert!(is_cabin_locked("DOUBLE_LOCKED"));
-        assert!(!is_cabin_locked("UNLOCKED"));
-        assert!(!is_cabin_locked("DRIVER_UNLOCKED"));
-        // Unknown / malformed → treated as not-locked → safe default
-        // (PE skips, ExteriorTrunkButton's branch handles it).
-        assert!(!is_cabin_locked(""));
     }
 
     /// 11. crypto::compute_challenge_response is deterministic — same
