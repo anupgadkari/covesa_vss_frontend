@@ -478,8 +478,9 @@ async fn handle_request(
 fn coverage_zones(antennas: &AntennaSet) -> Vec<Zone> {
     match antennas {
         AntennaSet::Cabin => vec![Zone::Cabin],
-        AntennaSet::Cylinder => vec![],
-        // Phase 7 adds Zone::KeyCylinder; until then Cylinder covers nothing.
+        // Phase 7 — cylinder antenna covers the short-range
+        // `Zone::KeyCylinder` introduced alongside the KeySource cal.
+        AntennaSet::Cylinder => vec![Zone::KeyCylinder],
         AntennaSet::AllApproach => vec![
             Zone::Approach,
             Zone::LeftFront,

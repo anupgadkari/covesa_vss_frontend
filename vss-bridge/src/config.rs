@@ -722,6 +722,23 @@ impl PlatformConfig {
         })
     }
 
+    /// Build a `PlatformConfig` directly from its components (for
+    /// unit tests that need to vary the line-cal in ways the existing
+    /// `defaults_*` helpers don't cover).
+    pub fn test_construct(
+        vehicle_line: VehicleLineCal,
+        variant: VariantCal,
+        dealer_config_tx: watch::Sender<DealerConfig>,
+        dealer_config_rx: watch::Receiver<DealerConfig>,
+    ) -> Self {
+        Self {
+            vehicle_line,
+            variant: std::sync::RwLock::new(variant),
+            dealer_config_tx,
+            dealer_config_rx,
+        }
+    }
+
     /// Create with a custom lane-change flash count (for unit tests).
     pub fn defaults_with_lane_change_flash_count(count: u8) -> Arc<Self> {
         let vl = VehicleLineCal {

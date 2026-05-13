@@ -29,5 +29,6 @@ pub mod slam_lock;
 pub mod sunroof_control;
 pub mod thumb_pad_lock;
 pub mod turn_indicator;
+pub mod vehicle_starting_control;
 pub mod walk_away_lock;
 pub mod welcome;
