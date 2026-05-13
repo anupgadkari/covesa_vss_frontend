@@ -3005,9 +3005,14 @@ const INTERIOR_ZONES=new Set(['Hood','Trunk','TrunkInside','LeftFront','RightFro
 function DevicePanel({s, set, sel, setSel}){
   const [firedBtn, setFiredBtn]=useState(null);
 
-  // Device selector list: fobs 1-4 (paired) + phones 1-2
+  // Device selector list: paired fobs 1-4 + intruder fobs 5-6 + phones 1-2.
+  // Intruder fobs are coloured red to distinguish them from authorised
+  // (amber) fobs.  Fob 5 is a mechanically-compatible / unauthorised key;
+  // Fob 6 is an incompatible key blank (modelled in the zone-button
+  // filter — its CYLINDER tile is hidden).
   const devices=[
     ...[1,2,3,4].map(i=>({type:'fob',  index:i, label:`F${i}`, color:'#F59E0B', pfx:`Body.PEPS.Plant.KeyFob.${i}`})),
+    ...[5,6]    .map(i=>({type:'fob',  index:i, label:`F${i}`, color:'#F04040', pfx:`Body.PEPS.Plant.KeyFob.${i}`, intruder:true})),
     ...[1,2]    .map(i=>({type:'phone',index:i, label:`P${i}`, color:'#4A9EF5', pfx:`Body.PEPS.Plant.BlePhone.${i}`})),
   ];
 
