@@ -816,6 +816,19 @@ function CombinedView({s,set,cfg,onDeviceSelect}){
                    : 'NotPresent';
       set(drag.key,nfcPos);
     } else {
+      // Single-slot cylinder: refuse drops on KeyCylinder when a
+      // different fob is already inserted there.  Applies to fobs
+      // only; phones can "tap" the NFC pad regardless.
+      if(zone==='KeyCylinder' && drag.type==='fob'){
+        const mFob=drag.key.match(/KeyFob\.(\d+)/);
+        const myIdx=mFob?parseInt(mFob[1]):0;
+        const occupant=fobOccupyingCylinder(s);
+        if(occupant && occupant !== myIdx){
+          // Slot occupied by a different fob — silently bounce.
+          setDrag(null);
+          return;
+        }
+      }
       set(drag.key,zone);
     }
     setDrag(null);
@@ -3071,6 +3084,18 @@ const ZONE_PROX=[
 ];
 const INTERIOR_ZONES=new Set(['Hood','Trunk','TrunkInside','LeftFront','RightFront','Cabin']);
 
+/* The cylinder is a single physical slot — only one fob's mechanical
+   key bow can be inserted at a time.  Returns the slot index (1-6) of
+   the fob currently at KeyCylinder, or 0 if empty.  Phones and NFC
+   cards don't count: their "presence" at the cylinder is an NFC tap,
+   not a mechanical insertion. */
+function fobOccupyingCylinder(s){
+  for(let i=1;i<=6;i++){
+    if(s[`Body.PEPS.Plant.KeyFob.${i}.Zone`]==='KeyCylinder') return i;
+  }
+  return 0;
+}
+
 /* ── Dedicated Auth Device Panel ──────────────────────────────── */
 function DevicePanel({s, set, sel, setSel}){
   const [firedBtn, setFiredBtn]=useState(null);
@@ -3234,6 +3259,13 @@ function DevicePanel({s, set, sel, setSel}){
         const keyStuckHere = removalInhibited
                           && dev.type === 'fob'
                           && zone === 'KeyCylinder';
+        // Single-slot cylinder occupancy.  Only relevant when the
+        // selected device is a fob trying to *enter* the cylinder.
+        const cylOccupant = fobOccupyingCylinder(s);
+        const selectedFobIdx = dev.type==='fob' ? dev.index : 0;
+        const cylBlockedByOther = dev.type==='fob'
+                               && cylOccupant !== 0
+                               && cylOccupant !== selectedFobIdx;
         return <>
           <div className="devpanel-section">
             PLACE IN ZONE
@@ -3242,14 +3274,24 @@ function DevicePanel({s, set, sel, setSel}){
               color:'#F59E0B',fontWeight:700,letterSpacing:0.5}}>
               🔒 KEY-IN LOCKOUT · shift to P to remove
             </span>}
+            {cylBlockedByOther && !keyStuckHere && <span style={{
+              marginLeft:6,fontFamily:'var(--fm)',fontSize:'7px',
+              color:'#4A9EF5',fontWeight:700,letterSpacing:0.5}}>
+              🔑 CYLINDER OCCUPIED BY F{cylOccupant}
+            </span>}
           </div>
           <div className="zonepick">
             {ZONE_BTNS.map(({z,label,c})=>{
               const isActive=zone===z;
-              const blocked = keyStuckHere && z !== 'KeyCylinder';
+              const blockedByLockout = keyStuckHere && z !== 'KeyCylinder';
+              const blockedByOccupant = z === 'KeyCylinder' && cylBlockedByOther;
+              const blocked = blockedByLockout || blockedByOccupant;
               return <button key={z}
                 className={`zpbtn${isActive?' zp-active':''}`}
                 disabled={blocked}
+                title={blockedByOccupant
+                  ? `Cylinder occupied by Fob ${cylOccupant} — remove that key first`
+                  : undefined}
                 style={{borderColor:isActive?c:'',background:isActive?c:'',
                         color:isActive?'#0a0f18':'',
                         opacity:blocked?0.35:1,
@@ -3517,16 +3559,25 @@ function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
             {(()=>{
               const removalInhibited = !!s['Body.Switches.IgnitionCylinder.RemovalInhibited'];
               const stuck = removalInhibited && zone === 'KeyCylinder';
+              // Single-slot cylinder: hide the KeyCylinder option if
+              // another fob is already inserted.  The current occupant
+              // sees the option (so they can stay/leave); everyone
+              // else does not.
+              const cylOccupant = fobOccupyingCylinder(s);
+              const cylBlocked = cylOccupant !== 0 && cylOccupant !== i;
+              const allZones = ['OutOfRange','RfRange','Approach','LeftFront','RightFront','Cabin','Hood','Trunk','TrunkInside','KeyCylinder'];
+              const opts = cylBlocked ? allZones.filter(z=>z!=='KeyCylinder') : allZones;
               return <div style={{display:'flex',alignItems:'center',gap:6,marginTop:4}}>
                 <span style={{fontFamily:'var(--fm)',fontSize:'8px',color:stuck?'#F59E0B':'var(--dim)'}}>{stuck?'ZONE 🔒':'ZONE'}</span>
                 <select className="peps-btn" style={{flex:1,padding:'2px 4px',fontFamily:'var(--fm)',fontSize:'9px',
                           opacity:stuck?0.55:1, cursor:stuck?'not-allowed':'pointer'}}
                   value={zone}
                   disabled={stuck}
-                  title={stuck?'Key locked in cylinder — shift to PARK to remove':undefined}
+                  title={stuck?'Key locked in cylinder — shift to PARK to remove'
+                         : cylBlocked?`Cylinder occupied by Fob ${cylOccupant}`
+                         : undefined}
                   onChange={e=>set(`${pfx}.Zone`, e.target.value)}>
-                  {['OutOfRange','RfRange','Approach','LeftFront','RightFront','Cabin','Hood','Trunk','TrunkInside','KeyCylinder']
-                    .map(z=><option key={z} value={z}>{z}</option>)}
+                  {opts.map(z=><option key={z} value={z}>{z}</option>)}
                 </select>
               </div>;
             })()}
@@ -3560,15 +3611,20 @@ function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
             {(()=>{
               const removalInhibited = !!s['Body.Switches.IgnitionCylinder.RemovalInhibited'];
               const stuck = removalInhibited && zone === 'KeyCylinder';
+              const cylOccupant = fobOccupyingCylinder(s);
+              const cylBlocked = cylOccupant !== 0 && cylOccupant !== i;
+              const opts = cylBlocked ? zoneOpts.filter(z=>z!=='KeyCylinder') : zoneOpts;
               return <div style={{display:'flex',alignItems:'center',gap:6,marginTop:4}}>
                 <span style={{fontFamily:'var(--fm)',fontSize:'8px',color:stuck?'#F59E0B':'var(--dim)'}}>{stuck?'ZONE 🔒':'ZONE'}</span>
                 <select className="peps-btn" style={{flex:1,padding:'2px 4px',fontFamily:'var(--fm)',fontSize:'9px',
                           opacity:stuck?0.55:1, cursor:stuck?'not-allowed':'pointer'}}
                   value={zone}
                   disabled={stuck}
-                  title={stuck?'Key locked in cylinder — shift to PARK to remove':undefined}
+                  title={stuck?'Key locked in cylinder — shift to PARK to remove'
+                         : cylBlocked?`Cylinder occupied by Fob ${cylOccupant}`
+                         : undefined}
                   onChange={e=>set(`${pfx}.Zone`, e.target.value)}>
-                  {zoneOpts.map(z=><option key={z} value={z}>{z}</option>)}
+                  {opts.map(z=><option key={z} value={z}>{z}</option>)}
                 </select>
               </div>;
             })()}
