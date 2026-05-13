@@ -714,7 +714,7 @@ function DeviceChip({device, pos, dimmed, onPointerDown}){
   </g>;
 }
 
-function CombinedView({s,set,onDeviceSelect}){
+function CombinedView({s,set,cfg,onDeviceSelect}){
   const svgRef=useRef(null);
   const [drag,setDrag]=useState(null);
   // drag={key,type,label,color,paired,isNfc,x,y,ox,oy}
@@ -732,7 +732,12 @@ function CombinedView({s,set,onDeviceSelect}){
   }
   for(let i=1;i<=2;i++){
     const pos=s[`Body.PEPS.Plant.NfcCard.${i}.Position`]||'NotPresent';
-    const zone=pos==='DriverHandle'?'LeftFront':pos==='PushButton'?'Cabin':'OutOfRange';
+    // Render NFC card chip at the *driver-side* B-pillar zone — uses
+    // the same dealer.driver_door_side cal as PEPS handle routing so
+    // the chip moves to the correct side on RHD vehicles.
+    const driverSideForChip = cfg?.dealer?.driver_door_side === 'Right' ? 'Right' : 'Left';
+    const driverZoneForChip = driverSideForChip === 'Right' ? 'RightFront' : 'LeftFront';
+    const zone=pos==='DriverHandle'?driverZoneForChip:pos==='PushButton'?'Cabin':'OutOfRange';
     allDevices.push({key:`Body.PEPS.Plant.NfcCard.${i}.Position`,type:'nfc',label:`N${i}`,
       zone,paired:true,color:'#0DC8C8',isNfc:true,nfcPos:pos});
   }
@@ -782,14 +787,18 @@ function CombinedView({s,set,onDeviceSelect}){
     }
     const zone=hitTestZone(x,y);
     if(drag.isNfc){
-      // NFC card → reader position mapping.  The handle reader sits
-      // on the driver-door B-pillar, but the HMI is side-agnostic —
-      // either LeftFront or RightFront maps to `DriverHandle` so this
-      // works for LHD and RHD without the HMI needing to know
-      // cfg.driver_door_side.  Same applies to phones with NFC: the
-      // user can tap either side B-pillar interchangeably.
-      const nfcPos=(zone==='LeftFront'||zone==='RightFront')?'DriverHandle'
-                  :zone==='Cabin'?'PushButton':'NotPresent';
+      // NFC card → reader position mapping, side-aware via the same
+      // `dealer.driver_door_side` cal that PEPS uses to route handle
+      // pulls.  Only the driver-side B-pillar carries the NFC reader
+      // hardware in production; dropping on the passenger side
+      // therefore reads as `NotPresent` (no reader to tap).
+      // Defaults to Left when cfg is missing or driver_door_side
+      // hasn't arrived yet from the broadcast.
+      const driverSide = cfg?.dealer?.driver_door_side === 'Right' ? 'Right' : 'Left';
+      const driverZone = driverSide === 'Right' ? 'RightFront' : 'LeftFront';
+      const nfcPos = zone===driverZone ? 'DriverHandle'
+                   : zone==='Cabin'     ? 'PushButton'
+                   : 'NotPresent';
       set(drag.key,nfcPos);
     } else {
       set(drag.key,zone);
@@ -4265,7 +4274,7 @@ function App(){
           <span className="ctright">NXP S32G2 · BODY DOMAIN · QM+ASIL-B</span>
         </div>
         <div className={view==='config'?'':' svgwrap'} style={view==='config'?{flex:1,display:'flex',minHeight:0}:{}}>
-          {view==='top'     &&<CombinedView s={s} set={set} onDeviceSelect={setSelDev}/>}
+          {view==='top'     &&<CombinedView s={s} set={set} cfg={cfg} onDeviceSelect={setSelDev}/>}
           {view==='side'    &&<SideView s={s} set={set}/>}
           {view==='cockpit' &&<CockpitView s={s} set={set} cfg={cfg}/>}
           {view==='config'  &&<ConfigView cfg={cfg} onSet={setCfgKey}
