@@ -2258,7 +2258,7 @@ function CockpitView({s,set,cfg}){
     </CockpitZone>
 
     {/* ── Dash-mounted body-opening release pulls ── */}
-    <CockpitZone title="BODY RELEASES" subtitle="dash lower-left pulls" night={night}>
+    <CockpitZone title="BODY CLOSURE RELEASES" subtitle="dash lower-left pulls" night={night}>
       <div style={{display:'flex',gap:8,alignItems:'center'}}>
         <Btn night={night} on={s['Body.Switches.Trunk.Release.IsPressed']}
              onMouseDown={()=>set('Body.Switches.Trunk.Release.IsPressed',true)}
