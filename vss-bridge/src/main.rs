@@ -59,6 +59,7 @@ use vss_bridge::features::manual_horn::ManualHorn;
 use vss_bridge::features::manual_lighting::ManualLighting;
 use vss_bridge::features::mirror_adjust::MirrorAdjust;
 use vss_bridge::features::mirror_fold::MirrorFold;
+use vss_bridge::features::nfc_entry::NfcEntry;
 use vss_bridge::features::panic_alarm::PanicAlarm;
 use vss_bridge::features::passive_entry::{DeviceKind, PairedDevice, PassiveEntry};
 use vss_bridge::features::perimeter_alarm::PerimeterAlarm;
@@ -517,7 +518,12 @@ async fn boot_simulation_stack(
         .run(),
     );
 
-    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome, MirrorFold, MirrorAdjust, Farewell, DoorOpenAssist, ExteriorTrunkButton, CabinTrunkRelease, ManualHorn, PerimeterAlarm, KeySearchArbiter, VehicleStartingControl");
+    // NFC Entry — unlock on NFC card / phone tap at the driver-side
+    // B-pillar reader.  Independent of KeySearch (NFC handshake at
+    // the reader IS the authentication in production).
+    set.spawn(NfcEntry::new(Arc::clone(&bus), Arc::clone(&door_lock_arb)).run());
+
+    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome, MirrorFold, MirrorAdjust, Farewell, DoorOpenAssist, ExteriorTrunkButton, CabinTrunkRelease, ManualHorn, PerimeterAlarm, KeySearchArbiter, VehicleStartingControl, NfcEntry");
 
     // ── Plant Models ────────────────────────────────────────────────
     set.spawn(BlinkRelay::new(Arc::clone(&bus)).run());
