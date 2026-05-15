@@ -9,17 +9,17 @@
 //! - `Body.PEPS.Plant.NfcCard.{1,2}.Position` rising edge to
 //!   `"DriverHandle"` — the user tapped a paired NFC card on the
 //!   driver-door B-pillar reader.
-//! - `Body.PEPS.Plant.BlePhone.{1,2}.Zone` rising edge to either
-//!   `"LeftFront"` or `"RightFront"` — the user tapped an
-//!   NFC-equipped phone on the driver-door B-pillar.  We accept
-//!   either side because the HMI's drag-target is side-agnostic;
-//!   the dealer's `driver_door_side` cal decides which physical
-//!   side is the driver's, but the NFC reader hardware is wired to
-//!   that side regardless and the tap event itself doesn't carry
-//!   side information.
+//! - `Body.PEPS.Plant.BlePhone.{1,2}.NfcTap` rising edge to
+//!   `"DriverHandle"` — the user tapped an NFC-equipped phone on
+//!   the driver-door B-pillar.  Phones expose BLE (continuous
+//!   proximity, consumed by PassiveEntry on a handle pull) and
+//!   NFC (deliberate ~5 cm tap, consumed here) as independent
+//!   radios; the simulator models them as independent signals
+//!   (`.Zone` for BLE, `.NfcTap` for NFC) so the user can have a
+//!   phone in their pocket near the door without it auto-unlocking.
 //!
-//! Falling edges (`NotPresent`, `OutOfRange`, any other zone)
-//! clear the latch but do not trigger a fresh unlock.
+//! Falling edges (`NotPresent`) clear the latch but do not trigger
+//! a fresh unlock.
 //!
 //! # Action
 //!
@@ -66,12 +66,14 @@ const NFC_CARD_SIGNALS: [VssPath; 2] = [
     "Body.PEPS.Plant.NfcCard.2.Position",
 ];
 
-/// Per-BLE-phone Zone paths.  Two phones in the simulator HMI.
+/// Per-BLE-phone NFC tap paths.  Two phones in the simulator HMI.
 /// Phones authenticate over BLE for proximity (handled by PassiveEntry
-/// on a handle-pull) and over NFC for tap-to-unlock (handled here).
+/// on a handle-pull via `.Zone`) and over NFC for tap-to-unlock
+/// (handled here via `.NfcTap`).  Distinct signals so BLE proximity
+/// and NFC tap don't conflate.
 const BLE_PHONE_SIGNALS: [VssPath; 2] = [
-    "Body.PEPS.Plant.BlePhone.1.Zone",
-    "Body.PEPS.Plant.BlePhone.2.Zone",
+    "Body.PEPS.Plant.BlePhone.1.NfcTap",
+    "Body.PEPS.Plant.BlePhone.2.NfcTap",
 ];
 
 pub struct NfcEntry<B: SignalBus> {
@@ -136,14 +138,12 @@ impl<B: SignalBus + Send + Sync + 'static> NfcEntry<B> {
                 }
                 Some((idx, val)) = next_indexed(&mut phone_rxs) => {
                     if let SignalValue::String(s) = val {
-                        // The dealer's driver_door_side cal selects
-                        // which front-zone counts as the driver-side
-                        // B-pillar — but the NFC reader is wired to
-                        // whichever side that is, so a phone landing
-                        // at EITHER front zone is treated as a tap
-                        // on the (one) physical reader.  The HMI is
-                        // side-agnostic for the same reason.
-                        let engaged = s == "LeftFront" || s == "RightFront";
+                        // `BlePhone.{N}.NfcTap` uses the same enum as
+                        // an NFC card: NotPresent / DriverHandle /
+                        // PushButton.  `DriverHandle` is the only
+                        // unlock-triggering value; `PushButton` parks
+                        // there for the deferred start-button path.
+                        let engaged = s == "DriverHandle";
                         let was_engaged = phone_at_handle_zone[idx];
                         phone_at_handle_zone[idx] = engaged;
                         if engaged && !was_engaged {
@@ -420,7 +420,44 @@ mod tests {
     // ── BLE phone NFC path ─────────────────────────────────────────────
 
     #[tokio::test]
-    async fn phone_at_left_front_zone_unlocks() {
+    async fn phone_nfc_tap_at_driver_handle_unlocks() {
+        let bus = setup().await;
+        bus.inject(LOCK_STATUS, SignalValue::String("LOCKED".into()));
+        settle().await;
+        bus.clear_history();
+
+        bus.inject(
+            "Body.PEPS.Plant.BlePhone.1.NfcTap",
+            SignalValue::String("DriverHandle".into()),
+        );
+        settle().await;
+
+        assert!(unlock_was_dispatched(&bus));
+    }
+
+    #[tokio::test]
+    async fn phone_nfc_tap_at_push_button_does_not_unlock() {
+        // PushButton is the start-button NFC pad — deferred path.
+        let bus = setup().await;
+        bus.inject(LOCK_STATUS, SignalValue::String("LOCKED".into()));
+        settle().await;
+        bus.clear_history();
+
+        bus.inject(
+            "Body.PEPS.Plant.BlePhone.1.NfcTap",
+            SignalValue::String("PushButton".into()),
+        );
+        settle().await;
+
+        assert!(!unlock_was_dispatched(&bus));
+    }
+
+    #[tokio::test]
+    async fn phone_ble_zone_changes_do_not_trigger_nfc_unlock() {
+        // BLE proximity is observed via `.Zone`; NfcEntry must
+        // ignore those events entirely.  A phone arriving at
+        // LeftFront via BLE should not auto-unlock — that's
+        // PassiveEntry's job, gated on a handle pull.
         let bus = setup().await;
         bus.inject(LOCK_STATUS, SignalValue::String("LOCKED".into()));
         settle().await;
@@ -431,63 +468,13 @@ mod tests {
             SignalValue::String("LeftFront".into()),
         );
         settle().await;
-
-        assert!(unlock_was_dispatched(&bus));
-    }
-
-    #[tokio::test]
-    async fn phone_at_right_front_zone_unlocks() {
-        // RHD vehicles wire the reader to the right B-pillar.  HMI is
-        // side-agnostic, so a phone landing at RightFront must also
-        // trigger an unlock.
-        let bus = setup().await;
-        bus.inject(LOCK_STATUS, SignalValue::String("LOCKED".into()));
-        settle().await;
-        bus.clear_history();
-
-        bus.inject(
-            "Body.PEPS.Plant.BlePhone.1.Zone",
-            SignalValue::String("RightFront".into()),
-        );
-        settle().await;
-
-        assert!(unlock_was_dispatched(&bus));
-    }
-
-    #[tokio::test]
-    async fn phone_at_cabin_zone_does_not_unlock() {
-        // Cabin is not a B-pillar reader — that's a proximity zone
-        // for PassiveEntry to consume on a handle pull.
-        let bus = setup().await;
-        bus.inject(LOCK_STATUS, SignalValue::String("LOCKED".into()));
-        settle().await;
-        bus.clear_history();
+        assert!(!unlock_was_dispatched(&bus));
 
         bus.inject(
             "Body.PEPS.Plant.BlePhone.1.Zone",
             SignalValue::String("Cabin".into()),
         );
         settle().await;
-
-        assert!(!unlock_was_dispatched(&bus));
-    }
-
-    #[tokio::test]
-    async fn phone_at_key_cylinder_zone_does_not_unlock() {
-        // KeyCylinder is the push-button NFC pad on KeyCylinder
-        // builds, used for ignition.  The unlock path here ignores
-        // it; the start path is deferred.
-        let bus = setup().await;
-        bus.inject(LOCK_STATUS, SignalValue::String("LOCKED".into()));
-        settle().await;
-        bus.clear_history();
-
-        bus.inject(
-            "Body.PEPS.Plant.BlePhone.1.Zone",
-            SignalValue::String("KeyCylinder".into()),
-        );
-        settle().await;
-
         assert!(!unlock_was_dispatched(&bus));
     }
 
@@ -499,8 +486,8 @@ mod tests {
         bus.clear_history();
 
         bus.inject(
-            "Body.PEPS.Plant.BlePhone.1.Zone",
-            SignalValue::String("LeftFront".into()),
+            "Body.PEPS.Plant.BlePhone.1.NfcTap",
+            SignalValue::String("DriverHandle".into()),
         );
         settle().await;
 
@@ -508,19 +495,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn phone_redundant_zone_does_not_re_tap() {
+    async fn phone_redundant_nfc_tap_does_not_re_unlock() {
         let bus = setup().await;
         bus.inject(LOCK_STATUS, SignalValue::String("LOCKED".into()));
         bus.inject(
-            "Body.PEPS.Plant.BlePhone.1.Zone",
-            SignalValue::String("LeftFront".into()),
+            "Body.PEPS.Plant.BlePhone.1.NfcTap",
+            SignalValue::String("DriverHandle".into()),
         );
         settle().await;
         bus.clear_history();
 
         bus.inject(
-            "Body.PEPS.Plant.BlePhone.1.Zone",
-            SignalValue::String("LeftFront".into()),
+            "Body.PEPS.Plant.BlePhone.1.NfcTap",
+            SignalValue::String("DriverHandle".into()),
         );
         settle().await;
 

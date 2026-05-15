@@ -242,8 +242,8 @@ const INIT_STATE={
   'Body.PEPS.Plant.KeyFob.4.Zone':'OutOfRange','Body.PEPS.Plant.KeyFob.4.ButtonPress':'NONE','Body.PEPS.Plant.KeyFob.4.Paired':true,'Body.PEPS.Plant.KeyFob.4.RssiResponse':'','Body.PEPS.Plant.KeyFob.4.RfMessage':'',
   'Body.PEPS.Plant.KeyFob.5.Zone':'OutOfRange','Body.PEPS.Plant.KeyFob.5.Paired':false,'Body.PEPS.Plant.KeyFob.5.RssiResponse':'',
   'Body.PEPS.Plant.KeyFob.6.Zone':'OutOfRange','Body.PEPS.Plant.KeyFob.6.Paired':false,'Body.PEPS.Plant.KeyFob.6.RssiResponse':'',
-  'Body.PEPS.Plant.BlePhone.1.Zone':'OutOfRange','Body.PEPS.Plant.BlePhone.1.RssiResponse':'',
-  'Body.PEPS.Plant.BlePhone.2.Zone':'OutOfRange','Body.PEPS.Plant.BlePhone.2.RssiResponse':'',
+  'Body.PEPS.Plant.BlePhone.1.Zone':'OutOfRange','Body.PEPS.Plant.BlePhone.1.RssiResponse':'','Body.PEPS.Plant.BlePhone.1.NfcTap':'NotPresent',
+  'Body.PEPS.Plant.BlePhone.2.Zone':'OutOfRange','Body.PEPS.Plant.BlePhone.2.RssiResponse':'','Body.PEPS.Plant.BlePhone.2.NfcTap':'NotPresent',
   'Body.PEPS.Plant.NfcCard.1.Position':'NotPresent',
   'Body.PEPS.Plant.NfcCard.2.Position':'NotPresent',
   // ── Doors — HMI-owned inputs only ────────────────────────────────────
@@ -3228,33 +3228,32 @@ function DevicePanel({s, set, cfg, sel, setSel}){
         </>;
       })()}
 
-      {/* Phone NFC tap — explicit affordances for the two NFC reader
-          locations.  Underlying signal is the same Body.PEPS.Plant.
-          BlePhone.{N}.Zone the regular zone tiles write; this section
-          just gives the user a clearly labelled "tap" button so they
-          don't have to know that LeftFront / RightFront / KeyCylinder
-          double as NFC positions.  The driver-handle button writes
-          whichever physical front zone is the driver's side per the
-          dealer.driver_door_side cal — both PassiveEntry (BLE
-          proximity on handle pull) and NfcEntry (NFC tap on the
-          B-pillar reader) consume that same zone signal. */}
+      {/* Phone NFC tap — writes the dedicated
+          `Body.PEPS.Plant.BlePhone.{N}.NfcTap` signal (NfcPosition
+          enum, same shape as the NFC card path).  This is distinct
+          from the phone's `.Zone` signal, which models BLE proximity
+          consumed by PassiveEntry on a handle pull.  Splitting the
+          two means the user can hold a phone *near* the driver door
+          (Zone = LeftFront / RightFront) for BLE without
+          auto-unlocking via NFC.  An explicit DRIVER HANDLE tap is
+          required for NfcEntry to fire. */}
       {dev.type==='phone' && (()=>{
-        const driverSide = cfg?.dealer?.driver_door_side === 'Right' ? 'Right' : 'Left';
-        const driverZone = driverSide === 'Right' ? 'RightFront' : 'LeftFront';
+        const tapPath = `${dev.pfx}.NfcTap`;
+        const tap = s[tapPath] || 'NotPresent';
         const NFC_TAP_BTNS=[
-          {z:'OutOfRange',     label:'TAP\nRELEASED', c:'#2E3E55'},
-          {z:driverZone,       label:'DRIVER\nHANDLE NFC',  c:'#10D98A'},
-          {z:'KeyCylinder',    label:'PUSH BTN\nNFC',   c:'#4A9EF5'},
+          {z:'NotPresent',  label:'NOT\nPRESENT',  c:'#2E3E55'},
+          {z:'DriverHandle',label:'DRIVER\nHANDLE',c:'#10D98A'},
+          {z:'PushButton',  label:'PUSH\nBUTTON',  c:'#4A9EF5'},
         ];
         return <>
           <div className="devpanel-section">PHONE NFC TAP</div>
           <div className="zonepick">
             {NFC_TAP_BTNS.map(({z,label,c})=>{
-              const isActive=zone===z;
+              const isActive=tap===z;
               return <button key={z}
                 className={`zpbtn${isActive?' zp-active':''}`}
                 style={{borderColor:isActive?c:'',background:isActive?c:'',color:isActive?'#0a0f18':''}}
-                onClick={()=>set(`${dev.pfx}.Zone`,z)}>
+                onClick={()=>set(tapPath,z)}>
                 {label}
               </button>;
             })}
