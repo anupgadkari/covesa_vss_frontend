@@ -3228,6 +3228,40 @@ function DevicePanel({s, set, cfg, sel, setSel}){
         </>;
       })()}
 
+      {/* Phone NFC tap — explicit affordances for the two NFC reader
+          locations.  Underlying signal is the same Body.PEPS.Plant.
+          BlePhone.{N}.Zone the regular zone tiles write; this section
+          just gives the user a clearly labelled "tap" button so they
+          don't have to know that LeftFront / RightFront / KeyCylinder
+          double as NFC positions.  The driver-handle button writes
+          whichever physical front zone is the driver's side per the
+          dealer.driver_door_side cal — both PassiveEntry (BLE
+          proximity on handle pull) and NfcEntry (NFC tap on the
+          B-pillar reader) consume that same zone signal. */}
+      {dev.type==='phone' && (()=>{
+        const driverSide = cfg?.dealer?.driver_door_side === 'Right' ? 'Right' : 'Left';
+        const driverZone = driverSide === 'Right' ? 'RightFront' : 'LeftFront';
+        const NFC_TAP_BTNS=[
+          {z:'OutOfRange',     label:'TAP\nRELEASED', c:'#2E3E55'},
+          {z:driverZone,       label:'DRIVER\nHANDLE NFC',  c:'#10D98A'},
+          {z:'KeyCylinder',    label:'PUSH BTN\nNFC',   c:'#4A9EF5'},
+        ];
+        return <>
+          <div className="devpanel-section">PHONE NFC TAP</div>
+          <div className="zonepick">
+            {NFC_TAP_BTNS.map(({z,label,c})=>{
+              const isActive=zone===z;
+              return <button key={z}
+                className={`zpbtn${isActive?' zp-active':''}`}
+                style={{borderColor:isActive?c:'',background:isActive?c:'',color:isActive?'#0a0f18':''}}
+                onClick={()=>set(`${dev.pfx}.Zone`,z)}>
+                {label}
+              </button>;
+            })}
+          </div>
+        </>;
+      })()}
+
       {/* Zone quick-assign */}
       {!isNfc && (()=>{
         // CYLINDER / BACKUP represents the short-range LF + NFC pad
