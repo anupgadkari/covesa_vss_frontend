@@ -3205,23 +3205,42 @@ function DevicePanel({s, set, cfg, sel, setSel}){
         </div>
       </div>
 
-      {/* NFC quick-assign — only 3 valid NfcPosition values.
-          Bypasses the zone-based grid entirely. */}
+      {/* NFC card quick-assign.
+          DRIVER HANDLE and PUSH BUTTON are MOMENTARY — press-and-hold
+          to write that position, release to write NotPresent.  This
+          simulates the physical "tap" gesture (card briefly touched
+          to the reader then withdrawn) instead of a state-set.
+          NOT PRESENT is a regular click that just clears state. */}
       {isNfc && (()=>{
+        const path = `${dev.pfx}.${dev.sigKey}`;
         const NFC_BTNS=[
-          {z:'NotPresent',  label:'NOT\nPRESENT',  c:'#2E3E55'},
-          {z:'DriverHandle',label:'DRIVER\nHANDLE',c:'#10D98A'},
-          {z:'PushButton',  label:'PUSH\nBUTTON',  c:'#4A9EF5'},
+          {z:'NotPresent',  label:'NOT\nPRESENT',  c:'#2E3E55', momentary:false},
+          {z:'DriverHandle',label:'DRIVER\nHANDLE',c:'#10D98A', momentary:true},
+          {z:'PushButton',  label:'PUSH\nBUTTON',  c:'#4A9EF5', momentary:true},
         ];
         return <>
-          <div className="devpanel-section">PLACE AT READER</div>
+          <div className="devpanel-section">PLACE AT READER <span style={{fontSize:7,color:'var(--muted)',marginLeft:6}}>(press & hold to tap)</span></div>
           <div className="zonepick">
-            {NFC_BTNS.map(({z,label,c})=>{
+            {NFC_BTNS.map(({z,label,c,momentary})=>{
               const isActive=rawSlot===z;
+              const sty={borderColor:isActive?c:'',background:isActive?c:'',color:isActive?'#0a0f18':'',userSelect:'none',touchAction:'none'};
+              if (momentary) {
+                const release = ()=>set(path,'NotPresent');
+                return <button key={z}
+                  className={`zpbtn${isActive?' zp-active':''}`}
+                  style={sty}
+                  onMouseDown={()=>set(path,z)}
+                  onMouseUp={release}
+                  onMouseLeave={release}
+                  onTouchStart={(e)=>{e.preventDefault();set(path,z);}}
+                  onTouchEnd={release}>
+                  {label}
+                </button>;
+              }
               return <button key={z}
                 className={`zpbtn${isActive?' zp-active':''}`}
-                style={{borderColor:isActive?c:'',background:isActive?c:'',color:isActive?'#0a0f18':''}}
-                onClick={()=>set(`${dev.pfx}.${dev.sigKey}`,z)}>
+                style={sty}
+                onClick={()=>set(path,z)}>
                 {label}
               </button>;
             })}
@@ -3229,31 +3248,47 @@ function DevicePanel({s, set, cfg, sel, setSel}){
         </>;
       })()}
 
-      {/* Phone NFC tap — writes the dedicated
-          `Body.PEPS.Plant.BlePhone.{N}.NfcTap` signal (NfcPosition
-          enum, same shape as the NFC card path).  This is distinct
-          from the phone's `.Zone` signal, which models BLE proximity
-          consumed by PassiveEntry on a handle pull.  Splitting the
-          two means the user can hold a phone *near* the driver door
-          (Zone = LeftFront / RightFront) for BLE without
-          auto-unlocking via NFC.  An explicit DRIVER HANDLE tap is
-          required for NfcEntry to fire. */}
+      {/* Phone NFC tap — DRIVER HANDLE and PUSH BUTTON are momentary
+          (press-and-hold to tap; release returns NfcTap to NotPresent
+          AND moves the phone's Zone to Cabin, simulating the user
+          taking the phone off the reader and stepping into the car).
+          The general zone tiles below still write .Zone for explicit
+          BLE-proximity testing. */}
       {dev.type==='phone' && (()=>{
         const tapPath = `${dev.pfx}.NfcTap`;
+        const zonePath = `${dev.pfx}.Zone`;
         const tap = s[tapPath] || 'NotPresent';
         const NFC_TAP_BTNS=[
-          {z:'NotPresent',  label:'NOT\nPRESENT',  c:'#2E3E55'},
-          {z:'DriverHandle',label:'DRIVER\nHANDLE',c:'#10D98A'},
-          {z:'PushButton',  label:'PUSH\nBUTTON',  c:'#4A9EF5'},
+          {z:'NotPresent',  label:'NOT\nPRESENT',  c:'#2E3E55', momentary:false},
+          {z:'DriverHandle',label:'DRIVER\nHANDLE',c:'#10D98A', momentary:true},
+          {z:'PushButton',  label:'PUSH\nBUTTON',  c:'#4A9EF5', momentary:true},
         ];
         return <>
-          <div className="devpanel-section">PHONE NFC TAP</div>
+          <div className="devpanel-section">PHONE NFC TAP <span style={{fontSize:7,color:'var(--muted)',marginLeft:6}}>(press & hold to tap)</span></div>
           <div className="zonepick">
-            {NFC_TAP_BTNS.map(({z,label,c})=>{
+            {NFC_TAP_BTNS.map(({z,label,c,momentary})=>{
               const isActive=tap===z;
+              const sty={borderColor:isActive?c:'',background:isActive?c:'',color:isActive?'#0a0f18':'',userSelect:'none',touchAction:'none'};
+              if (momentary) {
+                const release = ()=>{
+                  set(tapPath,'NotPresent');
+                  // Phone moves into the cabin after the tap.
+                  set(zonePath,'Cabin');
+                };
+                return <button key={z}
+                  className={`zpbtn${isActive?' zp-active':''}`}
+                  style={sty}
+                  onMouseDown={()=>set(tapPath,z)}
+                  onMouseUp={release}
+                  onMouseLeave={release}
+                  onTouchStart={(e)=>{e.preventDefault();set(tapPath,z);}}
+                  onTouchEnd={release}>
+                  {label}
+                </button>;
+              }
               return <button key={z}
                 className={`zpbtn${isActive?' zp-active':''}`}
-                style={{borderColor:isActive?c:'',background:isActive?c:'',color:isActive?'#0a0f18':''}}
+                style={sty}
                 onClick={()=>set(tapPath,z)}>
                 {label}
               </button>;
