@@ -2590,20 +2590,21 @@ function CockpitView({s,set,cfg}){
               }
               if (kind==='parking'){
                 // ISO parking / position-light icon — two lamps facing
-                // outward (mirror images of each other), like the
-                // headlamp telltale duplicated.  Each lamp is a
-                // semicircle with 3 short rays emanating outward.
+                // outward.  Each lamp's three rays fan out from the
+                // lamp body (diverging), not parallel, so it reads as
+                // light emanating from a point source instead of
+                // stripes painted alongside.
                 return <g key={p}>
-                  {/* Left lamp — body bulges left, rays point left */}
+                  {/* Left lamp — body bulges left, rays fan leftward */}
                   <path d={`M ${x-2},${y-4} A 4,4 0 0,0 ${x-2},${y+4} Z`} fill={c} stroke={c} strokeWidth="0.4"/>
-                  <line x1={x-3} y1={y-3} x2={x-8}  y2={y-3} stroke={c} strokeWidth="1.2" strokeLinecap="round"/>
-                  <line x1={x-3} y1={y}   x2={x-9}  y2={y}   stroke={c} strokeWidth="1.2" strokeLinecap="round"/>
-                  <line x1={x-3} y1={y+3} x2={x-8}  y2={y+3} stroke={c} strokeWidth="1.2" strokeLinecap="round"/>
-                  {/* Right lamp — body bulges right, rays point right */}
+                  <line x1={x-3} y1={y} x2={x-8} y2={y-4} stroke={c} strokeWidth="1.2" strokeLinecap="round"/>
+                  <line x1={x-3} y1={y} x2={x-9} y2={y}   stroke={c} strokeWidth="1.2" strokeLinecap="round"/>
+                  <line x1={x-3} y1={y} x2={x-8} y2={y+4} stroke={c} strokeWidth="1.2" strokeLinecap="round"/>
+                  {/* Right lamp — body bulges right, rays fan rightward */}
                   <path d={`M ${x+2},${y-4} A 4,4 0 0,1 ${x+2},${y+4} Z`} fill={c} stroke={c} strokeWidth="0.4"/>
-                  <line x1={x+3} y1={y-3} x2={x+8}  y2={y-3} stroke={c} strokeWidth="1.2" strokeLinecap="round"/>
-                  <line x1={x+3} y1={y}   x2={x+9}  y2={y}   stroke={c} strokeWidth="1.2" strokeLinecap="round"/>
-                  <line x1={x+3} y1={y+3} x2={x+8}  y2={y+3} stroke={c} strokeWidth="1.2" strokeLinecap="round"/>
+                  <line x1={x+3} y1={y} x2={x+8} y2={y-4} stroke={c} strokeWidth="1.2" strokeLinecap="round"/>
+                  <line x1={x+3} y1={y} x2={x+9} y2={y}   stroke={c} strokeWidth="1.2" strokeLinecap="round"/>
+                  <line x1={x+3} y1={y} x2={x+8} y2={y+4} stroke={c} strokeWidth="1.2" strokeLinecap="round"/>
                 </g>;
               }
               if (kind==='beam'){
