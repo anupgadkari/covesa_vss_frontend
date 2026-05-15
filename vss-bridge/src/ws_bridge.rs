@@ -362,6 +362,8 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     // BTSI + Key-in-Ignition Inhibit derived flags.
     "Powertrain.Transmission.ShiftLockEngaged",
     "Body.Switches.IgnitionCylinder.RemovalInhibited",
+    // NFC auth bypass — see NfcEntry / VehicleStartingControl.
+    "Body.PEPS.NfcAuthBypass",
 ];
 
 /// Subset of `OUTPUT_SIGNALS` whose authoritative boot value comes from

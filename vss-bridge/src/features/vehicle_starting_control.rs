@@ -62,6 +62,11 @@ const START_STOP_IN: VssPath = "Body.Switches.StartStop.IsPressed";
 const CYLINDER_IN: VssPath = "Body.Switches.IgnitionCylinder.Position";
 const BRAKE_IN: VssPath = "Chassis.Brake.IsApplied";
 const CURRENT_GEAR_IN: VssPath = "Powertrain.Transmission.CurrentGear";
+/// NFC auth bypass — published by `NfcEntry` on a start-button NFC
+/// tap.  Stays `true` for a short window; while it's true, a PEPS
+/// start-button press skips the normal `Cabin` Authenticated scan
+/// and treats the immobilizer as already satisfied.
+const NFC_AUTH_BYPASS_IN: VssPath = "Body.PEPS.NfcAuthBypass";
 
 const POWER_STATE_OUT: VssPath = "Vehicle.LowVoltageSystemState";
 const IMMOBILIZER_OUT: VssPath = "Vehicle.Starting.ImmobilizerStatus";
@@ -200,6 +205,7 @@ impl<B: SignalBus + Send + Sync + 'static> VehicleStartingControl<B> {
         let mut cylinder_rx = self.bus.subscribe(CYLINDER_IN).await;
         let mut brake_rx = self.bus.subscribe(BRAKE_IN).await;
         let mut gear_rx = self.bus.subscribe(CURRENT_GEAR_IN).await;
+        let mut nfc_bypass_rx = self.bus.subscribe(NFC_AUTH_BYPASS_IN).await;
 
         // Deterministic boot publishes — late subscribers always see a
         // defined value rather than `None`.
@@ -226,6 +232,11 @@ impl<B: SignalBus + Send + Sync + 'static> VehicleStartingControl<B> {
         let mut cylinder_session_authed = false;
         // Track previous start-stop value so we only act on rising edges.
         let mut prev_start_stop = false;
+        // NFC auth bypass — true while `Body.PEPS.NfcAuthBypass` is
+        // currently `true`.  Set by an NfcEntry start-button tap and
+        // auto-cleared by NfcEntry itself after its window expires.
+        // VSC just mirrors the published value.
+        let mut nfc_bypass_active = false;
 
         loop {
             select! {
@@ -251,6 +262,12 @@ impl<B: SignalBus + Send + Sync + 'static> VehicleStartingControl<B> {
                     }
                 }
 
+                Some(val) = nfc_bypass_rx.next() => {
+                    if let SignalValue::Bool(b) = val {
+                        nfc_bypass_active = b;
+                    }
+                }
+
                 Some(val) = start_stop_rx.next(),
                     if self.key_source() == KeySource::Peps =>
                 {
@@ -264,6 +281,7 @@ impl<B: SignalBus + Send + Sync + 'static> VehicleStartingControl<B> {
                         &mut power,
                         &mut immobilizer,
                         brake_applied,
+                        nfc_bypass_active,
                     ).await;
                 }
 
@@ -292,19 +310,35 @@ impl<B: SignalBus + Send + Sync + 'static> VehicleStartingControl<B> {
         tracing::warn!("VehicleStartingControl: input streams closed, exiting");
     }
 
-    /// PEPS rising-edge press handler.  Authenticates against the cabin
-    /// antennas; on success either jumps to `ON` (brake applied) or
-    /// cycles the next power state (brake not applied).
+    /// PEPS rising-edge press handler.  Two auth sources:
+    ///
+    /// 1. **NFC bypass** — if `Body.PEPS.NfcAuthBypass` is currently
+    ///    `true` (set by `NfcEntry` on a start-button NFC tap),
+    ///    treat the press as already authenticated and skip the
+    ///    cabin LF scan.  This is what makes NFC-tap-to-start work
+    ///    without requiring a fob in the cabin.
+    /// 2. **Cabin LF scan** — the default path: submit a
+    ///    `Cabin + Authenticated` search to the KeySearchArbiter and
+    ///    require at least one paired key in cabin.
+    ///
+    /// On success either jumps to `ON` (brake applied + currently
+    /// off/acc) or cycles the next power state.
     async fn handle_peps_press(
         &self,
         power: &mut PowerState,
         immobilizer: &mut Immobilizer,
         brake_applied: bool,
+        nfc_bypass_active: bool,
     ) {
         *immobilizer = Immobilizer::Authenticating;
         self.publish_immobilizer(*immobilizer).await;
 
-        let authed = self.authenticate(AntennaSet::Cabin).await;
+        let authed = if nfc_bypass_active {
+            tracing::info!("VehicleStartingControl: PEPS press — NFC bypass accepted");
+            true
+        } else {
+            self.authenticate(AntennaSet::Cabin).await
+        };
 
         if !authed {
             *immobilizer = Immobilizer::Failed;
@@ -680,6 +714,35 @@ mod tests {
         bus.inject(START_STOP_IN, SignalValue::Bool(true));
         settle().await;
         assert_eq!(latest_power(&bus).as_deref(), Some("OFF"));
+    }
+
+    #[tokio::test]
+    async fn peps_press_with_nfc_bypass_active_authenticates_without_cabin_key() {
+        // NfcEntry has just published Body.PEPS.NfcAuthBypass = true
+        // (start-button NFC tap).  A subsequent PEPS press must skip
+        // the cabin scan and authenticate directly.  No fob is in
+        // cabin here — without the bypass, this press would fail.
+        let bus = setup(cfg_peps()).await;
+        bus.inject("Body.PEPS.NfcAuthBypass", SignalValue::Bool(true));
+        settle().await;
+        bus.inject(START_STOP_IN, SignalValue::Bool(true));
+        settle().await;
+        assert_eq!(latest_power(&bus).as_deref(), Some("ACC"));
+        assert_eq!(latest_immo(&bus).as_deref(), Some("AUTHENTICATED"));
+    }
+
+    #[tokio::test]
+    async fn peps_press_with_expired_nfc_bypass_falls_back_to_cabin_scan() {
+        // Bypass was set, then cleared.  Press now must run the
+        // normal cabin scan, find nothing, and fail.
+        let bus = setup(cfg_peps()).await;
+        bus.inject("Body.PEPS.NfcAuthBypass", SignalValue::Bool(true));
+        bus.inject("Body.PEPS.NfcAuthBypass", SignalValue::Bool(false));
+        settle().await;
+        bus.inject(START_STOP_IN, SignalValue::Bool(true));
+        settle().await;
+        assert_eq!(latest_power(&bus).as_deref(), Some("OFF"));
+        assert_eq!(latest_immo(&bus).as_deref(), Some("FAILED"));
     }
 
     #[tokio::test]

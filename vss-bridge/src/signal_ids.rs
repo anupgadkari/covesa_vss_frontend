@@ -548,6 +548,12 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         //   lockout behaviour.  Always false on PEPS builds.
         "Powertrain.Transmission.ShiftLockEngaged" => Some(0x001E_0005),
         "Body.Switches.IgnitionCylinder.RemovalInhibited" => Some(0x001E_0006),
+        // NFC auth bypass — set true by NfcEntry for ~3 s after any
+        // NFC tap (driver-handle OR push-button).  Consumed by
+        // VehicleStartingControl to short-circuit its normal cabin
+        // Authenticated scan when the user proved auth via NFC.
+        // Auto-clears to false after the window expires.
+        "Body.PEPS.NfcAuthBypass" => Some(0x001E_0007),
 
         _ => None,
     }
@@ -917,6 +923,7 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
         "Body.Switches.IgnitionCylinder.RemovalInhibited",
         0x001E_0006,
     ),
+    ("Body.PEPS.NfcAuthBypass", 0x001E_0007),
 ];
 
 #[cfg(test)]

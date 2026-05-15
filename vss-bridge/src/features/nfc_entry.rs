@@ -41,15 +41,26 @@
 //! `DRIVER_UNLOCKED` still escalates — a deliberate tap on the
 //! B-pillar reader is a clear "open everything" intent.
 //!
-//! # Not yet implemented — `PushButton` start
+//! # PushButton start
 //!
-//! `NfcPosition::PushButton` (card) / `Zone::KeyCylinder` (phone)
-//! represent an NFC tap on the cylinder / start-button reader.
-//! VehicleStartingControl would have to accept this as an auth
-//! source alongside its current `Cabin` Authenticated scan; that
-//! crosscut is deferred to a follow-up PR.
+//! `NfcPosition::PushButton` (card) / `BlePhone.NfcTap = PushButton`
+//! (phone) represent an NFC tap on the start-button NFC pad.  On a
+//! rising edge there, NfcEntry:
+//!
+//! 1. Publishes `Body.PEPS.NfcAuthBypass = true` (auto-cleared
+//!    after `NFC_BYPASS_WINDOW`).  VehicleStartingControl reads
+//!    this as proof the user authenticated via NFC and skips its
+//!    normal cabin Authenticated scan.
+//! 2. Publishes a momentary `Body.Switches.StartStop.IsPressed`
+//!    rising-then-falling edge so VSC's PEPS press handler fires.
+//!
+//! Net effect: an NFC tap on the start-button pad is equivalent to
+//! holding a paired fob in the cabin and pressing the start button
+//! — power cycles OFF → ACC → ON, or jumps to ON with brake
+//! applied, per VSC's existing logic.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use futures::StreamExt;
 use tokio::select;
@@ -59,6 +70,20 @@ use crate::ipc_message::{FeatureId, SignalValue};
 use crate::signal_bus::{SignalBus, VssPath};
 
 const LOCK_STATUS: VssPath = "Cabin.LockStatus";
+const START_STOP: VssPath = "Body.Switches.StartStop.IsPressed";
+const NFC_AUTH_BYPASS: VssPath = "Body.PEPS.NfcAuthBypass";
+
+/// How long the NFC bypass stays valid after a tap.  Long enough
+/// for VSC to consume the StartStop press we publish right after,
+/// short enough that it doesn't linger as a stale auth credential
+/// for a later unrelated press.
+const NFC_BYPASS_WINDOW: Duration = Duration::from_secs(3);
+
+/// Short release delay between the rising and falling edges of the
+/// momentary `StartStop.IsPressed` we publish on a PushButton tap.
+/// VSC only acts on the rising edge, so 50 ms is comfortably
+/// enough.
+const START_PRESS_HOLD: Duration = Duration::from_millis(50);
 
 /// Per-NFC-card slot paths.  Two cards in the simulator HMI.
 const NFC_CARD_SIGNALS: [VssPath; 2] = [
@@ -101,11 +126,14 @@ impl<B: SignalBus + Send + Sync + 'static> NfcEntry<B> {
         }
         let mut lock_rx = self.bus.subscribe(LOCK_STATUS).await;
 
-        // Per-device "is the tap currently engaged" latch — used to
-        // distinguish a rising edge (`NotPresent` → `DriverHandle`)
-        // from a redundant publish (`DriverHandle` → `DriverHandle`).
+        // Per-device "is the tap currently engaged" latches — one
+        // pair per device (handle / push-button) so a card sitting
+        // at DriverHandle then moving to PushButton fires the start
+        // path exactly once, and vice versa.
         let mut card_at_handle = [false; NFC_CARD_SIGNALS.len()];
-        let mut phone_at_handle_zone = [false; BLE_PHONE_SIGNALS.len()];
+        let mut card_at_pushbtn = [false; NFC_CARD_SIGNALS.len()];
+        let mut phone_at_handle = [false; BLE_PHONE_SIGNALS.len()];
+        let mut phone_at_pushbtn = [false; BLE_PHONE_SIGNALS.len()];
 
         // Default LOCKED so the boot-time stance is "auth required";
         // a stray pre-boot tap that arrives before any LockStatus
@@ -121,12 +149,14 @@ impl<B: SignalBus + Send + Sync + 'static> NfcEntry<B> {
                 }
                 Some((idx, val)) = next_indexed(&mut card_rxs) => {
                     if let SignalValue::String(s) = val {
-                        let engaged = s == "DriverHandle";
-                        let was_engaged = card_at_handle[idx];
-                        card_at_handle[idx] = engaged;
-                        // Rising edge to DriverHandle → fire.
-                        if engaged && !was_engaged {
-                            self.on_tap(
+                        let handle = s == "DriverHandle";
+                        let pushbtn = s == "PushButton";
+                        let handle_rising = handle && !card_at_handle[idx];
+                        let pushbtn_rising = pushbtn && !card_at_pushbtn[idx];
+                        card_at_handle[idx] = handle;
+                        card_at_pushbtn[idx] = pushbtn;
+                        if handle_rising {
+                            self.on_unlock_tap(
                                 "NfcCard",
                                 idx as u8 + 1,
                                 FeatureId::NfcCard,
@@ -134,26 +164,33 @@ impl<B: SignalBus + Send + Sync + 'static> NfcEntry<B> {
                             )
                             .await;
                         }
+                        if pushbtn_rising {
+                            self.on_start_tap("NfcCard", idx as u8 + 1).await;
+                        }
                     }
                 }
                 Some((idx, val)) = next_indexed(&mut phone_rxs) => {
                     if let SignalValue::String(s) = val {
                         // `BlePhone.{N}.NfcTap` uses the same enum as
                         // an NFC card: NotPresent / DriverHandle /
-                        // PushButton.  `DriverHandle` is the only
-                        // unlock-triggering value; `PushButton` parks
-                        // there for the deferred start-button path.
-                        let engaged = s == "DriverHandle";
-                        let was_engaged = phone_at_handle_zone[idx];
-                        phone_at_handle_zone[idx] = engaged;
-                        if engaged && !was_engaged {
-                            self.on_tap(
+                        // PushButton.
+                        let handle = s == "DriverHandle";
+                        let pushbtn = s == "PushButton";
+                        let handle_rising = handle && !phone_at_handle[idx];
+                        let pushbtn_rising = pushbtn && !phone_at_pushbtn[idx];
+                        phone_at_handle[idx] = handle;
+                        phone_at_pushbtn[idx] = pushbtn;
+                        if handle_rising {
+                            self.on_unlock_tap(
                                 "NfcPhone",
                                 idx as u8 + 1,
                                 FeatureId::NfcPhone,
                                 &lock_status,
                             )
                             .await;
+                        }
+                        if pushbtn_rising {
+                            self.on_start_tap("NfcPhone", idx as u8 + 1).await;
                         }
                     }
                 }
@@ -164,9 +201,9 @@ impl<B: SignalBus + Send + Sync + 'static> NfcEntry<B> {
         tracing::warn!("NfcEntry: an input stream closed, exiting");
     }
 
-    /// Common dispatch path for a card or phone tap.  Short-circuits
-    /// when the cabin is already fully unlocked.
-    async fn on_tap(
+    /// DriverHandle tap → dispatch UnlockAll.  Short-circuits when
+    /// the cabin is already fully unlocked.
+    async fn on_unlock_tap(
         &self,
         device_kind: &'static str,
         slot: u8,
@@ -178,7 +215,7 @@ impl<B: SignalBus + Send + Sync + 'static> NfcEntry<B> {
                 device_kind,
                 slot,
                 lock_status,
-                "NfcEntry: tap ignored — cabin already unlocked"
+                "NfcEntry: unlock tap ignored — cabin already unlocked"
             );
             return;
         }
@@ -187,7 +224,7 @@ impl<B: SignalBus + Send + Sync + 'static> NfcEntry<B> {
             device_kind,
             slot,
             lock_status,
-            "NfcEntry: tap accepted — dispatching UnlockAll"
+            "NfcEntry: unlock tap accepted — dispatching UnlockAll"
         );
 
         if let Err(e) = self
@@ -206,6 +243,36 @@ impl<B: SignalBus + Send + Sync + 'static> NfcEntry<B> {
             .bus
             .publish(FEEDBACK_REQUEST, SignalValue::String("unlock".into()))
             .await;
+    }
+
+    /// PushButton tap → publish the NFC auth bypass + a momentary
+    /// `StartStop.IsPressed` press so VehicleStartingControl runs its
+    /// PEPS press handler.  The auth bypass auto-clears after
+    /// [`NFC_BYPASS_WINDOW`] — spawned as a separate task so this
+    /// handler returns immediately and the run loop stays responsive
+    /// to other taps.
+    async fn on_start_tap(&self, device_kind: &'static str, slot: u8) {
+        tracing::info!(
+            device_kind,
+            slot,
+            "NfcEntry: start-button tap — bypass + StartStop press"
+        );
+        let _ = self
+            .bus
+            .publish(NFC_AUTH_BYPASS, SignalValue::Bool(true))
+            .await;
+        let _ = self.bus.publish(START_STOP, SignalValue::Bool(true)).await;
+
+        // Background: release the press and clear the bypass after
+        // their respective delays.  Clone the bus into a spawned
+        // task so we don't block the run loop.
+        let bus = Arc::clone(&self.bus);
+        tokio::spawn(async move {
+            tokio::time::sleep(START_PRESS_HOLD).await;
+            let _ = bus.publish(START_STOP, SignalValue::Bool(false)).await;
+            tokio::time::sleep(NFC_BYPASS_WINDOW - START_PRESS_HOLD).await;
+            let _ = bus.publish(NFC_AUTH_BYPASS, SignalValue::Bool(false)).await;
+        });
     }
 }
 
@@ -303,8 +370,7 @@ mod tests {
 
     #[tokio::test]
     async fn card_tap_at_push_button_does_not_unlock() {
-        // PushButton path is the start-button reader.  Unlock should
-        // NOT fire — the start path is deferred to a follow-up.
+        // PushButton path drives the start press, not unlock.
         let bus = setup().await;
         bus.inject(LOCK_STATUS, SignalValue::String("LOCKED".into()));
         settle().await;
@@ -316,6 +382,63 @@ mod tests {
         );
         settle().await;
 
+        assert!(!unlock_was_dispatched(&bus));
+    }
+
+    /// Helper: did the bus see the auth bypass go true?
+    fn bypass_was_published(bus: &MockBus) -> bool {
+        bus.history()
+            .into_iter()
+            .any(|(s, v)| s == "Body.PEPS.NfcAuthBypass" && v == SignalValue::Bool(true))
+    }
+
+    /// Helper: did the bus see a momentary StartStop rising edge?
+    fn start_press_was_fired(bus: &MockBus) -> bool {
+        bus.history()
+            .into_iter()
+            .any(|(s, v)| s == "Body.Switches.StartStop.IsPressed" && v == SignalValue::Bool(true))
+    }
+
+    #[tokio::test]
+    async fn card_tap_at_push_button_pulses_start_press_and_bypass() {
+        let bus = setup().await;
+        bus.inject(LOCK_STATUS, SignalValue::String("LOCKED".into()));
+        settle().await;
+        bus.clear_history();
+
+        bus.inject(
+            "Body.PEPS.Plant.NfcCard.1.Position",
+            SignalValue::String("PushButton".into()),
+        );
+        settle().await;
+
+        assert!(
+            bypass_was_published(&bus),
+            "PushButton tap must publish NfcAuthBypass=true"
+        );
+        assert!(
+            start_press_was_fired(&bus),
+            "PushButton tap must publish StartStop.IsPressed=true"
+        );
+        // Unlock path must NOT fire — this isn't a driver-handle tap.
+        assert!(!unlock_was_dispatched(&bus));
+    }
+
+    #[tokio::test]
+    async fn phone_nfc_tap_at_push_button_pulses_start_press_and_bypass() {
+        let bus = setup().await;
+        bus.inject(LOCK_STATUS, SignalValue::String("LOCKED".into()));
+        settle().await;
+        bus.clear_history();
+
+        bus.inject(
+            "Body.PEPS.Plant.BlePhone.1.NfcTap",
+            SignalValue::String("PushButton".into()),
+        );
+        settle().await;
+
+        assert!(bypass_was_published(&bus));
+        assert!(start_press_was_fired(&bus));
         assert!(!unlock_was_dispatched(&bus));
     }
 
