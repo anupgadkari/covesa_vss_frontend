@@ -3232,7 +3232,12 @@ function DevicePanel({s, set, cfg, sel, setSel}){
                   style={sty}
                   onMouseDown={()=>set(path,z)}
                   onMouseUp={release}
-                  onMouseLeave={release}
+                  // Only fire release on leave-while-pressed (the user
+                  // dragged the mouse out while holding the button).
+                  // A bare hover-leave must NOT fire release —
+                  // otherwise just moving the cursor across the panel
+                  // would clear state behind the user's back.
+                  onMouseLeave={(e)=>{ if(e.buttons & 1) release(); }}
                   onTouchStart={(e)=>{e.preventDefault();set(path,z);}}
                   onTouchEnd={release}>
                   {label}
@@ -3281,7 +3286,11 @@ function DevicePanel({s, set, cfg, sel, setSel}){
                   style={sty}
                   onMouseDown={()=>set(tapPath,z)}
                   onMouseUp={release}
-                  onMouseLeave={release}
+                  // Only release on leave-while-pressed.  Bare
+                  // hover-leave would otherwise yank the phone into
+                  // Cabin every time the cursor crossed the button —
+                  // see also the matching NFC card path above.
+                  onMouseLeave={(e)=>{ if(e.buttons & 1) release(); }}
                   onTouchStart={(e)=>{e.preventDefault();set(tapPath,z);}}
                   onTouchEnd={release}>
                   {label}
