@@ -19,6 +19,7 @@ pub mod manual_horn;
 pub mod manual_lighting;
 pub mod mirror_adjust;
 pub mod mirror_fold;
+pub mod nfc_entry;
 pub mod panic_alarm;
 pub mod passive_entry;
 pub mod perimeter_alarm;
