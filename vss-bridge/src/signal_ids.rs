@@ -554,6 +554,14 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // Authenticated scan when the user proved auth via NFC.
         // Auto-clears to false after the window expires.
         "Body.PEPS.NfcAuthBypass" => Some(0x001E_0007),
+        // Start/Stop button backlight LED — distinct ECU output from
+        // the "engine running" indicator.  True when the button's
+        // LED ring should be illuminated so the driver can locate it
+        // in the dark (ignition OFF).  False when the engine is
+        // running (ACC/ON/START) — the engine-running indicator
+        // takes over the ring instead.  OEM extension; no standard
+        // VSS 4.0 signal exists for it.
+        "Body.Switches.StartStop.BacklightOn" => Some(0x001E_0008),
 
         _ => None,
     }
@@ -924,6 +932,7 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
         0x001E_0006,
     ),
     ("Body.PEPS.NfcAuthBypass", 0x001E_0007),
+    ("Body.Switches.StartStop.BacklightOn", 0x001E_0008),
 ];
 
 #[cfg(test)]

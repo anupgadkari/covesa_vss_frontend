@@ -71,6 +71,12 @@ const NFC_AUTH_BYPASS_IN: VssPath = "Body.PEPS.NfcAuthBypass";
 const POWER_STATE_OUT: VssPath = "Vehicle.LowVoltageSystemState";
 const IMMOBILIZER_OUT: VssPath = "Vehicle.Starting.ImmobilizerStatus";
 const REMOVAL_INHIBITED_OUT: VssPath = "Body.Switches.IgnitionCylinder.RemovalInhibited";
+/// Start/Stop button backlight LED.  True when the engine is off
+/// (`PowerState::Off`) so the driver can find the button in the
+/// dark; false otherwise (the engine-running indicator takes over
+/// the button's LED ring).  OEM extension — no standard VSS 4.0
+/// signal for it.
+const STARTSTOP_BACKLIGHT_OUT: VssPath = "Body.Switches.StartStop.BacklightOn";
 
 /// PRND/S code for Park, matching `TransmissionPlant`.
 const GEAR_PARK: i16 = 126;
@@ -534,6 +540,14 @@ impl<B: SignalBus + Send + Sync + 'static> VehicleStartingControl<B> {
             .bus
             .publish(POWER_STATE_OUT, SignalValue::String(p.as_str().into()))
             .await;
+        // Backlight LED follows power state — on when OFF (button
+        // findable in the dark), off otherwise (engine-running
+        // indicator takes the ring).
+        let backlight = matches!(p, PowerState::Off);
+        let _ = self
+            .bus
+            .publish(STARTSTOP_BACKLIGHT_OUT, SignalValue::Bool(backlight))
+            .await;
     }
 
     async fn publish_immobilizer(&self, i: Immobilizer) {
@@ -743,6 +757,45 @@ mod tests {
         settle().await;
         assert_eq!(latest_power(&bus).as_deref(), Some("OFF"));
         assert_eq!(latest_immo(&bus).as_deref(), Some("FAILED"));
+    }
+
+    #[tokio::test]
+    async fn backlight_on_at_boot_off_when_running() {
+        // Boot publishes both Power=OFF and BacklightOn=true.  After
+        // the user authenticates and power advances to ACC/ON, the
+        // backlight must drop to false (engine-running indicator
+        // takes over the button's LED ring).
+        let bus = setup(cfg_peps()).await;
+        assert_eq!(
+            bus.latest_value("Body.Switches.StartStop.BacklightOn"),
+            Some(SignalValue::Bool(true)),
+            "boot: BacklightOn must be true while Power=OFF"
+        );
+        place_fob_in_cabin(&bus, 1);
+        settle().await;
+        bus.inject(START_STOP_IN, SignalValue::Bool(true));
+        settle().await;
+        assert_eq!(latest_power(&bus).as_deref(), Some("ACC"));
+        assert_eq!(
+            bus.latest_value("Body.Switches.StartStop.BacklightOn"),
+            Some(SignalValue::Bool(false)),
+            "Power=ACC: BacklightOn must be false"
+        );
+        // Cycle back to OFF — backlight returns to true.
+        bus.inject(START_STOP_IN, SignalValue::Bool(false));
+        settle().await;
+        bus.inject(START_STOP_IN, SignalValue::Bool(true));
+        settle().await;
+        bus.inject(START_STOP_IN, SignalValue::Bool(false));
+        settle().await;
+        bus.inject(START_STOP_IN, SignalValue::Bool(true));
+        settle().await;
+        assert_eq!(latest_power(&bus).as_deref(), Some("OFF"));
+        assert_eq!(
+            bus.latest_value("Body.Switches.StartStop.BacklightOn"),
+            Some(SignalValue::Bool(true)),
+            "cycled back to Power=OFF: BacklightOn must be true again"
+        );
     }
 
     #[tokio::test]
