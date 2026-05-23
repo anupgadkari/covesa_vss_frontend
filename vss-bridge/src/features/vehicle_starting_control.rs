@@ -591,18 +591,17 @@ impl<B: SignalBus + Send + Sync + 'static> VehicleStartingControl<B> {
     /// Compute the backlight PWM duty cycle (0..=100) for the
     /// given power state at the given elapsed time since boot.
     ///
-    ///   * `Off` — soft sine-wave breathing between
+    ///   * `Off` / `Acc` — soft sine-wave breathing between
     ///     [`BACKLIGHT_BREATHE_MIN`] and [`BACKLIGHT_BREATHE_MAX`]
     ///     with period [`BACKLIGHT_BREATHE_PERIOD`].  Helps the
-    ///     driver locate the button in the dark.
-    ///   * `Acc` — fully off (0).  ACC powers radio + accessories
-    ///     but the start-button indicator is dark; the cluster
-    ///     covers user feedback.
+    ///     driver locate the button without competing with the
+    ///     cluster.  Both states are pre-RUN, so the LED stays in
+    ///     the same "ready to crank" finder pattern.
     ///   * `On` / `Start` — fully on (100).  The HMI uses this as
     ///     the "engine running" steady ring.
     fn backlight_duty_for(p: PowerState, elapsed: Duration) -> u8 {
         match p {
-            PowerState::Off => {
+            PowerState::Off | PowerState::Acc => {
                 let period = BACKLIGHT_BREATHE_PERIOD.as_secs_f64();
                 let phase = (elapsed.as_secs_f64() / period).rem_euclid(1.0);
                 let s = (phase * std::f64::consts::TAU).sin();
@@ -610,7 +609,6 @@ impl<B: SignalBus + Send + Sync + 'static> VehicleStartingControl<B> {
                 let half = (BACKLIGHT_BREATHE_MAX as f64 - BACKLIGHT_BREATHE_MIN as f64) / 2.0;
                 (mid + half * s).round().clamp(0.0, 100.0) as u8
             }
-            PowerState::Acc => 0,
             PowerState::On | PowerState::Start => 100,
         }
     }
@@ -827,9 +825,9 @@ mod tests {
     #[tokio::test]
     async fn backlight_duty_cycle_tracks_power_state() {
         // ECU's PWM duty cycle:
-        //   OFF   → sine-wave breathing (15..75)
-        //   ACC   → 0
-        //   ON    → 100
+        //   OFF / ACC → sine-wave breathing (15..75) — pre-RUN
+        //                "ready to crank" finder pattern
+        //   ON         → 100
         // The plant simulates the LED's perceived intensity from
         // this signal; here we just assert what VSC publishes.
         let bus = setup(cfg_peps()).await;
@@ -837,20 +835,22 @@ mod tests {
             Some(SignalValue::Uint8(v)) => v,
             _ => 255,
         };
-        // Boot: in OFF, duty is somewhere in the breathing range.
-        let d0 = duty();
-        assert!(
-            (BACKLIGHT_BREATHE_MIN..=BACKLIGHT_BREATHE_MAX).contains(&d0),
-            "boot OFF duty {d0} must be in breathing range {BACKLIGHT_BREATHE_MIN}..={BACKLIGHT_BREATHE_MAX}"
-        );
+        let in_breathe = |d: u8| (BACKLIGHT_BREATHE_MIN..=BACKLIGHT_BREATHE_MAX).contains(&d);
 
-        // Move to ACC.
+        // Boot: in OFF, duty is somewhere in the breathing range.
+        assert!(in_breathe(duty()), "boot OFF duty {} out of range", duty());
+
+        // Move to ACC — still breathing.
         place_fob_in_cabin(&bus, 1);
         settle().await;
         bus.inject(START_STOP_IN, SignalValue::Bool(true));
         settle().await;
         assert_eq!(latest_power(&bus).as_deref(), Some("ACC"));
-        assert_eq!(duty(), 0, "ACC: duty must be 0");
+        assert!(
+            in_breathe(duty()),
+            "ACC duty {} must stay in breathing range",
+            duty()
+        );
 
         // Cycle ACC → ON.
         bus.inject(START_STOP_IN, SignalValue::Bool(false));
@@ -866,10 +866,10 @@ mod tests {
         bus.inject(START_STOP_IN, SignalValue::Bool(true));
         settle().await;
         assert_eq!(latest_power(&bus).as_deref(), Some("OFF"));
-        let d_off2 = duty();
         assert!(
-            (BACKLIGHT_BREATHE_MIN..=BACKLIGHT_BREATHE_MAX).contains(&d_off2),
-            "cycled back to OFF: duty {d_off2} must be in breathing range"
+            in_breathe(duty()),
+            "cycled back to OFF duty {} out of range",
+            duty()
         );
     }
 
@@ -887,13 +887,17 @@ mod tests {
                 "duty {d} at {ms} ms out of bounds"
             );
         }
-        assert_eq!(
-            VehicleStartingControl::<crate::adapters::mock::MockBus>::backlight_duty_for(
+        // ACC breathes alongside OFF — same waveform.
+        for ms in (0..2600).step_by(50) {
+            let d = VehicleStartingControl::<crate::adapters::mock::MockBus>::backlight_duty_for(
                 PowerState::Acc,
-                Duration::ZERO
-            ),
-            0
-        );
+                Duration::from_millis(ms as u64),
+            );
+            assert!(
+                (BACKLIGHT_BREATHE_MIN..=BACKLIGHT_BREATHE_MAX).contains(&d),
+                "ACC duty {d} at {ms} ms out of bounds"
+            );
+        }
         assert_eq!(
             VehicleStartingControl::<crate::adapters::mock::MockBus>::backlight_duty_for(
                 PowerState::On,
