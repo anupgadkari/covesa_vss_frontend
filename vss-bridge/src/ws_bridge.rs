@@ -364,9 +364,11 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     "Body.Switches.IgnitionCylinder.RemovalInhibited",
     // NFC auth bypass — see NfcEntry / VehicleStartingControl.
     "Body.PEPS.NfcAuthBypass",
-    // Start/Stop button backlight — published by VSC.  HMI shows a
-    // slow pulse on the button's LED ring when true.
-    "Body.Switches.StartStop.BacklightOn",
+    // Start/Stop button backlight — VSC publishes the PWM duty
+    // cycle, StartStopLedPlant publishes the perceived intensity.
+    // HMI reads BacklightIntensity to render the ring opacity.
+    "Body.Switches.StartStop.BacklightDutyCycle",
+    "Body.Switches.StartStop.BacklightIntensity",
 ];
 
 /// Subset of `OUTPUT_SIGNALS` whose authoritative boot value comes from

@@ -45,6 +45,7 @@
 //! - Cylinder antenna as the PEPS-mode low-battery fallback path.
 
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use futures::StreamExt;
 use tokio::select;
@@ -71,12 +72,24 @@ const NFC_AUTH_BYPASS_IN: VssPath = "Body.PEPS.NfcAuthBypass";
 const POWER_STATE_OUT: VssPath = "Vehicle.LowVoltageSystemState";
 const IMMOBILIZER_OUT: VssPath = "Vehicle.Starting.ImmobilizerStatus";
 const REMOVAL_INHIBITED_OUT: VssPath = "Body.Switches.IgnitionCylinder.RemovalInhibited";
-/// Start/Stop button backlight LED.  True when the engine is off
-/// (`PowerState::Off`) so the driver can find the button in the
-/// dark; false otherwise (the engine-running indicator takes over
-/// the button's LED ring).  OEM extension — no standard VSS 4.0
-/// signal for it.
-const STARTSTOP_BACKLIGHT_OUT: VssPath = "Body.Switches.StartStop.BacklightOn";
+/// Start/Stop button backlight PWM duty cycle, 0..=100.  Modelled
+/// as the ECU's PWM control output: the body controller would
+/// drive an actual LED via a hardware PWM at this duty cycle.  On
+/// the simulator bus we publish the duty cycle directly at ~10 Hz
+/// so the LED plant can integrate it.  OEM extension — VSS 4.0 has
+/// no standard signal for the start-button backlight.
+const STARTSTOP_BACKLIGHT_DUTY_OUT: VssPath = "Body.Switches.StartStop.BacklightDutyCycle";
+
+/// PWM tick rate.  ~10 Hz is smooth enough for a 2.5 s breathing
+/// cycle (25 frames / pulse), low enough that the bus chatter
+/// stays modest.
+const BACKLIGHT_TICK: Duration = Duration::from_millis(100);
+/// "Breathing" sine-wave period while the vehicle is OFF.
+const BACKLIGHT_BREATHE_PERIOD: Duration = Duration::from_millis(2500);
+/// Sine-wave bounds while breathing.  Picked to read as a soft
+/// pulse rather than blinking — the LED never goes fully dark.
+const BACKLIGHT_BREATHE_MIN: u8 = 15;
+const BACKLIGHT_BREATHE_MAX: u8 = 75;
 
 /// PRND/S code for Park, matching `TransmissionPlant`.
 const GEAR_PARK: i16 = 126;
@@ -228,6 +241,24 @@ impl<B: SignalBus + Send + Sync + 'static> VehicleStartingControl<B> {
             .publish(REMOVAL_INHIBITED_OUT, SignalValue::Bool(false))
             .await;
 
+        // Boot value for backlight: emit the first tick of the
+        // OFF-state breathing wave so HMI snapshots see a defined
+        // duty cycle immediately.
+        let boot_instant = Instant::now();
+        let mut last_backlight_duty = Self::backlight_duty_for(power, Duration::ZERO);
+        let _ = self
+            .bus
+            .publish(
+                STARTSTOP_BACKLIGHT_DUTY_OUT,
+                SignalValue::Uint8(last_backlight_duty),
+            )
+            .await;
+        let mut backlight_tick = tokio::time::interval(BACKLIGHT_TICK);
+        // First call to `tick()` resolves immediately; skip it so
+        // the duty cycle we just published isn't republished
+        // redundantly.
+        backlight_tick.tick().await;
+
         let mut brake_applied = false;
         // Current engaged gear — published by TransmissionPlant.
         // Defaults to PARK to match the plant's boot value.
@@ -249,6 +280,21 @@ impl<B: SignalBus + Send + Sync + 'static> VehicleStartingControl<B> {
                 Some(val) = brake_rx.next() => {
                     if let SignalValue::Bool(b) = val {
                         brake_applied = b;
+                    }
+                }
+
+                _ = backlight_tick.tick() => {
+                    // Republish the duty cycle if it changed.  ON /
+                    // ACC are steady values so this is a no-op after
+                    // the initial transition; OFF breathes
+                    // continuously and produces ~10 publishes/sec.
+                    let duty = Self::backlight_duty_for(power, boot_instant.elapsed());
+                    if duty != last_backlight_duty {
+                        last_backlight_duty = duty;
+                        let _ = self
+                            .bus
+                            .publish(STARTSTOP_BACKLIGHT_DUTY_OUT, SignalValue::Uint8(duty))
+                            .await;
                     }
                 }
 
@@ -540,14 +586,33 @@ impl<B: SignalBus + Send + Sync + 'static> VehicleStartingControl<B> {
             .bus
             .publish(POWER_STATE_OUT, SignalValue::String(p.as_str().into()))
             .await;
-        // Backlight LED follows power state — on when OFF (button
-        // findable in the dark), off otherwise (engine-running
-        // indicator takes the ring).
-        let backlight = matches!(p, PowerState::Off);
-        let _ = self
-            .bus
-            .publish(STARTSTOP_BACKLIGHT_OUT, SignalValue::Bool(backlight))
-            .await;
+    }
+
+    /// Compute the backlight PWM duty cycle (0..=100) for the
+    /// given power state at the given elapsed time since boot.
+    ///
+    ///   * `Off` — soft sine-wave breathing between
+    ///     [`BACKLIGHT_BREATHE_MIN`] and [`BACKLIGHT_BREATHE_MAX`]
+    ///     with period [`BACKLIGHT_BREATHE_PERIOD`].  Helps the
+    ///     driver locate the button in the dark.
+    ///   * `Acc` — fully off (0).  ACC powers radio + accessories
+    ///     but the start-button indicator is dark; the cluster
+    ///     covers user feedback.
+    ///   * `On` / `Start` — fully on (100).  The HMI uses this as
+    ///     the "engine running" steady ring.
+    fn backlight_duty_for(p: PowerState, elapsed: Duration) -> u8 {
+        match p {
+            PowerState::Off => {
+                let period = BACKLIGHT_BREATHE_PERIOD.as_secs_f64();
+                let phase = (elapsed.as_secs_f64() / period).rem_euclid(1.0);
+                let s = (phase * std::f64::consts::TAU).sin();
+                let mid = (BACKLIGHT_BREATHE_MIN as f64 + BACKLIGHT_BREATHE_MAX as f64) / 2.0;
+                let half = (BACKLIGHT_BREATHE_MAX as f64 - BACKLIGHT_BREATHE_MIN as f64) / 2.0;
+                (mid + half * s).round().clamp(0.0, 100.0) as u8
+            }
+            PowerState::Acc => 0,
+            PowerState::On | PowerState::Start => 100,
+        }
     }
 
     async fn publish_immobilizer(&self, i: Immobilizer) {
@@ -760,41 +825,88 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn backlight_on_at_boot_off_when_running() {
-        // Boot publishes both Power=OFF and BacklightOn=true.  After
-        // the user authenticates and power advances to ACC/ON, the
-        // backlight must drop to false (engine-running indicator
-        // takes over the button's LED ring).
+    async fn backlight_duty_cycle_tracks_power_state() {
+        // ECU's PWM duty cycle:
+        //   OFF   → sine-wave breathing (15..75)
+        //   ACC   → 0
+        //   ON    → 100
+        // The plant simulates the LED's perceived intensity from
+        // this signal; here we just assert what VSC publishes.
         let bus = setup(cfg_peps()).await;
-        assert_eq!(
-            bus.latest_value("Body.Switches.StartStop.BacklightOn"),
-            Some(SignalValue::Bool(true)),
-            "boot: BacklightOn must be true while Power=OFF"
+        let duty = || match bus.latest_value("Body.Switches.StartStop.BacklightDutyCycle") {
+            Some(SignalValue::Uint8(v)) => v,
+            _ => 255,
+        };
+        // Boot: in OFF, duty is somewhere in the breathing range.
+        let d0 = duty();
+        assert!(
+            (BACKLIGHT_BREATHE_MIN..=BACKLIGHT_BREATHE_MAX).contains(&d0),
+            "boot OFF duty {d0} must be in breathing range {BACKLIGHT_BREATHE_MIN}..={BACKLIGHT_BREATHE_MAX}"
         );
+
+        // Move to ACC.
         place_fob_in_cabin(&bus, 1);
         settle().await;
         bus.inject(START_STOP_IN, SignalValue::Bool(true));
         settle().await;
         assert_eq!(latest_power(&bus).as_deref(), Some("ACC"));
-        assert_eq!(
-            bus.latest_value("Body.Switches.StartStop.BacklightOn"),
-            Some(SignalValue::Bool(false)),
-            "Power=ACC: BacklightOn must be false"
-        );
-        // Cycle back to OFF — backlight returns to true.
+        assert_eq!(duty(), 0, "ACC: duty must be 0");
+
+        // Cycle ACC → ON.
         bus.inject(START_STOP_IN, SignalValue::Bool(false));
         settle().await;
         bus.inject(START_STOP_IN, SignalValue::Bool(true));
         settle().await;
+        assert_eq!(latest_power(&bus).as_deref(), Some("ON"));
+        assert_eq!(duty(), 100, "ON: duty must be 100");
+
+        // Cycle ON → OFF.
         bus.inject(START_STOP_IN, SignalValue::Bool(false));
         settle().await;
         bus.inject(START_STOP_IN, SignalValue::Bool(true));
         settle().await;
         assert_eq!(latest_power(&bus).as_deref(), Some("OFF"));
+        let d_off2 = duty();
+        assert!(
+            (BACKLIGHT_BREATHE_MIN..=BACKLIGHT_BREATHE_MAX).contains(&d_off2),
+            "cycled back to OFF: duty {d_off2} must be in breathing range"
+        );
+    }
+
+    #[test]
+    fn backlight_waveform_bounds() {
+        // The sine wave must stay within the published [min, max]
+        // bounds across a full period.
+        for ms in (0..2600).step_by(50) {
+            let d = VehicleStartingControl::<crate::adapters::mock::MockBus>::backlight_duty_for(
+                PowerState::Off,
+                Duration::from_millis(ms as u64),
+            );
+            assert!(
+                (BACKLIGHT_BREATHE_MIN..=BACKLIGHT_BREATHE_MAX).contains(&d),
+                "duty {d} at {ms} ms out of bounds"
+            );
+        }
         assert_eq!(
-            bus.latest_value("Body.Switches.StartStop.BacklightOn"),
-            Some(SignalValue::Bool(true)),
-            "cycled back to Power=OFF: BacklightOn must be true again"
+            VehicleStartingControl::<crate::adapters::mock::MockBus>::backlight_duty_for(
+                PowerState::Acc,
+                Duration::ZERO
+            ),
+            0
+        );
+        assert_eq!(
+            VehicleStartingControl::<crate::adapters::mock::MockBus>::backlight_duty_for(
+                PowerState::On,
+                Duration::ZERO
+            ),
+            100
+        );
+        assert_eq!(
+            VehicleStartingControl::<crate::adapters::mock::MockBus>::backlight_duty_for(
+                PowerState::Start,
+                Duration::ZERO
+            ),
+            100
         );
     }
 

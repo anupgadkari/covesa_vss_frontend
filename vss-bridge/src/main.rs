@@ -86,6 +86,7 @@ use vss_bridge::plant_models::hood::HoodPlantModel;
 use vss_bridge::plant_models::mirror_adjust::MirrorAdjustPlantModel;
 use vss_bridge::plant_models::mirror_fold::MirrorFoldPlantModel;
 use vss_bridge::plant_models::peps::PepsPlantModel;
+use vss_bridge::plant_models::start_stop_led::StartStopLedPlant;
 use vss_bridge::plant_models::sunroof::SunroofPlantModel;
 use vss_bridge::plant_models::transmission::TransmissionPlant;
 use vss_bridge::plant_models::trunk::TrunkPlantModel;
@@ -549,6 +550,9 @@ async fn boot_simulation_stack(
     set.spawn(TrunkPlantModel::with_nvm(Arc::clone(&bus), nvm.clone()).run());
     set.spawn(HoodPlantModel::with_nvm(Arc::clone(&bus), nvm.clone()).run());
     set.spawn(SunroofPlantModel::with_nvm(Arc::clone(&bus), nvm.clone()).run());
+    // Start/Stop button LED — converts the ECU PWM duty cycle into
+    // a perceived intensity that the HMI renders directly.
+    set.spawn(StartStopLedPlant::new(Arc::clone(&bus)).run());
     set.spawn(MirrorFoldPlantModel::with_nvm(Arc::clone(&bus), nvm.clone()).run());
     set.spawn(MirrorAdjustPlantModel::new(Arc::clone(&bus)).run());
     set.spawn(

@@ -554,14 +554,23 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // Authenticated scan when the user proved auth via NFC.
         // Auto-clears to false after the window expires.
         "Body.PEPS.NfcAuthBypass" => Some(0x001E_0007),
-        // Start/Stop button backlight LED — distinct ECU output from
-        // the "engine running" indicator.  True when the button's
-        // LED ring should be illuminated so the driver can locate it
-        // in the dark (ignition OFF).  False when the engine is
-        // running (ACC/ON/START) — the engine-running indicator
-        // takes over the ring instead.  OEM extension; no standard
-        // VSS 4.0 signal exists for it.
-        "Body.Switches.StartStop.BacklightOn" => Some(0x001E_0008),
+        // Start/Stop button backlight — modeled as a PWM control
+        // signal published by the ECU (VehicleStartingControl) and
+        // a derived perceived intensity simulated by the
+        // StartStopLedPlant.  OEM extensions; VSS 4.0 has no
+        // standard signal for the button backlight.
+        //
+        //   BacklightDutyCycle (Uint8 0..=100) — ECU control output.
+        //     The body controller would emit a PWM square wave at
+        //     this duty cycle; on the simulator bus we publish the
+        //     duty cycle directly at ~10 Hz so the plant can model
+        //     time-varying breathing patterns (sine wave during
+        //     OFF, steady 100 while running, 0 in ACC).
+        //   BacklightIntensity (Uint8 0..=100) — plant output.
+        //     Today a passthrough; a future iteration can apply
+        //     gamma / RC-filter / ambient compensation.
+        "Body.Switches.StartStop.BacklightDutyCycle" => Some(0x001E_0008),
+        "Body.Switches.StartStop.BacklightIntensity" => Some(0x001E_0009),
 
         _ => None,
     }
@@ -932,7 +941,8 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
         0x001E_0006,
     ),
     ("Body.PEPS.NfcAuthBypass", 0x001E_0007),
-    ("Body.Switches.StartStop.BacklightOn", 0x001E_0008),
+    ("Body.Switches.StartStop.BacklightDutyCycle", 0x001E_0008),
+    ("Body.Switches.StartStop.BacklightIntensity", 0x001E_0009),
 ];
 
 #[cfg(test)]

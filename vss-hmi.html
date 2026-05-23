@@ -182,7 +182,8 @@ const INIT_STATE={
   'Chassis.Brake.IsApplied':false,
   'Vehicle.Starting.ImmobilizerStatus':'LOCKED',
   'Body.PEPS.NfcAuthBypass':false,
-  'Body.Switches.StartStop.BacklightOn':true,
+  'Body.Switches.StartStop.BacklightDutyCycle':0,
+  'Body.Switches.StartStop.BacklightIntensity':0,
   // BTSI + Key-in-Ignition Inhibit derived flags.
   'Powertrain.Transmission.ShiftLockEngaged':true,
   'Body.Switches.IgnitionCylinder.RemovalInhibited':false,
@@ -2465,21 +2466,23 @@ function CockpitView({s,set,cfg}){
                 <text x="35" y="58" textAnchor="middle"
                   fill={textColor} fontSize="6" fontFamily="Share Tech Mono"
                   fontWeight="700" letterSpacing="0.5">ENGINE</text>
-                {/* Ring indicator overlay.
-                    - Engine running (ON/START), button idle: steady
-                      green ring — the "engine is alive" tell-tale.
-                    - Engine off + button idle + BacklightOn signal
-                      true: slowly pulsing green ring — the ECU-driven
-                      backlit-LED finder that helps the driver locate
-                      the button in the dark.
-                    - Button pressed: hidden (the red pressed ring
-                      treatment owns the visual). */}
-                {!pressed && running && <circle cx="35" cy="35" r="33"
-                  fill="none" stroke="#10B981" strokeWidth="1.4" opacity="0.7"/>}
-                {!pressed && !running && !!s['Body.Switches.StartStop.BacklightOn'] &&
-                  <circle cx="35" cy="35" r="33"
-                    fill="none" stroke="#10B981" strokeWidth="1" opacity="0.5"
-                    className="pulse-slow"/>}
+                {/* Ring indicator overlay driven by the LED plant.
+                    Body.Switches.StartStop.BacklightIntensity is a
+                    perceived-brightness value 0..100 published by
+                    `StartStopLedPlant` from the ECU's PWM duty
+                    cycle output.  We render the ring opacity as
+                    intensity/100 — so the OFF-state sine-wave
+                    duty cycle creates a visible breathing pulse
+                    without any CSS animation.  Button pressed:
+                    hidden (red pressed ring owns the visual). */}
+                {!pressed && (()=>{
+                  const intensity = Math.max(0, Math.min(100, s['Body.Switches.StartStop.BacklightIntensity']||0));
+                  if (intensity === 0) return null;
+                  return <circle cx="35" cy="35" r="33"
+                    fill="none" stroke="#10B981"
+                    strokeWidth={running ? 1.4 : 1}
+                    opacity={intensity / 100}/>;
+                })()}
               </svg>
             </div>;
           }
