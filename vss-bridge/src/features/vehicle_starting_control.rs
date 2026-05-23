@@ -45,6 +45,7 @@
 //! - Cylinder antenna as the PEPS-mode low-battery fallback path.
 
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use futures::StreamExt;
 use tokio::select;
@@ -62,10 +63,33 @@ const START_STOP_IN: VssPath = "Body.Switches.StartStop.IsPressed";
 const CYLINDER_IN: VssPath = "Body.Switches.IgnitionCylinder.Position";
 const BRAKE_IN: VssPath = "Chassis.Brake.IsApplied";
 const CURRENT_GEAR_IN: VssPath = "Powertrain.Transmission.CurrentGear";
+/// NFC auth bypass — published by `NfcEntry` on a start-button NFC
+/// tap.  Stays `true` for a short window; while it's true, a PEPS
+/// start-button press skips the normal `Cabin` Authenticated scan
+/// and treats the immobilizer as already satisfied.
+const NFC_AUTH_BYPASS_IN: VssPath = "Body.PEPS.NfcAuthBypass";
 
 const POWER_STATE_OUT: VssPath = "Vehicle.LowVoltageSystemState";
 const IMMOBILIZER_OUT: VssPath = "Vehicle.Starting.ImmobilizerStatus";
 const REMOVAL_INHIBITED_OUT: VssPath = "Body.Switches.IgnitionCylinder.RemovalInhibited";
+/// Start/Stop button backlight PWM duty cycle, 0..=100.  Modelled
+/// as the ECU's PWM control output: the body controller would
+/// drive an actual LED via a hardware PWM at this duty cycle.  On
+/// the simulator bus we publish the duty cycle directly at ~10 Hz
+/// so the LED plant can integrate it.  OEM extension — VSS 4.0 has
+/// no standard signal for the start-button backlight.
+const STARTSTOP_BACKLIGHT_DUTY_OUT: VssPath = "Body.Switches.StartStop.BacklightDutyCycle";
+
+/// PWM tick rate.  ~10 Hz is smooth enough for a 2.5 s breathing
+/// cycle (25 frames / pulse), low enough that the bus chatter
+/// stays modest.
+const BACKLIGHT_TICK: Duration = Duration::from_millis(100);
+/// "Breathing" sine-wave period while the vehicle is OFF.
+const BACKLIGHT_BREATHE_PERIOD: Duration = Duration::from_millis(2500);
+/// Sine-wave bounds while breathing.  Picked to read as a soft
+/// pulse rather than blinking — the LED never goes fully dark.
+const BACKLIGHT_BREATHE_MIN: u8 = 15;
+const BACKLIGHT_BREATHE_MAX: u8 = 75;
 
 /// PRND/S code for Park, matching `TransmissionPlant`.
 const GEAR_PARK: i16 = 126;
@@ -200,6 +224,7 @@ impl<B: SignalBus + Send + Sync + 'static> VehicleStartingControl<B> {
         let mut cylinder_rx = self.bus.subscribe(CYLINDER_IN).await;
         let mut brake_rx = self.bus.subscribe(BRAKE_IN).await;
         let mut gear_rx = self.bus.subscribe(CURRENT_GEAR_IN).await;
+        let mut nfc_bypass_rx = self.bus.subscribe(NFC_AUTH_BYPASS_IN).await;
 
         // Deterministic boot publishes — late subscribers always see a
         // defined value rather than `None`.
@@ -216,6 +241,24 @@ impl<B: SignalBus + Send + Sync + 'static> VehicleStartingControl<B> {
             .publish(REMOVAL_INHIBITED_OUT, SignalValue::Bool(false))
             .await;
 
+        // Boot value for backlight: emit the first tick of the
+        // OFF-state breathing wave so HMI snapshots see a defined
+        // duty cycle immediately.
+        let boot_instant = Instant::now();
+        let mut last_backlight_duty = Self::backlight_duty_for(power, Duration::ZERO);
+        let _ = self
+            .bus
+            .publish(
+                STARTSTOP_BACKLIGHT_DUTY_OUT,
+                SignalValue::Uint8(last_backlight_duty),
+            )
+            .await;
+        let mut backlight_tick = tokio::time::interval(BACKLIGHT_TICK);
+        // First call to `tick()` resolves immediately; skip it so
+        // the duty cycle we just published isn't republished
+        // redundantly.
+        backlight_tick.tick().await;
+
         let mut brake_applied = false;
         // Current engaged gear — published by TransmissionPlant.
         // Defaults to PARK to match the plant's boot value.
@@ -226,12 +269,32 @@ impl<B: SignalBus + Send + Sync + 'static> VehicleStartingControl<B> {
         let mut cylinder_session_authed = false;
         // Track previous start-stop value so we only act on rising edges.
         let mut prev_start_stop = false;
+        // NFC auth bypass — true while `Body.PEPS.NfcAuthBypass` is
+        // currently `true`.  Set by an NfcEntry start-button tap and
+        // auto-cleared by NfcEntry itself after its window expires.
+        // VSC just mirrors the published value.
+        let mut nfc_bypass_active = false;
 
         loop {
             select! {
                 Some(val) = brake_rx.next() => {
                     if let SignalValue::Bool(b) = val {
                         brake_applied = b;
+                    }
+                }
+
+                _ = backlight_tick.tick() => {
+                    // Republish the duty cycle if it changed.  ON /
+                    // ACC are steady values so this is a no-op after
+                    // the initial transition; OFF breathes
+                    // continuously and produces ~10 publishes/sec.
+                    let duty = Self::backlight_duty_for(power, boot_instant.elapsed());
+                    if duty != last_backlight_duty {
+                        last_backlight_duty = duty;
+                        let _ = self
+                            .bus
+                            .publish(STARTSTOP_BACKLIGHT_DUTY_OUT, SignalValue::Uint8(duty))
+                            .await;
                     }
                 }
 
@@ -251,6 +314,12 @@ impl<B: SignalBus + Send + Sync + 'static> VehicleStartingControl<B> {
                     }
                 }
 
+                Some(val) = nfc_bypass_rx.next() => {
+                    if let SignalValue::Bool(b) = val {
+                        nfc_bypass_active = b;
+                    }
+                }
+
                 Some(val) = start_stop_rx.next(),
                     if self.key_source() == KeySource::Peps =>
                 {
@@ -264,6 +333,7 @@ impl<B: SignalBus + Send + Sync + 'static> VehicleStartingControl<B> {
                         &mut power,
                         &mut immobilizer,
                         brake_applied,
+                        nfc_bypass_active,
                     ).await;
                 }
 
@@ -292,19 +362,35 @@ impl<B: SignalBus + Send + Sync + 'static> VehicleStartingControl<B> {
         tracing::warn!("VehicleStartingControl: input streams closed, exiting");
     }
 
-    /// PEPS rising-edge press handler.  Authenticates against the cabin
-    /// antennas; on success either jumps to `ON` (brake applied) or
-    /// cycles the next power state (brake not applied).
+    /// PEPS rising-edge press handler.  Two auth sources:
+    ///
+    /// 1. **NFC bypass** — if `Body.PEPS.NfcAuthBypass` is currently
+    ///    `true` (set by `NfcEntry` on a start-button NFC tap),
+    ///    treat the press as already authenticated and skip the
+    ///    cabin LF scan.  This is what makes NFC-tap-to-start work
+    ///    without requiring a fob in the cabin.
+    /// 2. **Cabin LF scan** — the default path: submit a
+    ///    `Cabin + Authenticated` search to the KeySearchArbiter and
+    ///    require at least one paired key in cabin.
+    ///
+    /// On success either jumps to `ON` (brake applied + currently
+    /// off/acc) or cycles the next power state.
     async fn handle_peps_press(
         &self,
         power: &mut PowerState,
         immobilizer: &mut Immobilizer,
         brake_applied: bool,
+        nfc_bypass_active: bool,
     ) {
         *immobilizer = Immobilizer::Authenticating;
         self.publish_immobilizer(*immobilizer).await;
 
-        let authed = self.authenticate(AntennaSet::Cabin).await;
+        let authed = if nfc_bypass_active {
+            tracing::info!("VehicleStartingControl: PEPS press — NFC bypass accepted");
+            true
+        } else {
+            self.authenticate(AntennaSet::Cabin).await
+        };
 
         if !authed {
             *immobilizer = Immobilizer::Failed;
@@ -502,6 +588,31 @@ impl<B: SignalBus + Send + Sync + 'static> VehicleStartingControl<B> {
             .await;
     }
 
+    /// Compute the backlight PWM duty cycle (0..=100) for the
+    /// given power state at the given elapsed time since boot.
+    ///
+    ///   * `Off` / `Acc` — soft sine-wave breathing between
+    ///     [`BACKLIGHT_BREATHE_MIN`] and [`BACKLIGHT_BREATHE_MAX`]
+    ///     with period [`BACKLIGHT_BREATHE_PERIOD`].  Helps the
+    ///     driver locate the button without competing with the
+    ///     cluster.  Both states are pre-RUN, so the LED stays in
+    ///     the same "ready to crank" finder pattern.
+    ///   * `On` / `Start` — fully on (100).  The HMI uses this as
+    ///     the "engine running" steady ring.
+    fn backlight_duty_for(p: PowerState, elapsed: Duration) -> u8 {
+        match p {
+            PowerState::Off | PowerState::Acc => {
+                let period = BACKLIGHT_BREATHE_PERIOD.as_secs_f64();
+                let phase = (elapsed.as_secs_f64() / period).rem_euclid(1.0);
+                let s = (phase * std::f64::consts::TAU).sin();
+                let mid = (BACKLIGHT_BREATHE_MIN as f64 + BACKLIGHT_BREATHE_MAX as f64) / 2.0;
+                let half = (BACKLIGHT_BREATHE_MAX as f64 - BACKLIGHT_BREATHE_MIN as f64) / 2.0;
+                (mid + half * s).round().clamp(0.0, 100.0) as u8
+            }
+            PowerState::On | PowerState::Start => 100,
+        }
+    }
+
     async fn publish_immobilizer(&self, i: Immobilizer) {
         let _ = self
             .bus
@@ -680,6 +791,127 @@ mod tests {
         bus.inject(START_STOP_IN, SignalValue::Bool(true));
         settle().await;
         assert_eq!(latest_power(&bus).as_deref(), Some("OFF"));
+    }
+
+    #[tokio::test]
+    async fn peps_press_with_nfc_bypass_active_authenticates_without_cabin_key() {
+        // NfcEntry has just published Body.PEPS.NfcAuthBypass = true
+        // (start-button NFC tap).  A subsequent PEPS press must skip
+        // the cabin scan and authenticate directly.  No fob is in
+        // cabin here — without the bypass, this press would fail.
+        let bus = setup(cfg_peps()).await;
+        bus.inject("Body.PEPS.NfcAuthBypass", SignalValue::Bool(true));
+        settle().await;
+        bus.inject(START_STOP_IN, SignalValue::Bool(true));
+        settle().await;
+        assert_eq!(latest_power(&bus).as_deref(), Some("ACC"));
+        assert_eq!(latest_immo(&bus).as_deref(), Some("AUTHENTICATED"));
+    }
+
+    #[tokio::test]
+    async fn peps_press_with_expired_nfc_bypass_falls_back_to_cabin_scan() {
+        // Bypass was set, then cleared.  Press now must run the
+        // normal cabin scan, find nothing, and fail.
+        let bus = setup(cfg_peps()).await;
+        bus.inject("Body.PEPS.NfcAuthBypass", SignalValue::Bool(true));
+        bus.inject("Body.PEPS.NfcAuthBypass", SignalValue::Bool(false));
+        settle().await;
+        bus.inject(START_STOP_IN, SignalValue::Bool(true));
+        settle().await;
+        assert_eq!(latest_power(&bus).as_deref(), Some("OFF"));
+        assert_eq!(latest_immo(&bus).as_deref(), Some("FAILED"));
+    }
+
+    #[tokio::test]
+    async fn backlight_duty_cycle_tracks_power_state() {
+        // ECU's PWM duty cycle:
+        //   OFF / ACC → sine-wave breathing (15..75) — pre-RUN
+        //                "ready to crank" finder pattern
+        //   ON         → 100
+        // The plant simulates the LED's perceived intensity from
+        // this signal; here we just assert what VSC publishes.
+        let bus = setup(cfg_peps()).await;
+        let duty = || match bus.latest_value("Body.Switches.StartStop.BacklightDutyCycle") {
+            Some(SignalValue::Uint8(v)) => v,
+            _ => 255,
+        };
+        let in_breathe = |d: u8| (BACKLIGHT_BREATHE_MIN..=BACKLIGHT_BREATHE_MAX).contains(&d);
+
+        // Boot: in OFF, duty is somewhere in the breathing range.
+        assert!(in_breathe(duty()), "boot OFF duty {} out of range", duty());
+
+        // Move to ACC — still breathing.
+        place_fob_in_cabin(&bus, 1);
+        settle().await;
+        bus.inject(START_STOP_IN, SignalValue::Bool(true));
+        settle().await;
+        assert_eq!(latest_power(&bus).as_deref(), Some("ACC"));
+        assert!(
+            in_breathe(duty()),
+            "ACC duty {} must stay in breathing range",
+            duty()
+        );
+
+        // Cycle ACC → ON.
+        bus.inject(START_STOP_IN, SignalValue::Bool(false));
+        settle().await;
+        bus.inject(START_STOP_IN, SignalValue::Bool(true));
+        settle().await;
+        assert_eq!(latest_power(&bus).as_deref(), Some("ON"));
+        assert_eq!(duty(), 100, "ON: duty must be 100");
+
+        // Cycle ON → OFF.
+        bus.inject(START_STOP_IN, SignalValue::Bool(false));
+        settle().await;
+        bus.inject(START_STOP_IN, SignalValue::Bool(true));
+        settle().await;
+        assert_eq!(latest_power(&bus).as_deref(), Some("OFF"));
+        assert!(
+            in_breathe(duty()),
+            "cycled back to OFF duty {} out of range",
+            duty()
+        );
+    }
+
+    #[test]
+    fn backlight_waveform_bounds() {
+        // The sine wave must stay within the published [min, max]
+        // bounds across a full period.
+        for ms in (0..2600).step_by(50) {
+            let d = VehicleStartingControl::<crate::adapters::mock::MockBus>::backlight_duty_for(
+                PowerState::Off,
+                Duration::from_millis(ms as u64),
+            );
+            assert!(
+                (BACKLIGHT_BREATHE_MIN..=BACKLIGHT_BREATHE_MAX).contains(&d),
+                "duty {d} at {ms} ms out of bounds"
+            );
+        }
+        // ACC breathes alongside OFF — same waveform.
+        for ms in (0..2600).step_by(50) {
+            let d = VehicleStartingControl::<crate::adapters::mock::MockBus>::backlight_duty_for(
+                PowerState::Acc,
+                Duration::from_millis(ms as u64),
+            );
+            assert!(
+                (BACKLIGHT_BREATHE_MIN..=BACKLIGHT_BREATHE_MAX).contains(&d),
+                "ACC duty {d} at {ms} ms out of bounds"
+            );
+        }
+        assert_eq!(
+            VehicleStartingControl::<crate::adapters::mock::MockBus>::backlight_duty_for(
+                PowerState::On,
+                Duration::ZERO
+            ),
+            100
+        );
+        assert_eq!(
+            VehicleStartingControl::<crate::adapters::mock::MockBus>::backlight_duty_for(
+                PowerState::Start,
+                Duration::ZERO
+            ),
+            100
+        );
     }
 
     #[tokio::test]

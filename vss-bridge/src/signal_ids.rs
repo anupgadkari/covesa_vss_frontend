@@ -352,6 +352,16 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // PEPS plant model — BLE phone RSSI responses
         "Body.PEPS.Plant.BlePhone.1.RssiResponse" => Some(0x0011_0021),
         "Body.PEPS.Plant.BlePhone.2.RssiResponse" => Some(0x0011_0022),
+        // BLE phone NFC tap — String enum with the same `NfcPosition`
+        // values as the dedicated NFC card path (`NotPresent`,
+        // `DriverHandle`, `PushButton`).  Distinct from `.Zone` so the
+        // user can hold a phone *near* the driver door for BLE
+        // proximity (PassiveEntry on handle pull) while still keeping
+        // the explicit NFC tap event (NfcEntry on tap) as a separate
+        // signal.  Real phones expose BLE and NFC as independent
+        // radios; the simulator now mirrors that.
+        "Body.PEPS.Plant.BlePhone.1.NfcTap" => Some(0x0011_0031),
+        "Body.PEPS.Plant.BlePhone.2.NfcTap" => Some(0x0011_0032),
         // PEPS plant model — NFC card positions
         "Body.PEPS.Plant.NfcCard.1.Position" => Some(0x0012_0001),
         "Body.PEPS.Plant.NfcCard.2.Position" => Some(0x0012_0002),
@@ -538,6 +548,29 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         //   lockout behaviour.  Always false on PEPS builds.
         "Powertrain.Transmission.ShiftLockEngaged" => Some(0x001E_0005),
         "Body.Switches.IgnitionCylinder.RemovalInhibited" => Some(0x001E_0006),
+        // NFC auth bypass — set true by NfcEntry for ~3 s after any
+        // NFC tap (driver-handle OR push-button).  Consumed by
+        // VehicleStartingControl to short-circuit its normal cabin
+        // Authenticated scan when the user proved auth via NFC.
+        // Auto-clears to false after the window expires.
+        "Body.PEPS.NfcAuthBypass" => Some(0x001E_0007),
+        // Start/Stop button backlight — modeled as a PWM control
+        // signal published by the ECU (VehicleStartingControl) and
+        // a derived perceived intensity simulated by the
+        // StartStopLedPlant.  OEM extensions; VSS 4.0 has no
+        // standard signal for the button backlight.
+        //
+        //   BacklightDutyCycle (Uint8 0..=100) — ECU control output.
+        //     The body controller would emit a PWM square wave at
+        //     this duty cycle; on the simulator bus we publish the
+        //     duty cycle directly at ~10 Hz so the plant can model
+        //     time-varying breathing patterns (sine wave during
+        //     OFF, steady 100 while running, 0 in ACC).
+        //   BacklightIntensity (Uint8 0..=100) — plant output.
+        //     Today a passthrough; a future iteration can apply
+        //     gamma / RC-filter / ambient compensation.
+        "Body.Switches.StartStop.BacklightDutyCycle" => Some(0x001E_0008),
+        "Body.Switches.StartStop.BacklightIntensity" => Some(0x001E_0009),
 
         _ => None,
     }
@@ -818,6 +851,8 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     // PEPS plant model — BLE phone RSSI responses
     ("Body.PEPS.Plant.BlePhone.1.RssiResponse", 0x0011_0021),
     ("Body.PEPS.Plant.BlePhone.2.RssiResponse", 0x0011_0022),
+    ("Body.PEPS.Plant.BlePhone.1.NfcTap", 0x0011_0031),
+    ("Body.PEPS.Plant.BlePhone.2.NfcTap", 0x0011_0032),
     // PEPS plant model — NFC card positions
     ("Body.PEPS.Plant.NfcCard.1.Position", 0x0012_0001),
     ("Body.PEPS.Plant.NfcCard.2.Position", 0x0012_0002),
@@ -905,6 +940,9 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
         "Body.Switches.IgnitionCylinder.RemovalInhibited",
         0x001E_0006,
     ),
+    ("Body.PEPS.NfcAuthBypass", 0x001E_0007),
+    ("Body.Switches.StartStop.BacklightDutyCycle", 0x001E_0008),
+    ("Body.Switches.StartStop.BacklightIntensity", 0x001E_0009),
 ];
 
 #[cfg(test)]

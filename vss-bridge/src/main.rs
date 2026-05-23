@@ -59,6 +59,7 @@ use vss_bridge::features::manual_horn::ManualHorn;
 use vss_bridge::features::manual_lighting::ManualLighting;
 use vss_bridge::features::mirror_adjust::MirrorAdjust;
 use vss_bridge::features::mirror_fold::MirrorFold;
+use vss_bridge::features::nfc_entry::NfcEntry;
 use vss_bridge::features::panic_alarm::PanicAlarm;
 use vss_bridge::features::passive_entry::{DeviceKind, PairedDevice, PassiveEntry};
 use vss_bridge::features::perimeter_alarm::PerimeterAlarm;
@@ -85,6 +86,7 @@ use vss_bridge::plant_models::hood::HoodPlantModel;
 use vss_bridge::plant_models::mirror_adjust::MirrorAdjustPlantModel;
 use vss_bridge::plant_models::mirror_fold::MirrorFoldPlantModel;
 use vss_bridge::plant_models::peps::PepsPlantModel;
+use vss_bridge::plant_models::start_stop_led::StartStopLedPlant;
 use vss_bridge::plant_models::sunroof::SunroofPlantModel;
 use vss_bridge::plant_models::transmission::TransmissionPlant;
 use vss_bridge::plant_models::trunk::TrunkPlantModel;
@@ -517,7 +519,12 @@ async fn boot_simulation_stack(
         .run(),
     );
 
-    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome, MirrorFold, MirrorAdjust, Farewell, DoorOpenAssist, ExteriorTrunkButton, CabinTrunkRelease, ManualHorn, PerimeterAlarm, KeySearchArbiter, VehicleStartingControl");
+    // NFC Entry — unlock on NFC card / phone tap at the driver-side
+    // B-pillar reader.  Independent of KeySearch (NFC handshake at
+    // the reader IS the authentication in production).
+    set.spawn(NfcEntry::new(Arc::clone(&bus), Arc::clone(&door_lock_arb)).run());
+
+    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome, MirrorFold, MirrorAdjust, Farewell, DoorOpenAssist, ExteriorTrunkButton, CabinTrunkRelease, ManualHorn, PerimeterAlarm, KeySearchArbiter, VehicleStartingControl, NfcEntry");
 
     // ── Plant Models ────────────────────────────────────────────────
     set.spawn(BlinkRelay::new(Arc::clone(&bus)).run());
@@ -543,6 +550,9 @@ async fn boot_simulation_stack(
     set.spawn(TrunkPlantModel::with_nvm(Arc::clone(&bus), nvm.clone()).run());
     set.spawn(HoodPlantModel::with_nvm(Arc::clone(&bus), nvm.clone()).run());
     set.spawn(SunroofPlantModel::with_nvm(Arc::clone(&bus), nvm.clone()).run());
+    // Start/Stop button LED — converts the ECU PWM duty cycle into
+    // a perceived intensity that the HMI renders directly.
+    set.spawn(StartStopLedPlant::new(Arc::clone(&bus)).run());
     set.spawn(MirrorFoldPlantModel::with_nvm(Arc::clone(&bus), nvm.clone()).run());
     set.spawn(MirrorAdjustPlantModel::new(Arc::clone(&bus)).run());
     set.spawn(

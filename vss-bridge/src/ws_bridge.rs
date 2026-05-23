@@ -78,6 +78,10 @@ const INPUT_SIGNALS: &[VssPath] = &[
     "Body.PEPS.Plant.KeyFob.4.ButtonPress",
     "Body.PEPS.Plant.BlePhone.1.Zone",
     "Body.PEPS.Plant.BlePhone.2.Zone",
+    // Phone NFC tap — separate signal from .Zone so BLE proximity
+    // (PassiveEntry) and NFC tap (NfcEntry) are independent.
+    "Body.PEPS.Plant.BlePhone.1.NfcTap",
+    "Body.PEPS.Plant.BlePhone.2.NfcTap",
     "Body.PEPS.Plant.NfcCard.1.Position",
     "Body.PEPS.Plant.NfcCard.2.Position",
     // Door handle plant model inputs — HMI top-view physical interactions.
@@ -358,6 +362,13 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     // BTSI + Key-in-Ignition Inhibit derived flags.
     "Powertrain.Transmission.ShiftLockEngaged",
     "Body.Switches.IgnitionCylinder.RemovalInhibited",
+    // NFC auth bypass — see NfcEntry / VehicleStartingControl.
+    "Body.PEPS.NfcAuthBypass",
+    // Start/Stop button backlight — VSC publishes the PWM duty
+    // cycle, StartStopLedPlant publishes the perceived intensity.
+    // HMI reads BacklightIntensity to render the ring opacity.
+    "Body.Switches.StartStop.BacklightDutyCycle",
+    "Body.Switches.StartStop.BacklightIntensity",
 ];
 
 /// Subset of `OUTPUT_SIGNALS` whose authoritative boot value comes from
