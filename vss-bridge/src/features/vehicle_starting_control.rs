@@ -279,7 +279,35 @@ impl<B: SignalBus + Send + Sync + 'static> VehicleStartingControl<B> {
             select! {
                 Some(val) = brake_rx.next() => {
                     if let SignalValue::Bool(b) = val {
+                        let rising = b && !brake_applied;
                         brake_applied = b;
+                        // Item #14c: brake-press pre-auth.  Real OEMs
+                        // pre-authenticate when the driver touches the
+                        // brake so the subsequent Start press feels
+                        // instantaneous (the cabin LF scan, ~100 ms,
+                        // is already cached when the press fires).
+                        // Only meaningful in PEPS mode while the
+                        // vehicle is off — once running, the cabin
+                        // is presumed authenticated and brake taps
+                        // are routine.  Coalescing::Allowed so the
+                        // subsequent Start press picks up our result
+                        // via the arbiter's coalesce cache.
+                        if rising
+                            && self.key_source() == KeySource::Peps
+                            && matches!(power, PowerState::Off | PowerState::Acc)
+                        {
+                            let key_search = self.key_search.clone();
+                            tokio::spawn(async move {
+                                let _ = key_search
+                                    .submit(
+                                        "VehicleStartingControl::brake_pre_auth",
+                                        AntennaSet::Cabin,
+                                        SearchMode::Authenticated,
+                                        Coalescing::Allowed,
+                                    )
+                                    .await;
+                            });
+                        }
                     }
                 }
 
@@ -746,6 +774,100 @@ mod tests {
         settle().await;
         assert_eq!(latest_power(&bus).as_deref(), Some("OFF"));
         assert_eq!(latest_immo(&bus).as_deref(), Some("FAILED"));
+    }
+
+    #[tokio::test]
+    async fn brake_rising_edge_in_off_state_pre_authenticates_via_arbiter() {
+        // Item #14c: a brake press in OFF (or ACC) with PEPS line-cal
+        // should fire an authenticated Cabin scan via the arbiter so
+        // the subsequent Start press picks up the cached result.
+        // We assert by verifying the LastObservedZone signal — the
+        // arbiter publishes it after every scan, including this
+        // pre-auth scan, so its appearance proves the scan ran.
+        let bus = setup(cfg_peps()).await;
+        place_fob_in_cabin(&bus, 1);
+        settle().await;
+        // Clear history so the assertion isn't spoofed by an earlier
+        // scan / fob placement.
+        bus.clear_history();
+
+        bus.inject(BRAKE_IN, SignalValue::Bool(true));
+        settle().await;
+
+        let observed = bus.history().iter().any(|(s, v)| {
+            *s == "Body.PEPS.Plant.KeyFob.1.LastObservedZone"
+                && *v == SignalValue::String("Cabin".into())
+        });
+        assert!(
+            observed,
+            "brake rising edge should have triggered a Cabin scan that publishes LastObservedZone=Cabin"
+        );
+    }
+
+    #[tokio::test]
+    async fn brake_release_does_not_trigger_pre_auth() {
+        let bus = setup(cfg_peps()).await;
+        place_fob_in_cabin(&bus, 1);
+        // Press, settle, clear, then release — assert no scan fires on release.
+        bus.inject(BRAKE_IN, SignalValue::Bool(true));
+        settle().await;
+        bus.clear_history();
+        bus.inject(BRAKE_IN, SignalValue::Bool(false));
+        settle().await;
+        let any_scan = bus.history().iter().any(|(s, _)| {
+            s.starts_with("Body.PEPS.Plant.KeyFob.") && s.ends_with(".LastObservedZone")
+        });
+        assert!(!any_scan, "brake release must not trigger a pre-auth scan");
+    }
+
+    #[tokio::test]
+    async fn brake_press_while_running_does_not_pre_authenticate() {
+        // Once the engine is ON, brake taps are routine (driving) —
+        // no pre-auth needed.
+        let bus = setup(cfg_peps()).await;
+        place_fob_in_cabin(&bus, 1);
+        settle().await;
+        // Get to ON: brake + press.
+        bus.inject(BRAKE_IN, SignalValue::Bool(true));
+        settle().await;
+        bus.inject(START_STOP_IN, SignalValue::Bool(true));
+        settle().await;
+        assert_eq!(latest_power(&bus).as_deref(), Some("ON"));
+        bus.clear_history();
+
+        // Brake release + re-press while ON — must NOT trigger a scan.
+        bus.inject(BRAKE_IN, SignalValue::Bool(false));
+        settle().await;
+        bus.inject(BRAKE_IN, SignalValue::Bool(true));
+        settle().await;
+        let any_scan = bus.history().iter().any(|(s, _)| {
+            s.starts_with("Body.PEPS.Plant.KeyFob.") && s.ends_with(".LastObservedZone")
+        });
+        assert!(
+            !any_scan,
+            "brake press while running must not pre-authenticate"
+        );
+    }
+
+    #[tokio::test]
+    async fn brake_press_in_keycylinder_mode_does_not_pre_authenticate() {
+        // KeyCylinder vehicles authenticate via the cylinder, not via
+        // a cabin scan.  Pre-auth on brake doesn't apply.
+        let bus = setup(cfg_cylinder()).await;
+        place_fob_in_cylinder(&bus, 1);
+        settle().await;
+        bus.clear_history();
+
+        bus.inject(BRAKE_IN, SignalValue::Bool(true));
+        settle().await;
+
+        let any_scan = bus.history().iter().any(|(s, _)| {
+            s.starts_with("Body.PEPS.Plant.KeyFob.") && s.ends_with(".LastObservedZone")
+        });
+        assert!(
+            !any_scan,
+            "brake pre-auth is PEPS-only — KeyCylinder must not scan"
+        );
     }
 
     #[tokio::test]

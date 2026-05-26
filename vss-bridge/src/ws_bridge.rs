@@ -381,6 +381,10 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     "Body.Switches.IgnitionCylinder.RemovalInhibited",
     // NFC auth bypass — see NfcEntry / VehicleStartingControl.
     "Body.PEPS.NfcAuthBypass",
+    // Published by LostPkScan when ignition is live and the
+    // all-doors-closed scan found no paired keys on the vehicle —
+    // HMI cluster shows a "KEY NOT IN VEHICLE" warning popup.
+    "Body.PEPS.LostKeyWarning",
     // Start/Stop button backlight — VSC publishes the PWM duty
     // cycle, StartStopLedPlant publishes the perceived intensity.
     // HMI reads BacklightIntensity to render the ring opacity.

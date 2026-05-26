@@ -597,6 +597,16 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         //     gamma / RC-filter / ambient compensation.
         "Body.Switches.StartStop.BacklightDutyCycle" => Some(0x001E_0008),
         "Body.Switches.StartStop.BacklightIntensity" => Some(0x001E_0009),
+        // Published by the LostPkScan feature.  True while the
+        // vehicle is in a live ignition state (ON / START) and the
+        // most recent on-vehicle key search (fired on the
+        // all-doors-closed edge) found zero paired devices — i.e.
+        // the driver is operating the vehicle without an
+        // authenticated key on board.  Cleared on the next scan
+        // that finds at least one key, or on ignition leaving
+        // ON / START.  The HMI cluster can subscribe and display
+        // a "KEY NOT IN VEHICLE" warning popup.  OEM extension.
+        "Body.PEPS.LostKeyWarning" => Some(0x001E_000A),
 
         _ => None,
     }
@@ -975,6 +985,7 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
         0x001E_0006,
     ),
     ("Body.PEPS.NfcAuthBypass", 0x001E_0007),
+    ("Body.PEPS.LostKeyWarning", 0x001E_000A),
     ("Body.Switches.StartStop.BacklightDutyCycle", 0x001E_0008),
     ("Body.Switches.StartStop.BacklightIntensity", 0x001E_0009),
 ];
