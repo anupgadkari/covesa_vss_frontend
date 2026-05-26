@@ -26,8 +26,8 @@ item is independently shippable as its own sub-branch / PR.
 | 12 | Key-in-Ignition Inhibit (KeyCylinder mode) | S | ✅ Done — PR #27 |
 | 13 | Migrate ExteriorTrunkButton → KeySearch arbiter | M | ⏳ Pending |
 | 14 | Stop continuous Zone publishing; `PlacedZone` + `LastObservedZone` | L | ⏳ Pending |
-| 14c | Extra scan triggers — brake-press pre-auth | S | ⏳ Pending |
-| 14d | Extra scan triggers — door-close snapshot | S | ⏳ Pending |
+| 14c | Extra scan triggers — brake-press pre-auth | S | ✅ Done |
+| 14d | Lost-paired-key scan + cluster warning (formerly door-close snapshot) | S | ✅ Done |
 | 15 | Smart Unlock feature (key-locked-in-trunk) | M | ⏳ Pending |
 | 16 | NFC Entry feature (card/phone tap → unlock; tap at push-button → start) | M | ⏳ Pending |
 | 17 | Key-lost warning chime | XS | ⏳ Pending |
@@ -163,38 +163,47 @@ simulated LF airtime each.
 
 ---
 
-## 14d. Extra scan triggers — door-close snapshot  *(S)*
+## 14d. Lost-paired-key scan + cluster warning  *(S)*
 
-**Trigger.**  When the last open door closes and the cabin is
-locked (or about to be), the vehicle should snapshot per-fob
-positions so:
+**Trigger.**  Driver gets in, closes the door, starts the car —
+but somehow no paired fob is with them (left on porch, dropped
+on driveway, handed to a passenger who got out, …).  The vehicle
+is now running without an authenticated key on board.  We want a
+cluster warning popup so the driver doesn't unknowingly drive
+away.
 
-  * Walk-away has fresh per-device `LastObservedZone` data the
-    moment it arms (rather than waiting for the next approach
-    poll up to 700 ms later).
-  * Smart Unlock (item #15) can decide whether to pop the trunk
-    based on a fob being inside.
-  * Future trunk / cabin auto-lock features get a clean snapshot
-    to base their decisions on.
+The original 14d plan was a generic on-close snapshot that also
+fed Smart Unlock (#15).  In practice Smart Unlock's trigger is
+the **lock** edge (driver locks the door from outside with a fob
+potentially still in the trunk) — a different event entirely —
+so Smart Unlock should run its own scan when it needs one.
+Conflating the two muddied both features; we narrowed 14d to the
+lost-PK case and renamed the feature accordingly.
 
 **Built on (in `main`).**  Per-door `IsOpen` signals,
-`Cabin.LockStatus`, KeySearchArbiter with `AntennaSet::Sequence`
-(can run AllApproach + TrunkInside + Cabin in one go).
+`Vehicle.LowVoltageSystemState`, KeySearchArbiter with
+`AntennaSet::Sequence` (runs AllApproach + TrunkInside + Cabin
+in one go).
 
 **Plan.**
-1. New small feature `features/door_close_scan.rs` (or a method
-   on an existing manager): subscribe to all four `IsOpen`
-   signals + `Cabin.LockStatus`.
-2. On the all-doors-now-closed edge: submit a `Sequence` of
-   `AllApproach` + `TrunkInside` + `Cabin` Presence scans, with
-   `Coalescing::Disallowed`.  Updates LastObservedZone for every
-   covered slot.
-3. Tests: open one door + close it → triggers a scan; second
-   transition while still locked doesn't.
+1. New feature `features/lost_pk_scan.rs`: subscribe to all four
+   `IsOpen` signals + `Vehicle.LowVoltageSystemState`.
+2. On the any-open→all-closed edge **AND** ignition ∈
+   {`ON`, `START`}: submit a `Sequence` of `AllApproach` +
+   `TrunkInside` + `Cabin` Presence scans, `Coalescing::Disallowed`.
+3. On zero paired keys found: publish
+   `Body.PEPS.LostKeyWarning = true`.  Clears on the next scan
+   that finds a key, or on ignition leaving live.
+4. HMI cluster subscribes to `LostKeyWarning` and renders a
+   "KEY NOT IN VEHICLE" popup.
+5. Tests: boot publishes false; ignition-off close = no-op;
+   ignition-on close with no key = warning; ignition-on close
+   with cabin key = no warning; warning clears on key reappear
+   and on ignition off; partial close doesn't fire.
 
 **Risks.**  Low.  Sequence scan latency adds up (~150 ms total)
-but isn't on a user-perceived path; runs after the user shuts
-the door.
+but runs after the user shuts the door, off any user-perceived
+path.
 
 ---
 

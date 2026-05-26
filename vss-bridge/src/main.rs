@@ -55,6 +55,7 @@ use vss_bridge::features::follow_me_home::FollowMeHome;
 use vss_bridge::features::hazard_lighting::HazardLighting;
 use vss_bridge::features::key_search_arbiter::KeySearchArbiter;
 use vss_bridge::features::lock_feedback::LockFeedback;
+use vss_bridge::features::lost_pk_scan::LostPkScan;
 use vss_bridge::features::manual_horn::ManualHorn;
 use vss_bridge::features::manual_lighting::ManualLighting;
 use vss_bridge::features::mirror_adjust::MirrorAdjust;
@@ -524,7 +525,15 @@ async fn boot_simulation_stack(
     // the reader IS the authentication in production).
     set.spawn(NfcEntry::new(Arc::clone(&bus), Arc::clone(&door_lock_arb)).run());
 
-    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome, MirrorFold, MirrorAdjust, Farewell, DoorOpenAssist, ExteriorTrunkButton, CabinTrunkRelease, ManualHorn, PerimeterAlarm, KeySearchArbiter, VehicleStartingControl, NfcEntry");
+    // Item #14d — Lost-Paired-Key scan.  On the all-doors-closed
+    // edge while ignition is live (ON / START), run a Presence
+    // sweep across all on-vehicle zones.  If zero paired keys are
+    // found, publish Body.PEPS.LostKeyWarning=true so the cluster
+    // can pop up a "KEY NOT IN VEHICLE" alert.  Cleared when a key
+    // reappears in a subsequent cycle or when ignition goes OFF.
+    set.spawn(LostPkScan::new(Arc::clone(&bus), key_search_handle.clone()).run());
+
+    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome, MirrorFold, MirrorAdjust, Farewell, DoorOpenAssist, LostPkScan, ExteriorTrunkButton, CabinTrunkRelease, ManualHorn, PerimeterAlarm, KeySearchArbiter, VehicleStartingControl, NfcEntry");
 
     // ── Plant Models ────────────────────────────────────────────────
     set.spawn(BlinkRelay::new(Arc::clone(&bus)).run());
