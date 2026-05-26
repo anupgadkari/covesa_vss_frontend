@@ -64,7 +64,7 @@ const LOCK_LAST_REQUESTOR: VssPath = "Cabin.LockStatus.LastRequestor";
 /// the physical-external unlock paths — the user is acting from
 /// outside the vehicle and might walk away without entering.
 /// Internal sources (DoorTrimButton, soldier knob, AutoLock,
-/// CrashUnlock, WalkAwayLock, ThumbPadLock, DoubleLockRelease) are
+/// CrashUnlock, WalkAwayLock, KeypadLock, DoubleLockRelease) are
 /// deliberately *not* in this set: locking again 45 s after the
 /// driver pressed an interior unlock is hostile UX.  Strings come
 /// from `<FeatureId as Display>` (Debug-format variant names).
@@ -179,7 +179,7 @@ impl<B: SignalBus> AutoRelock<B> {
         // detect an external relock (driver hits LOCK while the timer
         // is running) and cancel the timer.  Phase 1 arming is gated
         // on `ARM_REQUEST` instead, so unlocks from PassiveEntry /
-        // ThumbPadLock / HMI direct toggle no longer auto-arm.
+        // KeypadLock / HMI direct toggle no longer auto-arm.
         let lock_streams = futures::future::join_all(
             DEFAULT_LOCK_SIGNALS
                 .iter()

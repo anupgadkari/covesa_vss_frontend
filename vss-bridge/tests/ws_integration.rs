@@ -465,10 +465,10 @@ async fn welcome_arms_puddle_lamps_on_approach_entry() {
     assert!(on, "puddle Left should arm on PEPS approach entry");
 }
 
-/// ThumbPadLock — pad held with fob in Approach locks; pad held with
+/// KeypadLock — pad held with fob in Approach locks; pad held with
 /// no fob anywhere does NOT lock (keys-in-vehicle guard end-to-end).
 #[tokio::test]
-async fn thumb_pad_lock_blocked_when_no_fob_outside() {
+async fn keypad_lock_blocked_when_no_fob_outside() {
     let bridge = BridgeProcess::start();
     let (mut tx, mut rx) = connect_ws(&bridge.ws_url()).await;
 
@@ -491,6 +491,6 @@ async fn thumb_pad_lock_blocked_when_no_fob_outside() {
     .await;
     assert!(
         !locked,
-        "ThumbPadLock must deny when no paired device is outside the cabin"
+        "KeypadLock must deny when no paired device is outside the cabin"
     );
 }

@@ -9,7 +9,7 @@ Feature: Lock / Unlock Feedback Flash
   # Implementation model
   # -------------------------------------------------------------------------
   # This feature subscribes to Body.Doors.CentralLock.FeedbackRequest
-  # (published by RKE, WalkAwayLock, ThumbPadLock, AutoRelock) and plays
+  # (published by RKE, WalkAwayLock, KeypadLock, AutoRelock) and plays
   # timed flash patterns on both direction indicators via the Lighting domain
   # arbiter at priority HIGH.
   #

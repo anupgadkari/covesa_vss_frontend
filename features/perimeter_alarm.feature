@@ -110,12 +110,12 @@ Feature: Perimeter Alarm (anti-intrusion alarm on unauthorised door open)
   #               publish Vehicle.Body.Alarm.IsActive = FALSE.  Disarm
   #               works at any phase — chime, full alarm, or lights-only.
   #
-  # REQ-PERI-010: A thumb-pad / sill-knob / HMI-direct unlock (any source
+  # REQ-PERI-010: A keypad / sill-knob / HMI-direct unlock (any source
   #               NOT in the external-auth list above) SHALL NOT disarm a
   #               running alarm.  These sources are not authenticated
   #               against a paired device; treating them as disarm
   #               candidates would let an attacker who reached the
-  #               thumb-pad bypass the alarm.
+  #               keypad bypass the alarm.
   #
   # REQ-PERI-011: When Body.Switches.Panic.IsEngaged transitions to TRUE
   #               while a PerimeterAlarm sequence is running (any phase),
@@ -169,7 +169,7 @@ Feature: Perimeter Alarm (anti-intrusion alarm on unauthorised door open)
   #               i.e. the requestor identities that take the alarm
   #               from DISARMED to PRE_ARMED on a fresh lock cycle —
   #               SHALL include `KeyfobRke`, `KeyfobPeps`,
-  #               `ThumbPadLock`, `AutoRelock`, `WalkAwayLock`,
+  #               `KeypadLock`, `AutoRelock`, `WalkAwayLock`,
   #               `PhoneApp`, `PhoneBle`, `NfcCard`, `NfcPhone`, and
   #               `SlamLock`.  See `slam_lock.feature` for the
   #               provenance of `SlamLock` events on US slam-lock-
@@ -284,7 +284,7 @@ Feature: Perimeter Alarm (anti-intrusion alarm on unauthorised door open)
   Scenario: Thumb-pad unlock does NOT disarm a running alarm
     Given a PerimeterAlarm sequence is in the full-alarm phase
     When Cabin.LockStatus transitions to "UNLOCKED"
-    And Cabin.LockStatus.LastRequestor becomes "ThumbPadLock"
+    And Cabin.LockStatus.LastRequestor becomes "KeypadLock"
     Then Vehicle.Body.Alarm.IsActive remains TRUE
     And the alarm continues pulsing
 

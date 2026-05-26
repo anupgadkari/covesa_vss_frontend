@@ -78,7 +78,7 @@ Feature: Panic Alarm
   #               Body.Switches.Panic.IsEngaged = FALSE so the switch state
   #               on the bus matches the alarm's actual state.
   #
-  # REQ-PANIC-012: A "lock" feedback (AutoRelock, WalkAwayLock, ThumbPad)
+  # REQ-PANIC-012: A "lock" feedback (AutoRelock, WalkAwayLock, Keypad)
   #               SHALL NOT cancel the alarm.  Only "unlock" feedback
   #               cancels.
   # -------------------------------------------------------------------------

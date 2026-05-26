@@ -69,26 +69,6 @@ use crate::signal_bus::{SignalBus, VssPath};
 /// and preempts cleanly.
 const INVERSION_DELAY_MS: u64 = 500;
 
-/// Mislock audible feedback — single horn honk that fires on every
-/// slam-lock-protect inversion.  Audible cue that the lock was
-/// rejected because of the open door.  Always fires when an
-/// inversion happens, regardless of `dealer.horn_chirp_on_lock`:
-/// it's an error indicator, not a confirmation, so a dealer cal that
-/// silences the cheerful "lock confirmed" chirp shouldn't silence
-/// this safety beep.
-const MISLOCK_CHIRPS: u8 = 1;
-/// Horn ON duration per mislock chirp (ms).  Slightly longer than
-/// the rejected chirp-on-lock confirmation (300 ms) so the user
-/// distinguishes it as a deliberate "denied" tone rather than a
-/// success cue.
-const MISLOCK_CHIRP_ON_MS: u64 = 350;
-/// Horn OFF gap between mislock chirps (ms).  Unused with a single
-/// chirp but retained so the loop reads cleanly if we ever raise
-/// `MISLOCK_CHIRPS` again.
-const MISLOCK_CHIRP_OFF_MS: u64 = 120;
-
-const HORN: VssPath = "Body.Horn.IsActive";
-
 const FEATURE_ID: FeatureId = FeatureId::SlamLock;
 
 const LEFT_LOCK_BUTTON: VssPath = "Body.Switches.DoorTrim.Row1.Left.LockButton";
@@ -125,7 +105,7 @@ const DOOR_OPEN_SIGNALS: [VssPath; 4] = [
 const EXTERNAL_LOCK_INVERSION_REQUESTORS: &[&str] = &[
     "KeyfobRke",
     "KeyfobPeps",
-    "ThumbPadLock",
+    "KeypadLock",
     "PhoneApp",
     "PhoneBle",
     "NfcCard",
@@ -313,21 +293,15 @@ impl<B: SignalBus + Send + Sync + 'static> SlamLock<B> {
             "SlamLock: slam_lock_protect inversion — scheduling delayed unlock"
         );
 
-        // Fire the mislock chirp pattern in parallel with the delayed
-        // unlock.  Direct publish to Body.Horn.IsActive (single writer
-        // for this short window — no concurrent PerimeterAlarm /
-        // PanicAlarm in flight while a user is actively pressing lock).
-        // If a second writer wants the horn here later, route both
-        // through the existing horn arbiter at appropriate priorities.
-        let chirp_bus = Arc::clone(&self.bus);
-        tokio::spawn(async move {
-            for _ in 0..MISLOCK_CHIRPS {
-                let _ = chirp_bus.publish(HORN, SignalValue::Bool(true)).await;
-                sleep(Duration::from_millis(MISLOCK_CHIRP_ON_MS)).await;
-                let _ = chirp_bus.publish(HORN, SignalValue::Bool(false)).await;
-                sleep(Duration::from_millis(MISLOCK_CHIRP_OFF_MS)).await;
-            }
-        });
+        // Fire the mislock honk via LockFeedback's "mislock" kind.
+        // Was previously a direct publish to Body.Horn.IsActive here
+        // with a "single writer for this short window" caveat; now
+        // centralised in LockFeedback so SmartUnlock and WAL can
+        // emit the same cue when they prevent a lockout.
+        let _ = self
+            .bus
+            .publish(FEEDBACK_REQUEST, SignalValue::String("mislock".into()))
+            .await;
 
         let bus = Arc::clone(&self.bus);
         let arbiter = Arc::clone(&self.arbiter);
@@ -570,7 +544,7 @@ mod tests {
         );
     }
 
-    // ── External-lock inversion path (RKE / PEPS / phone / NFC / thumb-pad) ──
+    // ── External-lock inversion path (RKE / PEPS / phone / NFC / keypad) ──
 
     /// Helper: inject the full (status, requestor, event_num) tuple the
     /// arbiter would publish on an accepted external lock command.
@@ -662,15 +636,15 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn thumb_pad_lock_with_door_open_inverts() {
-        // Exterior thumb-pad has its own keys-in-vehicle gate, but if
+    async fn keypad_lock_with_door_open_inverts() {
+        // Exterior keypad has its own keys-in-vehicle gate, but if
         // a door is also open the SlamLock inversion still fires under EU.
         let bus = setup(vl_eu(), true, false).await;
         bus.inject("Body.Doors.Row2.Left.IsOpen", SignalValue::Bool(true));
         for _ in 0..8 {
             tokio::task::yield_now().await;
         }
-        inject_lock_event(&bus, "ThumbPadLock", 1).await;
+        inject_lock_event(&bus, "KeypadLock", 1).await;
         settle().await;
         assert_last_lock_cmd(&bus, "unlock_all");
     }
@@ -697,10 +671,11 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn inversion_fires_mislock_honk() {
-        // Audible mislock feedback: every inversion publishes exactly
-        // MISLOCK_CHIRPS Body.Horn.IsActive=true pulses (one honk by
-        // default), each followed by a Body.Horn.IsActive=false edge.
+    async fn inversion_publishes_mislock_feedback() {
+        // Audible mislock feedback is now centralised in LockFeedback
+        // under the "mislock" FEEDBACK_REQUEST kind.  We assert that
+        // SlamLock publishes the intent — the actual horn pulse is
+        // covered by lock_feedback's own tests.
         let bus = setup(vl_eu(), true, false).await;
         bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
         for _ in 0..8 {
@@ -709,32 +684,21 @@ mod tests {
         inject_lock_event(&bus, "KeyfobRke", 1).await;
         settle().await;
 
-        let true_chirps = bus
+        let mislocks = bus
             .history()
             .iter()
-            .filter(|(s, v)| *s == HORN && *v == SignalValue::Bool(true))
-            .count();
-        let false_chirps = bus
-            .history()
-            .iter()
-            .filter(|(s, v)| *s == HORN && *v == SignalValue::Bool(false))
+            .filter(|(s, v)| *s == FEEDBACK_REQUEST && *v == SignalValue::String("mislock".into()))
             .count();
         assert_eq!(
-            true_chirps, MISLOCK_CHIRPS as usize,
-            "expected {} horn-ON edge(s) per inversion, saw {}",
-            MISLOCK_CHIRPS, true_chirps
-        );
-        assert_eq!(
-            false_chirps, MISLOCK_CHIRPS as usize,
-            "expected {} horn-OFF edge(s) per inversion, saw {}",
-            MISLOCK_CHIRPS, false_chirps
+            mislocks, 1,
+            "expected exactly one mislock feedback per inversion, saw {mislocks}"
         );
     }
 
     #[tokio::test(start_paused = true)]
-    async fn no_inversion_no_honk() {
-        // No inversion → no mislock honk.  Verifies the honk is gated
-        // on the inversion firing, not on the lock event itself.
+    async fn no_inversion_no_mislock() {
+        // No inversion → no mislock feedback.  Verifies the honk is
+        // gated on the inversion firing, not on the lock event itself.
         let bus = setup(vl_us(), true, false).await; // US cal: external-lock inversion is a no-op
         bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
         for _ in 0..8 {
@@ -744,8 +708,10 @@ mod tests {
         settle().await;
 
         assert!(
-            bus.history().iter().all(|(s, _)| *s != HORN),
-            "US cal: no inversion → no mislock honk"
+            !bus.history().iter().any(|(s, v)| {
+                *s == FEEDBACK_REQUEST && *v == SignalValue::String("mislock".into())
+            }),
+            "US cal: no inversion → no mislock feedback"
         );
     }
 

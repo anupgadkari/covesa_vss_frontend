@@ -94,7 +94,7 @@ calls for splitting the signal:
   looked" subscribe to this instead of the raw Zone.
 
 **Built on (in `main`).**  All features that read `KeyFob.{N}.Zone`
-today (`walk_away_lock`, `thumb_pad_lock`, `passive_entry`, etc.)
+today (`walk_away_lock`, `keypad_lock`, `passive_entry`, etc.)
 need migration.  KeySearch arbiter is the central point that
 publishes `LastObservedZone` from inside `run_scan`.
 
@@ -111,7 +111,7 @@ publishes `LastObservedZone` from inside `run_scan`.
    - `walk_away_lock` — subscribes to `LastObservedZone` instead of
      `Zone`.  Triggers a fresh `AllApproach + Presence` scan via
      the arbiter before deciding "all keys away".
-   - `thumb_pad_lock` — same.
+   - `keypad_lock` — same.
    - `passive_entry` — sub-item 14a; this is the big one.  Move
      handle-pull → arbiter Authenticated search; remove all direct
      `Zone` reads.
@@ -225,7 +225,7 @@ arbiters already accept claims.
 2. Subscribe to `Cabin.LockStatus`, `Cabin.LockStatus.LastRequestor`,
    `Cabin.LockStatus.EventNum`.
 3. On a fresh lock event whose `LastRequestor` ∈ {`KeyfobRke`,
-   `WalkAwayLock`, `ThumbPadLock`}:
+   `WalkAwayLock`, `KeypadLock`}:
    - Delay 1.5 s (gives the user time to step away).
    - Submit `TrunkInside + Authenticated` search.
    - If non-empty: claim trunk open through `trunk_arbiter`,

@@ -136,7 +136,7 @@ pub struct KeyFinding {
 - **One LF scan at a time.**  Real antennas can't share airtime cleanly.
 - **Priority classes** (request gets queued in its class, FIFO within):
   - Critical: Vehicle Starting Control's start-button request
-  - High: Passive Entry, Thumb Pad Lock, Exterior Trunk Button,
+  - High: Passive Entry, Keypad Lock, Exterior Trunk Button,
     Smart Unlock — all event-driven authenticated searches
   - Normal: Approach poll (arbiter's own internal driver)
 - Higher classes don't preempt mid-scan, but they jump the queue.
@@ -287,7 +287,7 @@ All must hold for Smart Unlock to consider firing:
    state (subscribed from `lock_feedback`, not per-door `IsLocked`).
 4. `Cabin.LockStatus.LastRequestor` is in the **external-source
    allowlist** (not `DoorTrimButton`).  Includes: `KeyfobRke`,
-   `PhoneBle`, `PhoneApp`, `NfcCard`, `NfcPhone`, `ThumbPadLock`,
+   `PhoneBle`, `PhoneApp`, `NfcCard`, `NfcPhone`, `KeypadLock`,
    `WalkAwayLock`, `AutoLock`, `PassiveEntry`, `SlamLock`.
 5. `dealer.smart_unlock_enabled == true` (new config flag, default true).
 
@@ -358,7 +358,7 @@ Each phase is a single commit.  Order matters; do not skip ahead.
 | 1 | KeySearch arbiter foundation | New `key_search_arbiter` module + `run_search` API on the PEPS plant + `Presence` / `Authenticated` modes + scheduling + coalescing.  No feature uses it yet.  Unit tests on arbiter scheduling, coalescing, both latencies. |
 | 2 | Approach poll loop | Arbiter's internal periodic task driving `Body.PEPS.ApproachState` / `ApproachKeys` / `ApproachPollInterval`.  Paused on `ACC`/`ON`/`START`.  Tests for cadence flips. |
 | 3 | Migrate Passive Entry | `SingleHandle + Authenticated` requests on handle-pull edges; drop direct `Zone` signal subscriptions.  Existing passive-entry tests rewritten to seed `PlacedZone` and assert via arbiter mock. |
-| 4 | Migrate Thumb Pad Lock | Same pattern as Passive Entry. |
+| 4 | Migrate Keypad Lock | Same pattern as Passive Entry. |
 | 5 | Migrate Welcome | Subscribe to `Body.PEPS.ApproachState` rather than zone transitions. |
 | 6 | Migrate Walk-Away Lock | Subscribe to `all_doors_closed` + `ApproachState`; no own search request.  Lock fires when both align with ignition in `LOCK/OFF`. |
 | 7 | Vehicle Starting Control + brake plant + `Zone::KeyCylinder` + `key_source_cfg` config | New ignition feature, brake plant, KeyCylinder zone added, HMI sim-panel switches between START button / cylinder rotary by config. |

@@ -54,6 +54,7 @@ use vss_bridge::features::fog_lamps::FogLamps;
 use vss_bridge::features::follow_me_home::FollowMeHome;
 use vss_bridge::features::hazard_lighting::HazardLighting;
 use vss_bridge::features::key_search_arbiter::KeySearchArbiter;
+use vss_bridge::features::keypad_lock::KeypadLock;
 use vss_bridge::features::lock_feedback::LockFeedback;
 use vss_bridge::features::lost_pk_scan::LostPkScan;
 use vss_bridge::features::manual_horn::ManualHorn;
@@ -68,8 +69,8 @@ use vss_bridge::features::power_child_lock::PowerChildLock;
 use vss_bridge::features::power_window::PowerWindow;
 use vss_bridge::features::rke::{PairedFob, RkeFeature};
 use vss_bridge::features::slam_lock::SlamLock;
+use vss_bridge::features::smart_unlock::SmartUnlock;
 use vss_bridge::features::sunroof_control::SunroofControl;
-use vss_bridge::features::thumb_pad_lock::ThumbPadLock;
 use vss_bridge::features::turn_indicator::TurnIndicator;
 use vss_bridge::features::vehicle_starting_control::VehicleStartingControl;
 use vss_bridge::features::walk_away_lock::WalkAwayLock;
@@ -334,8 +335,32 @@ async fn boot_simulation_stack(
             .run(),
     );
     set.spawn(DoubleLockRelease::new(Arc::clone(&bus), Arc::clone(&door_lock_arb)).run());
-    set.spawn(WalkAwayLock::new(Arc::clone(&bus), Arc::clone(&door_lock_arb)).run());
-    set.spawn(ThumbPadLock::new(Arc::clone(&bus), Arc::clone(&door_lock_arb)).run());
+
+    // KeySearch arbiter — owns LF airtime for PEPS searches and runs
+    // the adaptive approach-poll loop.  Constructed before its
+    // consumers so we can hand each one a `KeySearchArbiterHandle`
+    // clone.  The run loop is spawned later (below) alongside the
+    // other arbiter-driven features; only the handle is needed at
+    // this point.
+    let (key_search_arb, key_search_handle, key_search_rx) =
+        KeySearchArbiter::new_with_rx(Arc::clone(&bus));
+
+    set.spawn(
+        WalkAwayLock::new(
+            Arc::clone(&bus),
+            Arc::clone(&door_lock_arb),
+            key_search_handle.clone(),
+        )
+        .run(),
+    );
+    set.spawn(
+        KeypadLock::new(
+            Arc::clone(&bus),
+            Arc::clone(&door_lock_arb),
+            key_search_handle.clone(),
+        )
+        .run(),
+    );
     // Interior trim Lock / Unlock buttons on Row 1 doors.  No auth —
     // occupant-operated; unlock works even with the alarm armed (egress
     // safety) but PerimeterAlarm escalates on the resulting unlock
@@ -463,6 +488,7 @@ async fn boot_simulation_stack(
             Arc::clone(&bus),
             Arc::clone(&door_lock_arb),
             Arc::clone(&cfg),
+            key_search_handle.clone(),
             pe_devices,
         )
         .run(),
@@ -493,14 +519,9 @@ async fn boot_simulation_stack(
     set.spawn(ManualHorn::new(Arc::clone(&bus), Arc::clone(&horn_arb)).run());
     set.spawn(CabinTrunkRelease::new(Arc::clone(&bus), Arc::clone(&trunk_arb)).run());
 
-    // KeySearch arbiter — owns LF airtime for PEPS searches and runs
-    // the adaptive approach-poll loop.  Constructed before its
-    // consumers so we can hand each one a `KeySearchArbiterHandle`
-    // clone.  Today: `VehicleStartingControl` (PR #27) and
-    // `ExteriorTrunkButton` (item 13).  Future phases migrate the
-    // remaining legacy passive-entry paths onto it.
-    let (key_search_arb, key_search_handle, key_search_rx) =
-        KeySearchArbiter::new_with_rx(Arc::clone(&bus));
+    // KeySearch arbiter run loop — handle was created earlier
+    // (above the WalkAwayLock spawn) so every consumer below has a
+    // clone to submit against.
     set.spawn(key_search_arb.run(key_search_rx));
 
     set.spawn(
@@ -533,7 +554,22 @@ async fn boot_simulation_stack(
     // reappears in a subsequent cycle or when ignition goes OFF.
     set.spawn(LostPkScan::new(Arc::clone(&bus), key_search_handle.clone()).run());
 
-    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome, MirrorFold, MirrorAdjust, Farewell, DoorOpenAssist, LostPkScan, ExteriorTrunkButton, CabinTrunkRelease, ManualHorn, PerimeterAlarm, KeySearchArbiter, VehicleStartingControl, NfcEntry");
+    // Smart Unlock — PEPS only.  Re-unlocks the vehicle if the lock
+    // event came from an exterior source while ignition is quiescent
+    // AND a paired key is in the cabin with no paired key in any
+    // approach zone (i.e., the owner just locked themselves out).
+    // No-op on KeyCylinder vehicles.
+    set.spawn(
+        SmartUnlock::new(
+            Arc::clone(&bus),
+            Arc::clone(&door_lock_arb),
+            key_search_handle.clone(),
+            Arc::clone(&cfg),
+        )
+        .run(),
+    );
+
+    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, KeypadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome, MirrorFold, MirrorAdjust, Farewell, DoorOpenAssist, LostPkScan, ExteriorTrunkButton, CabinTrunkRelease, ManualHorn, PerimeterAlarm, KeySearchArbiter, VehicleStartingControl, NfcEntry, SmartUnlock");
 
     // ── Plant Models ────────────────────────────────────────────────
     set.spawn(BlinkRelay::new(Arc::clone(&bus)).run());

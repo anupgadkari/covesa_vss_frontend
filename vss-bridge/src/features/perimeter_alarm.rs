@@ -171,7 +171,7 @@ const INTERNAL_UNLOCK_SOURCES: &[&str] = &["DoorTrimButton"];
 const EXTERNAL_LOCK_REQUESTORS: &[&str] = &[
     "KeyfobRke",
     "KeyfobPeps",
-    "ThumbPadLock",
+    "KeypadLock",
     "AutoRelock",
     "WalkAwayLock",
     "PhoneApp",
@@ -437,7 +437,7 @@ impl<B: SignalBus + Send + Sync + 'static> PerimeterAlarm<B> {
                     //    state is still PRE_ARMED / ARMED.  Drop to
                     //    DISARMED.  Skips ACTIVATED because a running
                     //    alarm survives a non-auth unlock (e.g.
-                    //    ThumbPadLock-as-requestor on an unlock).
+                    //    KeypadLock-as-requestor on an unlock).
                     if active.is_none()
                         && !is_armable_lock_state(&lock_status)
                         && current_state != AlarmState::Disarmed
@@ -993,8 +993,8 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn thumb_pad_unlock_does_not_disarm_alarm() {
-        // ThumbPadLock unlock isn't authenticated against a paired
+    async fn keypad_unlock_does_not_disarm_alarm() {
+        // KeypadLock unlock isn't authenticated against a paired
         // device — must NOT cancel the alarm.
         let bus = setup().await;
         inject_lock(&bus, "LOCKED", "KeyfobRke", 1).await;
@@ -1008,7 +1008,7 @@ mod tests {
             Some(SignalValue::Bool(true))
         );
 
-        inject_lock(&bus, "UNLOCKED", "ThumbPadLock", 2).await;
+        inject_lock(&bus, "UNLOCKED", "KeypadLock", 2).await;
         settle(50).await;
 
         // Still alarming.
@@ -1467,7 +1467,7 @@ mod tests {
         // trim switch) are not user-initiated "I am leaving the
         // vehicle" events.  Locking via either must NOT take the alarm
         // out of DISARMED — the rule is that arming requires a
-        // deliberate external lock action (RKE, ThumbPadLock,
+        // deliberate external lock action (RKE, KeypadLock,
         // AutoRelock, WalkAwayLock, paired phone, NFC).
         for internal_requestor in ["AutoLock", "DoorTrimButton"] {
             let bus = setup().await;
@@ -1492,7 +1492,7 @@ mod tests {
         for external_requestor in [
             "KeyfobRke",
             "KeyfobPeps",
-            "ThumbPadLock",
+            "KeypadLock",
             "AutoRelock",
             "WalkAwayLock",
             "PhoneApp",

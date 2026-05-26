@@ -231,7 +231,23 @@ impl VssWorld {
             });
         }
 
-        let pe = PassiveEntry::new(Arc::clone(&bus), dlarb, Arc::clone(&cfg), paired);
+        // KeySearchArbiter — PassiveEntry submits a fresh
+        // SingleHandle Authenticated scan on every handle pull to
+        // sidestep stale LastObservedZone, so the arbiter has to be
+        // live in the e2e stack too.
+        let (ksa, ksa_handle, ksa_rx) =
+            vss_bridge::features::key_search_arbiter::KeySearchArbiter::new_with_rx(Arc::clone(
+                &bus,
+            ));
+        self._tasks.push(tokio::spawn(ksa.run(ksa_rx)));
+
+        let pe = PassiveEntry::new(
+            Arc::clone(&bus),
+            dlarb,
+            Arc::clone(&cfg),
+            ksa_handle,
+            paired,
+        );
         self._tasks.push(tokio::spawn(pe.run()));
 
         // Yield until every spawned task reaches its first
@@ -1232,12 +1248,26 @@ async fn given_rhd(w: &mut VssWorld) {
 
 // ---- Handle pulls ----
 
+/// Virtual time needed between a handle pull and the corresponding
+/// `Then PassiveEntry dispatches …` assertion.  PassiveEntry now
+/// submits a fresh `SingleHandle` Authenticated scan (~100 ms in the
+/// arbiter sim) on every pull before issuing the challenge, then
+/// waits up to `CHALLENGE_TIMEOUT_MS = 150 ms` for the response.
+/// 300 ms covers both with margin under paused time.
+const HANDLE_PULL_SETTLE: Duration = Duration::from_millis(300);
+
+async fn settle_handle_pull() {
+    advance(HANDLE_PULL_SETTLE).await;
+    settle().await;
+}
+
 #[when("the driver pulls the Row1.Left outside handle")]
 async fn when_driver_pulls_left(w: &mut VssWorld) {
     // Clear history at the boundary so the following Then assertions
     // see only what PassiveEntry produces in response to *this* pull.
     w.bus().clear_history();
     w.inject(ROW1_LEFT_HANDLE, SignalValue::Bool(true)).await;
+    settle_handle_pull().await;
 }
 
 /// RHD driver-side pull — Row1.Right is the driver door when
@@ -1246,12 +1276,14 @@ async fn when_driver_pulls_left(w: &mut VssWorld) {
 async fn when_driver_pulls_right(w: &mut VssWorld) {
     w.bus().clear_history();
     w.inject(ROW1_RIGHT_HANDLE, SignalValue::Bool(true)).await;
+    settle_handle_pull().await;
 }
 
 #[when("the passenger pulls the Row1.Right outside handle")]
 async fn when_passenger_pulls_right(w: &mut VssWorld) {
     w.bus().clear_history();
     w.inject(ROW1_RIGHT_HANDLE, SignalValue::Bool(true)).await;
+    settle_handle_pull().await;
 }
 
 /// RHD passenger-side pull — Row1.Left is the passenger door on RHD.
@@ -1259,6 +1291,7 @@ async fn when_passenger_pulls_right(w: &mut VssWorld) {
 async fn when_passenger_pulls_left(w: &mut VssWorld) {
     w.bus().clear_history();
     w.inject(ROW1_LEFT_HANDLE, SignalValue::Bool(true)).await;
+    settle_handle_pull().await;
 }
 
 #[when(
@@ -1274,6 +1307,7 @@ async fn when_driver_releases_and_repulls_left(w: &mut VssWorld, secs: u64) {
     // command, not stage 1.
     w.bus().clear_history();
     w.inject(ROW1_LEFT_HANDLE, SignalValue::Bool(true)).await;
+    settle_handle_pull().await;
 }
 
 /// RHD second-pull within window on the driver door (Row1.Right).
@@ -1286,6 +1320,7 @@ async fn when_driver_releases_and_repulls_right(w: &mut VssWorld, secs: u64) {
     settle().await;
     w.bus().clear_history();
     w.inject(ROW1_RIGHT_HANDLE, SignalValue::Bool(true)).await;
+    settle_handle_pull().await;
 }
 
 // ---- Assertions ----
