@@ -292,14 +292,36 @@ impl<B: SignalBus + Send + Sync + 'static> KeySearchArbiter<B> {
         // detection is independent of cryptographic pairing.
         let paired: Arc<tokio::sync::Mutex<HashMap<KeySlot, bool>>> =
             Arc::new(tokio::sync::Mutex::new(HashMap::new()));
+        // Per-fob `LastObservedZone` map — updated whenever a scan
+        // touches a fob.  Used to detect "fob has left coverage"
+        // transitions: if a fob's previous LastObserved was inside
+        // the current scan's coverage and the scan didn't see it,
+        // publish OutOfRange.
+        let last_observed: Arc<tokio::sync::Mutex<HashMap<KeySlot, Zone>>> =
+            Arc::new(tokio::sync::Mutex::new(HashMap::new()));
 
-        // Subscribe to every fob's Zone + Paired signals once.
+        // Subscribe to every fob's PlacedZone + legacy Zone + Paired
+        // signals once.  PlacedZone is the new HMI drag target; .Zone
+        // is the legacy alias that the PEPS plant still mirrors and
+        // that many existing tests inject directly.  Subscribing to
+        // both keeps the transition backward-compatible — whichever
+        // signal arrives last wins in the cache.
         for slot in 0..NUM_KEY_SLOTS as KeySlot {
-            let path = fob_zone_signal(slot);
-            let mut rx_zone = self.bus.subscribe(path).await;
             let zones_clone = Arc::clone(&zones);
+            let mut rx_placed = self.bus.subscribe(fob_placed_zone_signal(slot)).await;
             tokio::spawn(async move {
-                while let Some(v) = rx_zone.next().await {
+                while let Some(v) = rx_placed.next().await {
+                    if let SignalValue::String(s) = v {
+                        if let Some(z) = Zone::from_str_value(&s) {
+                            zones_clone.lock().await.insert(slot, z);
+                        }
+                    }
+                }
+            });
+            let zones_clone = Arc::clone(&zones);
+            let mut rx_legacy = self.bus.subscribe(fob_legacy_zone_signal(slot)).await;
+            tokio::spawn(async move {
+                while let Some(v) = rx_legacy.next().await {
                     if let SignalValue::String(s) = v {
                         if let Some(z) = Zone::from_str_value(&s) {
                             zones_clone.lock().await.insert(slot, z);
@@ -327,6 +349,18 @@ impl<B: SignalBus + Send + Sync + 'static> KeySearchArbiter<B> {
         let mut approach_keys: u8 = 0;
         let mut ign_suspended: bool = false;
         let mut poll_deadline: Instant = Instant::now() + self.fast_cadence;
+
+        // Seed `LastObservedZone = OutOfRange` for every slot so HMI
+        // snapshots see a defined value before the first scan runs.
+        for slot in 0..NUM_KEY_SLOTS as KeySlot {
+            let _ = self
+                .bus
+                .publish(
+                    fob_last_observed_zone_signal(slot),
+                    SignalValue::String(Zone::OutOfRange.to_string()),
+                )
+                .await;
+        }
 
         // Seed the derived signals so HMI snapshots see defined values.
         let _ = self
@@ -386,7 +420,7 @@ impl<B: SignalBus + Send + Sync + 'static> KeySearchArbiter<B> {
 
                 // Feature-submitted search request.
                 Some(req) = rx.recv() => {
-                    handle_request(req, &zones, &paired, &mut cache).await;
+                    handle_request(req, &self.bus, &zones, &paired, &last_observed, &mut cache).await;
                 }
 
                 // Periodic approach poll.
@@ -400,6 +434,8 @@ impl<B: SignalBus + Send + Sync + 'static> KeySearchArbiter<B> {
                         &zones_snapshot,
                         &paired_snapshot,
                     ).await;
+                    // Per-fob LastObservedZone update from the poll.
+                    publish_last_observed(&self.bus, &last_observed, &AntennaSet::AllApproach, &result).await;
                     let now_any = !result.keys_found.is_empty();
                     let now_count = result.keys_found.len() as u8;
 
@@ -446,10 +482,13 @@ impl<B: SignalBus + Send + Sync + 'static> KeySearchArbiter<B> {
 /// Process a single submitted search request — pure function over
 /// the zones cache and the coalescing window.  Extracted so the
 /// `select!` body stays readable.
-async fn handle_request(
+#[allow(clippy::too_many_arguments)]
+async fn handle_request<B: SignalBus + Send + Sync + 'static>(
     req: KeySearchRequest,
+    bus: &Arc<B>,
     zones: &Arc<tokio::sync::Mutex<HashMap<KeySlot, Zone>>>,
     paired: &Arc<tokio::sync::Mutex<HashMap<KeySlot, bool>>>,
+    last_observed: &Arc<tokio::sync::Mutex<HashMap<KeySlot, Zone>>>,
     cache: &mut Vec<(AntennaSet, SearchMode, KeySearchResult, Instant)>,
 ) {
     // Drop cache entries older than the coalesce window.
@@ -485,6 +524,9 @@ async fn handle_request(
         "KeySearchArbiter: scan complete"
     );
 
+    // Publish per-fob LastObservedZone updates from this scan.
+    publish_last_observed(bus, last_observed, &req.antennas, &result).await;
+
     cache.push((
         req.antennas.clone(),
         req.mode,
@@ -492,6 +534,80 @@ async fn handle_request(
         Instant::now(),
     ));
     let _ = req.response.send(result);
+}
+
+/// Update the `LastObservedZone` signal for each fob touched by the
+/// scan, and for any fob whose previous last-observed zone was within
+/// the scan's coverage but isn't in the current result (meaning it
+/// has left that coverage area).
+///
+/// This is the per-device counterpart to the aggregate `ApproachKeys`
+/// / `ApproachState` signals — features that need per-key positions
+/// should subscribe to `Body.PEPS.Plant.{...}.LastObservedZone`
+/// rather than the legacy `.Zone` (which is currently a mirror of
+/// the HMI-set ground truth).
+async fn publish_last_observed<B: SignalBus + Send + Sync + 'static>(
+    bus: &Arc<B>,
+    last_observed: &Arc<tokio::sync::Mutex<HashMap<KeySlot, Zone>>>,
+    antennas: &AntennaSet,
+    result: &KeySearchResult,
+) {
+    // For Sequence scans the result already concatenates all legs;
+    // the coverage union is the union of each leg.  Zone is Hash so
+    // we dedup via a HashSet rather than sort+dedup (Zone doesn't
+    // implement Ord and there's no compelling reason to add it).
+    let coverage: std::collections::HashSet<Zone> = match antennas {
+        AntennaSet::Sequence(legs) => legs.iter().flat_map(|(a, _)| coverage_zones(a)).collect(),
+        other => coverage_zones(other).into_iter().collect(),
+    };
+
+    let mut lo = last_observed.lock().await;
+
+    // Slots found in this scan → publish their observed zone.
+    let mut found_slots: Vec<KeySlot> = Vec::with_capacity(result.keys_found.len());
+    for finding in &result.keys_found {
+        found_slots.push(finding.slot);
+        let prev = lo.get(&finding.slot).copied();
+        if prev != Some(finding.zone) {
+            lo.insert(finding.slot, finding.zone);
+            let _ = bus
+                .publish(
+                    fob_last_observed_zone_signal(finding.slot),
+                    SignalValue::String(finding.zone.to_string()),
+                )
+                .await;
+        }
+    }
+
+    // Slots whose previous LastObserved was in this scan's coverage
+    // but who weren't found this time → they've left the coverage
+    // area.  Publish OutOfRange to give consumers the "fob gone"
+    // event.  Slots that were previously seen outside this scan's
+    // coverage are unaffected (the scan can't speak to them).
+    let to_clear: Vec<KeySlot> = lo
+        .iter()
+        .filter_map(|(slot, prev_zone)| {
+            if found_slots.contains(slot) {
+                return None;
+            }
+            if !coverage.contains(prev_zone) {
+                return None;
+            }
+            if *prev_zone == Zone::OutOfRange {
+                return None;
+            }
+            Some(*slot)
+        })
+        .collect();
+    for slot in to_clear {
+        lo.insert(slot, Zone::OutOfRange);
+        let _ = bus
+            .publish(
+                fob_last_observed_zone_signal(slot),
+                SignalValue::String(Zone::OutOfRange.to_string()),
+            )
+            .await;
+    }
 }
 
 // ── Internal scan execution ───────────────────────────────────────────────
@@ -593,9 +709,32 @@ fn rssi_for_zone(z: Zone) -> i8 {
     }
 }
 
-fn fob_zone_signal(slot: KeySlot) -> VssPath {
-    // Constant string indices — matches the existing PEPS plant's
-    // published per-fob zone signals.  Slot range 0..NUM_KEY_SLOTS.
+/// Where to read each fob's HMI-set physical position from.
+///
+/// The arbiter is the one consumer that legitimately needs ground-
+/// truth position — it's *simulating* the LF antenna subsystem.
+/// Every other consumer should subscribe to LastObservedZone
+/// (published below from inside scan results) so it experiences the
+/// same partial-information world a real PEPS feature does.
+fn fob_placed_zone_signal(slot: KeySlot) -> VssPath {
+    match slot {
+        0 => "Body.PEPS.Plant.KeyFob.1.PlacedZone",
+        1 => "Body.PEPS.Plant.KeyFob.2.PlacedZone",
+        2 => "Body.PEPS.Plant.KeyFob.3.PlacedZone",
+        3 => "Body.PEPS.Plant.KeyFob.4.PlacedZone",
+        4 => "Body.PEPS.Plant.BlePhone.1.PlacedZone",
+        5 => "Body.PEPS.Plant.BlePhone.2.PlacedZone",
+        _ => "Body.PEPS.Plant.KeyFob.1.PlacedZone", // defensive; never hit at runtime
+    }
+}
+
+/// Legacy `.Zone` path for the same slot indexing.  The arbiter
+/// subscribes to BOTH `.PlacedZone` (new, HMI-driven) and `.Zone`
+/// (legacy, PEPS plant mirror + test injections) so the transition
+/// to item #14a's signal split doesn't force every existing test to
+/// rewrite its zone setup.  Either subscription updates the zone
+/// cache; whichever signal arrives last wins.
+fn fob_legacy_zone_signal(slot: KeySlot) -> VssPath {
     match slot {
         0 => "Body.PEPS.Plant.KeyFob.1.Zone",
         1 => "Body.PEPS.Plant.KeyFob.2.Zone",
@@ -603,7 +742,22 @@ fn fob_zone_signal(slot: KeySlot) -> VssPath {
         3 => "Body.PEPS.Plant.KeyFob.4.Zone",
         4 => "Body.PEPS.Plant.BlePhone.1.Zone",
         5 => "Body.PEPS.Plant.BlePhone.2.Zone",
-        _ => "Body.PEPS.Plant.KeyFob.1.Zone", // defensive; never hit at runtime
+        _ => "Body.PEPS.Plant.KeyFob.1.Zone",
+    }
+}
+
+/// Output signal — what the arbiter saw on its most recent scan
+/// that covered this fob.  This is what features should subscribe
+/// to instead of the legacy `.Zone` mirror.
+fn fob_last_observed_zone_signal(slot: KeySlot) -> VssPath {
+    match slot {
+        0 => "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
+        1 => "Body.PEPS.Plant.KeyFob.2.LastObservedZone",
+        2 => "Body.PEPS.Plant.KeyFob.3.LastObservedZone",
+        3 => "Body.PEPS.Plant.KeyFob.4.LastObservedZone",
+        4 => "Body.PEPS.Plant.BlePhone.1.LastObservedZone",
+        5 => "Body.PEPS.Plant.BlePhone.2.LastObservedZone",
+        _ => "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
     }
 }
 
@@ -656,7 +810,7 @@ mod tests {
 
     fn place(bus: &MockBus, slot: KeySlot, zone: Zone) {
         bus.inject(
-            fob_zone_signal(slot),
+            fob_placed_zone_signal(slot),
             SignalValue::String(zone.as_str().into()),
         );
     }

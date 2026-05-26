@@ -343,6 +343,29 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Body.PEPS.Plant.KeyFob.2.RfMessage" => Some(0x0010_0052),
         "Body.PEPS.Plant.KeyFob.3.RfMessage" => Some(0x0010_0053),
         "Body.PEPS.Plant.KeyFob.4.RfMessage" => Some(0x0010_0054),
+        // PlacedZone — where the device physically is.  In production
+        // the vehicle never knows this directly; this signal exists
+        // only because the simulator user can drag chips around in
+        // the HMI.  The PEPS plant and KeySearchArbiter read it as
+        // ground truth.  Real PEPS subsystems learn position through
+        // periodic LF scans, surfaced as LastObservedZone.  The
+        // legacy `.Zone` signal is now a transitional mirror of
+        // `.PlacedZone` until all consumers migrate.
+        "Body.PEPS.Plant.KeyFob.1.PlacedZone" => Some(0x0010_0061),
+        "Body.PEPS.Plant.KeyFob.2.PlacedZone" => Some(0x0010_0062),
+        "Body.PEPS.Plant.KeyFob.3.PlacedZone" => Some(0x0010_0063),
+        "Body.PEPS.Plant.KeyFob.4.PlacedZone" => Some(0x0010_0064),
+        "Body.PEPS.Plant.KeyFob.5.PlacedZone" => Some(0x0010_0065),
+        "Body.PEPS.Plant.KeyFob.6.PlacedZone" => Some(0x0010_0066),
+        // LastObservedZone — published by the KeySearchArbiter after
+        // each scan.  This is what real PEPS features should consume
+        // (and what the legacy `.Zone` mirror will eventually mean).
+        "Body.PEPS.Plant.KeyFob.1.LastObservedZone" => Some(0x0010_0071),
+        "Body.PEPS.Plant.KeyFob.2.LastObservedZone" => Some(0x0010_0072),
+        "Body.PEPS.Plant.KeyFob.3.LastObservedZone" => Some(0x0010_0073),
+        "Body.PEPS.Plant.KeyFob.4.LastObservedZone" => Some(0x0010_0074),
+        "Body.PEPS.Plant.KeyFob.5.LastObservedZone" => Some(0x0010_0075),
+        "Body.PEPS.Plant.KeyFob.6.LastObservedZone" => Some(0x0010_0076),
         // PEPS plant model — BLE phone zones
         "Body.PEPS.Plant.BlePhone.1.Zone" => Some(0x0011_0001),
         "Body.PEPS.Plant.BlePhone.2.Zone" => Some(0x0011_0002),
@@ -362,6 +385,12 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // radios; the simulator now mirrors that.
         "Body.PEPS.Plant.BlePhone.1.NfcTap" => Some(0x0011_0031),
         "Body.PEPS.Plant.BlePhone.2.NfcTap" => Some(0x0011_0032),
+        // BLE phone PlacedZone / LastObservedZone — same model as the
+        // KeyFob signals above.
+        "Body.PEPS.Plant.BlePhone.1.PlacedZone" => Some(0x0011_0041),
+        "Body.PEPS.Plant.BlePhone.2.PlacedZone" => Some(0x0011_0042),
+        "Body.PEPS.Plant.BlePhone.1.LastObservedZone" => Some(0x0011_0051),
+        "Body.PEPS.Plant.BlePhone.2.LastObservedZone" => Some(0x0011_0052),
         // PEPS plant model — NFC card positions
         "Body.PEPS.Plant.NfcCard.1.Position" => Some(0x0012_0001),
         "Body.PEPS.Plant.NfcCard.2.Position" => Some(0x0012_0002),
@@ -842,6 +871,18 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Body.PEPS.Plant.KeyFob.2.RfMessage", 0x0010_0052),
     ("Body.PEPS.Plant.KeyFob.3.RfMessage", 0x0010_0053),
     ("Body.PEPS.Plant.KeyFob.4.RfMessage", 0x0010_0054),
+    ("Body.PEPS.Plant.KeyFob.1.PlacedZone", 0x0010_0061),
+    ("Body.PEPS.Plant.KeyFob.2.PlacedZone", 0x0010_0062),
+    ("Body.PEPS.Plant.KeyFob.3.PlacedZone", 0x0010_0063),
+    ("Body.PEPS.Plant.KeyFob.4.PlacedZone", 0x0010_0064),
+    ("Body.PEPS.Plant.KeyFob.5.PlacedZone", 0x0010_0065),
+    ("Body.PEPS.Plant.KeyFob.6.PlacedZone", 0x0010_0066),
+    ("Body.PEPS.Plant.KeyFob.1.LastObservedZone", 0x0010_0071),
+    ("Body.PEPS.Plant.KeyFob.2.LastObservedZone", 0x0010_0072),
+    ("Body.PEPS.Plant.KeyFob.3.LastObservedZone", 0x0010_0073),
+    ("Body.PEPS.Plant.KeyFob.4.LastObservedZone", 0x0010_0074),
+    ("Body.PEPS.Plant.KeyFob.5.LastObservedZone", 0x0010_0075),
+    ("Body.PEPS.Plant.KeyFob.6.LastObservedZone", 0x0010_0076),
     // PEPS plant model — BLE phone zones
     ("Body.PEPS.Plant.BlePhone.1.Zone", 0x0011_0001),
     ("Body.PEPS.Plant.BlePhone.2.Zone", 0x0011_0002),
@@ -853,6 +894,10 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Body.PEPS.Plant.BlePhone.2.RssiResponse", 0x0011_0022),
     ("Body.PEPS.Plant.BlePhone.1.NfcTap", 0x0011_0031),
     ("Body.PEPS.Plant.BlePhone.2.NfcTap", 0x0011_0032),
+    ("Body.PEPS.Plant.BlePhone.1.PlacedZone", 0x0011_0041),
+    ("Body.PEPS.Plant.BlePhone.2.PlacedZone", 0x0011_0042),
+    ("Body.PEPS.Plant.BlePhone.1.LastObservedZone", 0x0011_0051),
+    ("Body.PEPS.Plant.BlePhone.2.LastObservedZone", 0x0011_0052),
     // PEPS plant model — NFC card positions
     ("Body.PEPS.Plant.NfcCard.1.Position", 0x0012_0001),
     ("Body.PEPS.Plant.NfcCard.2.Position", 0x0012_0002),

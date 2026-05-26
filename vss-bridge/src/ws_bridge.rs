@@ -66,6 +66,17 @@ const INPUT_SIGNALS: &[VssPath] = &[
     "Body.Lights.DirectionIndicator.Right.Lamp.Side.IsDefect",
     "Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsDefect",
     // PEPS plant model inputs — HMI positions devices and presses fob buttons.
+    // `.PlacedZone` is the new HMI drag target (item #14a); `.Zone`
+    // stays accepted as a transitional alias so unmigrated paths
+    // (and integration tests injecting via the old name) keep
+    // working.  The PEPS plant subscribes to BOTH and mirrors writes
+    // between them.
+    "Body.PEPS.Plant.KeyFob.1.PlacedZone",
+    "Body.PEPS.Plant.KeyFob.2.PlacedZone",
+    "Body.PEPS.Plant.KeyFob.3.PlacedZone",
+    "Body.PEPS.Plant.KeyFob.4.PlacedZone",
+    "Body.PEPS.Plant.KeyFob.5.PlacedZone",
+    "Body.PEPS.Plant.KeyFob.6.PlacedZone",
     "Body.PEPS.Plant.KeyFob.1.Zone",
     "Body.PEPS.Plant.KeyFob.2.Zone",
     "Body.PEPS.Plant.KeyFob.3.Zone",
@@ -76,6 +87,8 @@ const INPUT_SIGNALS: &[VssPath] = &[
     "Body.PEPS.Plant.KeyFob.2.ButtonPress",
     "Body.PEPS.Plant.KeyFob.3.ButtonPress",
     "Body.PEPS.Plant.KeyFob.4.ButtonPress",
+    "Body.PEPS.Plant.BlePhone.1.PlacedZone",
+    "Body.PEPS.Plant.BlePhone.2.PlacedZone",
     "Body.PEPS.Plant.BlePhone.1.Zone",
     "Body.PEPS.Plant.BlePhone.2.Zone",
     // Phone NFC tap — separate signal from .Zone so BLE proximity
@@ -369,6 +382,18 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     // HMI reads BacklightIntensity to render the ring opacity.
     "Body.Switches.StartStop.BacklightDutyCycle",
     "Body.Switches.StartStop.BacklightIntensity",
+    // Per-device LastObservedZone — published by the KeySearchArbiter
+    // after each scan that covers the slot (item #14a).  Features
+    // that need realistic per-key positions subscribe here instead
+    // of reading the legacy `.Zone` ground-truth mirror.
+    "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
+    "Body.PEPS.Plant.KeyFob.2.LastObservedZone",
+    "Body.PEPS.Plant.KeyFob.3.LastObservedZone",
+    "Body.PEPS.Plant.KeyFob.4.LastObservedZone",
+    "Body.PEPS.Plant.KeyFob.5.LastObservedZone",
+    "Body.PEPS.Plant.KeyFob.6.LastObservedZone",
+    "Body.PEPS.Plant.BlePhone.1.LastObservedZone",
+    "Body.PEPS.Plant.BlePhone.2.LastObservedZone",
 ];
 
 /// Subset of `OUTPUT_SIGNALS` whose authoritative boot value comes from

@@ -240,14 +240,14 @@ const INIT_STATE={
   'Body.Connectivity.NfcCardPresent':false,
   'Body.Connectivity.NfcPhonePresent':false,
   // PEPS plant model
-  'Body.PEPS.Plant.KeyFob.1.Zone':'OutOfRange','Body.PEPS.Plant.KeyFob.1.ButtonPress':'NONE','Body.PEPS.Plant.KeyFob.1.Paired':true,'Body.PEPS.Plant.KeyFob.1.RssiResponse':'','Body.PEPS.Plant.KeyFob.1.RfMessage':'',
-  'Body.PEPS.Plant.KeyFob.2.Zone':'OutOfRange','Body.PEPS.Plant.KeyFob.2.ButtonPress':'NONE','Body.PEPS.Plant.KeyFob.2.Paired':true,'Body.PEPS.Plant.KeyFob.2.RssiResponse':'','Body.PEPS.Plant.KeyFob.2.RfMessage':'',
-  'Body.PEPS.Plant.KeyFob.3.Zone':'OutOfRange','Body.PEPS.Plant.KeyFob.3.ButtonPress':'NONE','Body.PEPS.Plant.KeyFob.3.Paired':true,'Body.PEPS.Plant.KeyFob.3.RssiResponse':'','Body.PEPS.Plant.KeyFob.3.RfMessage':'',
-  'Body.PEPS.Plant.KeyFob.4.Zone':'OutOfRange','Body.PEPS.Plant.KeyFob.4.ButtonPress':'NONE','Body.PEPS.Plant.KeyFob.4.Paired':true,'Body.PEPS.Plant.KeyFob.4.RssiResponse':'','Body.PEPS.Plant.KeyFob.4.RfMessage':'',
-  'Body.PEPS.Plant.KeyFob.5.Zone':'OutOfRange','Body.PEPS.Plant.KeyFob.5.Paired':false,'Body.PEPS.Plant.KeyFob.5.RssiResponse':'',
-  'Body.PEPS.Plant.KeyFob.6.Zone':'OutOfRange','Body.PEPS.Plant.KeyFob.6.Paired':false,'Body.PEPS.Plant.KeyFob.6.RssiResponse':'',
-  'Body.PEPS.Plant.BlePhone.1.Zone':'OutOfRange','Body.PEPS.Plant.BlePhone.1.RssiResponse':'','Body.PEPS.Plant.BlePhone.1.NfcTap':'NotPresent',
-  'Body.PEPS.Plant.BlePhone.2.Zone':'OutOfRange','Body.PEPS.Plant.BlePhone.2.RssiResponse':'','Body.PEPS.Plant.BlePhone.2.NfcTap':'NotPresent',
+  'Body.PEPS.Plant.KeyFob.1.PlacedZone':'OutOfRange','Body.PEPS.Plant.KeyFob.1.ButtonPress':'NONE','Body.PEPS.Plant.KeyFob.1.Paired':true,'Body.PEPS.Plant.KeyFob.1.RssiResponse':'','Body.PEPS.Plant.KeyFob.1.RfMessage':'',
+  'Body.PEPS.Plant.KeyFob.2.PlacedZone':'OutOfRange','Body.PEPS.Plant.KeyFob.2.ButtonPress':'NONE','Body.PEPS.Plant.KeyFob.2.Paired':true,'Body.PEPS.Plant.KeyFob.2.RssiResponse':'','Body.PEPS.Plant.KeyFob.2.RfMessage':'',
+  'Body.PEPS.Plant.KeyFob.3.PlacedZone':'OutOfRange','Body.PEPS.Plant.KeyFob.3.ButtonPress':'NONE','Body.PEPS.Plant.KeyFob.3.Paired':true,'Body.PEPS.Plant.KeyFob.3.RssiResponse':'','Body.PEPS.Plant.KeyFob.3.RfMessage':'',
+  'Body.PEPS.Plant.KeyFob.4.PlacedZone':'OutOfRange','Body.PEPS.Plant.KeyFob.4.ButtonPress':'NONE','Body.PEPS.Plant.KeyFob.4.Paired':true,'Body.PEPS.Plant.KeyFob.4.RssiResponse':'','Body.PEPS.Plant.KeyFob.4.RfMessage':'',
+  'Body.PEPS.Plant.KeyFob.5.PlacedZone':'OutOfRange','Body.PEPS.Plant.KeyFob.5.Paired':false,'Body.PEPS.Plant.KeyFob.5.RssiResponse':'',
+  'Body.PEPS.Plant.KeyFob.6.PlacedZone':'OutOfRange','Body.PEPS.Plant.KeyFob.6.Paired':false,'Body.PEPS.Plant.KeyFob.6.RssiResponse':'',
+  'Body.PEPS.Plant.BlePhone.1.PlacedZone':'OutOfRange','Body.PEPS.Plant.BlePhone.1.RssiResponse':'','Body.PEPS.Plant.BlePhone.1.NfcTap':'NotPresent',
+  'Body.PEPS.Plant.BlePhone.2.PlacedZone':'OutOfRange','Body.PEPS.Plant.BlePhone.2.RssiResponse':'','Body.PEPS.Plant.BlePhone.2.NfcTap':'NotPresent',
   'Body.PEPS.Plant.NfcCard.1.Position':'NotPresent',
   'Body.PEPS.Plant.NfcCard.2.Position':'NotPresent',
   // ── Doors — HMI-owned inputs only ────────────────────────────────────
@@ -729,13 +729,13 @@ function CombinedView({s,set,cfg,onDeviceSelect}){
   // Build device list
   const allDevices=[];
   for(let i=1;i<=6;i++){
-    allDevices.push({key:`Body.PEPS.Plant.KeyFob.${i}.Zone`,type:'fob',label:`F${i}`,
-      zone:s[`Body.PEPS.Plant.KeyFob.${i}.Zone`]||'OutOfRange',
+    allDevices.push({key:`Body.PEPS.Plant.KeyFob.${i}.PlacedZone`,type:'fob',label:`F${i}`,
+      zone:s[`Body.PEPS.Plant.KeyFob.${i}.PlacedZone`]||'OutOfRange',
       paired:i<=4,color:i<=4?'#F59E0B':'#F04040'});
   }
   for(let i=1;i<=2;i++){
-    allDevices.push({key:`Body.PEPS.Plant.BlePhone.${i}.Zone`,type:'phone',label:`P${i}`,
-      zone:s[`Body.PEPS.Plant.BlePhone.${i}.Zone`]||'OutOfRange',paired:true,color:'#4A9EF5'});
+    allDevices.push({key:`Body.PEPS.Plant.BlePhone.${i}.PlacedZone`,type:'phone',label:`P${i}`,
+      zone:s[`Body.PEPS.Plant.BlePhone.${i}.PlacedZone`]||'OutOfRange',paired:true,color:'#4A9EF5'});
   }
   for(let i=1;i<=2;i++){
     const pos=s[`Body.PEPS.Plant.NfcCard.${i}.Position`]||'NotPresent';
@@ -868,8 +868,8 @@ function CombinedView({s,set,cfg,onDeviceSelect}){
   const trunkBtnLockStatus = s['Cabin.LockStatus'] ?? '';
   const trunkBtnValet      = !!s['Cabin.ValetMode.IsActive'];
   const trunkBtnFobInZone  =
-    [1,2,3,4,5,6].some(i => s[`Body.PEPS.Plant.KeyFob.${i}.Zone`] === 'Trunk') ||
-    [1,2].some(i => s[`Body.PEPS.Plant.BlePhone.${i}.Zone`] === 'Trunk');
+    [1,2,3,4,5,6].some(i => s[`Body.PEPS.Plant.KeyFob.${i}.PlacedZone`] === 'Trunk') ||
+    [1,2].some(i => s[`Body.PEPS.Plant.BlePhone.${i}.PlacedZone`] === 'Trunk');
   const trunkBtnUnlocked   =
     trunkBtnLockStatus === 'UNLOCKED' || trunkBtnLockStatus === 'DRIVER_UNLOCKED';
   const trunkBtnLocked     =
@@ -2797,12 +2797,24 @@ function CockpitView({s,set,cfg}){
                 sz={14} pad={'10px 18px'} min={50}>{lab}</Btn>
             </span>;
           })}
-          {shiftLock && <div style={{fontFamily:'Share Tech Mono',fontSize:9,
-            color:'#F59E0B',fontWeight:700,padding:'4px 8px',borderRadius:3,
-            border:'1px solid #F59E0B',background:'rgba(245,158,11,0.08)',
-            letterSpacing:0.5,marginLeft:6}}>
-            🔒 SHIFT-LOCK · press brake + ignition ON
-          </div>}
+          {shiftLock && (()=>{
+            // Two distinct reasons the lock is engaged:
+            //   - Ignition OFF / ACC → driver needs to start the car
+            //     first (brake + Start button on PEPS, or brake +
+            //     rotate to ON on KeyCylinder).
+            //   - Ignition ON but brake released → just press the
+            //     brake to shift out.
+            const power = s['Vehicle.LowVoltageSystemState'] || 'OFF';
+            const live  = power === 'ON' || power === 'START';
+            const hint  = live ? 'press brake to shift out of P'
+                               : 'press Start button with brake';
+            return <div style={{fontFamily:'Share Tech Mono',fontSize:9,
+              color:'#F59E0B',fontWeight:700,padding:'4px 8px',borderRadius:3,
+              border:'1px solid #F59E0B',background:'rgba(245,158,11,0.08)',
+              letterSpacing:0.5,marginLeft:6}}>
+              🔒 SHIFT-LOCK · {hint}
+            </div>;
+          })()}
           <span style={{flex:1}}/>
           {/* Driver-intent readout — mirrors the highlighted button.
               The cluster PRND under the speedometer is the authoritative
@@ -3118,7 +3130,7 @@ const INTERIOR_ZONES=new Set(['Hood','Trunk','TrunkInside','LeftFront','RightFro
    not a mechanical insertion. */
 function fobOccupyingCylinder(s){
   for(let i=1;i<=6;i++){
-    if(s[`Body.PEPS.Plant.KeyFob.${i}.Zone`]==='KeyCylinder') return i;
+    if(s[`Body.PEPS.Plant.KeyFob.${i}.PlacedZone`]==='KeyCylinder') return i;
   }
   return 0;
 }
@@ -3290,7 +3302,7 @@ function DevicePanel({s, set, cfg, sel, setSel}){
           BLE-proximity testing. */}
       {dev.type==='phone' && (()=>{
         const tapPath = `${dev.pfx}.NfcTap`;
-        const zonePath = `${dev.pfx}.Zone`;
+        const zonePath = `${dev.pfx}.PlacedZone`;
         const tap = s[tapPath] || 'NotPresent';
         const NFC_TAP_BTNS=[
           {z:'NotPresent',  label:'NOT\nPRESENT',  c:'#2E3E55', momentary:false},
@@ -3412,7 +3424,7 @@ function DevicePanel({s, set, cfg, sel, setSel}){
                         color:isActive?'#0a0f18':'',
                         opacity:blocked?0.35:1,
                         cursor:blocked?'not-allowed':'pointer'}}
-                onClick={()=>{ if(!blocked) set(`${dev.pfx}.Zone`,z); }}>
+                onClick={()=>{ if(!blocked) set(`${dev.pfx}.PlacedZone`,z); }}>
                 {label}
               </button>;
             })}
@@ -3668,7 +3680,7 @@ function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
         <div className="peps-section" style={{padding:'0 0 4px',fontFamily:'var(--fm)',fontSize:'9px',color:'var(--dim)'}}>KEY FOBS — button press + zone</div>
         {[1,2,3,4].map(i=>{
           const pfx=`Body.PEPS.Plant.KeyFob.${i}`;
-          const zone=s[`${pfx}.Zone`]||'OutOfRange';
+          const zone=s[`${pfx}.PlacedZone`]||'OutOfRange';
           const rssi=s[`${pfx}.RssiResponse`]||'';
           return <div key={i} className="peps-card">
             <div className="peps-title">FOB {i} <span className="peps-badge paired">PAIRED</span>
@@ -3698,7 +3710,7 @@ function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
                   title={stuck?'Key locked in cylinder — rotate to OFF or LOCK to remove'
                          : cylBlocked?`Cylinder occupied by Fob ${cylOccupant}`
                          : undefined}
-                  onChange={e=>set(`${pfx}.Zone`, e.target.value)}>
+                  onChange={e=>set(`${pfx}.PlacedZone`, e.target.value)}>
                   {opts.map(z=><option key={z} value={z}>{z}</option>)}
                 </select>
               </div>;
@@ -3712,7 +3724,7 @@ function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
         })}
         {[5,6].map(i=>{
           const pfx=`Body.PEPS.Plant.KeyFob.${i}`;
-          const zone=s[`${pfx}.Zone`]||'OutOfRange';
+          const zone=s[`${pfx}.PlacedZone`]||'OutOfRange';
           // Fob 5: mechanically-compatible key blank — fits the
           //   cylinder but fails the immobilizer challenge, so the
           //   cylinder rotates without authorising a state change.
@@ -3744,7 +3756,7 @@ function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
                   title={stuck?'Key locked in cylinder — rotate to OFF or LOCK to remove'
                          : cylBlocked?`Cylinder occupied by Fob ${cylOccupant}`
                          : undefined}
-                  onChange={e=>set(`${pfx}.Zone`, e.target.value)}>
+                  onChange={e=>set(`${pfx}.PlacedZone`, e.target.value)}>
                   {opts.map(z=><option key={z} value={z}>{z}</option>)}
                 </select>
               </div>;
@@ -4594,7 +4606,7 @@ function App(){
             {label:'HVAC',   active:s['Cabin.HVAC.IsAirConditioningActive'],c:'var(--teal)'},
             {label:'HORN',   active:s['Body.Horn.IsActive'],c:'var(--red)',horn:true},
             {label:'CHIME',  active:s['Body.Chime.IsSounding'],c:'var(--amber)',chime:true},
-            {label:'PEPS',   active:[1,2,3,4,5,6].some(i=>s[`Body.PEPS.Plant.KeyFob.${i}.Zone`]&&s[`Body.PEPS.Plant.KeyFob.${i}.Zone`]!=='OutOfRange')||[1,2].some(i=>s[`Body.PEPS.Plant.BlePhone.${i}.Zone`]&&s[`Body.PEPS.Plant.BlePhone.${i}.Zone`]!=='OutOfRange'),c:'var(--teal)'},
+            {label:'PEPS',   active:[1,2,3,4,5,6].some(i=>s[`Body.PEPS.Plant.KeyFob.${i}.PlacedZone`]&&s[`Body.PEPS.Plant.KeyFob.${i}.PlacedZone`]!=='OutOfRange')||[1,2].some(i=>s[`Body.PEPS.Plant.BlePhone.${i}.PlacedZone`]&&s[`Body.PEPS.Plant.BlePhone.${i}.PlacedZone`]!=='OutOfRange'),c:'var(--teal)'},
           ].map(({label,active,c,horn,chime})=>(
             <div key={label} className="sti">
               {horn ? (

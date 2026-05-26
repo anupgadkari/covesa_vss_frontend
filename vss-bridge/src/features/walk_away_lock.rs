@@ -31,16 +31,24 @@ use crate::arbiter::{DoorLockArbiter, DoorLockRequest, LockCommand, FEEDBACK_REQ
 use crate::ipc_message::{FeatureId, SignalValue};
 use crate::signal_bus::SignalBus;
 
+// Walk-away tracks per-device LastObservedZone (item #14a of the
+// post-PEPS backlog) instead of the legacy `.Zone` ground-truth
+// mirror.  The KeySearchArbiter publishes LastObservedZone after
+// each periodic approach poll: positive values for fobs found in
+// coverage, OutOfRange for fobs that have left coverage since the
+// previous scan.  Walk-away therefore experiences the same
+// partial-information world a real PEPS feature does — it can only
+// react to what the antennas actually saw, not to HMI ground truth.
 const FOB_ZONE_SIGNALS: [&str; 4] = [
-    "Body.PEPS.Plant.KeyFob.1.Zone",
-    "Body.PEPS.Plant.KeyFob.2.Zone",
-    "Body.PEPS.Plant.KeyFob.3.Zone",
-    "Body.PEPS.Plant.KeyFob.4.Zone",
+    "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
+    "Body.PEPS.Plant.KeyFob.2.LastObservedZone",
+    "Body.PEPS.Plant.KeyFob.3.LastObservedZone",
+    "Body.PEPS.Plant.KeyFob.4.LastObservedZone",
 ];
 
 const PHONE_ZONE_SIGNALS: [&str; 2] = [
-    "Body.PEPS.Plant.BlePhone.1.Zone",
-    "Body.PEPS.Plant.BlePhone.2.Zone",
+    "Body.PEPS.Plant.BlePhone.1.LastObservedZone",
+    "Body.PEPS.Plant.BlePhone.2.LastObservedZone",
 ];
 
 const NUM_FOBS: usize = 4;
@@ -269,6 +277,63 @@ mod tests {
             h.iter().any(|(s, v)| *s == "Body.Doors.CentralLock.Command"
                 && *v == SignalValue::String("lock_all".into())),
             "only armed device leaving should trigger lock, history: {:?}",
+            h
+        );
+    }
+
+    #[tokio::test]
+    async fn arbiter_drives_walk_away_end_to_end() {
+        // End-to-end proof that the new signal chain works:
+        //   HMI PlacedZone → KeySearchArbiter approach poll →
+        //   LastObservedZone publish → WalkAwayLock → LockAll.
+        //
+        // Spawn the arbiter (with a brisk test cadence) alongside
+        // walk-away.  Place fob 1 in the Approach zone via
+        // PlacedZone, wait for a poll cycle, then move it
+        // OutOfRange and verify walk-away dispatches LockAll.
+        use crate::features::key_search_arbiter::KeySearchArbiter;
+        use std::time::Duration;
+
+        let bus = Arc::new(MockBus::new());
+        let (arb, _ack_tx, loop_fut) = door_lock_arbiter(Arc::clone(&bus));
+        tokio::spawn(loop_fut);
+        let arb = Arc::new(arb);
+
+        let (ksa, _handle, rx) = KeySearchArbiter::new_with_rx(Arc::clone(&bus));
+        tokio::spawn(
+            ksa.with_cadence(Duration::from_millis(20), Duration::from_millis(40))
+                .run(rx),
+        );
+
+        tokio::spawn(WalkAwayLock::new(Arc::clone(&bus), arb).run());
+        tokio::task::yield_now().await;
+
+        // Place fob 1 in approach (via PlacedZone — the HMI's write
+        // target).  The arbiter's PlacedZone subscription updates
+        // its cache; the next poll publishes LastObservedZone=Approach;
+        // walk-away arms.
+        bus.inject(
+            "Body.PEPS.Plant.KeyFob.1.PlacedZone",
+            SignalValue::String("Approach".into()),
+        );
+        sleep(Duration::from_millis(80)).await; // let a couple of polls run
+        bus.clear_history();
+
+        // Move fob OutOfRange.  Next poll: arbiter's diff detects
+        // "fob was in approach coverage, not found now" and publishes
+        // LastObservedZone=OutOfRange.  Walk-away sees the transition
+        // and fires.
+        bus.inject(
+            "Body.PEPS.Plant.KeyFob.1.PlacedZone",
+            SignalValue::String("OutOfRange".into()),
+        );
+        sleep(Duration::from_millis(100)).await;
+
+        let h = bus.history();
+        assert!(
+            h.iter().any(|(s, v)| *s == "Body.Doors.CentralLock.Command"
+                && *v == SignalValue::String("lock_all".into())),
+            "expected lock_all command from end-to-end arbiter→walk-away chain, history: {:?}",
             h
         );
     }
