@@ -67,7 +67,7 @@ use std::sync::Arc;
 use futures::StreamExt;
 use tokio::select;
 
-use crate::arbiter::{DoorLockArbiter, DoorLockRequest, LockCommand};
+use crate::arbiter::{DoorLockArbiter, DoorLockRequest, LockCommand, FEEDBACK_REQUEST};
 use crate::config::{KeySource, PlatformConfig};
 use crate::features::key_search_arbiter::{
     AntennaSet, Coalescing, KeySearchArbiterHandle, SearchMode,
@@ -241,6 +241,18 @@ impl<B: SignalBus + Send + Sync + 'static> SmartUnlock<B> {
                             "SmartUnlock: paired key detected in cabin with no key \
                              outside — dispatching UnlockAll"
                         );
+                        // Audible "lock didn't take" cue.  Published
+                        // BEFORE the UnlockAll dispatch so the honk
+                        // overlaps the still-fading lock chirp/flash
+                        // from the user's original lock action,
+                        // making the "lock got undone" beat clear.
+                        let _ = self
+                            .bus
+                            .publish(
+                                FEEDBACK_REQUEST,
+                                SignalValue::String("mislock".into()),
+                            )
+                            .await;
                         if let Err(e) = self
                             .arbiter
                             .request(DoorLockRequest {
@@ -251,6 +263,17 @@ impl<B: SignalBus + Send + Sync + 'static> SmartUnlock<B> {
                         {
                             tracing::error!(error = %e, "SmartUnlock: arbiter request failed");
                         }
+                        // Visual confirmation: 2-flash unlock pattern
+                        // tells the user the car is now unlocked,
+                        // matching the cue any other UnlockAll
+                        // requestor (RKE, PEPS) produces.
+                        let _ = self
+                            .bus
+                            .publish(
+                                FEEDBACK_REQUEST,
+                                SignalValue::String("unlock".into()),
+                            )
+                            .await;
                     } else {
                         tracing::debug!(
                             key_in_cabin,
@@ -399,6 +422,36 @@ mod tests {
             unlock_all_dispatched(&bus),
             "expected SmartUnlock to dispatch UnlockAll; history: {:?}",
             bus.history()
+        );
+    }
+
+    /// SmartUnlock's auto-undo must publish "mislock" + "unlock"
+    /// feedback so the user gets an audible "lock didn't take" honk
+    /// plus the visual 2-flash unlock confirmation.
+    #[tokio::test]
+    async fn auto_unlock_publishes_mislock_and_unlock_feedback() {
+        let (bus, _arb) = setup().await;
+        place(&bus, 1, Zone::Cabin);
+        bus.inject(IGNITION_STATE, SignalValue::String("OFF".into()));
+        settle().await;
+
+        fire_lock_event(&bus, "LOCKED", "PhoneApp", 1);
+        wait_for_scan().await;
+
+        let history = bus.history();
+        assert!(
+            history.iter().any(|(s, v)| {
+                *s == FEEDBACK_REQUEST && *v == SignalValue::String("mislock".into())
+            }),
+            "expected mislock feedback; history: {:?}",
+            history
+        );
+        assert!(
+            history.iter().any(|(s, v)| {
+                *s == FEEDBACK_REQUEST && *v == SignalValue::String("unlock".into())
+            }),
+            "expected unlock feedback (visual confirmation); history: {:?}",
+            history
         );
     }
 

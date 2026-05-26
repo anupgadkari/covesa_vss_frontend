@@ -308,6 +308,19 @@ impl<B: SignalBus + Send + Sync + 'static> WalkAwayLock<B> {
                             "WalkAwayLock: paired key still in cabin / trunk-inside — \
                              holding off LockAll to prevent locking driver out"
                         );
+                        // Audible "your auto-lock didn't take — you
+                        // left a key inside" cue.  Fires on every
+                        // hold-off evaluation, not once-per-armed-cycle,
+                        // so a driver pacing near the car keeps getting
+                        // the reminder until they recover the fob or
+                        // step out of approach for good.
+                        let _ = self
+                            .bus
+                            .publish(
+                                FEEDBACK_REQUEST,
+                                SignalValue::String("mislock".into()),
+                            )
+                            .await;
                         // Leave `was_armed` set so the next zone event
                         // can re-evaluate (e.g. the interior fob gets
                         // picked up and walks out of approach).
@@ -560,6 +573,42 @@ mod tests {
                 .any(|(s, v)| *s == "Body.Doors.CentralLock.Command"
                     && *v == SignalValue::String("lock_all".into())),
             "interior paired key must block WAL; history: {:?}",
+            h
+        );
+    }
+
+    #[tokio::test]
+    async fn interior_key_holdoff_publishes_mislock_feedback() {
+        // The hold-off should fire a "mislock" FEEDBACK_REQUEST so
+        // LockFeedback honks the user: "your auto-lock didn't take,
+        // you left a key inside."
+        let (bus, _h) = setup().await;
+
+        bus.inject(
+            "Body.PEPS.Plant.KeyFob.1.Paired",
+            SignalValue::Bool(true),
+        );
+        bus.inject(
+            "Body.PEPS.Plant.KeyFob.1.PlacedZone",
+            SignalValue::String("Cabin".into()),
+        );
+
+        bus.inject(FOB_ZONE_SIGNALS[1], SignalValue::String("Approach".into()));
+        tokio::task::yield_now().await;
+        bus.clear_history();
+
+        bus.inject(
+            FOB_ZONE_SIGNALS[1],
+            SignalValue::String("OutOfRange".into()),
+        );
+        wait_for_interior_scan().await;
+
+        let h = bus.history();
+        assert!(
+            h.iter().any(|(s, v)| {
+                *s == FEEDBACK_REQUEST && *v == SignalValue::String("mislock".into())
+            }),
+            "expected mislock feedback from interior-key hold-off; history: {:?}",
             h
         );
     }

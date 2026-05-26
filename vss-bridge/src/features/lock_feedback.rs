@@ -14,12 +14,32 @@
 //! | `"lock"`         | 1 flash unit                           |
 //! | `"unlock"`       | flash unit · 300 ms gap · flash unit  |
 //! | `"trunk_unlock"` | Same as unlock + arm trunk-close latch |
+//! | `"mislock"`      | 350 ms `Body.Horn.IsActive` pulse — no flash |
 //!
 //! # Preemption
 //!
-//! If a new `FeedbackRequest` arrives while a pattern is playing, the current
-//! task is aborted, the arbiter claims are released, and the new pattern starts
-//! immediately from the beginning.
+//! If a new `FeedbackRequest` arrives while a flash pattern is playing,
+//! the current task is aborted, the arbiter claims are released, and
+//! the new pattern starts immediately from the beginning.
+//!
+//! `"mislock"` is the exception — it fires its horn pulse alongside any
+//! in-flight flash without preempting it.  Slam-lock's inversion flow
+//! publishes both `"mislock"` (honk) and `"unlock"` (2-flash) in quick
+//! succession; SmartUnlock's lockout-prevention undo does the same.
+//! The audibly-distinct long honk is the user-facing cue that the lock
+//! didn't take, regardless of what the indicators are doing.
+//!
+//! # When `"mislock"` is published
+//!
+//! - `slam_lock.rs` — the EU slam-lock-protect inversion path (trim
+//!   button + door ajar) used to publish `Body.Horn.IsActive` directly;
+//!   now routes through `"mislock"` so all user-facing feedback is
+//!   centralised here.
+//! - `smart_unlock.rs` — fires before dispatching the lockout-recovery
+//!   `UnlockAll` so the user hears that their lock attempt was undone.
+//! - `walk_away_lock.rs` — fires every time the interior-key guard
+//!   holds off the auto-lock.  Lets the user know they walked away
+//!   with a paired key still in the cabin / trunk.
 //!
 //! # Trunk-close lock feedback
 //!
@@ -45,6 +65,13 @@ const LEFT_SIG: VssPath = "Body.Lights.DirectionIndicator.Left.IsSignaling";
 const RIGHT_SIG: VssPath = "Body.Lights.DirectionIndicator.Right.IsSignaling";
 const TRUNK_OPEN_SIG: VssPath = "Body.Trunk.IsOpen";
 const CHIME: VssPath = "Body.Chime.IsActive";
+const HORN: VssPath = "Body.Horn.IsActive";
+
+/// Mislock honk duration — matches the pattern previously hard-coded
+/// in `slam_lock.rs` (deliberately longer than the lock-confirm
+/// chirp so the user can distinguish "lock didn't take" from
+/// "lock confirmed").
+const MISLOCK_HONK_MS: u64 = 350;
 
 /// Duration of the audible chime pulse on a successful lock when
 /// `dealer.horn_chirp_on_lock` is enabled (ms).  Brief — matches the
@@ -155,6 +182,31 @@ impl<B: SignalBus + Send + Sync + 'static> LockFeedback<B> {
                             "trunk_unlock" => {
                                 trunk_opened_externally = true;
                                 "unlock"
+                            }
+                            "mislock" => {
+                                // Audible-only "this lock didn't take" cue.
+                                // Spawn the honk task — it runs in parallel
+                                // with whatever flash pattern is active and
+                                // does NOT preempt it.  The next "lock" or
+                                // "unlock" feedback published alongside the
+                                // mislock (e.g. SmartUnlock's UnlockAll, or
+                                // SlamLock's inversion) drives the visual.
+                                //
+                                // Single-writer caveat on `Body.Horn.IsActive`
+                                // matches what slam_lock.rs used to do —
+                                // PerimeterAlarm / PanicAlarm are mutually
+                                // exclusive with lock-feedback flows in
+                                // practice.  If a third concurrent writer
+                                // ever appears, route this through the horn
+                                // arbiter at a low/medium priority.
+                                tracing::info!("LockFeedback: mislock honk");
+                                let bus = Arc::clone(&self.bus);
+                                tokio::spawn(async move {
+                                    let _ = bus.publish(HORN, SignalValue::Bool(true)).await;
+                                    sleep(Duration::from_millis(MISLOCK_HONK_MS)).await;
+                                    let _ = bus.publish(HORN, SignalValue::Bool(false)).await;
+                                });
+                                continue;
                             }
                             other => {
                                 tracing::warn!(value = other, "LockFeedback: unknown FeedbackRequest — ignored");
@@ -377,6 +429,85 @@ mod tests {
     async fn send_feedback(bus: &MockBus, kind: &str) {
         bus.inject(FEEDBACK_REQUEST, SignalValue::String(kind.into()));
         drain().await;
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn mislock_kind_fires_horn_pulse_and_releases() {
+        // "mislock" should pulse Body.Horn.IsActive=true for
+        // MISLOCK_HONK_MS then back to false.  No flash, no chime —
+        // the audio is the entire cue.
+        let (bus, arb) = setup().await;
+        let feature = LockFeedback::new(Arc::clone(&bus), Arc::clone(&arb));
+        tokio::spawn(feature.run());
+        drain().await;
+        bus.clear_history();
+
+        send_feedback(&bus, "mislock").await;
+
+        // Horn-ON edge happens immediately when the spawned task runs.
+        let h = bus.history();
+        assert!(
+            h.iter()
+                .any(|(s, v)| *s == HORN && *v == SignalValue::Bool(true)),
+            "expected horn ON immediately after mislock: {:?}",
+            h
+        );
+        // Horn-OFF edge requires the MISLOCK_HONK_MS sleep to elapse.
+        advance(Duration::from_millis(MISLOCK_HONK_MS + 1)).await;
+        drain().await;
+        let h = bus.history();
+        assert!(
+            h.iter()
+                .any(|(s, v)| *s == HORN && *v == SignalValue::Bool(false)),
+            "expected horn OFF after MISLOCK_HONK_MS: {:?}",
+            h
+        );
+
+        // And no flash claims should have been published.
+        assert!(
+            !h.iter().any(|(s, _)| *s == LEFT_SIG || *s == RIGHT_SIG),
+            "mislock must not drive the indicators: {:?}",
+            h
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn mislock_does_not_preempt_existing_flash() {
+        // A "lock" pattern is running; a "mislock" arriving alongside
+        // must NOT cancel the flash — the user gets the visual lock
+        // cue and the audio mislock cue in parallel.
+        let (bus, arb) = setup().await;
+        let feature = LockFeedback::new(Arc::clone(&bus), Arc::clone(&arb));
+        tokio::spawn(feature.run());
+        drain().await;
+        bus.clear_history();
+
+        send_feedback(&bus, "lock").await;
+        advance(Duration::from_millis(LEAD_IN_MS + 1)).await;
+        drain().await;
+        // Flash is now mid-ON.  Fire mislock.
+        send_feedback(&bus, "mislock").await;
+        // Honk fires.
+        let h = bus.history();
+        assert!(
+            h.iter()
+                .any(|(s, v)| *s == HORN && *v == SignalValue::Bool(true)),
+            "expected horn ON from mislock during flash"
+        );
+        // The ON-claim release that preempt_and_start would emit
+        // (false → release) must NOT have been published — the flash
+        // is still active.
+        let release_count = h
+            .iter()
+            .filter(|(s, v)| *s == LEFT_SIG && *v == SignalValue::Bool(false))
+            .count();
+        // Exactly one OFF claim from the original lead-in; preemption
+        // would have produced a second one.
+        assert_eq!(
+            release_count, 1,
+            "mislock must not preempt the in-flight flash: {:?}",
+            h
+        );
     }
 
     #[tokio::test(start_paused = true)]
