@@ -26,12 +26,10 @@
 //!    must not contradict an active driver.
 //! 3. `Cabin.LockStatus` ∈ {`LOCKED`, `DOUBLE_LOCKED`} — only a fresh
 //!    lock event matters.
-//! 4. `LastRequestor` is in `EXTERNAL_LOCK_SOURCES` — interior
-//!    `DoorTrimButton` presses are an explicit "lock yourself in"
-//!    action and must not auto-undo.  `AutoLock` is also excluded
-//!    (occupant-driven autolock); `AutoRelock` is excluded (its job
-//!    is to re-secure a vehicle the user already walked away from —
-//!    overriding it would defeat the feature).
+//! 4. `LastRequestor` ∈ {`PhoneApp`, `SlamLock`} — these are the only
+//!    lock paths that don't come with built-in proof of a paired-key
+//!    holder being at the vehicle.  See [`EXTERNAL_LOCK_SOURCES`] for
+//!    the rationale on each excluded requestor.
 //!
 //! If all four hold, run a [`Sequence`] scan covering the cabin and
 //! the on-vehicle approach zones, both [`Authenticated`] (pairing
@@ -83,45 +81,33 @@ const LAST_REQUESTOR: VssPath = "Cabin.LockStatus.LastRequestor";
 const LOCK_EVENT_NUM: VssPath = "Cabin.LockStatus.EventNum";
 const IGNITION_STATE: VssPath = "Vehicle.LowVoltageSystemState";
 
-/// `LastRequestor` strings that count as an "exterior lock source"
-/// for Smart Unlock.  These are the cases where the user is plausibly
-/// outside the vehicle and could have left a paired key behind:
+/// `LastRequestor` strings that should trigger Smart Unlock.
 ///
-/// - `KeyfobRke` / `KeyfobPeps` — physical fob lock press / capacitive
-///   handle touch.
-/// - `PassiveEntry` — handle-touch lock confirmation.
-/// - `ThumbPadLock` — exterior thumb-pad.
-/// - `PhoneApp` / `PhoneBle` — remote / proximity phone lock.
-/// - `NfcCard` / `NfcPhone` — B-pillar tap lock.
-/// - `SlamLock` — slam-lock-with-trim-button → door-close pattern,
-///   user is by definition outside when the door clicks shut.
-/// - `WalkAwayLock` — driver walked away from a still-unlocked
-///   vehicle and the timer secured it; the literal scenario this
-///   feature exists to undo.
+/// The trigger set is deliberately narrow: only the lock paths that
+/// produce **no proof of paired-key presence outside the cabin**.  A
+/// physical fob press (`KeyfobRke`), an LF-authenticated handle touch
+/// (`KeyfobPeps` / `PassiveEntry`), a BLE phone proximity lock
+/// (`PhoneBle`), an NFC tap (`NfcCard` / `NfcPhone`), and a
+/// thumb-pad code entry (`ThumbPadLock`) all confirm a credential
+/// holder is at the vehicle — Smart Unlock must not contradict their
+/// intent.  `WalkAwayLock` is excluded because the WAL feature itself
+/// holds off when any paired fob is detected in the interior (see
+/// `walk_away_lock.rs`), so if WAL fired there is by construction no
+/// paired key in the cabin to recover.
 ///
-/// **Deliberately excluded:**
-/// - `DoorTrimButton` — interior trim press; user explicitly chose to
-///   lock the cabin from the inside.  Not Smart Unlock's job to
-///   second-guess that.
-/// - `AutoLock` — drive-away auto-lock fires with the occupant in the
-///   seat.
-/// - `AutoRelock` — re-secures a vehicle the user walked away from
-///   after an unlock that produced no door open.  Overriding it here
-///   would defeat its purpose.
-/// - `CrashUnlock` / `DoubleLockRelease` — neither produces a LOCK
-///   transition.
-const EXTERNAL_LOCK_SOURCES: &[&str] = &[
-    "KeyfobRke",
-    "KeyfobPeps",
-    "PassiveEntry",
-    "ThumbPadLock",
-    "PhoneApp",
-    "PhoneBle",
-    "NfcCard",
-    "NfcPhone",
-    "SlamLock",
-    "WalkAwayLock",
-];
+/// What's left as a trigger:
+///
+/// - **`PhoneApp`** — remote phone-app lock.  The user could be
+///   miles away from the vehicle.  If a paired fob was left on the
+///   seat, this is exactly the lockout we want to recover.
+/// - **`SlamLock`** — interior trim-button press with a door ajar,
+///   followed by the door slamming shut.  The classic
+///   "kid hit the lock button before getting out of the back seat
+///   and pulled the door behind them" case — no paired key holder is
+///   guaranteed to be present.  (Adult-with-fob slam-lock cases are
+///   filtered out by the `no key in any approach zone` predicate
+///   below.)
+const EXTERNAL_LOCK_SOURCES: &[&str] = &["PhoneApp", "SlamLock"];
 
 const LOCKED_STATES: &[&str] = &["LOCKED", "DOUBLE_LOCKED"];
 
@@ -398,13 +384,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn external_lock_with_key_in_cabin_and_nothing_outside_unlocks() {
+    async fn phoneapp_lock_with_key_in_cabin_and_nothing_outside_unlocks() {
         let (bus, _arb) = setup().await;
         place(&bus, 1, Zone::Cabin);
         bus.inject(IGNITION_STATE, SignalValue::String("OFF".into()));
         settle().await;
 
-        fire_lock_event(&bus, "LOCKED", "KeyfobRke", 1);
+        // Remote phone-app lock — no proof of paired-key holder near
+        // the vehicle, and a paired fob is sitting in the cabin.
+        fire_lock_event(&bus, "LOCKED", "PhoneApp", 1);
         wait_for_scan().await;
 
         assert!(
@@ -415,16 +403,32 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn external_lock_with_key_in_cabin_but_also_outside_stays_locked() {
+    async fn slam_lock_with_key_in_cabin_and_nothing_outside_unlocks() {
         let (bus, _arb) = setup().await;
         place(&bus, 1, Zone::Cabin);
-        // Driver is outside holding their own paired fob — the
-        // "lock and walk away" gesture must be respected.
-        place(&bus, 2, Zone::Approach);
         bus.inject(IGNITION_STATE, SignalValue::String("OFF".into()));
         settle().await;
 
-        fire_lock_event(&bus, "LOCKED", "KeyfobPeps", 1);
+        // Kid hit the trim lock button before getting out and pulled
+        // the door behind them — SlamLock dispatched the LockAll.
+        // No paired-key holder anywhere outside.
+        fire_lock_event(&bus, "LOCKED", "SlamLock", 1);
+        wait_for_scan().await;
+
+        assert!(unlock_all_dispatched(&bus));
+    }
+
+    #[tokio::test]
+    async fn slam_lock_with_adult_outside_stays_locked() {
+        let (bus, _arb) = setup().await;
+        place(&bus, 1, Zone::Cabin);
+        // Adult is still at the driver's door with their own paired
+        // fob — the SlamLock came from them reaching in to lock.
+        place(&bus, 2, Zone::LeftFront);
+        bus.inject(IGNITION_STATE, SignalValue::String("OFF".into()));
+        settle().await;
+
+        fire_lock_event(&bus, "LOCKED", "SlamLock", 1);
         wait_for_scan().await;
 
         assert!(
@@ -434,14 +438,88 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn rke_button_lock_does_not_trigger_even_with_key_in_cabin() {
+        let (bus, _arb) = setup().await;
+        place(&bus, 1, Zone::Cabin);
+        bus.inject(IGNITION_STATE, SignalValue::String("OFF".into()));
+        settle().await;
+
+        // Locker pressed the lock button on their own paired fob —
+        // by definition they have a paired key with them, even though
+        // it's at RF range and won't show in an LF approach scan.
+        fire_lock_event(&bus, "LOCKED", "KeyfobRke", 1);
+        wait_for_scan().await;
+
+        assert!(
+            !unlock_all_dispatched(&bus),
+            "RKE press = proof of paired key; must not auto-unlock"
+        );
+    }
+
+    #[tokio::test]
+    async fn peps_handle_lock_does_not_trigger() {
+        let (bus, _arb) = setup().await;
+        place(&bus, 1, Zone::Cabin);
+        bus.inject(IGNITION_STATE, SignalValue::String("OFF".into()));
+        settle().await;
+
+        // KeyfobPeps requires a paired fob in the handle's LF field
+        // to lock — the locker is authenticated at the door.
+        fire_lock_event(&bus, "LOCKED", "KeyfobPeps", 1);
+        wait_for_scan().await;
+
+        assert!(!unlock_all_dispatched(&bus));
+    }
+
+    #[tokio::test]
+    async fn nfc_lock_does_not_trigger() {
+        let (bus, _arb) = setup().await;
+        place(&bus, 1, Zone::Cabin);
+        bus.inject(IGNITION_STATE, SignalValue::String("OFF".into()));
+        settle().await;
+
+        fire_lock_event(&bus, "LOCKED", "NfcCard", 1);
+        wait_for_scan().await;
+
+        assert!(!unlock_all_dispatched(&bus));
+    }
+
+    #[tokio::test]
+    async fn thumbpad_lock_does_not_trigger() {
+        let (bus, _arb) = setup().await;
+        place(&bus, 1, Zone::Cabin);
+        bus.inject(IGNITION_STATE, SignalValue::String("OFF".into()));
+        settle().await;
+
+        fire_lock_event(&bus, "LOCKED", "ThumbPadLock", 1);
+        wait_for_scan().await;
+
+        assert!(!unlock_all_dispatched(&bus));
+    }
+
+    #[tokio::test]
+    async fn walkaway_lock_does_not_trigger() {
+        let (bus, _arb) = setup().await;
+        place(&bus, 1, Zone::Cabin);
+        bus.inject(IGNITION_STATE, SignalValue::String("OFF".into()));
+        settle().await;
+
+        // WAL has its own interior-key guard now — if it fired, there
+        // is no paired key in the cabin anyway.  Smart Unlock still
+        // explicitly ignores it as a belt-and-suspenders.
+        fire_lock_event(&bus, "LOCKED", "WalkAwayLock", 1);
+        wait_for_scan().await;
+
+        assert!(!unlock_all_dispatched(&bus));
+    }
+
+    #[tokio::test]
     async fn interior_trim_lock_is_ignored() {
         let (bus, _arb) = setup().await;
         place(&bus, 1, Zone::Cabin);
         bus.inject(IGNITION_STATE, SignalValue::String("OFF".into()));
         settle().await;
 
-        // DoorTrimButton is interior — an occupant chose to lock the
-        // cabin from inside.  Smart Unlock must not override that.
         fire_lock_event(&bus, "LOCKED", "DoorTrimButton", 1);
         wait_for_scan().await;
 
@@ -455,9 +533,6 @@ mod tests {
         bus.inject(IGNITION_STATE, SignalValue::String("OFF".into()));
         settle().await;
 
-        // AutoRelock's whole point is to re-secure a vehicle the user
-        // walked away from.  Cancelling it here would defeat the
-        // feature.
         fire_lock_event(&bus, "LOCKED", "AutoRelock", 1);
         wait_for_scan().await;
 
@@ -471,13 +546,10 @@ mod tests {
         bus.inject(IGNITION_STATE, SignalValue::String("ON".into()));
         settle().await;
 
-        fire_lock_event(&bus, "LOCKED", "KeyfobRke", 1);
+        fire_lock_event(&bus, "LOCKED", "PhoneApp", 1);
         wait_for_scan().await;
 
-        assert!(
-            !unlock_all_dispatched(&bus),
-            "must not act while ignition is live"
-        );
+        assert!(!unlock_all_dispatched(&bus));
     }
 
     #[tokio::test]
@@ -486,7 +558,7 @@ mod tests {
         bus.inject(IGNITION_STATE, SignalValue::String("OFF".into()));
         settle().await;
 
-        fire_lock_event(&bus, "LOCKED", "KeyfobRke", 1);
+        fire_lock_event(&bus, "LOCKED", "PhoneApp", 1);
         wait_for_scan().await;
 
         assert!(!unlock_all_dispatched(&bus));
@@ -514,7 +586,7 @@ mod tests {
         bus.inject(IGNITION_STATE, SignalValue::String("OFF".into()));
         settle().await;
 
-        fire_lock_event(&bus, "LOCKED", "KeyfobRke", 1);
+        fire_lock_event(&bus, "LOCKED", "PhoneApp", 1);
         wait_for_scan().await;
 
         assert!(!unlock_all_dispatched(&bus));
@@ -527,7 +599,7 @@ mod tests {
         bus.inject(IGNITION_STATE, SignalValue::String("OFF".into()));
         settle().await;
 
-        fire_lock_event(&bus, "LOCKED", "KeyfobRke", 1);
+        fire_lock_event(&bus, "LOCKED", "PhoneApp", 1);
         wait_for_scan().await;
 
         assert!(!unlock_all_dispatched(&bus));

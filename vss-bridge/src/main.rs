@@ -335,7 +335,24 @@ async fn boot_simulation_stack(
             .run(),
     );
     set.spawn(DoubleLockRelease::new(Arc::clone(&bus), Arc::clone(&door_lock_arb)).run());
-    set.spawn(WalkAwayLock::new(Arc::clone(&bus), Arc::clone(&door_lock_arb)).run());
+
+    // KeySearch arbiter — owns LF airtime for PEPS searches and runs
+    // the adaptive approach-poll loop.  Constructed before its
+    // consumers so we can hand each one a `KeySearchArbiterHandle`
+    // clone.  The run loop is spawned later (below) alongside the
+    // other arbiter-driven features; only the handle is needed at
+    // this point.
+    let (key_search_arb, key_search_handle, key_search_rx) =
+        KeySearchArbiter::new_with_rx(Arc::clone(&bus));
+
+    set.spawn(
+        WalkAwayLock::new(
+            Arc::clone(&bus),
+            Arc::clone(&door_lock_arb),
+            key_search_handle.clone(),
+        )
+        .run(),
+    );
     set.spawn(ThumbPadLock::new(Arc::clone(&bus), Arc::clone(&door_lock_arb)).run());
     // Interior trim Lock / Unlock buttons on Row 1 doors.  No auth —
     // occupant-operated; unlock works even with the alarm armed (egress
@@ -494,14 +511,9 @@ async fn boot_simulation_stack(
     set.spawn(ManualHorn::new(Arc::clone(&bus), Arc::clone(&horn_arb)).run());
     set.spawn(CabinTrunkRelease::new(Arc::clone(&bus), Arc::clone(&trunk_arb)).run());
 
-    // KeySearch arbiter — owns LF airtime for PEPS searches and runs
-    // the adaptive approach-poll loop.  Constructed before its
-    // consumers so we can hand each one a `KeySearchArbiterHandle`
-    // clone.  Today: `VehicleStartingControl` (PR #27) and
-    // `ExteriorTrunkButton` (item 13).  Future phases migrate the
-    // remaining legacy passive-entry paths onto it.
-    let (key_search_arb, key_search_handle, key_search_rx) =
-        KeySearchArbiter::new_with_rx(Arc::clone(&bus));
+    // KeySearch arbiter run loop — handle was created earlier
+    // (above the WalkAwayLock spawn) so every consumer below has a
+    // clone to submit against.
     set.spawn(key_search_arb.run(key_search_rx));
 
     set.spawn(

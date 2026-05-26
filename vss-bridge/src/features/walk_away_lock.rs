@@ -17,6 +17,14 @@
 //! It fires when every *currently-armed* device is back outside the approach zone.
 //! After firing, the armed set is cleared and the feature waits for the next entry.
 //!
+//! # Interior-key guard
+//! Before dispatching the `LockAll`, WAL submits a `Cabin + TrunkInside`
+//! authenticated key-search.  If any paired fob is still inside the
+//! vehicle, the lock is held off — locking would leave the only
+//! paired key sealed inside, which is exactly the lockout this
+//! feature must not cause.  The armed set is preserved across the
+//! hold-off so the next zone event can re-evaluate.
+//!
 //! # Scope
 //! Tracks 4 keyfobs and 2 BLE phones (the full device set in the simulation).
 //! Walk-away lock does NOT apply to NFC cards (held at the handle — users are
@@ -28,7 +36,11 @@ use futures::StreamExt;
 use tokio::select;
 
 use crate::arbiter::{DoorLockArbiter, DoorLockRequest, LockCommand, FEEDBACK_REQUEST};
+use crate::features::key_search_arbiter::{
+    AntennaSet, Coalescing, KeySearchArbiterHandle, SearchMode,
+};
 use crate::ipc_message::{FeatureId, SignalValue};
+use crate::plant_models::peps::zone::Zone;
 use crate::signal_bus::SignalBus;
 
 // Walk-away tracks per-device LastObservedZone (item #14a of the
@@ -77,11 +89,20 @@ fn zone_is_outside_approach(val: &SignalValue) -> bool {
 pub struct WalkAwayLock<B: SignalBus> {
     bus: Arc<B>,
     arbiter: Arc<DoorLockArbiter>,
+    key_search: KeySearchArbiterHandle,
 }
 
 impl<B: SignalBus + Send + Sync + 'static> WalkAwayLock<B> {
-    pub fn new(bus: Arc<B>, arbiter: Arc<DoorLockArbiter>) -> Self {
-        Self { bus, arbiter }
+    pub fn new(
+        bus: Arc<B>,
+        arbiter: Arc<DoorLockArbiter>,
+        key_search: KeySearchArbiterHandle,
+    ) -> Self {
+        Self {
+            bus,
+            arbiter,
+            key_search,
+        }
     }
 
     pub async fn run(self) {
@@ -145,27 +166,69 @@ impl<B: SignalBus + Send + Sync + 'static> WalkAwayLock<B> {
                 if any_armed && all_armed_outside {
                     tracing::info!(
                         device = device_idx,
-                        "WalkAwayLock: all armed devices left approach — locking"
+                        "WalkAwayLock: all armed devices left approach — running interior key check"
                     );
 
-                    // Fire lock + feedback
-                    if let Err(e) = self
-                        .arbiter
-                        .request(DoorLockRequest {
-                            command: LockCommand::LockAll,
-                            feature_id: FeatureId::WalkAwayLock,
-                        })
-                        .await
-                    {
-                        tracing::error!(error = %e, "WalkAwayLock: arbiter error");
-                    }
-                    let _ = self
-                        .bus
-                        .publish(FEEDBACK_REQUEST, SignalValue::String("lock".into()))
+                    // Interior-key guard.  All tracked devices are out
+                    // of approach, but that only covers exterior LF
+                    // zones; a paired fob sitting on the cabin seat or
+                    // in the trunk-inside cargo bay never enters/leaves
+                    // approach via the periodic poll, so the FSM above
+                    // can't see it.  Submit a Cabin + TrunkInside
+                    // authenticated scan and hold off if any paired
+                    // key is still inside.  Without this guard the
+                    // driver could walk away with no fob on them and
+                    // we'd cheerfully lock the only paired key inside.
+                    let interior = self
+                        .key_search
+                        .submit(
+                            "WalkAwayLock",
+                            AntennaSet::Sequence(vec![
+                                (AntennaSet::Cabin, SearchMode::Authenticated),
+                                (AntennaSet::TrunkInside, SearchMode::Authenticated),
+                            ]),
+                            SearchMode::Authenticated,
+                            Coalescing::Disallowed,
+                        )
                         .await;
+                    let interior_key_present = interior
+                        .as_ref()
+                        .map(|r| {
+                            r.keys_found
+                                .iter()
+                                .any(|k| matches!(k.zone, Zone::Cabin | Zone::TrunkInside))
+                        })
+                        .unwrap_or(false);
 
-                    // Reset armed state — wait for next approach entry.
-                    was_armed = [false; NUM_DEVICES];
+                    if interior_key_present {
+                        tracing::warn!(
+                            "WalkAwayLock: paired key still in cabin / trunk-inside — \
+                             holding off LockAll to prevent locking driver out"
+                        );
+                        // Leave `was_armed` set so the next zone event
+                        // can re-evaluate (e.g. the interior fob gets
+                        // picked up and walks out of approach).
+                    } else {
+                        tracing::info!("WalkAwayLock: no interior paired key — locking");
+
+                        if let Err(e) = self
+                            .arbiter
+                            .request(DoorLockRequest {
+                                command: LockCommand::LockAll,
+                                feature_id: FeatureId::WalkAwayLock,
+                            })
+                            .await
+                        {
+                            tracing::error!(error = %e, "WalkAwayLock: arbiter error");
+                        }
+                        let _ = self
+                            .bus
+                            .publish(FEEDBACK_REQUEST, SignalValue::String("lock".into()))
+                            .await;
+
+                        // Reset armed state — wait for next approach entry.
+                        was_armed = [false; NUM_DEVICES];
+                    }
                 }
             }
         }
@@ -181,17 +244,33 @@ mod tests {
     use super::*;
     use crate::adapters::mock::MockBus;
     use crate::arbiter::door_lock_arbiter;
+    use crate::features::key_search_arbiter::KeySearchArbiter;
     use tokio::time::{sleep, Duration};
+
+    /// Wait long enough for the interior-key scan sequence
+    /// (Cabin Auth ~100ms + TrunkInside Auth ~100ms) to complete and
+    /// for the spawned tasks to settle.
+    async fn wait_for_interior_scan() {
+        for _ in 0..32 {
+            tokio::task::yield_now().await;
+        }
+        sleep(Duration::from_millis(300)).await;
+        for _ in 0..32 {
+            tokio::task::yield_now().await;
+        }
+    }
 
     async fn setup() -> (Arc<MockBus>, tokio::task::JoinHandle<()>) {
         let bus = Arc::new(MockBus::new());
         let (arb, _ack_tx, loop_fut) = door_lock_arbiter(Arc::clone(&bus));
         tokio::spawn(loop_fut);
         let arb = Arc::new(arb);
-        let feature = WalkAwayLock::new(Arc::clone(&bus), arb);
-        let handle = tokio::spawn(feature.run());
+        let (ksa, handle, rx) = KeySearchArbiter::new_with_rx(Arc::clone(&bus));
+        tokio::spawn(ksa.run(rx));
+        let feature = WalkAwayLock::new(Arc::clone(&bus), arb, handle);
+        let h = tokio::spawn(feature.run());
         tokio::task::yield_now().await;
-        (bus, handle)
+        (bus, h)
     }
 
     #[tokio::test]
@@ -210,7 +289,7 @@ mod tests {
             SignalValue::String("OutOfRange".into()),
         );
         tokio::task::yield_now().await;
-        sleep(Duration::from_millis(10)).await;
+        wait_for_interior_scan().await;
         tokio::task::yield_now().await;
 
         let h = bus.history();
@@ -245,7 +324,7 @@ mod tests {
             SignalValue::String("OutOfRange".into()),
         );
         tokio::task::yield_now().await;
-        sleep(Duration::from_millis(10)).await;
+        wait_for_interior_scan().await;
         tokio::task::yield_now().await;
 
         let h = bus.history();
@@ -269,7 +348,7 @@ mod tests {
         // Fob 1 leaves — only it was armed, and it's now out
         bus.inject(FOB_ZONE_SIGNALS[0], SignalValue::String("RfRange".into()));
         tokio::task::yield_now().await;
-        sleep(Duration::from_millis(10)).await;
+        wait_for_interior_scan().await;
         tokio::task::yield_now().await;
 
         let h = bus.history();
@@ -299,13 +378,13 @@ mod tests {
         tokio::spawn(loop_fut);
         let arb = Arc::new(arb);
 
-        let (ksa, _handle, rx) = KeySearchArbiter::new_with_rx(Arc::clone(&bus));
+        let (ksa, ksa_handle, rx) = KeySearchArbiter::new_with_rx(Arc::clone(&bus));
         tokio::spawn(
             ksa.with_cadence(Duration::from_millis(20), Duration::from_millis(40))
                 .run(rx),
         );
 
-        tokio::spawn(WalkAwayLock::new(Arc::clone(&bus), arb).run());
+        tokio::spawn(WalkAwayLock::new(Arc::clone(&bus), arb, ksa_handle).run());
         tokio::task::yield_now().await;
 
         // Place fob 1 in approach (via PlacedZone — the HMI's write
@@ -327,13 +406,93 @@ mod tests {
             "Body.PEPS.Plant.KeyFob.1.PlacedZone",
             SignalValue::String("OutOfRange".into()),
         );
-        sleep(Duration::from_millis(100)).await;
+        // Allow time for: the next approach poll to publish OutOfRange,
+        // walk-away to fire the interior scan, and the scan to complete.
+        sleep(Duration::from_millis(400)).await;
 
         let h = bus.history();
         assert!(
             h.iter().any(|(s, v)| *s == "Body.Doors.CentralLock.Command"
                 && *v == SignalValue::String("lock_all".into())),
             "expected lock_all command from end-to-end arbiter→walk-away chain, history: {:?}",
+            h
+        );
+    }
+
+    #[tokio::test]
+    async fn paired_fob_in_cabin_holds_off_lock() {
+        // Driver walks away with no fob; a paired fob is sitting on
+        // the cabin seat.  The exterior FSM is satisfied (no fob in
+        // approach), but the interior scan must catch the cabin fob
+        // and suppress the LockAll.  Without this guard the only
+        // paired key would be sealed inside the locked car.
+        let (bus, _h) = setup().await;
+
+        // Mark the cabin fob as paired so the Authenticated scan
+        // returns it, and place it in Cabin via PlacedZone (the
+        // arbiter's ground truth).
+        bus.inject(
+            "Body.PEPS.Plant.KeyFob.1.Paired",
+            SignalValue::Bool(true),
+        );
+        bus.inject(
+            "Body.PEPS.Plant.KeyFob.1.PlacedZone",
+            SignalValue::String("Cabin".into()),
+        );
+
+        // Driver's fob (slot 2) enters approach then leaves.
+        bus.inject(FOB_ZONE_SIGNALS[1], SignalValue::String("Approach".into()));
+        tokio::task::yield_now().await;
+        bus.clear_history();
+
+        bus.inject(
+            FOB_ZONE_SIGNALS[1],
+            SignalValue::String("OutOfRange".into()),
+        );
+        wait_for_interior_scan().await;
+
+        let h = bus.history();
+        assert!(
+            !h.iter()
+                .any(|(s, v)| *s == "Body.Doors.CentralLock.Command"
+                    && *v == SignalValue::String("lock_all".into())),
+            "interior paired key must block WAL; history: {:?}",
+            h
+        );
+    }
+
+    #[tokio::test]
+    async fn unpaired_fob_in_cabin_does_not_block_lock() {
+        // Belt-and-suspenders: an unpaired stranger's fob sitting in
+        // the cabin must NOT block walk-away.  The Authenticated scan
+        // filters unpaired fobs out, so the interior check sees
+        // zero paired keys and the lock proceeds.
+        let (bus, _h) = setup().await;
+
+        bus.inject(
+            "Body.PEPS.Plant.KeyFob.1.Paired",
+            SignalValue::Bool(false),
+        );
+        bus.inject(
+            "Body.PEPS.Plant.KeyFob.1.PlacedZone",
+            SignalValue::String("Cabin".into()),
+        );
+
+        bus.inject(FOB_ZONE_SIGNALS[1], SignalValue::String("Approach".into()));
+        tokio::task::yield_now().await;
+        bus.clear_history();
+
+        bus.inject(
+            FOB_ZONE_SIGNALS[1],
+            SignalValue::String("OutOfRange".into()),
+        );
+        wait_for_interior_scan().await;
+
+        let h = bus.history();
+        assert!(
+            h.iter().any(|(s, v)| *s == "Body.Doors.CentralLock.Command"
+                && *v == SignalValue::String("lock_all".into())),
+            "unpaired interior fob should not block WAL; history: {:?}",
             h
         );
     }
@@ -349,7 +508,7 @@ mod tests {
             SignalValue::String("OutOfRange".into()),
         );
         tokio::task::yield_now().await;
-        sleep(Duration::from_millis(10)).await;
+        wait_for_interior_scan().await;
         tokio::task::yield_now().await;
 
         let h = bus.history();
