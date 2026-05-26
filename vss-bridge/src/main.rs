@@ -353,7 +353,14 @@ async fn boot_simulation_stack(
         )
         .run(),
     );
-    set.spawn(ThumbPadLock::new(Arc::clone(&bus), Arc::clone(&door_lock_arb)).run());
+    set.spawn(
+        ThumbPadLock::new(
+            Arc::clone(&bus),
+            Arc::clone(&door_lock_arb),
+            key_search_handle.clone(),
+        )
+        .run(),
+    );
     // Interior trim Lock / Unlock buttons on Row 1 doors.  No auth —
     // occupant-operated; unlock works even with the alarm armed (egress
     // safety) but PerimeterAlarm escalates on the resulting unlock
@@ -481,6 +488,7 @@ async fn boot_simulation_stack(
             Arc::clone(&bus),
             Arc::clone(&door_lock_arb),
             Arc::clone(&cfg),
+            key_search_handle.clone(),
             pe_devices,
         )
         .run(),

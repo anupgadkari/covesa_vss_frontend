@@ -73,6 +73,9 @@ use rand::Rng;
 
 use crate::arbiter::{DoorLockArbiter, DoorLockRequest, LockCommand, FEEDBACK_REQUEST};
 use crate::config::PlatformConfig;
+use crate::features::key_search_arbiter::{
+    AntennaSet, Coalescing, DoorRef, KeySearchArbiterHandle, KeySlot, SearchMode, Side,
+};
 use crate::ipc_message::{FeatureId, SignalValue};
 use crate::plant_models::peps::crypto::{
     compute_challenge_response, Challenge, ChallengeResponse, SharedSecret,
@@ -104,6 +107,11 @@ struct Door {
     /// The PEPS proximity zone associated with this door.  An auth
     /// candidate device must be in this zone to unlock from this door.
     proximity_zone: Zone,
+    /// The arbiter's identifier for this handle's antenna.  Used for
+    /// the fresh `SingleHandle` scan submitted on every handle pull
+    /// so candidate selection sees current zone data instead of a
+    /// potentially-stale 10 s-old approach-poll value.
+    door_ref: DoorRef,
     /// Friendly tag for logging.
     name: &'static str,
 }
@@ -136,11 +144,19 @@ const DOORS: [Door; 4] = [
     Door {
         handle_signal: "Body.Doors.Row1.Left.Handle.Outside.IsPulled",
         proximity_zone: Zone::LeftFront,
+        door_ref: DoorRef {
+            row: 1,
+            side: Side::Left,
+        },
         name: "Row1.Left",
     },
     Door {
         handle_signal: "Body.Doors.Row1.Right.Handle.Outside.IsPulled",
         proximity_zone: Zone::RightFront,
+        door_ref: DoorRef {
+            row: 1,
+            side: Side::Right,
+        },
         name: "Row1.Right",
     },
     Door {
@@ -153,11 +169,19 @@ const DOORS: [Door; 4] = [
         // more intuitive (fob near rear-left → Row2.Left works) and
         // more accurate to typical real-vehicle PEPS antenna wiring.
         proximity_zone: Zone::LeftFront,
+        door_ref: DoorRef {
+            row: 2,
+            side: Side::Left,
+        },
         name: "Row2.Left",
     },
     Door {
         handle_signal: "Body.Doors.Row2.Right.Handle.Outside.IsPulled",
         proximity_zone: Zone::RightFront,
+        door_ref: DoorRef {
+            row: 2,
+            side: Side::Right,
+        },
         name: "Row2.Right",
     },
 ];
@@ -225,6 +249,16 @@ pub struct PairedDevice {
     pub secret: SharedSecret,
 }
 
+/// Map a `PairedDevice` to the global `KeySlot` (0..NUM_KEY_SLOTS)
+/// used by the KeySearchArbiter.  Fobs occupy slots 0..3, phones
+/// occupy 4..5 — see `key_search_arbiter::fob_placed_zone_signal`.
+fn arb_slot_for(dev: &PairedDevice) -> KeySlot {
+    match dev.kind {
+        DeviceKind::Fob => dev.slot as KeySlot,
+        DeviceKind::Phone => 4 + dev.slot as KeySlot,
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum DeviceKind {
     Fob,
@@ -279,6 +313,11 @@ pub struct PassiveEntry<B: SignalBus> {
     bus: Arc<B>,
     arbiter: Arc<DoorLockArbiter>,
     config: Arc<PlatformConfig>,
+    /// Used to submit a fresh `SingleHandle(door)` Authenticated
+    /// scan on every handle pull — replaces relying on the cached
+    /// `LastObservedZone` subscription, which can be up to 10 s
+    /// stale once the approach poll switches to slow cadence.
+    key_search: KeySearchArbiterHandle,
     paired_devices: Vec<PairedDevice>,
     /// Last-seen zone per paired device — kept up to date by the
     /// background zone-watcher task so candidate selection on a
@@ -300,6 +339,7 @@ impl<B: SignalBus + Send + Sync + 'static> PassiveEntry<B> {
         bus: Arc<B>,
         arbiter: Arc<DoorLockArbiter>,
         config: Arc<PlatformConfig>,
+        key_search: KeySearchArbiterHandle,
         paired_devices: Vec<PairedDevice>,
     ) -> Self {
         let device_zones = vec![Zone::OutOfRange; paired_devices.len()];
@@ -307,6 +347,7 @@ impl<B: SignalBus + Send + Sync + 'static> PassiveEntry<B> {
             bus,
             arbiter,
             config,
+            key_search,
             paired_devices,
             device_zones,
             pending_stage_two: None,
@@ -444,6 +485,14 @@ impl<B: SignalBus + Send + Sync + 'static> PassiveEntry<B> {
     /// Issue a challenge and unlock the door if any paired device
     /// produces a verifiable response in the eligible zone.
     async fn try_unlock_for_door(&mut self, door: &Door) {
+        // Fresh-scan first: the cached `device_zones` is driven by
+        // the periodic approach poll which can be 10 s stale.  A
+        // single-handle Authenticated scan covers this exact door's
+        // LF antenna and refreshes the cache before we evaluate
+        // candidates.  Coalescing is Allowed so back-to-back handle
+        // pulls in quick succession share one scan (50 ms window).
+        self.refresh_zone_cache_for_door(door).await;
+
         let dev = match self
             .try_authenticate_in_zone(door.proximity_zone, door.name)
             .await
@@ -521,11 +570,81 @@ impl<B: SignalBus + Send + Sync + 'static> PassiveEntry<B> {
         }
     }
 
+    /// Submit a `SingleHandle(door)` Authenticated scan and seed
+    /// `device_zones` directly from the result.  Done synchronously
+    /// before candidate selection so the cache is fresh at the
+    /// moment we decide whether to issue the challenge — sidesteps
+    /// the 10 s slow-cadence staleness of the approach poll.
+    ///
+    /// Devices that show up in `keys_found` at this scan's zone get
+    /// their cached zone updated to the scan's reading.  Devices the
+    /// scan didn't see but whose cached zone matches the scan's
+    /// coverage get cleared to `OutOfRange` (the LF antenna for that
+    /// handle just told us they're not there anymore).  All other
+    /// cached zones are left alone — the scan didn't cover them.
+    async fn refresh_zone_cache_for_door(&mut self, door: &Door) {
+        // The arbiter only models Row1 handle antennas explicitly.
+        // For Row2 handles, fall back to the same-side Row1 antenna —
+        // real PEPS vehicles typically share LF coverage between
+        // front and rear doors on each side anyway.  Filtering by
+        // `door.proximity_zone` (already LeftFront/RightFront for
+        // both rows) preserves auth correctness.
+        let scan_door_ref = DoorRef {
+            row: 1,
+            side: door.door_ref.side,
+        };
+        let result = match self
+            .key_search
+            .submit(
+                "PassiveEntry",
+                AntennaSet::SingleHandle(scan_door_ref),
+                SearchMode::Authenticated,
+                Coalescing::Allowed,
+            )
+            .await
+        {
+            Some(r) => r,
+            None => {
+                tracing::warn!(
+                    door = door.name,
+                    "PassiveEntry: key-search submit returned no result"
+                );
+                return;
+            }
+        };
+
+        // Apply findings to the local cache.
+        for finding in &result.keys_found {
+            if let Some(idx) = self.paired_device_index_for_arb_slot(finding.slot) {
+                self.device_zones[idx] = finding.zone;
+            }
+        }
+
+        // Devices the scan should have seen but didn't → mark out.
+        for (idx, dev) in self.paired_devices.iter().enumerate() {
+            let arb_slot = arb_slot_for(dev);
+            let was_in_scan_zone = self.device_zones[idx] == door.proximity_zone;
+            let found = result.keys_found.iter().any(|k| k.slot == arb_slot);
+            if was_in_scan_zone && !found {
+                self.device_zones[idx] = Zone::OutOfRange;
+            }
+        }
+    }
+
+    /// Map an arbiter KeySlot (global 0..6) back to an index into our
+    /// `paired_devices` vec (which is partitioned into fobs and
+    /// phones).  Returns None if no paired device corresponds.
+    fn paired_device_index_for_arb_slot(&self, slot: KeySlot) -> Option<usize> {
+        self.paired_devices
+            .iter()
+            .position(|d| arb_slot_for(d) == slot)
+    }
+
     /// In-memory lookup of paired devices currently in the target
-    /// zone.  Reads from `device_zones`, which is kept current by the
-    /// background zone-watcher branch in `run()`.  No bus access on
-    /// this hot path — that's why a handle pull's challenge can fly
-    /// out within microseconds of the trigger.
+    /// zone.  Reads from `device_zones`, which is now seeded by
+    /// `refresh_zone_cache_for_door` on every handle pull (and still
+    /// kept warm in the background by the zone-watcher branch in
+    /// `run()` for any other paths that might consume it).
     fn candidates_in_zone(&self, target: Zone) -> Vec<PairedDevice> {
         self.paired_devices
             .iter()
@@ -739,6 +858,9 @@ mod tests {
         let (arb, ack_tx, arb_fut) = door_lock_arbiter(Arc::clone(&bus));
         tokio::spawn(arb_fut);
         let arb = Arc::new(arb);
+        let (ksa, ksa_handle, ksa_rx) =
+            crate::features::key_search_arbiter::KeySearchArbiter::new_with_rx(Arc::clone(&bus));
+        tokio::spawn(ksa.run(ksa_rx));
 
         // Door-lock plant model — produces LockAcks so the arbiter can
         // drain its queue.  Without this the arbiter would stall after
@@ -773,7 +895,7 @@ mod tests {
             });
         }
 
-        let pe = PassiveEntry::new(Arc::clone(&bus), arb, config, paired);
+        let pe = PassiveEntry::new(Arc::clone(&bus), arb, config, ksa_handle, paired);
         tokio::spawn(pe.run());
 
         // Yield until all spawned tasks have reached their first .await.
@@ -803,6 +925,9 @@ mod tests {
         let (arb, ack_tx, arb_fut) = door_lock_arbiter(Arc::clone(&bus));
         tokio::spawn(arb_fut);
         let arb = Arc::new(arb);
+        let (ksa, ksa_handle, ksa_rx) =
+            crate::features::key_search_arbiter::KeySearchArbiter::new_with_rx(Arc::clone(&bus));
+        tokio::spawn(ksa.run(ksa_rx));
 
         let config = PlatformConfig::load();
         let mut dc = config.dealer_config();
@@ -825,7 +950,7 @@ mod tests {
             });
         }
 
-        let pe = PassiveEntry::new(Arc::clone(&bus), arb, Arc::clone(&config), paired);
+        let pe = PassiveEntry::new(Arc::clone(&bus), arb, Arc::clone(&config), ksa_handle, paired);
         tokio::spawn(pe.run());
 
         for _ in 0..32 {
@@ -854,10 +979,14 @@ mod tests {
     }
 
     async fn drain() {
+        // 150 ms covers the SingleHandle Authenticated scan latency
+        // (~100 ms in the arbiter simulation) plus task-scheduling
+        // slack.  Every handle pull now submits a fresh scan before
+        // the challenge/response runs, so drains have to outlast it.
         for _ in 0..32 {
             tokio::task::yield_now().await;
         }
-        tokio::time::sleep(Duration::from_millis(5)).await;
+        tokio::time::sleep(Duration::from_millis(150)).await;
         for _ in 0..32 {
             tokio::task::yield_now().await;
         }
@@ -952,6 +1081,46 @@ mod tests {
         drain().await;
 
         assert_eq!(last_command(&bus), None);
+    }
+
+    /// Staleness regression: prove the handle-pull path uses a FRESH
+    /// scan and not a stale `LastObservedZone` cache.  Inject a stale
+    /// "fob in LeftFront" LastObservedZone (simulating an old approach
+    /// poll) but PlacedZone says the fob is actually OutOfRange right
+    /// now.  Naive cache-trusting code would issue a challenge and
+    /// (with no fob actually present) time out silently — same
+    /// observable behaviour as a deny.  The fresh scan should report
+    /// no candidates immediately, so we exit the auth path well before
+    /// the CHALLENGE_TIMEOUT_MS window.  We assert that AND that no
+    /// stale-cache-derived LF challenge nonce was published.
+    #[tokio::test]
+    async fn stale_last_observed_zone_does_not_drive_challenge() {
+        let bus = setup().await;
+
+        // Stale "fob in LeftFront" reading from a ~10 s-old poll.
+        bus.inject(
+            peps_signals::KEYFOB_1_LAST_OBSERVED_ZONE,
+            SignalValue::String("LeftFront".into()),
+        );
+        // But the fob is actually beyond range right now.
+        bus.inject(
+            peps_signals::KEYFOB_1_PLACED_ZONE,
+            SignalValue::String("OutOfRange".into()),
+        );
+        drain().await;
+        bus.clear_history();
+
+        bus.inject(
+            "Body.Doors.Row1.Left.Handle.Outside.IsPulled",
+            SignalValue::Bool(true),
+        );
+        drain().await;
+
+        assert_eq!(
+            last_command(&bus),
+            None,
+            "fresh scan must override stale LastObservedZone — no unlock should fire"
+        );
     }
 
     /// 4. After stage-1 unlocks the driver door, a second pull on the
@@ -1186,6 +1355,9 @@ mod tests {
         let (arb, ack_tx, arb_fut) = door_lock_arbiter(Arc::clone(&bus2));
         tokio::spawn(arb_fut);
         let arb = Arc::new(arb);
+        let (ksa, ksa_handle, ksa_rx) =
+            crate::features::key_search_arbiter::KeySearchArbiter::new_with_rx(Arc::clone(&bus2));
+        tokio::spawn(ksa.run(ksa_rx));
         let dlpm = DoorLockPlantModel::with_ack_tx(Arc::clone(&bus2), ack_tx);
         tokio::spawn(dlpm.run());
         let plant = PepsPlantModel::new(Arc::clone(&bus2));
@@ -1198,7 +1370,7 @@ mod tests {
                 secret: default_secret(b'F', i),
             });
         }
-        let pe = PassiveEntry::new(Arc::clone(&bus2), arb, Arc::clone(&cfg), paired);
+        let pe = PassiveEntry::new(Arc::clone(&bus2), arb, Arc::clone(&cfg), ksa_handle, paired);
         tokio::spawn(pe.run());
         for _ in 0..32 {
             tokio::task::yield_now().await;

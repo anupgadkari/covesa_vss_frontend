@@ -231,7 +231,15 @@ impl VssWorld {
             });
         }
 
-        let pe = PassiveEntry::new(Arc::clone(&bus), dlarb, Arc::clone(&cfg), paired);
+        // KeySearchArbiter — PassiveEntry submits a fresh
+        // SingleHandle Authenticated scan on every handle pull to
+        // sidestep stale LastObservedZone, so the arbiter has to be
+        // live in the e2e stack too.
+        let (ksa, ksa_handle, ksa_rx) =
+            vss_bridge::features::key_search_arbiter::KeySearchArbiter::new_with_rx(Arc::clone(&bus));
+        self._tasks.push(tokio::spawn(ksa.run(ksa_rx)));
+
+        let pe = PassiveEntry::new(Arc::clone(&bus), dlarb, Arc::clone(&cfg), ksa_handle, paired);
         self._tasks.push(tokio::spawn(pe.run()));
 
         // Yield until every spawned task reaches its first
