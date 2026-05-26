@@ -3,6 +3,11 @@ name = "vss-bridge"
 version = "0.1.0"
 edition = "2021"
 description = "COVESA VSS body controller bridge — L5 application layer"
+# Internal proprietary platform — not published to crates.io.  The
+# `publish = false` flag is what makes `cargo-deny`'s license check
+# skip this crate under `[licenses.private] ignore = true`, so we
+# don't have to assign an SPDX identifier to internal code.
+publish = false
 
 [lib]
 name = "vss_bridge"

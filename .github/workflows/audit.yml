@@ -14,9 +14,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: rustsec/audit-check@v2.0.0
+      # `rustsec/audit-check` runs from the repo root and reads
+      # `./Cargo.lock`, which we don't have at the root — the crate
+      # lives under `vss-bridge/`.  The action has no
+      # working-directory input, so we install + invoke cargo-audit
+      # ourselves from inside the crate.  `taiki-e/install-action`
+      # is a precompiled-binary installer (no `cargo install` build,
+      # ~5 s vs ~45 s).
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@v2
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          tool: cargo-audit
+      - name: Run cargo audit
+        working-directory: vss-bridge
+        run: cargo audit --deny warnings
 
   deny:
     name: cargo deny
@@ -27,4 +38,7 @@ jobs:
         with:
           manifest-path: vss-bridge/Cargo.toml
           command: check
-          arguments: --all-features
+          # cargo-deny 0.19+ rejects `--all-features` at the top
+          # level — it's now a per-graph flag and not exposed via
+          # `check`.  Drop it; `check` defaults already cover the
+          # advisories / bans / licenses / sources surface.

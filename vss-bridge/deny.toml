@@ -21,6 +21,12 @@ allow = [
 ]
 confidence-threshold = 0.8
 
+# Skip license enforcement on this workspace's own crates (they're
+# marked `publish = false` in their Cargo.toml).  Without this,
+# cargo-deny errors out with `unlicensed: vss-bridge = 0.1.0` even
+# though the crate is never going to a registry.
+private = { ignore = true }
+
 [bans]
 multiple-versions = "warn"
 wildcards = "allow"
