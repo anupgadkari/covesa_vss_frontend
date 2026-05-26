@@ -1047,6 +1047,9 @@ fn door_lock_allow_list() -> Vec<DoorLockAllowEntry> {
         DoorLockAllowEntry {
             feature_id: FeatureId::SlamLock,
         },
+        DoorLockAllowEntry {
+            feature_id: FeatureId::SmartUnlock,
+        },
     ]
 }
 

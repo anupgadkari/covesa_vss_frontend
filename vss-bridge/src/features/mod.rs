@@ -28,6 +28,7 @@ pub mod power_child_lock;
 pub mod power_window;
 pub mod rke;
 pub mod slam_lock;
+pub mod smart_unlock;
 pub mod sunroof_control;
 pub mod thumb_pad_lock;
 pub mod turn_indicator;

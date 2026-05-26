@@ -68,6 +68,7 @@ use vss_bridge::features::power_child_lock::PowerChildLock;
 use vss_bridge::features::power_window::PowerWindow;
 use vss_bridge::features::rke::{PairedFob, RkeFeature};
 use vss_bridge::features::slam_lock::SlamLock;
+use vss_bridge::features::smart_unlock::SmartUnlock;
 use vss_bridge::features::sunroof_control::SunroofControl;
 use vss_bridge::features::thumb_pad_lock::ThumbPadLock;
 use vss_bridge::features::turn_indicator::TurnIndicator;
@@ -533,7 +534,22 @@ async fn boot_simulation_stack(
     // reappears in a subsequent cycle or when ignition goes OFF.
     set.spawn(LostPkScan::new(Arc::clone(&bus), key_search_handle.clone()).run());
 
-    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome, MirrorFold, MirrorAdjust, Farewell, DoorOpenAssist, LostPkScan, ExteriorTrunkButton, CabinTrunkRelease, ManualHorn, PerimeterAlarm, KeySearchArbiter, VehicleStartingControl, NfcEntry");
+    // Smart Unlock — PEPS only.  Re-unlocks the vehicle if the lock
+    // event came from an exterior source while ignition is quiescent
+    // AND a paired key is in the cabin with no paired key in any
+    // approach zone (i.e., the owner just locked themselves out).
+    // No-op on KeyCylinder vehicles.
+    set.spawn(
+        SmartUnlock::new(
+            Arc::clone(&bus),
+            Arc::clone(&door_lock_arb),
+            key_search_handle.clone(),
+            Arc::clone(&cfg),
+        )
+        .run(),
+    );
+
+    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome, MirrorFold, MirrorAdjust, Farewell, DoorOpenAssist, LostPkScan, ExteriorTrunkButton, CabinTrunkRelease, ManualHorn, PerimeterAlarm, KeySearchArbiter, VehicleStartingControl, NfcEntry, SmartUnlock");
 
     // ── Plant Models ────────────────────────────────────────────────
     set.spawn(BlinkRelay::new(Arc::clone(&bus)).run());

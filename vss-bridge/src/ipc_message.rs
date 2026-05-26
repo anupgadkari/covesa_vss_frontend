@@ -206,6 +206,11 @@ pub enum FeatureId {
     /// `Body.Sunroof.MoveCmd` + `Body.Sunroof.Shade.MoveCmd` so the
     /// existing SunroofPlantModel stays unchanged.
     SunroofControl = 0x27,
+    /// Smart Unlock — re-unlocks a PEPS vehicle that was locked from
+    /// outside while a paired key is still in the cabin.  Triggered
+    /// on every external `Cabin.LockStatus` lock event with ignition
+    /// quiescent.  See `features::smart_unlock`.
+    SmartUnlock = 0x2B,
     // ---- Future window-arbiter participants (allow-list reserved) ----
     // WindowAntiPinch       = 0x28 — Priority::Critical, observes a
     //   future per-window anti-pinch detection signal and forces
@@ -273,6 +278,7 @@ impl FeatureId {
             0x25 => Some(Self::PowerWindow),
             0x26 => Some(Self::DelayedAccessory),
             0x27 => Some(Self::SunroofControl),
+            0x2B => Some(Self::SmartUnlock),
             _ => None,
         }
     }
