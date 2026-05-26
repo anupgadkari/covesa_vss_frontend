@@ -15,7 +15,7 @@ machinery first wired up for RKE:
 | Feature | What it does | Trigger | Outputs |
 |---|---|---|---|
 | **PassiveEntry** | Unlock-on-handle-pull | `Body.Doors.Row*.*.Handle.Outside.IsPulled` FALSE→TRUE while a paired device is in the matching proximity zone | `LockCommand::UnlockDriver` / `UnlockAll` via `DoorLockArbiter`; `FEEDBACK_REQUEST = "unlock"` |
-| **ThumbPadLock** (PEPS gate added) | Walk-up lock from outside handle thumb pad — gated on a paired device being **outside the cabin** | 500 ms hold of `LockPad.IsPressed` AND ≥1 paired device in LeftFront / RightFront / Hood / Trunk / Approach | `LockCommand::LockAll`; `FEEDBACK_REQUEST = "lock"` (or `"lock_denied"` if gate fails) |
+| **KeypadLock** (PEPS gate added) | Walk-up lock from outside handle keypad — gated on a paired device being **outside the cabin** | 500 ms hold of `LockPad.IsPressed` AND ≥1 paired device in LeftFront / RightFront / Hood / Trunk / Approach | `LockCommand::LockAll`; `FEEDBACK_REQUEST = "lock"` (or `"lock_denied"` if gate fails) |
 | **Welcome** | Courtesy puddle / dome / interior lights on approach | Any paired device transitions from no-LF (OutOfRange/RfRange) into ANY LF zone | `Puddle.Left.IsOn`, `Puddle.Right.IsOn`, `Cabin.Lights.IsDomeOn` via courtesy arbiter |
 
 ---
@@ -128,9 +128,9 @@ The stagger has two purposes:
 
 ---
 
-## 5. The keys-in-vehicle guard (ThumbPadLock)
+## 5. The keys-in-vehicle guard (KeypadLock)
 
-**Rule:** ThumbPadLock fires `LockAll` only if at least one paired
+**Rule:** KeypadLock fires `LockAll` only if at least one paired
 PEPS device is in a zone outside the cabin
 (`is_outside_cabin(zone) == true` for LeftFront, RightFront,
 Hood, Trunk, or Approach).
@@ -142,7 +142,7 @@ When the gate denies a press:
   future "denial" flash pattern.
 - Pad latch is cleared so a fresh press is required to retry.
 
-Why this matters: a child inside the cabin pressing the thumb pad
+Why this matters: a child inside the cabin pressing the keypad
 through an open door (intentionally or by accident) must not lock
 the keys in the vehicle.  Real PEPS systems implement this in the
 BCM at the same level — it's a regulatory + safety expectation, not
@@ -160,9 +160,9 @@ fire) purely in-memory.
 | Layer | Tests |
 |---|---|
 | `passive_entry::tests` | 11 (handle pull happy path, no-device deny, Approach-only deny, two-stage, unpaired ignore, phone path, parser round-trip + fuzz, nonce uniqueness, secret-format invariant, crypto determinism) |
-| `thumb_pad_lock::tests` | 9 (5 existing + 4 new gate-denial tests) |
+| `keypad_lock::tests` | 9 (5 existing + 4 new gate-denial tests) |
 | `welcome::tests` | 6 (entry arms, hold expires, ignition-on releases, second-device-no-extend, all-leave releases, RfRange does NOT arm) |
-| `tests/ws_integration` | 4 new (real bridge subprocess; PE unlock, no-device deny, Welcome puddle, ThumbPad gate) |
+| `tests/ws_integration` | 4 new (real bridge subprocess; PE unlock, no-device deny, Welcome puddle, Keypad gate) |
 | Gherkin specs | `features/passive_entry.feature` (8 scenarios), `features/welcome.feature` (6 scenarios) — documentation only; cucumber step defs are a follow-up |
 
 Total impact: **+34 tests** on the branch.  All 323 lib + 33 cucumber +
@@ -183,7 +183,7 @@ cd vss-bridge && cargo build --release
 # 2. Drag F1 to the DRIVER DOOR zone       → still on (proximity is also LF)
 # 3. Pull the Row1.Left outside handle     → driver door unlocks (PassiveEntry)
 # 4. Pull again within 3 s                 → all doors unlock (stage 2)
-# 5. Press LOCK PAD on Row1.Left handle    → all doors lock (ThumbPadLock,
+# 5. Press LOCK PAD on Row1.Left handle    → all doors lock (KeypadLock,
 #                                            gate passes because F1 is at the
 #                                            driver door)
 # 6. Drag F1 to CABIN, press LOCK PAD      → does NOT lock (keys-in-vehicle

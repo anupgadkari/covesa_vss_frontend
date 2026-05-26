@@ -85,7 +85,7 @@
 //! Each successful arbiter request is followed by a
 //! `Body.Doors.CentralLock.FeedbackRequest` publish (`"lock"` /
 //! `"unlock"`) so `LockFeedback` plays its standard flash pattern.
-//! No PEPS-presence gate (cf. `ThumbPadLock`) — this is an interior
+//! No PEPS-presence gate (cf. `KeypadLock`) — this is an interior
 //! source where keys-in-vehicle isn't possible (you're sitting on
 //! them).
 

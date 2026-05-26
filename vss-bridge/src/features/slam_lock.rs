@@ -105,7 +105,7 @@ const DOOR_OPEN_SIGNALS: [VssPath; 4] = [
 const EXTERNAL_LOCK_INVERSION_REQUESTORS: &[&str] = &[
     "KeyfobRke",
     "KeyfobPeps",
-    "ThumbPadLock",
+    "KeypadLock",
     "PhoneApp",
     "PhoneBle",
     "NfcCard",
@@ -544,7 +544,7 @@ mod tests {
         );
     }
 
-    // ── External-lock inversion path (RKE / PEPS / phone / NFC / thumb-pad) ──
+    // ── External-lock inversion path (RKE / PEPS / phone / NFC / keypad) ──
 
     /// Helper: inject the full (status, requestor, event_num) tuple the
     /// arbiter would publish on an accepted external lock command.
@@ -636,15 +636,15 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn thumb_pad_lock_with_door_open_inverts() {
-        // Exterior thumb-pad has its own keys-in-vehicle gate, but if
+    async fn keypad_lock_with_door_open_inverts() {
+        // Exterior keypad has its own keys-in-vehicle gate, but if
         // a door is also open the SlamLock inversion still fires under EU.
         let bus = setup(vl_eu(), true, false).await;
         bus.inject("Body.Doors.Row2.Left.IsOpen", SignalValue::Bool(true));
         for _ in 0..8 {
             tokio::task::yield_now().await;
         }
-        inject_lock_event(&bus, "ThumbPadLock", 1).await;
+        inject_lock_event(&bus, "KeypadLock", 1).await;
         settle().await;
         assert_last_lock_cmd(&bus, "unlock_all");
     }

@@ -88,7 +88,7 @@ const IGNITION_STATE: VssPath = "Vehicle.LowVoltageSystemState";
 /// physical fob press (`KeyfobRke`), an LF-authenticated handle touch
 /// (`KeyfobPeps` / `PassiveEntry`), a BLE phone proximity lock
 /// (`PhoneBle`), an NFC tap (`NfcCard` / `NfcPhone`), and a
-/// thumb-pad code entry (`ThumbPadLock`) all confirm a credential
+/// keypad code entry (`KeypadLock`) all confirm a credential
 /// holder is at the vehicle — Smart Unlock must not contradict their
 /// intent.  `WalkAwayLock` is excluded because the WAL feature itself
 /// holds off when any paired fob is detected in the interior (see
@@ -544,7 +544,7 @@ mod tests {
         bus.inject(IGNITION_STATE, SignalValue::String("OFF".into()));
         settle().await;
 
-        fire_lock_event(&bus, "LOCKED", "ThumbPadLock", 1);
+        fire_lock_event(&bus, "LOCKED", "KeypadLock", 1);
         wait_for_scan().await;
 
         assert!(!unlock_all_dispatched(&bus));

@@ -1,7 +1,7 @@
 //! Lock / Unlock Feedback Flash — visual confirmation on direction indicators.
 //!
 //! Subscribes to `Body.Doors.CentralLock.FeedbackRequest` (published by
-//! external-origin features: RKE, WalkAwayLock, ThumbPadLock, AutoRelock)
+//! external-origin features: RKE, WalkAwayLock, KeypadLock, AutoRelock)
 //! and plays a timed flash pattern on both direction indicators via the
 //! Lighting domain arbiter at **priority HIGH**.
 //!

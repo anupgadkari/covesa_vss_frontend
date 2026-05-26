@@ -888,7 +888,7 @@ pub const CENTRAL_LOCK_CMD: VssPath = "Body.Doors.CentralLock.Command";
 /// Signal published by external-origin features to request a visual lock/unlock
 /// confirmation flash on both direction indicators.
 ///
-/// Published by: RKE, WalkAwayLock, ThumbPadLock, AutoRelock.
+/// Published by: RKE, WalkAwayLock, KeypadLock, AutoRelock.
 /// Subscribed by: LockFeedback.
 ///
 /// Values:
@@ -1036,7 +1036,7 @@ fn door_lock_allow_list() -> Vec<DoorLockAllowEntry> {
             feature_id: FeatureId::WalkAwayLock,
         },
         DoorLockAllowEntry {
-            feature_id: FeatureId::ThumbPadLock,
+            feature_id: FeatureId::KeypadLock,
         },
         DoorLockAllowEntry {
             feature_id: FeatureId::DoubleLockRelease,

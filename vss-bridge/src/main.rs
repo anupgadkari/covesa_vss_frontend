@@ -70,7 +70,7 @@ use vss_bridge::features::rke::{PairedFob, RkeFeature};
 use vss_bridge::features::slam_lock::SlamLock;
 use vss_bridge::features::smart_unlock::SmartUnlock;
 use vss_bridge::features::sunroof_control::SunroofControl;
-use vss_bridge::features::thumb_pad_lock::ThumbPadLock;
+use vss_bridge::features::keypad_lock::KeypadLock;
 use vss_bridge::features::turn_indicator::TurnIndicator;
 use vss_bridge::features::vehicle_starting_control::VehicleStartingControl;
 use vss_bridge::features::walk_away_lock::WalkAwayLock;
@@ -354,7 +354,7 @@ async fn boot_simulation_stack(
         .run(),
     );
     set.spawn(
-        ThumbPadLock::new(
+        KeypadLock::new(
             Arc::clone(&bus),
             Arc::clone(&door_lock_arb),
             key_search_handle.clone(),
@@ -569,7 +569,7 @@ async fn boot_simulation_stack(
         .run(),
     );
 
-    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, ThumbPadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome, MirrorFold, MirrorAdjust, Farewell, DoorOpenAssist, LostPkScan, ExteriorTrunkButton, CabinTrunkRelease, ManualHorn, PerimeterAlarm, KeySearchArbiter, VehicleStartingControl, NfcEntry, SmartUnlock");
+    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, KeypadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome, MirrorFold, MirrorAdjust, Farewell, DoorOpenAssist, LostPkScan, ExteriorTrunkButton, CabinTrunkRelease, ManualHorn, PerimeterAlarm, KeySearchArbiter, VehicleStartingControl, NfcEntry, SmartUnlock");
 
     // ── Plant Models ────────────────────────────────────────────────
     set.spawn(BlinkRelay::new(Arc::clone(&bus)).run());

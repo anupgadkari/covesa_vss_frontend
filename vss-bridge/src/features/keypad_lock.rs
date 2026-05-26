@@ -1,11 +1,11 @@
-//! Thumb-Pad Lock — lock from outside door handle capacitive pads (Row 1 only).
+//! Keypad Lock — lock from outside door handle capacitive pads (Row 1 only).
 //!
 //! Row 1 (driver and front passenger) outside door handles have a capacitive thumb
 //! pad on the trailing edge. Pressing and *holding* the pad for **500 ms** locks
 //! all doors. This provides a convenient walk-up lock without needing the key fob.
 //!
 //! # Design notes
-//! - Only Row 1 Left and Row 1 Right have thumb pads — Row 2 has no capacitive area.
+//! - Only Row 1 Left and Row 1 Right have keypads — Row 2 has no capacitive area.
 //! - Debounce is 500 ms: the lock fires at exactly 500 ms of continuous press, not
 //!   on release. A release before 500 ms cancels the pending lock.
 //! - A new press while debouncing resets the 500 ms window (anti-spam guard).
@@ -19,7 +19,7 @@
 //! zone outside the cabin** (LeftFront / RightFront / Hood / Trunk /
 //! Approach).  This is the canonical "keys-in-vehicle" guard: a child
 //! inside the cabin can't accidentally lock the keys in the vehicle by
-//! pressing the thumb pad through the open door, because the only
+//! pressing the keypad through the open door, because the only
 //! paired devices in range are inside (Cabin / TrunkInside) and the
 //! lock command is denied.
 //!
@@ -76,13 +76,13 @@ fn is_outside_cabin(zone: Zone) -> bool {
     )
 }
 
-pub struct ThumbPadLock<B: SignalBus> {
+pub struct KeypadLock<B: SignalBus> {
     bus: Arc<B>,
     arbiter: Arc<DoorLockArbiter>,
     key_search: KeySearchArbiterHandle,
 }
 
-impl<B: SignalBus + Send + Sync + 'static> ThumbPadLock<B> {
+impl<B: SignalBus + Send + Sync + 'static> KeypadLock<B> {
     pub fn new(
         bus: Arc<B>,
         arbiter: Arc<DoorLockArbiter>,
@@ -103,7 +103,7 @@ impl<B: SignalBus + Send + Sync + 'static> ThumbPadLock<B> {
         let mut left_pressed_at: Option<Instant> = None;
         let mut right_pressed_at: Option<Instant> = None;
 
-        tracing::info!("ThumbPadLock feature started");
+        tracing::info!("KeypadLock feature started");
 
         loop {
             // Compute the next debounce deadline (minimum over active pads).
@@ -161,7 +161,7 @@ impl<B: SignalBus + Send + Sync + 'static> ThumbPadLock<B> {
                         let scan = self
                             .key_search
                             .submit(
-                                "ThumbPadLock",
+                                "KeypadLock",
                                 AntennaSet::Sequence(vec![
                                     (AntennaSet::Cabin, SearchMode::Authenticated),
                                     (AntennaSet::AllApproach, SearchMode::Authenticated),
@@ -177,7 +177,7 @@ impl<B: SignalBus + Send + Sync + 'static> ThumbPadLock<B> {
                         if !device_outside {
                             tracing::warn!(
                                 scan_keys = ?scan.as_ref().map(|r| r.keys_found.len()),
-                                "ThumbPadLock: debounce complete but fresh scan found NO paired device outside cabin — lock denied (keys-in-vehicle guard)"
+                                "KeypadLock: debounce complete but fresh scan found NO paired device outside cabin — lock denied (keys-in-vehicle guard)"
                             );
                             let _ = self
                                 .bus
@@ -195,18 +195,18 @@ impl<B: SignalBus + Send + Sync + 'static> ThumbPadLock<B> {
                         tracing::info!(
                             left = left_done,
                             right = right_done,
-                            "ThumbPadLock: debounce complete — locking"
+                            "KeypadLock: debounce complete — locking"
                         );
 
                         if let Err(e) = self
                             .arbiter
                             .request(DoorLockRequest {
                                 command: LockCommand::LockAll,
-                                feature_id: FeatureId::ThumbPadLock,
+                                feature_id: FeatureId::KeypadLock,
                             })
                             .await
                         {
-                            tracing::error!(error = %e, "ThumbPadLock: arbiter error");
+                            tracing::error!(error = %e, "KeypadLock: arbiter error");
                         }
                         let _ = self
                             .bus
@@ -222,7 +222,7 @@ impl<B: SignalBus + Send + Sync + 'static> ThumbPadLock<B> {
             }
         }
 
-        tracing::info!("ThumbPadLock feature stopped");
+        tracing::info!("KeypadLock feature stopped");
     }
 }
 
@@ -242,7 +242,7 @@ mod tests {
     /// for select-loop scheduling slack.
     const TICK_FOR_LOCK: Duration = Duration::from_millis(900);
 
-    /// Default test setup: bus, both arbiters, ThumbPadLock running,
+    /// Default test setup: bus, both arbiters, KeypadLock running,
     /// and **paired fob 1 placed in `Approach`** so the keys-in-
     /// vehicle gate passes for the happy-path tests.  Tests that
     /// need to verify the gate denial path use
@@ -266,7 +266,7 @@ mod tests {
         let arb = Arc::new(arb);
         let (ksa, key_search, ksa_rx) = KeySearchArbiter::new_with_rx(Arc::clone(&bus));
         tokio::spawn(ksa.run(ksa_rx));
-        let feature = ThumbPadLock::new(Arc::clone(&bus), arb, key_search);
+        let feature = KeypadLock::new(Arc::clone(&bus), arb, key_search);
         let handle = tokio::spawn(feature.run());
         tokio::task::yield_now().await;
         (bus, handle)
