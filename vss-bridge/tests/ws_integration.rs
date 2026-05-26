@@ -351,8 +351,22 @@ async fn passive_entry_unlocks_driver_door_via_handle_pull() {
     .await;
     assert!(locked, "doors should lock for the test setup");
 
-    // Place fob 1 at the driver door.
-    send_sensor(&mut tx, "Body.PEPS.Plant.KeyFob.1.Zone", json!("LeftFront")).await;
+    // Place fob 1 at the driver door.  Dual-write: PlacedZone for
+    // the PEPS plant + arbiter cache, LastObservedZone to prime
+    // PassiveEntry's per-device zone cache without waiting for the
+    // next approach poll to fire.
+    send_sensor(
+        &mut tx,
+        "Body.PEPS.Plant.KeyFob.1.PlacedZone",
+        json!("LeftFront"),
+    )
+    .await;
+    send_sensor(
+        &mut tx,
+        "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
+        json!("LeftFront"),
+    )
+    .await;
 
     // Allow the production stagger (10 ms × slot) plus arbiter +
     // plant model round trip.
@@ -426,8 +440,20 @@ async fn welcome_arms_puddle_lamps_on_approach_entry() {
     let bridge = BridgeProcess::start();
     let (mut tx, mut rx) = connect_ws(&bridge.ws_url()).await;
 
-    // Place fob 1 at Approach.
-    send_sensor(&mut tx, "Body.PEPS.Plant.KeyFob.1.Zone", json!("Approach")).await;
+    // Place fob 1 at Approach.  Dual-write — see comment in the
+    // PassiveEntry test above.
+    send_sensor(
+        &mut tx,
+        "Body.PEPS.Plant.KeyFob.1.PlacedZone",
+        json!("Approach"),
+    )
+    .await;
+    send_sensor(
+        &mut tx,
+        "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
+        json!("Approach"),
+    )
+    .await;
 
     let on = wait_for_state(
         &mut rx,

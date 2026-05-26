@@ -300,28 +300,14 @@ impl<B: SignalBus + Send + Sync + 'static> KeySearchArbiter<B> {
         let last_observed: Arc<tokio::sync::Mutex<HashMap<KeySlot, Zone>>> =
             Arc::new(tokio::sync::Mutex::new(HashMap::new()));
 
-        // Subscribe to every fob's PlacedZone + legacy Zone + Paired
-        // signals once.  PlacedZone is the new HMI drag target; .Zone
-        // is the legacy alias that the PEPS plant still mirrors and
-        // that many existing tests inject directly.  Subscribing to
-        // both keeps the transition backward-compatible — whichever
-        // signal arrives last wins in the cache.
+        // Subscribe to every fob's PlacedZone + Paired signals once.
+        // The arbiter simulates the LF antenna subsystem; PlacedZone
+        // is the HMI-set ground truth it samples from each scan.
         for slot in 0..NUM_KEY_SLOTS as KeySlot {
             let zones_clone = Arc::clone(&zones);
             let mut rx_placed = self.bus.subscribe(fob_placed_zone_signal(slot)).await;
             tokio::spawn(async move {
                 while let Some(v) = rx_placed.next().await {
-                    if let SignalValue::String(s) = v {
-                        if let Some(z) = Zone::from_str_value(&s) {
-                            zones_clone.lock().await.insert(slot, z);
-                        }
-                    }
-                }
-            });
-            let zones_clone = Arc::clone(&zones);
-            let mut rx_legacy = self.bus.subscribe(fob_legacy_zone_signal(slot)).await;
-            tokio::spawn(async move {
-                while let Some(v) = rx_legacy.next().await {
                     if let SignalValue::String(s) = v {
                         if let Some(z) = Zone::from_str_value(&s) {
                             zones_clone.lock().await.insert(slot, z);
@@ -725,24 +711,6 @@ fn fob_placed_zone_signal(slot: KeySlot) -> VssPath {
         4 => "Body.PEPS.Plant.BlePhone.1.PlacedZone",
         5 => "Body.PEPS.Plant.BlePhone.2.PlacedZone",
         _ => "Body.PEPS.Plant.KeyFob.1.PlacedZone", // defensive; never hit at runtime
-    }
-}
-
-/// Legacy `.Zone` path for the same slot indexing.  The arbiter
-/// subscribes to BOTH `.PlacedZone` (new, HMI-driven) and `.Zone`
-/// (legacy, PEPS plant mirror + test injections) so the transition
-/// to item #14a's signal split doesn't force every existing test to
-/// rewrite its zone setup.  Either subscription updates the zone
-/// cache; whichever signal arrives last wins.
-fn fob_legacy_zone_signal(slot: KeySlot) -> VssPath {
-    match slot {
-        0 => "Body.PEPS.Plant.KeyFob.1.Zone",
-        1 => "Body.PEPS.Plant.KeyFob.2.Zone",
-        2 => "Body.PEPS.Plant.KeyFob.3.Zone",
-        3 => "Body.PEPS.Plant.KeyFob.4.Zone",
-        4 => "Body.PEPS.Plant.BlePhone.1.Zone",
-        5 => "Body.PEPS.Plant.BlePhone.2.Zone",
-        _ => "Body.PEPS.Plant.KeyFob.1.Zone",
     }
 }
 

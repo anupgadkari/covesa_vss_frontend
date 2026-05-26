@@ -7,40 +7,15 @@
 
 use crate::signal_bus::VssPath;
 
-// ── Key Fob Zone — TRANSITIONAL ALIAS ─────────────────────────────────
-//
-// `.Zone` is the legacy "ground truth" signal that conflated where the
-// chip was physically (driven by the HMI drag) with what the vehicle
-// had observed.  Item #14 of the post-PEPS backlog splits them:
-//
-//   `.PlacedZone`        — HMI-written ground truth (simulator-only;
-//                            real vehicles never know this directly).
-//   `.LastObservedZone`  — Arbiter-published, derived from the last
-//                            scan that covered this fob.  Realistic.
-//
-// `.Zone` is still published by `PepsPlantModel` as a mirror of
-// `PlacedZone` so unmigrated consumers (everything except
-// `walk_away_lock` post-#14a) keep working.  Will go away once every
-// consumer has moved to `LastObservedZone`.
-pub const KEYFOB_1_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.1.Zone";
-pub const KEYFOB_2_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.2.Zone";
-pub const KEYFOB_3_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.3.Zone";
-pub const KEYFOB_4_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.4.Zone";
-pub const KEYFOB_5_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.5.Zone";
-pub const KEYFOB_6_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.6.Zone";
-
-/// All key fob zone signals, indexed 0..6.  Legacy alias — see
-/// [`KEYFOB_PLACED_ZONES`] for the canonical HMI-driven signal.
-pub const KEYFOB_ZONES: [VssPath; 6] = [
-    KEYFOB_1_ZONE,
-    KEYFOB_2_ZONE,
-    KEYFOB_3_ZONE,
-    KEYFOB_4_ZONE,
-    KEYFOB_5_ZONE,
-    KEYFOB_6_ZONE,
-];
-
 // ── Key Fob PlacedZone (input: HMI drag-and-drop target) ───────────────
+//
+// `.PlacedZone` is the canonical HMI-set ground truth.  The PEPS
+// plant subscribes here; the KeySearchArbiter also reads it as the
+// LF subsystem's input.  Consumer features instead read
+// `.LastObservedZone` (published by the arbiter after each scan) so
+// they experience the same partial-information world a real PEPS
+// feature does.  The legacy `.Zone` signal has been retired (item
+// #14 follow-up).
 pub const KEYFOB_1_PLACED_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.1.PlacedZone";
 pub const KEYFOB_2_PLACED_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.2.PlacedZone";
 pub const KEYFOB_3_PLACED_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.3.PlacedZone";
@@ -152,14 +127,8 @@ pub const KEYFOB_RF_MSGS: [VssPath; 4] = [
     KEYFOB_4_RF_MSG,
 ];
 
-// ── BLE Phone Zone — TRANSITIONAL ALIAS ───────────────────────────────
-// See KEYFOB_*_ZONE above for the migration story.
-pub const PHONE_1_ZONE: VssPath = "Body.PEPS.Plant.BlePhone.1.Zone";
-pub const PHONE_2_ZONE: VssPath = "Body.PEPS.Plant.BlePhone.2.Zone";
-
-pub const PHONE_ZONES: [VssPath; 2] = [PHONE_1_ZONE, PHONE_2_ZONE];
-
 // ── BLE Phone PlacedZone (input: HMI drag-and-drop target) ────────────
+// Legacy `.Zone` retired — see KEYFOB_PLACED_ZONES above.
 pub const PHONE_1_PLACED_ZONE: VssPath = "Body.PEPS.Plant.BlePhone.1.PlacedZone";
 pub const PHONE_2_PLACED_ZONE: VssPath = "Body.PEPS.Plant.BlePhone.2.PlacedZone";
 

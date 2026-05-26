@@ -26,6 +26,8 @@ item is independently shippable as its own sub-branch / PR.
 | 12 | Key-in-Ignition Inhibit (KeyCylinder mode) | S | ✅ Done — PR #27 |
 | 13 | Migrate ExteriorTrunkButton → KeySearch arbiter | M | ⏳ Pending |
 | 14 | Stop continuous Zone publishing; `PlacedZone` + `LastObservedZone` | L | ⏳ Pending |
+| 14c | Extra scan triggers — brake-press pre-auth | S | ⏳ Pending |
+| 14d | Extra scan triggers — door-close snapshot | S | ⏳ Pending |
 | 15 | Smart Unlock feature (key-locked-in-trunk) | M | ⏳ Pending |
 | 16 | NFC Entry feature (card/phone tap → unlock; tap at push-button → start) | M | ⏳ Pending |
 | 17 | Key-lost warning chime | XS | ⏳ Pending |
@@ -123,6 +125,76 @@ publishes `LastObservedZone` from inside `run_scan`.
 touches.  Stage the migration carefully behind a feature flag if
 needed.  The `passive_entry` test corpus is 1.6 kLOC and 48 tests;
 schedule a full afternoon for sub-item 14a.
+
+---
+
+## 14c. Extra scan triggers — brake-press pre-auth  *(S)*
+
+**Trigger.**  Today the only events that drive a fresh
+authenticated scan are: a Start/Stop press (PEPS), a cylinder
+rotation to a live state (KeyCylinder), and an exterior-trunk
+button press.  Real OEMs additionally **pre-authenticate the
+moment the driver touches the brake pedal** so the subsequent
+Start/Stop press feels instantaneous — the cabin Authenticated
+scan (~100 ms LF airtime) has already completed by the time the
+press fires.
+
+**Built on (in `main`).**  KeySearchArbiter, `Chassis.Brake.IsApplied`
+(published by the brake plant), `KeySearchArbiterHandle::submit`
++ coalescing (so the cached result is what the Start press picks
+up).
+
+**Plan.**
+1. New small handler in `VehicleStartingControl` (or a separate
+   pre-auth feature if preferred): subscribe to
+   `Chassis.Brake.IsApplied`.
+2. On `false → true` edge AND `key_source_cfg == PEPS` AND power
+   ∈ {`OFF`, `ACC`}: submit `AntennaSet::Cabin` +
+   `SearchMode::Authenticated` with `Coalescing::Allowed`.
+3. The Start press, if it comes within the coalesce window
+   (50 ms), reuses the cached result.  Outside the window it runs
+   a fresh scan as today.
+4. Tests: brake edge + delayed Start press uses the pre-auth
+   cache; brake edge without a follow-up press is a no-op.
+
+**Risks.**  Low.  The arbiter already serialises scans and the
+coalesce window is short; spurious brake presses cost a few ms of
+simulated LF airtime each.
+
+---
+
+## 14d. Extra scan triggers — door-close snapshot  *(S)*
+
+**Trigger.**  When the last open door closes and the cabin is
+locked (or about to be), the vehicle should snapshot per-fob
+positions so:
+
+  * Walk-away has fresh per-device `LastObservedZone` data the
+    moment it arms (rather than waiting for the next approach
+    poll up to 700 ms later).
+  * Smart Unlock (item #15) can decide whether to pop the trunk
+    based on a fob being inside.
+  * Future trunk / cabin auto-lock features get a clean snapshot
+    to base their decisions on.
+
+**Built on (in `main`).**  Per-door `IsOpen` signals,
+`Cabin.LockStatus`, KeySearchArbiter with `AntennaSet::Sequence`
+(can run AllApproach + TrunkInside + Cabin in one go).
+
+**Plan.**
+1. New small feature `features/door_close_scan.rs` (or a method
+   on an existing manager): subscribe to all four `IsOpen`
+   signals + `Cabin.LockStatus`.
+2. On the all-doors-now-closed edge: submit a `Sequence` of
+   `AllApproach` + `TrunkInside` + `Cabin` Presence scans, with
+   `Coalescing::Disallowed`.  Updates LastObservedZone for every
+   covered slot.
+3. Tests: open one door + close it → triggers a scan; second
+   transition while still locked doesn't.
+
+**Risks.**  Low.  Sequence scan latency adds up (~150 ms total)
+but isn't on a user-perceived path; runs after the user shuts
+the door.
 
 ---
 

@@ -708,10 +708,10 @@ mod tests {
     fn place_fob_in_cabin(bus: &MockBus, slot: u8) {
         bus.inject(
             match slot {
-                1 => "Body.PEPS.Plant.KeyFob.1.Zone",
-                2 => "Body.PEPS.Plant.KeyFob.2.Zone",
-                3 => "Body.PEPS.Plant.KeyFob.3.Zone",
-                4 => "Body.PEPS.Plant.KeyFob.4.Zone",
+                1 => "Body.PEPS.Plant.KeyFob.1.PlacedZone",
+                2 => "Body.PEPS.Plant.KeyFob.2.PlacedZone",
+                3 => "Body.PEPS.Plant.KeyFob.3.PlacedZone",
+                4 => "Body.PEPS.Plant.KeyFob.4.PlacedZone",
                 _ => panic!("unknown slot"),
             },
             SignalValue::String("Cabin".into()),
@@ -720,10 +720,10 @@ mod tests {
     fn place_fob_in_cylinder(bus: &MockBus, slot: u8) {
         bus.inject(
             match slot {
-                1 => "Body.PEPS.Plant.KeyFob.1.Zone",
-                2 => "Body.PEPS.Plant.KeyFob.2.Zone",
-                3 => "Body.PEPS.Plant.KeyFob.3.Zone",
-                4 => "Body.PEPS.Plant.KeyFob.4.Zone",
+                1 => "Body.PEPS.Plant.KeyFob.1.PlacedZone",
+                2 => "Body.PEPS.Plant.KeyFob.2.PlacedZone",
+                3 => "Body.PEPS.Plant.KeyFob.3.PlacedZone",
+                4 => "Body.PEPS.Plant.KeyFob.4.PlacedZone",
                 _ => panic!("unknown slot"),
             },
             SignalValue::String("KeyCylinder".into()),
@@ -1003,7 +1003,7 @@ mod tests {
         // Remove fob, then rotate to ON.  Session flag should still
         // accept the rotation because we already authenticated.
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.Zone",
+            "Body.PEPS.Plant.KeyFob.1.PlacedZone",
             SignalValue::String("OutOfRange".into()),
         );
         bus.inject(CYLINDER_IN, SignalValue::String("ON".into()));
@@ -1052,7 +1052,7 @@ mod tests {
         // Remove the key — session was already established, OFF→ON
         // must still work.
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.Zone",
+            "Body.PEPS.Plant.KeyFob.1.PlacedZone",
             SignalValue::String("OutOfRange".into()),
         );
         bus.inject(CYLINDER_IN, SignalValue::String("ON".into()));
@@ -1157,7 +1157,7 @@ mod tests {
         assert_eq!(latest_immo(&bus).as_deref(), Some("LOCKED"));
         // Remove fob; rotation back to ACC should now fail.
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.Zone",
+            "Body.PEPS.Plant.KeyFob.1.PlacedZone",
             SignalValue::String("OutOfRange".into()),
         );
         bus.inject(CYLINDER_IN, SignalValue::String("ACC".into()));
