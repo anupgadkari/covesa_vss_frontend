@@ -587,14 +587,14 @@ mod tests {
         bus.clear_history();
 
         bus.inject(
-            "Body.PEPS.Plant.BlePhone.1.Zone",
+            "Body.PEPS.Plant.BlePhone.1.PlacedZone",
             SignalValue::String("LeftFront".into()),
         );
         settle().await;
         assert!(!unlock_was_dispatched(&bus));
 
         bus.inject(
-            "Body.PEPS.Plant.BlePhone.1.Zone",
+            "Body.PEPS.Plant.BlePhone.1.PlacedZone",
             SignalValue::String("Cabin".into()),
         );
         settle().await;

@@ -66,31 +66,35 @@ const INPUT_SIGNALS: &[VssPath] = &[
     "Body.Lights.DirectionIndicator.Right.Lamp.Side.IsDefect",
     "Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsDefect",
     // PEPS plant model inputs — HMI positions devices and presses fob buttons.
-    // `.PlacedZone` is the new HMI drag target (item #14a); `.Zone`
-    // stays accepted as a transitional alias so unmigrated paths
-    // (and integration tests injecting via the old name) keep
-    // working.  The PEPS plant subscribes to BOTH and mirrors writes
-    // between them.
+    // `.PlacedZone` is the canonical HMI drag target (item #14
+    // foundation + follow-up).  The legacy `.Zone` alias has been
+    // retired now that every consumer reads `.LastObservedZone` from
+    // the KeySearchArbiter instead.
     "Body.PEPS.Plant.KeyFob.1.PlacedZone",
     "Body.PEPS.Plant.KeyFob.2.PlacedZone",
     "Body.PEPS.Plant.KeyFob.3.PlacedZone",
     "Body.PEPS.Plant.KeyFob.4.PlacedZone",
     "Body.PEPS.Plant.KeyFob.5.PlacedZone",
     "Body.PEPS.Plant.KeyFob.6.PlacedZone",
-    "Body.PEPS.Plant.KeyFob.1.Zone",
-    "Body.PEPS.Plant.KeyFob.2.Zone",
-    "Body.PEPS.Plant.KeyFob.3.Zone",
-    "Body.PEPS.Plant.KeyFob.4.Zone",
-    "Body.PEPS.Plant.KeyFob.5.Zone",
-    "Body.PEPS.Plant.KeyFob.6.Zone",
     "Body.PEPS.Plant.KeyFob.1.ButtonPress",
     "Body.PEPS.Plant.KeyFob.2.ButtonPress",
     "Body.PEPS.Plant.KeyFob.3.ButtonPress",
     "Body.PEPS.Plant.KeyFob.4.ButtonPress",
     "Body.PEPS.Plant.BlePhone.1.PlacedZone",
     "Body.PEPS.Plant.BlePhone.2.PlacedZone",
-    "Body.PEPS.Plant.BlePhone.1.Zone",
-    "Body.PEPS.Plant.BlePhone.2.Zone",
+    // LastObservedZone is the consumer-facing signal published by
+    // the KeySearchArbiter after each scan.  In production no one
+    // else writes it.  Allowed here as an HMI / e2e input so the
+    // gherkin suite can drive consumer features deterministically
+    // without waiting for the next approach poll to fire.
+    "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
+    "Body.PEPS.Plant.KeyFob.2.LastObservedZone",
+    "Body.PEPS.Plant.KeyFob.3.LastObservedZone",
+    "Body.PEPS.Plant.KeyFob.4.LastObservedZone",
+    "Body.PEPS.Plant.KeyFob.5.LastObservedZone",
+    "Body.PEPS.Plant.KeyFob.6.LastObservedZone",
+    "Body.PEPS.Plant.BlePhone.1.LastObservedZone",
+    "Body.PEPS.Plant.BlePhone.2.LastObservedZone",
     // Phone NFC tap — separate signal from .Zone so BLE proximity
     // (PassiveEntry) and NFC tap (NfcEntry) are independent.
     "Body.PEPS.Plant.BlePhone.1.NfcTap",

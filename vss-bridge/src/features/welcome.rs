@@ -71,13 +71,19 @@ const POWER_STATE: VssPath = "Vehicle.LowVoltageSystemState";
 // hardware constraint in one place so Farewell, PerimeterAlarm, and
 // any future puddle claimant inherit the same behaviour.
 
+// Welcome subscribes to per-device LastObservedZone (item #14a of
+// the post-PEPS backlog) instead of the legacy `.Zone` mirror.  The
+// KeySearchArbiter publishes LastObservedZone after each periodic
+// approach poll; Welcome reacts to fobs transitioning into approach
+// coverage just as it did before, but driven by what the antennas
+// actually saw rather than HMI ground truth.
 const PAIRED_ZONE_SIGNALS: [VssPath; 6] = [
-    "Body.PEPS.Plant.KeyFob.1.Zone",
-    "Body.PEPS.Plant.KeyFob.2.Zone",
-    "Body.PEPS.Plant.KeyFob.3.Zone",
-    "Body.PEPS.Plant.KeyFob.4.Zone",
-    peps_signals::PHONE_1_ZONE,
-    peps_signals::PHONE_2_ZONE,
+    "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
+    "Body.PEPS.Plant.KeyFob.2.LastObservedZone",
+    "Body.PEPS.Plant.KeyFob.3.LastObservedZone",
+    "Body.PEPS.Plant.KeyFob.4.LastObservedZone",
+    peps_signals::PHONE_1_LAST_OBSERVED_ZONE,
+    peps_signals::PHONE_2_LAST_OBSERVED_ZONE,
 ];
 
 /// Door-open signals — used to release the courtesy lights early
@@ -356,7 +362,7 @@ mod tests {
         let (bus, _h) = setup_with_hold(Duration::from_secs(30)).await;
 
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.Zone",
+            "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
             SignalValue::String("Approach".into()),
         );
         settle().await;
@@ -378,7 +384,7 @@ mod tests {
     async fn lights_release_after_hold() {
         let (bus, _h) = setup_with_hold(Duration::from_millis(100)).await;
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.Zone",
+            "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
             SignalValue::String("Approach".into()),
         );
         settle().await;
@@ -399,7 +405,7 @@ mod tests {
     async fn ignition_on_releases_lights_early() {
         let (bus, _h) = setup_with_hold(Duration::from_secs(30)).await;
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.Zone",
+            "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
             SignalValue::String("Approach".into()),
         );
         settle().await;
@@ -423,7 +429,7 @@ mod tests {
 
         // Device 1 enters at t=0.
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.Zone",
+            "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
             SignalValue::String("Approach".into()),
         );
         settle().await;
@@ -432,7 +438,7 @@ mod tests {
         advance(Duration::from_millis(50)).await;
         settle().await;
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.2.Zone",
+            "Body.PEPS.Plant.KeyFob.2.LastObservedZone",
             SignalValue::String("Approach".into()),
         );
         settle().await;
@@ -457,14 +463,14 @@ mod tests {
     async fn all_devices_leaving_lf_releases_lights() {
         let (bus, _h) = setup_with_hold(Duration::from_secs(30)).await;
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.Zone",
+            "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
             SignalValue::String("Approach".into()),
         );
         settle().await;
         assert_eq!(bus.latest_value(PUDDLE_LEFT), Some(SignalValue::Bool(true)));
 
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.Zone",
+            "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
             SignalValue::String("OutOfRange".into()),
         );
         settle().await;
@@ -482,7 +488,7 @@ mod tests {
     async fn rf_range_only_does_not_arm_welcome() {
         let (bus, _h) = setup_with_hold(Duration::from_secs(30)).await;
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.Zone",
+            "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
             SignalValue::String("RfRange".into()),
         );
         settle().await;
@@ -499,7 +505,7 @@ mod tests {
     async fn door_open_releases_lights_early() {
         let (bus, _h) = setup_with_hold(Duration::from_secs(30)).await;
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.Zone",
+            "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
             SignalValue::String("Approach".into()),
         );
         settle().await;
@@ -521,7 +527,7 @@ mod tests {
     async fn rear_door_open_also_releases_lights() {
         let (bus, _h) = setup_with_hold(Duration::from_secs(30)).await;
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.Zone",
+            "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
             SignalValue::String("Approach".into()),
         );
         settle().await;

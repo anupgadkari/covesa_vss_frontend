@@ -305,13 +305,10 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // Safety signals
         "Vehicle.Safety.CrashDetected" => Some(0x000F_0001),
 
-        // PEPS plant model — key fob zones
-        "Body.PEPS.Plant.KeyFob.1.Zone" => Some(0x0010_0001),
-        "Body.PEPS.Plant.KeyFob.2.Zone" => Some(0x0010_0002),
-        "Body.PEPS.Plant.KeyFob.3.Zone" => Some(0x0010_0003),
-        "Body.PEPS.Plant.KeyFob.4.Zone" => Some(0x0010_0004),
-        "Body.PEPS.Plant.KeyFob.5.Zone" => Some(0x0010_0005),
-        "Body.PEPS.Plant.KeyFob.6.Zone" => Some(0x0010_0006),
+        // PEPS plant model — `.Zone` (IDs 0x0010_0001..0x0010_0006)
+        // retired in item #14 follow-up.  HMI writes `.PlacedZone`;
+        // every feature consumer reads `.LastObservedZone` (see
+        // KeySearchArbiter).
         // PEPS plant model — key fob button presses
         "Body.PEPS.Plant.KeyFob.1.ButtonPress" => Some(0x0010_0011),
         "Body.PEPS.Plant.KeyFob.2.ButtonPress" => Some(0x0010_0012),
@@ -366,9 +363,9 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Body.PEPS.Plant.KeyFob.4.LastObservedZone" => Some(0x0010_0074),
         "Body.PEPS.Plant.KeyFob.5.LastObservedZone" => Some(0x0010_0075),
         "Body.PEPS.Plant.KeyFob.6.LastObservedZone" => Some(0x0010_0076),
-        // PEPS plant model — BLE phone zones
-        "Body.PEPS.Plant.BlePhone.1.Zone" => Some(0x0011_0001),
-        "Body.PEPS.Plant.BlePhone.2.Zone" => Some(0x0011_0002),
+        // PEPS plant model — BlePhone `.Zone` (IDs 0x0011_0001 /
+        // 0x0011_0002) retired in item #14 follow-up — see KeyFob
+        // note above.
         // PEPS plant model — BLE phone challenge responses
         "Body.PEPS.Plant.BlePhone.1.ChallengeResponse" => Some(0x0011_0011),
         "Body.PEPS.Plant.BlePhone.2.ChallengeResponse" => Some(0x0011_0012),
@@ -833,13 +830,7 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Body.Doors.Row2.Right.IsRemoved", 0x000E_0043),
     // Safety signals
     ("Vehicle.Safety.CrashDetected", 0x000F_0001),
-    // PEPS plant model — key fob zones
-    ("Body.PEPS.Plant.KeyFob.1.Zone", 0x0010_0001),
-    ("Body.PEPS.Plant.KeyFob.2.Zone", 0x0010_0002),
-    ("Body.PEPS.Plant.KeyFob.3.Zone", 0x0010_0003),
-    ("Body.PEPS.Plant.KeyFob.4.Zone", 0x0010_0004),
-    ("Body.PEPS.Plant.KeyFob.5.Zone", 0x0010_0005),
-    ("Body.PEPS.Plant.KeyFob.6.Zone", 0x0010_0006),
+    // PEPS plant model — `.Zone` retired (IDs 0x0010_0001..0x0010_0006).
     // PEPS plant model — key fob button presses
     ("Body.PEPS.Plant.KeyFob.1.ButtonPress", 0x0010_0011),
     ("Body.PEPS.Plant.KeyFob.2.ButtonPress", 0x0010_0012),
@@ -883,9 +874,7 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Body.PEPS.Plant.KeyFob.4.LastObservedZone", 0x0010_0074),
     ("Body.PEPS.Plant.KeyFob.5.LastObservedZone", 0x0010_0075),
     ("Body.PEPS.Plant.KeyFob.6.LastObservedZone", 0x0010_0076),
-    // PEPS plant model — BLE phone zones
-    ("Body.PEPS.Plant.BlePhone.1.Zone", 0x0011_0001),
-    ("Body.PEPS.Plant.BlePhone.2.Zone", 0x0011_0002),
+    // PEPS plant model — BlePhone `.Zone` retired (IDs 0x0011_0001 / 0x0011_0002).
     // PEPS plant model — BLE phone challenge responses
     ("Body.PEPS.Plant.BlePhone.1.ChallengeResponse", 0x0011_0011),
     ("Body.PEPS.Plant.BlePhone.2.ChallengeResponse", 0x0011_0012),

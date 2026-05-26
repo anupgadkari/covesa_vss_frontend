@@ -44,15 +44,19 @@ use crate::signal_bus::{SignalBus, VssPath};
 const LEFT_PAD: &str = "Body.Doors.Row1.Left.Handle.Outside.LockPad.IsPressed";
 const RIGHT_PAD: &str = "Body.Doors.Row1.Right.Handle.Outside.LockPad.IsPressed";
 
-/// All paired-device zone signals tracked for the keys-in-vehicle gate.
-/// Slot order matches the PEPS plant model: 4 paired fobs + 2 phones.
+/// All paired-device LastObservedZone signals tracked for the
+/// keys-in-vehicle gate.  Slot order matches the PEPS plant model:
+/// 4 paired fobs + 2 phones.  Migrated from the legacy `.Zone`
+/// mirror to `.LastObservedZone` (item #14a of the post-PEPS
+/// backlog) — same semantic but driven by what the arbiter's scans
+/// actually saw rather than HMI ground truth.
 const PAIRED_ZONE_SIGNALS: [VssPath; 6] = [
-    "Body.PEPS.Plant.KeyFob.1.Zone",
-    "Body.PEPS.Plant.KeyFob.2.Zone",
-    "Body.PEPS.Plant.KeyFob.3.Zone",
-    "Body.PEPS.Plant.KeyFob.4.Zone",
-    peps_signals::PHONE_1_ZONE,
-    peps_signals::PHONE_2_ZONE,
+    "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
+    "Body.PEPS.Plant.KeyFob.2.LastObservedZone",
+    "Body.PEPS.Plant.KeyFob.3.LastObservedZone",
+    "Body.PEPS.Plant.KeyFob.4.LastObservedZone",
+    peps_signals::PHONE_1_LAST_OBSERVED_ZONE,
+    peps_signals::PHONE_2_LAST_OBSERVED_ZONE,
 ];
 
 /// Debounce duration before the lock fires.
@@ -235,7 +239,7 @@ mod tests {
         // initial cached value via subscribe-replay during its first
         // poll.
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.Zone",
+            "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
             SignalValue::String("Approach".into()),
         );
         tokio::task::yield_now().await;
@@ -410,7 +414,7 @@ mod tests {
     async fn fob_in_cabin_only_denies_lock() {
         let (bus, _h) = setup_no_paired_device_outside().await;
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.Zone",
+            "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
             SignalValue::String("Cabin".into()),
         );
         tokio::task::yield_now().await;
@@ -437,11 +441,11 @@ mod tests {
     async fn fob_split_cabin_and_approach_locks() {
         let (bus, _h) = setup_no_paired_device_outside().await;
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.Zone",
+            "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
             SignalValue::String("Cabin".into()),
         );
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.2.Zone",
+            "Body.PEPS.Plant.KeyFob.2.LastObservedZone",
             SignalValue::String("Approach".into()),
         );
         tokio::task::yield_now().await;
@@ -468,7 +472,7 @@ mod tests {
     async fn phone_in_driver_door_zone_passes_gate() {
         let (bus, _h) = setup_no_paired_device_outside().await;
         bus.inject(
-            "Body.PEPS.Plant.BlePhone.1.Zone",
+            "Body.PEPS.Plant.BlePhone.1.LastObservedZone",
             SignalValue::String("LeftFront".into()),
         );
         tokio::task::yield_now().await;

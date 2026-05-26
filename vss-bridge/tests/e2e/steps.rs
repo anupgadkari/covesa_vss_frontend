@@ -1103,28 +1103,48 @@ async fn given_paired_fob_in_zone(w: &mut VssWorld, slot: u8, zone: String) {
         (1..=4).contains(&slot),
         "paired fobs are slots 1..=4 (slots 5, 6 are unpaired in the default plant config)"
     );
-    let path: VssPath = match slot {
-        1 => "Body.PEPS.Plant.KeyFob.1.Zone",
-        2 => "Body.PEPS.Plant.KeyFob.2.Zone",
-        3 => "Body.PEPS.Plant.KeyFob.3.Zone",
-        4 => "Body.PEPS.Plant.KeyFob.4.Zone",
+    // Dual injection: PlacedZone (HMI ground truth, drives the PEPS
+    // plant model and the KeySearchArbiter cache) + LastObservedZone
+    // (what consumer features subscribe to post-#14a).  Without the
+    // second inject the cucumber suite would need to wait for the
+    // arbiter's approach poll to fire before LastObservedZone was
+    // published, which is racy at the e2e timing layer.
+    let placed: VssPath = match slot {
+        1 => "Body.PEPS.Plant.KeyFob.1.PlacedZone",
+        2 => "Body.PEPS.Plant.KeyFob.2.PlacedZone",
+        3 => "Body.PEPS.Plant.KeyFob.3.PlacedZone",
+        4 => "Body.PEPS.Plant.KeyFob.4.PlacedZone",
         _ => unreachable!(),
     };
-    w.inject(path, SignalValue::String(zone_string(&zone)))
-        .await;
+    let observed: VssPath = match slot {
+        1 => "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
+        2 => "Body.PEPS.Plant.KeyFob.2.LastObservedZone",
+        3 => "Body.PEPS.Plant.KeyFob.3.LastObservedZone",
+        4 => "Body.PEPS.Plant.KeyFob.4.LastObservedZone",
+        _ => unreachable!(),
+    };
+    let val = SignalValue::String(zone_string(&zone));
+    w.inject(placed, val.clone()).await;
+    w.inject(observed, val).await;
 }
 
 #[given(regex = r#"^paired phone (\d+) is in the (\w+) zone$"#)]
 async fn given_paired_phone_in_zone(w: &mut VssWorld, slot: u8, zone: String) {
     w.ensure_passive_entry_started().await;
     assert!((1..=2).contains(&slot), "paired phones are slots 1..=2");
-    let path: VssPath = match slot {
-        1 => "Body.PEPS.Plant.BlePhone.1.Zone",
-        2 => "Body.PEPS.Plant.BlePhone.2.Zone",
+    let placed: VssPath = match slot {
+        1 => "Body.PEPS.Plant.BlePhone.1.PlacedZone",
+        2 => "Body.PEPS.Plant.BlePhone.2.PlacedZone",
         _ => unreachable!(),
     };
-    w.inject(path, SignalValue::String(zone_string(&zone)))
-        .await;
+    let observed: VssPath = match slot {
+        1 => "Body.PEPS.Plant.BlePhone.1.LastObservedZone",
+        2 => "Body.PEPS.Plant.BlePhone.2.LastObservedZone",
+        _ => unreachable!(),
+    };
+    let val = SignalValue::String(zone_string(&zone));
+    w.inject(placed, val.clone()).await;
+    w.inject(observed, val).await;
 }
 
 #[given(regex = r#"^unpaired fob (\d+) is in the (\w+) zone$"#)]
@@ -1135,13 +1155,19 @@ async fn given_unpaired_fob_in_zone(w: &mut VssWorld, slot: u8, zone: String) {
         slot == 5 || slot == 6,
         "unpaired fobs are slots 5, 6 (1..=4 are paired)"
     );
-    let path: VssPath = match slot {
-        5 => "Body.PEPS.Plant.KeyFob.5.Zone",
-        6 => "Body.PEPS.Plant.KeyFob.6.Zone",
+    let placed: VssPath = match slot {
+        5 => "Body.PEPS.Plant.KeyFob.5.PlacedZone",
+        6 => "Body.PEPS.Plant.KeyFob.6.PlacedZone",
         _ => unreachable!(),
     };
-    w.inject(path, SignalValue::String(zone_string(&zone)))
-        .await;
+    let observed: VssPath = match slot {
+        5 => "Body.PEPS.Plant.KeyFob.5.LastObservedZone",
+        6 => "Body.PEPS.Plant.KeyFob.6.LastObservedZone",
+        _ => unreachable!(),
+    };
+    let val = SignalValue::String(zone_string(&zone));
+    w.inject(placed, val.clone()).await;
+    w.inject(observed, val).await;
 }
 
 #[given("no paired devices are positioned in any zone")]
@@ -1151,12 +1177,18 @@ async fn given_no_devices_positioned(w: &mut VssWorld) {
     // explicit so the scenario is robust to any prior step having
     // moved a device.
     for path in [
-        "Body.PEPS.Plant.KeyFob.1.Zone",
-        "Body.PEPS.Plant.KeyFob.2.Zone",
-        "Body.PEPS.Plant.KeyFob.3.Zone",
-        "Body.PEPS.Plant.KeyFob.4.Zone",
-        "Body.PEPS.Plant.BlePhone.1.Zone",
-        "Body.PEPS.Plant.BlePhone.2.Zone",
+        "Body.PEPS.Plant.KeyFob.1.PlacedZone",
+        "Body.PEPS.Plant.KeyFob.2.PlacedZone",
+        "Body.PEPS.Plant.KeyFob.3.PlacedZone",
+        "Body.PEPS.Plant.KeyFob.4.PlacedZone",
+        "Body.PEPS.Plant.BlePhone.1.PlacedZone",
+        "Body.PEPS.Plant.BlePhone.2.PlacedZone",
+        "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
+        "Body.PEPS.Plant.KeyFob.2.LastObservedZone",
+        "Body.PEPS.Plant.KeyFob.3.LastObservedZone",
+        "Body.PEPS.Plant.KeyFob.4.LastObservedZone",
+        "Body.PEPS.Plant.BlePhone.1.LastObservedZone",
+        "Body.PEPS.Plant.BlePhone.2.LastObservedZone",
     ] {
         w.inject(path, SignalValue::String("OutOfRange".into()))
             .await;

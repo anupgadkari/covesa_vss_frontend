@@ -6,10 +6,12 @@
 //!
 //! ## How it works
 //!
-//! The HMI or test harness positions devices by publishing zone signals
-//! (e.g., `Body.PEPS.Plant.KeyFob.1.Zone = "LeftFront"`). When the
-//! vehicle-side feature logic sends a challenge, each device in a
-//! compatible zone responds with an AES-128 encrypted reply.
+//! The HMI or test harness positions devices by publishing PlacedZone
+//! signals (e.g., `Body.PEPS.Plant.KeyFob.1.PlacedZone = "LeftFront"`).
+//! When the vehicle-side feature logic sends a challenge, each device
+//! in a compatible zone responds with an AES-128 encrypted reply.
+//! The `KeySearchArbiter` separately publishes `LastObservedZone`
+//! after each scan, which is what consumer features subscribe to.
 //!
 //! ```text
 //!  ┌───────────┐    zone signals     ┌─────────────────┐
@@ -138,8 +140,6 @@ impl<B: SignalBus> PepsPlantModel<B> {
         };
         let old = fob.zone;
         if old == zone {
-            // No-op edge — skip the mirror publish so we don't create
-            // a feedback loop with our own `.Zone` subscription.
             return;
         }
         fob.zone = zone;
@@ -149,22 +149,6 @@ impl<B: SignalBus> PepsPlantModel<B> {
             to = %zone,
             "PEPS plant: fob zone changed"
         );
-
-        // Transitional `.Zone` mirror — feature consumers that haven't
-        // migrated to `.LastObservedZone` still read `.Zone` directly.
-        // The HMI writes `.PlacedZone` only; the plant republishes the
-        // same value to `.Zone` here so the legacy subscribers keep
-        // seeing position changes.  Will be removed once every consumer
-        // is on the LastObservedZone path.  Guarded by the `old == zone`
-        // check above so a `.Zone` write doesn't feedback-loop into
-        // itself via our dual subscription.
-        let _ = self
-            .bus
-            .publish(
-                signals::KEYFOB_ZONES[index],
-                SignalValue::String(zone.to_string()),
-            )
-            .await;
 
         // Publish RSSI feedback when in an LF zone, clear when leaving.
         let rssi_signal = signals::KEYFOB_RSSIS[index];
@@ -192,7 +176,6 @@ impl<B: SignalBus> PepsPlantModel<B> {
         };
         let old = phone.zone;
         if old == zone {
-            // No-op edge — skip the mirror publish (see set_fob_zone).
             return;
         }
         phone.zone = zone;
@@ -202,15 +185,6 @@ impl<B: SignalBus> PepsPlantModel<B> {
             to = %zone,
             "PEPS plant: phone zone changed"
         );
-
-        // Transitional `.Zone` mirror — see set_fob_zone above.
-        let _ = self
-            .bus
-            .publish(
-                signals::PHONE_ZONES[index],
-                SignalValue::String(zone.to_string()),
-            )
-            .await;
 
         let rssi_signal = signals::PHONE_RSSIS[index];
         if zone.supports_rssi() {
@@ -359,38 +333,17 @@ impl<B: SignalBus> PepsPlantModel<B> {
             self.nfc_cards.len()
         );
 
-        // Subscribe to fob zone signals.  Both `.PlacedZone` (new,
-        // HMI drag-and-drop target per item #14a) and the legacy
-        // `.Zone` are accepted — the plant treats either write as a
-        // position update from the simulator and republishes back to
-        // both signals so consumers on either path stay in sync.  The
-        // dual subscription preserves backward compatibility for the
-        // many tests + consumer features that still inject / read
-        // `.Zone` directly; new code should use `.PlacedZone`.
-        let mut fz0 = futures::stream::select(
-            self.bus.subscribe(signals::KEYFOB_PLACED_ZONES[0]).await,
-            self.bus.subscribe(signals::KEYFOB_ZONES[0]).await,
-        );
-        let mut fz1 = futures::stream::select(
-            self.bus.subscribe(signals::KEYFOB_PLACED_ZONES[1]).await,
-            self.bus.subscribe(signals::KEYFOB_ZONES[1]).await,
-        );
-        let mut fz2 = futures::stream::select(
-            self.bus.subscribe(signals::KEYFOB_PLACED_ZONES[2]).await,
-            self.bus.subscribe(signals::KEYFOB_ZONES[2]).await,
-        );
-        let mut fz3 = futures::stream::select(
-            self.bus.subscribe(signals::KEYFOB_PLACED_ZONES[3]).await,
-            self.bus.subscribe(signals::KEYFOB_ZONES[3]).await,
-        );
-        let mut fz4 = futures::stream::select(
-            self.bus.subscribe(signals::KEYFOB_PLACED_ZONES[4]).await,
-            self.bus.subscribe(signals::KEYFOB_ZONES[4]).await,
-        );
-        let mut fz5 = futures::stream::select(
-            self.bus.subscribe(signals::KEYFOB_PLACED_ZONES[5]).await,
-            self.bus.subscribe(signals::KEYFOB_ZONES[5]).await,
-        );
+        // Subscribe to per-fob PlacedZone signals.  PlacedZone is the
+        // HMI's drag-and-drop target (item #14a + follow-up); the
+        // legacy `.Zone` signal has been retired now that every
+        // feature subscribes to LastObservedZone via the
+        // KeySearchArbiter.
+        let mut fz0 = self.bus.subscribe(signals::KEYFOB_PLACED_ZONES[0]).await;
+        let mut fz1 = self.bus.subscribe(signals::KEYFOB_PLACED_ZONES[1]).await;
+        let mut fz2 = self.bus.subscribe(signals::KEYFOB_PLACED_ZONES[2]).await;
+        let mut fz3 = self.bus.subscribe(signals::KEYFOB_PLACED_ZONES[3]).await;
+        let mut fz4 = self.bus.subscribe(signals::KEYFOB_PLACED_ZONES[4]).await;
+        let mut fz5 = self.bus.subscribe(signals::KEYFOB_PLACED_ZONES[5]).await;
 
         // Fob button signals (paired fobs 1..4 only).
         let mut fb0 = self.bus.subscribe(signals::KEYFOB_BUTTONS[0]).await;
@@ -398,15 +351,9 @@ impl<B: SignalBus> PepsPlantModel<B> {
         let mut fb2 = self.bus.subscribe(signals::KEYFOB_BUTTONS[2]).await;
         let mut fb3 = self.bus.subscribe(signals::KEYFOB_BUTTONS[3]).await;
 
-        // Phone zone signals — same dual-subscription pattern as fobs.
-        let mut pz0 = futures::stream::select(
-            self.bus.subscribe(signals::PHONE_PLACED_ZONES[0]).await,
-            self.bus.subscribe(signals::PHONE_ZONES[0]).await,
-        );
-        let mut pz1 = futures::stream::select(
-            self.bus.subscribe(signals::PHONE_PLACED_ZONES[1]).await,
-            self.bus.subscribe(signals::PHONE_ZONES[1]).await,
-        );
+        // Phone PlacedZone signals.
+        let mut pz0 = self.bus.subscribe(signals::PHONE_PLACED_ZONES[0]).await;
+        let mut pz1 = self.bus.subscribe(signals::PHONE_PLACED_ZONES[1]).await;
 
         // NFC position signals.
         let mut np0 = self.bus.subscribe(signals::NFC_POSITIONS[0]).await;
@@ -936,7 +883,7 @@ mod tests {
 
         // Inject a zone change via the bus
         bus.inject(
-            signals::KEYFOB_1_ZONE,
+            signals::KEYFOB_1_PLACED_ZONE,
             SignalValue::String("LeftFront".into()),
         );
         tokio::task::yield_now().await;
@@ -967,7 +914,7 @@ mod tests {
 
         // Place fob 1 at approach, then trigger a poll
         bus.inject(
-            signals::KEYFOB_1_ZONE,
+            signals::KEYFOB_1_PLACED_ZONE,
             SignalValue::String("Approach".into()),
         );
         tokio::task::yield_now().await;
@@ -1021,7 +968,7 @@ mod tests {
 
         // Place fob 1 at LeftFront (proximity)
         bus.inject(
-            signals::KEYFOB_1_ZONE,
+            signals::KEYFOB_1_PLACED_ZONE,
             SignalValue::String("LeftFront".into()),
         );
         tokio::task::yield_now().await;
@@ -1074,7 +1021,7 @@ mod tests {
 
         // Place fob 1 at Approach (only RSSI, no challenge-response)
         bus.inject(
-            signals::KEYFOB_1_ZONE,
+            signals::KEYFOB_1_PLACED_ZONE,
             SignalValue::String("Approach".into()),
         );
         tokio::task::yield_now().await;
@@ -1116,8 +1063,14 @@ mod tests {
         tokio::task::yield_now().await;
 
         // Fob 1 at Cabin (proximity), fob 2 at OutOfRange, fob 3 at Trunk (proximity)
-        bus.inject(signals::KEYFOB_1_ZONE, SignalValue::String("Cabin".into()));
-        bus.inject(signals::KEYFOB_3_ZONE, SignalValue::String("Trunk".into()));
+        bus.inject(
+            signals::KEYFOB_1_PLACED_ZONE,
+            SignalValue::String("Cabin".into()),
+        );
+        bus.inject(
+            signals::KEYFOB_3_PLACED_ZONE,
+            SignalValue::String("Trunk".into()),
+        );
         tokio::task::yield_now().await;
         tokio::task::yield_now().await;
 
@@ -1178,7 +1131,7 @@ mod tests {
 
         // Place unpaired fob 5 at LeftFront
         bus.inject(
-            signals::KEYFOB_5_ZONE,
+            signals::KEYFOB_5_PLACED_ZONE,
             SignalValue::String("LeftFront".into()),
         );
         tokio::task::yield_now().await;
@@ -1234,7 +1187,7 @@ mod tests {
 
         // Place phone 1 at RightFront
         bus.inject(
-            signals::PHONE_1_ZONE,
+            signals::PHONE_1_PLACED_ZONE,
             SignalValue::String("RightFront".into()),
         );
         tokio::task::yield_now().await;
@@ -1279,7 +1232,7 @@ mod tests {
         tokio::task::yield_now().await;
 
         bus.inject(
-            signals::PHONE_1_ZONE,
+            signals::PHONE_1_PLACED_ZONE,
             SignalValue::String("Approach".into()),
         );
         tokio::task::yield_now().await;
@@ -1399,7 +1352,7 @@ mod tests {
 
         // Place fob 1 in RF range
         bus.inject(
-            signals::KEYFOB_1_ZONE,
+            signals::KEYFOB_1_PLACED_ZONE,
             SignalValue::String("RfRange".into()),
         );
         tokio::task::yield_now().await;
@@ -1444,7 +1397,7 @@ mod tests {
         tokio::task::yield_now().await;
 
         bus.inject(
-            signals::KEYFOB_1_ZONE,
+            signals::KEYFOB_1_PLACED_ZONE,
             SignalValue::String("RfRange".into()),
         );
         tokio::task::yield_now().await;
@@ -1499,7 +1452,7 @@ mod tests {
         tokio::task::yield_now().await;
 
         bus.inject(
-            signals::KEYFOB_1_ZONE,
+            signals::KEYFOB_1_PLACED_ZONE,
             SignalValue::String("RfRange".into()),
         );
         tokio::task::yield_now().await;
@@ -1609,7 +1562,7 @@ mod tests {
         tokio::task::yield_now().await;
 
         bus.inject(
-            signals::KEYFOB_1_ZONE,
+            signals::KEYFOB_1_PLACED_ZONE,
             SignalValue::String("LeftFront".into()),
         );
         tokio::task::yield_now().await;
@@ -1658,11 +1611,11 @@ mod tests {
 
         // Place fob 1 and fob 2 in range
         bus.inject(
-            signals::KEYFOB_1_ZONE,
+            signals::KEYFOB_1_PLACED_ZONE,
             SignalValue::String("RfRange".into()),
         );
         bus.inject(
-            signals::KEYFOB_2_ZONE,
+            signals::KEYFOB_2_PLACED_ZONE,
             SignalValue::String("RfRange".into()),
         );
         tokio::task::yield_now().await;
@@ -1717,7 +1670,7 @@ mod tests {
         tokio::task::yield_now().await;
 
         bus.inject(
-            signals::KEYFOB_1_ZONE,
+            signals::KEYFOB_1_PLACED_ZONE,
             SignalValue::String("RfRange".into()),
         );
         tokio::task::yield_now().await;
@@ -1756,7 +1709,7 @@ mod tests {
         tokio::task::yield_now().await;
 
         bus.inject(
-            signals::PHONE_1_ZONE,
+            signals::PHONE_1_PLACED_ZONE,
             SignalValue::String("RightFront".into()),
         );
         tokio::task::yield_now().await;
@@ -1793,13 +1746,16 @@ mod tests {
         tokio::task::yield_now().await;
 
         // Move to LF zone first, then out
-        bus.inject(signals::PHONE_1_ZONE, SignalValue::String("Cabin".into()));
+        bus.inject(
+            signals::PHONE_1_PLACED_ZONE,
+            SignalValue::String("Cabin".into()),
+        );
         tokio::task::yield_now().await;
         tokio::task::yield_now().await;
 
         bus.clear_history();
         bus.inject(
-            signals::PHONE_1_ZONE,
+            signals::PHONE_1_PLACED_ZONE,
             SignalValue::String("OutOfRange".into()),
         );
         tokio::task::yield_now().await;
@@ -1831,11 +1787,11 @@ mod tests {
 
         // Phone 1 at LeftFront (proximity), Phone 2 at Approach (no challenge)
         bus.inject(
-            signals::PHONE_1_ZONE,
+            signals::PHONE_1_PLACED_ZONE,
             SignalValue::String("LeftFront".into()),
         );
         bus.inject(
-            signals::PHONE_2_ZONE,
+            signals::PHONE_2_PLACED_ZONE,
             SignalValue::String("Approach".into()),
         );
         tokio::task::yield_now().await;
@@ -1876,7 +1832,10 @@ mod tests {
         );
 
         // Now move phone 2 to proximity and re-challenge
-        bus.inject(signals::PHONE_2_ZONE, SignalValue::String("Hood".into()));
+        bus.inject(
+            signals::PHONE_2_PLACED_ZONE,
+            SignalValue::String("Hood".into()),
+        );
         tokio::task::yield_now().await;
         tokio::task::yield_now().await;
 
@@ -1913,11 +1872,11 @@ mod tests {
         tokio::task::yield_now().await;
 
         bus.inject(
-            signals::PHONE_1_ZONE,
+            signals::PHONE_1_PLACED_ZONE,
             SignalValue::String("Approach".into()),
         );
         bus.inject(
-            signals::PHONE_2_ZONE,
+            signals::PHONE_2_PLACED_ZONE,
             SignalValue::String("OutOfRange".into()),
         );
         tokio::task::yield_now().await;
@@ -2101,7 +2060,7 @@ mod tests {
 
         // Place unpaired fob 6 at RightFront
         bus.inject(
-            signals::KEYFOB_6_ZONE,
+            signals::KEYFOB_6_PLACED_ZONE,
             SignalValue::String("RightFront".into()),
         );
         tokio::task::yield_now().await;
@@ -2150,23 +2109,23 @@ mod tests {
 
         // Place unpaired fob 5 and all paired fobs at LeftFront
         bus.inject(
-            signals::KEYFOB_5_ZONE,
+            signals::KEYFOB_5_PLACED_ZONE,
             SignalValue::String("LeftFront".into()),
         );
         bus.inject(
-            signals::KEYFOB_1_ZONE,
+            signals::KEYFOB_1_PLACED_ZONE,
             SignalValue::String("LeftFront".into()),
         );
         bus.inject(
-            signals::KEYFOB_2_ZONE,
+            signals::KEYFOB_2_PLACED_ZONE,
             SignalValue::String("LeftFront".into()),
         );
         bus.inject(
-            signals::KEYFOB_3_ZONE,
+            signals::KEYFOB_3_PLACED_ZONE,
             SignalValue::String("LeftFront".into()),
         );
         bus.inject(
-            signals::KEYFOB_4_ZONE,
+            signals::KEYFOB_4_PLACED_ZONE,
             SignalValue::String("LeftFront".into()),
         );
         tokio::task::yield_now().await;
@@ -2223,7 +2182,7 @@ mod tests {
 
         // Place unpaired fob 5 in Approach zone
         bus.inject(
-            signals::KEYFOB_5_ZONE,
+            signals::KEYFOB_5_PLACED_ZONE,
             SignalValue::String("Approach".into()),
         );
         tokio::task::yield_now().await;

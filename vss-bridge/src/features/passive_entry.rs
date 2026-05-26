@@ -240,9 +240,14 @@ impl PairedDevice {
     }
 
     fn zone_signal(&self) -> VssPath {
+        // Migrated to LastObservedZone (item #14a follow-up).  Real
+        // PassiveEntry only ever knows position from the LF
+        // subsystem's most recent scan — KeySearchArbiter publishes
+        // LastObservedZone after every approach poll + after every
+        // feature-submitted authenticated search.
         match self.kind {
-            DeviceKind::Fob => peps_signals::KEYFOB_ZONES[self.slot],
-            DeviceKind::Phone => peps_signals::PHONE_ZONES[self.slot],
+            DeviceKind::Fob => peps_signals::KEYFOB_LAST_OBSERVED_ZONES[self.slot],
+            DeviceKind::Phone => peps_signals::PHONE_LAST_OBSERVED_ZONES[self.slot],
         }
     }
 
@@ -877,7 +882,11 @@ mod tests {
 
         // Place fob 1 in LeftFront zone.
         bus.inject(
-            peps_signals::KEYFOB_1_ZONE,
+            peps_signals::KEYFOB_1_PLACED_ZONE,
+            SignalValue::String("LeftFront".into()),
+        );
+        bus.inject(
+            peps_signals::KEYFOB_1_LAST_OBSERVED_ZONE,
             SignalValue::String("LeftFront".into()),
         );
         drain().await;
@@ -907,7 +916,11 @@ mod tests {
         let bus = setup().await;
 
         bus.inject(
-            peps_signals::KEYFOB_1_ZONE,
+            peps_signals::KEYFOB_1_PLACED_ZONE,
+            SignalValue::String("Approach".into()),
+        );
+        bus.inject(
+            peps_signals::KEYFOB_1_LAST_OBSERVED_ZONE,
             SignalValue::String("Approach".into()),
         );
         drain().await;
@@ -952,7 +965,11 @@ mod tests {
     async fn second_driver_pull_after_stage_one_is_skipped() {
         let bus = setup().await;
         bus.inject(
-            peps_signals::KEYFOB_1_ZONE,
+            peps_signals::KEYFOB_1_PLACED_ZONE,
+            SignalValue::String("LeftFront".into()),
+        );
+        bus.inject(
+            peps_signals::KEYFOB_1_LAST_OBSERVED_ZONE,
             SignalValue::String("LeftFront".into()),
         );
         drain().await;
@@ -995,7 +1012,11 @@ mod tests {
     async fn passenger_pull_after_stage_one_unlocks_all() {
         let bus = setup().await;
         bus.inject(
-            peps_signals::KEYFOB_1_ZONE,
+            peps_signals::KEYFOB_1_PLACED_ZONE,
+            SignalValue::String("LeftFront".into()),
+        );
+        bus.inject(
+            peps_signals::KEYFOB_1_LAST_OBSERVED_ZONE,
             SignalValue::String("LeftFront".into()),
         );
         drain().await;
@@ -1010,7 +1031,11 @@ mod tests {
 
         // Move fob to RightFront, pull passenger — should unlock all.
         bus.inject(
-            peps_signals::KEYFOB_1_ZONE,
+            peps_signals::KEYFOB_1_PLACED_ZONE,
+            SignalValue::String("RightFront".into()),
+        );
+        bus.inject(
+            peps_signals::KEYFOB_1_LAST_OBSERVED_ZONE,
             SignalValue::String("RightFront".into()),
         );
         drain().await;
@@ -1029,7 +1054,11 @@ mod tests {
     async fn pull_while_cabin_unlocked_skips_auth() {
         let bus = setup().await;
         bus.inject(
-            peps_signals::KEYFOB_1_ZONE,
+            peps_signals::KEYFOB_1_PLACED_ZONE,
+            SignalValue::String("LeftFront".into()),
+        );
+        bus.inject(
+            peps_signals::KEYFOB_1_LAST_OBSERVED_ZONE,
             SignalValue::String("LeftFront".into()),
         );
         // Force cabin into UNLOCKED.
@@ -1077,7 +1106,11 @@ mod tests {
     async fn passenger_handle_pull_unlocks_all_even_with_two_stage() {
         let bus = setup().await;
         bus.inject(
-            peps_signals::KEYFOB_1_ZONE,
+            peps_signals::KEYFOB_1_PLACED_ZONE,
+            SignalValue::String("RightFront".into()),
+        );
+        bus.inject(
+            peps_signals::KEYFOB_1_LAST_OBSERVED_ZONE,
             SignalValue::String("RightFront".into()),
         );
         drain().await;
@@ -1102,7 +1135,11 @@ mod tests {
     async fn rear_handle_pull_does_not_trigger_passive_entry_by_default() {
         let bus = setup().await;
         bus.inject(
-            peps_signals::KEYFOB_1_ZONE,
+            peps_signals::KEYFOB_1_PLACED_ZONE,
+            SignalValue::String("RightFront".into()),
+        );
+        bus.inject(
+            peps_signals::KEYFOB_1_LAST_OBSERVED_ZONE,
             SignalValue::String("RightFront".into()),
         );
         drain().await;
@@ -1171,7 +1208,11 @@ mod tests {
         // handle — should unlock all (front-passenger-bypass-style
         // path runs because Row2.* maps to RightFront proximity).
         bus2.inject(
-            peps_signals::KEYFOB_1_ZONE,
+            peps_signals::KEYFOB_1_PLACED_ZONE,
+            SignalValue::String("RightFront".into()),
+        );
+        bus2.inject(
+            peps_signals::KEYFOB_1_LAST_OBSERVED_ZONE,
             SignalValue::String("RightFront".into()),
         );
         drain().await;
@@ -1210,7 +1251,11 @@ mod tests {
     async fn rhd_driver_pull_first_press_is_unlock_driver() {
         let bus = setup_rhd().await;
         bus.inject(
-            peps_signals::KEYFOB_1_ZONE,
+            peps_signals::KEYFOB_1_PLACED_ZONE,
+            SignalValue::String("RightFront".into()),
+        );
+        bus.inject(
+            peps_signals::KEYFOB_1_LAST_OBSERVED_ZONE,
             SignalValue::String("RightFront".into()),
         );
         drain().await;
@@ -1235,7 +1280,11 @@ mod tests {
     async fn rhd_second_driver_pull_after_stage_one_is_skipped() {
         let bus = setup_rhd().await;
         bus.inject(
-            peps_signals::KEYFOB_1_ZONE,
+            peps_signals::KEYFOB_1_PLACED_ZONE,
+            SignalValue::String("RightFront".into()),
+        );
+        bus.inject(
+            peps_signals::KEYFOB_1_LAST_OBSERVED_ZONE,
             SignalValue::String("RightFront".into()),
         );
         drain().await;
@@ -1275,7 +1324,11 @@ mod tests {
     async fn rhd_passenger_pull_unlocks_all_even_with_two_stage() {
         let bus = setup_rhd().await;
         bus.inject(
-            peps_signals::KEYFOB_1_ZONE,
+            peps_signals::KEYFOB_1_PLACED_ZONE,
+            SignalValue::String("LeftFront".into()),
+        );
+        bus.inject(
+            peps_signals::KEYFOB_1_LAST_OBSERVED_ZONE,
             SignalValue::String("LeftFront".into()),
         );
         drain().await;
@@ -1303,7 +1356,11 @@ mod tests {
 
         // Slot index 4 = fob 5 (unpaired in default plant config).
         bus.inject(
-            peps_signals::KEYFOB_5_ZONE,
+            peps_signals::KEYFOB_5_PLACED_ZONE,
+            SignalValue::String("LeftFront".into()),
+        );
+        bus.inject(
+            peps_signals::KEYFOB_5_LAST_OBSERVED_ZONE,
             SignalValue::String("LeftFront".into()),
         );
         drain().await;
@@ -1327,7 +1384,11 @@ mod tests {
         let bus = setup().await;
 
         bus.inject(
-            peps_signals::PHONE_1_ZONE,
+            peps_signals::PHONE_1_PLACED_ZONE,
+            SignalValue::String("LeftFront".into()),
+        );
+        bus.inject(
+            peps_signals::PHONE_1_LAST_OBSERVED_ZONE,
             SignalValue::String("LeftFront".into()),
         );
         drain().await;
