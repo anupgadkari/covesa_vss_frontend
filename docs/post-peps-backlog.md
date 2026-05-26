@@ -35,6 +35,7 @@ item is independently shippable as its own sub-branch / PR.
 | 19 | Kuksa.val databroker integration (replace MockBus on the SignalBus seam) | L | 📋 Program-level |
 | 20 | Feature-completeness + interconnection audit (requirements + Gherkin + tests) | M | 📋 Program-level |
 | 21 | Run the test suite on a virtualised target (QEMU / Renode / Avocado) | L | 📋 Program-level |
+| 22 | Refresh to the latest COVESA VSS release (currently pinned at v4.0) | M | 📋 Program-level |
 
 Suggested next order: **13 → 16 → 14 → 15 → 17**.  Reasoning:
 **13** is a localised migration that exercises the arbiter end-to-end
@@ -611,6 +612,112 @@ suite on a virtualised target so we catch them before bench.
   packet-accurate but not always cycle-accurate.  Pure logical
   regression is reliable; timing-sensitive races still need
   bench validation.
+
+---
+
+## 22. Refresh to the latest COVESA VSS release  *(M)*
+
+**Trigger.**  The bridge currently targets **VSS v4.0** — visible in
+the doc comments scattered through `ws_bridge.rs`, `main.rs`, and
+the assumed paths in `signal_ids.rs` (e.g.
+`Vehicle.LowVoltageSystemState`, `Vehicle.Cabin.Infotainment.HMI.DayNightMode`,
+the four `Vehicle.Chassis.Axle.Row{1,2}.Wheel.{Left,Right}.Tire.IsPressureLow`
+TPMS signals).  COVESA cuts a new VSS release every few months;
+each one adds signals, occasionally renames or reshapes existing
+branches, and updates the catalog units / enums.  Staying on v4.0
+ships an aging schema and forecloses any new signals the OEM may
+want to expose to head units / fleet telematics / OTA tools.
+
+**Built on (in `main`).**
+- `signal_ids.rs` — the single chokepoint where every VSS path
+  is registered with a stable 32-bit ID.  Any rename in the new
+  catalog only touches this file + the const string in each
+  feature that references it.
+- The MockBus / KuksaBus (item 19) is path-agnostic — it carries
+  whatever string we give it.  No bus-layer changes needed.
+- VSS-tools (`vspec`, `vss2vss-yaml`, the JSON / Protobuf
+  generators) — used to produce the kuksa.val catalog and the
+  HMI side's signal manifest.
+
+**Plan.**
+
+1. **Check the latest release.**  Pull
+   `https://github.com/COVESA/vehicle_signal_specification/releases`
+   and read the changelog for every minor since v4.0.  As of the
+   writing of this item: v4.1, v4.2, v5.0 (breaking) shipped;
+   v5.x is the likely target.  Note in the PR description which
+   specific tag is being adopted.
+2. **Pull the spec.**  `git submodule add` the COVESA repo at
+   the chosen tag, or vendor the generated YAML catalog into
+   `vss-bridge/specs/vss-<version>.yaml`.
+3. **Generate the path manifest.**  Run `vspec export json` (or
+   the binary Protobuf generator) into a file the HMI and the
+   bridge both consume.  Update the HMI's manifest path.
+4. **Migrate `signal_ids.rs`.**
+   - For every path the bridge currently registers, look up the
+     new release's equivalent.  Three outcomes per path:
+     - **Unchanged** — no work.
+     - **Renamed / reshaped** — update the string; keep the
+       32-bit ID stable so on-the-wire compatibility holds.  Log
+       the rename in a section of the file's header so
+       downstream Tier-2 consumers know what moved.
+     - **Deleted** — usually means a signal was promoted into a
+       struct or replaced by something more idiomatic.  Map our
+       use to the replacement.
+5. **New signals worth adopting.**  Sweep the new spec for any
+   body-domain signals we don't expose yet but probably should:
+   - VSS 4.1+: `Vehicle.Cabin.Door.RowN.SideN.ChildLock.IsActive`
+     (we have our own `Body.Doors.RowN.SideN.IsChildLockActive` —
+     consider migrating to the canonical path).
+   - VSS 5.0+: cabin comfort / interior lighting signals that
+     might subsume our `Cabin.Lights.IsDomeOn`.
+   - Anything new under `Vehicle.Body.PEPS` — VSS hasn't
+     historically modelled PEPS deeply, but the cabin / driver-
+     identification area in 5.x is expanding.  Worth a look.
+6. **Update all in-code references.**  Doc comments saying "VSS
+   v4.0" become "VSS v5.x" (or whatever the chosen tag is).
+   `Cargo.toml` `description` field updates to mention the new
+   version.
+7. **Regenerate the kuksa.val catalog** (gated on item 19
+   landing).  The broker only understands signals that exist in
+   its loaded VSS catalog; the regenerated catalog is what makes
+   the new paths queryable.
+8. **HMI sync.**  The web HMI reads the signal manifest at
+   runtime; it picks up the new paths automatically once the
+   manifest is regenerated.  Test the chip rendering / signal
+   log explorer pages against the new catalog.
+9. **Tests.**
+   - Existing lib + e2e + ws_integration suites should pass
+     unchanged on renamed-but-equivalent paths after step 4.
+     A failing test is most likely catching a rename we missed.
+   - Add one new test per newly-adopted signal that publishes
+     and reads it through the bus, asserting the round-trip
+     works.
+10. **Tier-2 callout.**  If any path the platform's API surface
+    exposes to head units / cluster gets renamed, that's a
+    breaking change downstream — flag it in the PR description
+    and coordinate the rename with whatever consumer owns the
+    head-unit / cluster integration.
+
+**Risks.**
+- **Breaking renames cascade.**  A renamed signal in the schema
+  means every feature consuming it touches; with ~30 features
+  and ~300 signal paths the search-and-replace is mechanical but
+  needs careful review.  Mitigate by doing the rename in two
+  PRs: one that adds aliases (both old and new paths publish to
+  the same `latest_value`), then a follow-up that removes the
+  old path after every consumer has migrated.
+- **Deleted signals.**  Rare but real.  Need a fallback
+  signal-or-feature-removal plan per case.
+- **HMI manifest drift.**  If the HMI loads a stale manifest
+  it'll silently fall back to "unknown signal" rendering.  Wire
+  a manifest-version check into the WS handshake so a mismatched
+  HMI logs a loud warning.
+- **Cadence.**  COVESA ships VSS roughly twice a year.  Once
+  we're on a recent tag the rebase cost stays small (~a day per
+  release) if we keep up; let it slip 2-3 releases and the next
+  bump grows non-linearly.  Worth wiring into the team's
+  quarterly cadence after the first catch-up.
 
 ---
 
