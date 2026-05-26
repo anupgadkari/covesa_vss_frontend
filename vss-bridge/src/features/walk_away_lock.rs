@@ -17,13 +17,30 @@
 //! It fires when every *currently-armed* device is back outside the approach zone.
 //! After firing, the armed set is cleared and the feature waits for the next entry.
 //!
+//! # Closure gate
+//! Before WAL will dispatch a lock, **every cabin door, the trunk,
+//! and the hood must be closed at the moment of dispatch**.  Any open
+//! opening means the driver is still actively using the vehicle
+//! (loading bags, kid still climbing out, mechanic under the hood)
+//! and is overwhelmingly likely to come back — auto-locking now is
+//! hostile UX, and in the unloading case it also raises the risk of
+//! a fob getting set down on a seat or in the cargo bay during the
+//! flurry of activity.  Closing every opening is a deliberate "I am
+//! done with this car" gesture; only after that gesture is the
+//! walk-away signal trustworthy.  Closure is checked **at dispatch
+//! time**, not at arm time, so a door re-opened mid-walkaway (kid
+//! comes back for forgotten phone) still suppresses the lock.
+//!
 //! # Interior-key guard
-//! Before dispatching the `LockAll`, WAL submits a `Cabin + TrunkInside`
+//! After the closure gate passes, WAL submits a `Cabin + TrunkInside`
 //! authenticated key-search.  If any paired fob is still inside the
 //! vehicle, the lock is held off — locking would leave the only
 //! paired key sealed inside, which is exactly the lockout this
 //! feature must not cause.  The armed set is preserved across the
-//! hold-off so the next zone event can re-evaluate.
+//! hold-off so the next zone event can re-evaluate.  The closure
+//! gate catches the common cases at the source; the interior-key
+//! guard is the belt-and-suspenders for the rare "driver closed
+//! every door but walked away with no fob" edge.
 //!
 //! # Scope
 //! Tracks 4 keyfobs and 2 BLE phones (the full device set in the simulation).
@@ -66,6 +83,22 @@ const PHONE_ZONE_SIGNALS: [&str; 2] = [
 const NUM_FOBS: usize = 4;
 const NUM_PHONES: usize = 2;
 const NUM_DEVICES: usize = NUM_FOBS + NUM_PHONES;
+
+/// Cabin door IsOpen signals.  WAL holds off until every cabin door
+/// is closed — a door still open means the driver is mid-activity
+/// (loading bags, kid getting out, etc.), not actually walking away.
+const DOOR_OPEN_SIGNALS: [&str; 4] = [
+    "Body.Doors.Row1.Left.IsOpen",
+    "Body.Doors.Row1.Right.IsOpen",
+    "Body.Doors.Row2.Left.IsOpen",
+    "Body.Doors.Row2.Right.IsOpen",
+];
+
+/// Trunk + hood openings.  Same rationale as the door gate: trunk
+/// open = loading; hood open = mechanic / pre-trip inspection.
+/// Neither is "I'm done with the car, lock it behind me."
+const TRUNK_IS_OPEN: &str = "Body.Trunk.IsOpen";
+const HOOD_IS_OPEN: &str = "Body.Hood.IsOpen";
 
 /// True if a zone string value represents "in approach zone or closer".
 fn zone_is_in_approach(val: &SignalValue) -> bool {
@@ -130,10 +163,35 @@ impl<B: SignalBus + Send + Sync + 'static> WalkAwayLock<B> {
                 .map(|(i, s)| futures::stream::StreamExt::map(s, move |v| (NUM_FOBS + i, v))),
         );
 
+        // Closure-state streams.  Used only to maintain caches —
+        // never trigger the lock decision on their own.  A door
+        // *closing* with armed devices already outside still has to
+        // wait for the next zone event to drive the decision; that's
+        // intentional because in practice the "all closed" edge
+        // arrives well before the last fob hits RfRange (driver shuts
+        // door at the car, then walks).
+        let mut door_streams = futures::stream::select_all(
+            futures::future::join_all(
+                DOOR_OPEN_SIGNALS.iter().map(|&sig| self.bus.subscribe(sig)),
+            )
+            .await
+            .into_iter()
+            .enumerate()
+            .map(|(i, s)| futures::stream::StreamExt::map(s, move |v| (i, v))),
+        );
+        let mut trunk_open_rx = self.bus.subscribe(TRUNK_IS_OPEN).await;
+        let mut hood_open_rx = self.bus.subscribe(HOOD_IS_OPEN).await;
+
         // Per-device: true = device is currently in approach zone or closer.
         let mut in_approach = [false; NUM_DEVICES];
         // Per-device: true = device has entered approach zone since last lock.
         let mut was_armed = [false; NUM_DEVICES];
+        // Closure caches.  Default-closed (matches typical boot state
+        // of an idle vehicle); the first published value updates the
+        // cache before any walkaway event can be evaluated against it.
+        let mut door_open = [false; DOOR_OPEN_SIGNALS.len()];
+        let mut trunk_open = false;
+        let mut hood_open = false;
 
         tracing::info!("WalkAwayLock feature started");
 
@@ -141,6 +199,26 @@ impl<B: SignalBus + Send + Sync + 'static> WalkAwayLock<B> {
             let (device_idx, zone_val) = select! {
                 Some(pair) = fob_zones.next() => pair,
                 Some(pair) = phone_zones.next() => pair,
+                // Closure-state updates — pure cache writes, then
+                // continue the loop without evaluating the lock gate.
+                Some((idx, val)) = door_streams.next() => {
+                    if let SignalValue::Bool(b) = val {
+                        door_open[idx] = b;
+                    }
+                    continue;
+                }
+                Some(val) = trunk_open_rx.next() => {
+                    if let SignalValue::Bool(b) = val {
+                        trunk_open = b;
+                    }
+                    continue;
+                }
+                Some(val) = hood_open_rx.next() => {
+                    if let SignalValue::Bool(b) = val {
+                        hood_open = b;
+                    }
+                    continue;
+                }
                 else => break,
             };
 
@@ -164,9 +242,34 @@ impl<B: SignalBus + Send + Sync + 'static> WalkAwayLock<B> {
                     .all(|(&armed, &in_ap)| !armed || !in_ap);
 
                 if any_armed && all_armed_outside {
+                    // Closure gate.  Every cabin door, the trunk, and
+                    // the hood must be closed *right now* (not "were
+                    // closed when the fob left").  An opening still
+                    // open means the driver is mid-activity — loading
+                    // bags, kid getting out, mechanic under the hood —
+                    // and they're coming back.  Holding off here also
+                    // means we never reach the interior-key scan in
+                    // the common loading case, saving the LF airtime.
+                    let any_opening_open =
+                        door_open.iter().any(|&b| b) || trunk_open || hood_open;
+                    if any_opening_open {
+                        tracing::info!(
+                            door_open = ?door_open,
+                            trunk_open,
+                            hood_open,
+                            "WalkAwayLock: armed devices outside but a door / trunk / \
+                             hood is still open — holding off (driver still active)"
+                        );
+                        // Preserve `was_armed` so the next zone event
+                        // re-evaluates with the closure state at that
+                        // moment.  No interior scan, no lock.
+                        continue;
+                    }
+
                     tracing::info!(
                         device = device_idx,
-                        "WalkAwayLock: all armed devices left approach — running interior key check"
+                        "WalkAwayLock: all armed devices left approach + cabin sealed — \
+                         running interior key check"
                     );
 
                     // Interior-key guard.  All tracked devices are out
@@ -494,6 +597,126 @@ mod tests {
                 && *v == SignalValue::String("lock_all".into())),
             "unpaired interior fob should not block WAL; history: {:?}",
             h
+        );
+    }
+
+    /// Helper for the closure-gate tests: arm WAL by entering then
+    /// leaving the approach zone with one fob.  Returns the bus so
+    /// the caller can inspect history and inject more events.
+    async fn walk_in_and_out(bus: &MockBus, slot: usize) {
+        bus.inject(FOB_ZONE_SIGNALS[slot], SignalValue::String("Approach".into()));
+        tokio::task::yield_now().await;
+        bus.clear_history();
+        bus.inject(
+            FOB_ZONE_SIGNALS[slot],
+            SignalValue::String("OutOfRange".into()),
+        );
+        wait_for_interior_scan().await;
+    }
+
+    fn lock_all_dispatched(bus: &MockBus) -> bool {
+        bus.history().iter().any(|(s, v)| {
+            *s == "Body.Doors.CentralLock.Command"
+                && *v == SignalValue::String("lock_all".into())
+        })
+    }
+
+    #[tokio::test]
+    async fn open_cabin_door_blocks_lock() {
+        let (bus, _h) = setup().await;
+        // Driver door still open at the moment the fob leaves approach.
+        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        tokio::task::yield_now().await;
+
+        walk_in_and_out(&bus, 0).await;
+
+        assert!(
+            !lock_all_dispatched(&bus),
+            "cabin door open must block WAL; history: {:?}",
+            bus.history()
+        );
+    }
+
+    #[tokio::test]
+    async fn open_trunk_blocks_lock() {
+        let (bus, _h) = setup().await;
+        bus.inject(TRUNK_IS_OPEN, SignalValue::Bool(true));
+        tokio::task::yield_now().await;
+
+        walk_in_and_out(&bus, 0).await;
+
+        assert!(!lock_all_dispatched(&bus));
+    }
+
+    #[tokio::test]
+    async fn open_hood_blocks_lock() {
+        let (bus, _h) = setup().await;
+        bus.inject(HOOD_IS_OPEN, SignalValue::Bool(true));
+        tokio::task::yield_now().await;
+
+        walk_in_and_out(&bus, 0).await;
+
+        assert!(!lock_all_dispatched(&bus));
+    }
+
+    #[tokio::test]
+    async fn closure_gate_re_evaluates_on_next_zone_tick() {
+        // Loading-groceries-then-walking-away sequence:
+        //   1. Driver opens passenger door (loading).
+        //   2. Driver's fob enters approach, then leaves approach
+        //      while the door is still open → WAL holds off.
+        //   3. Driver closes the door.
+        //   4. Fob does another approach→leave cycle (driver walked
+        //      back to the car for one more bag, then left again).
+        //   5. WAL fires this time.
+        let (bus, _h) = setup().await;
+
+        bus.inject("Body.Doors.Row1.Right.IsOpen", SignalValue::Bool(true));
+        walk_in_and_out(&bus, 0).await;
+        assert!(
+            !lock_all_dispatched(&bus),
+            "first pass with door open must not lock"
+        );
+
+        // Door closes; fob does another in/out cycle.
+        bus.inject("Body.Doors.Row1.Right.IsOpen", SignalValue::Bool(false));
+        bus.clear_history();
+        walk_in_and_out(&bus, 0).await;
+
+        assert!(
+            lock_all_dispatched(&bus),
+            "after closing the door, next walk-away cycle should lock; history: {:?}",
+            bus.history()
+        );
+    }
+
+    #[tokio::test]
+    async fn door_reopened_after_arm_blocks_dispatch() {
+        // Closure is checked at dispatch time, not arm time.  Fob
+        // enters approach with everything closed (arm); a kid then
+        // opens the rear door (forgotten phone); fob leaves approach.
+        // The fact that the closure state was good at arm time must
+        // not save us — re-opening before the lock dispatch suppresses.
+        let (bus, _h) = setup().await;
+
+        bus.inject(FOB_ZONE_SIGNALS[0], SignalValue::String("Approach".into()));
+        tokio::task::yield_now().await;
+
+        // Mid-walkaway: a rear door opens.
+        bus.inject("Body.Doors.Row2.Left.IsOpen", SignalValue::Bool(true));
+        tokio::task::yield_now().await;
+        bus.clear_history();
+
+        bus.inject(
+            FOB_ZONE_SIGNALS[0],
+            SignalValue::String("OutOfRange".into()),
+        );
+        wait_for_interior_scan().await;
+
+        assert!(
+            !lock_all_dispatched(&bus),
+            "door opened mid-walkaway must block; history: {:?}",
+            bus.history()
         );
     }
 
