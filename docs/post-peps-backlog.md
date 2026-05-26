@@ -31,6 +31,10 @@ item is independently shippable as its own sub-branch / PR.
 | 15 | Smart Unlock feature (key-locked-in-trunk) | M | ⏳ Pending |
 | 16 | NFC Entry feature (card/phone tap → unlock; tap at push-button → start) | M | ⏳ Pending |
 | 17 | Key-lost warning chime | XS | ⏳ Pending |
+| 18 | ASIL-B on FreeRTOS + Ferrocene-qualified Rust (replaces Classic AUTOSAR M7) | XXL | 📋 Program-level — see plan |
+| 19 | Kuksa.val databroker integration (replace MockBus on the SignalBus seam) | L | 📋 Program-level |
+| 20 | Feature-completeness + interconnection audit (requirements + Gherkin + tests) | M | 📋 Program-level |
+| 21 | Run the test suite on a virtualised target (QEMU / Renode / Avocado) | L | 📋 Program-level |
 
 Suggested next order: **13 → 16 → 14 → 15 → 17**.  Reasoning:
 **13** is a localised migration that exercises the arbiter end-to-end
@@ -317,6 +321,296 @@ plant model.
 5. Tests: trigger on the drop edge; suppression while parked.
 
 **Risks.**  None significant.
+
+---
+
+## 18. ASIL-B on FreeRTOS + Ferrocene-qualified Rust  *(XXL — program-level)*
+
+**Trigger.**  Today the platform-provider proposal assumes Classic
+AUTOSAR on the M7 for the ASIL-B layer (BSW + safety SWCs).  Move
+that layer to **FreeRTOS / SafeRTOS + ISO 26262-qualified Rust**
+so the OEM owns the M7 application code in the same language they
+already own the QM layer in, and we drop a tier of vendor lock-in
+and licensing.  Architecturally this collapses "QM Rust on A53" and
+"ASIL-B C on M7" into one Rust codebase with two safety classes,
+linked only by build-time toolchain selection.
+
+**Built on (in `main`).**  Nothing — this is a parallel hardware /
+toolchain track, not a feature.  Existing QM Rust code is the
+proof-of-concept that the language fits; the safety-monitor IPC
+message types in `ipc_message.rs` and the FaultReport / CmdAck
+discipline already define the M7 ↔ A53 wire format.
+
+**Plan.**
+
+*Phase 1 — Toolchain evaluation (M).*
+1. Pick a qualified Rust compiler.  **Ferrocene** (Ferrous Systems)
+   is the current reference — qualified to ISO 26262 ASIL-D / IEC
+   61508 SIL 4 from rustc 1.68+, recent releases track upstream
+   within a few months.  Alternatives: **AdaCore GNAT Pro for
+   Rust** (similar coverage), or rolling our own qualification kit
+   (multi-year, not realistic).
+2. Pick the RTOS.  **SafeRTOS** (WHIS) — FreeRTOS-API-compatible
+   with a TÜV-certified safety case to IEC 61508 / ISO 26262
+   ASIL-D; the de-facto choice when the BSP needs to clear an
+   automotive audit.  Vanilla FreeRTOS is fine for dev / CI but
+   the cert paperwork lives with SafeRTOS.
+3. Stand up a cross-compile target (`thumbv7em-none-eabihf` or
+   the vendor MCU's tier-1 triple) under Ferrocene; verify the
+   existing `no_std`-compatible parts of `ipc_message.rs` /
+   `signal_ids.rs` build clean.
+
+*Phase 2 — MCAL + RTE shim (L).*
+4. Replace Classic AUTOSAR MCAL with vendor-provided HAL crates +
+   thin Rust wrappers.  Bring up GPIO, CAN-FD, LIN, ADC, DIO,
+   watchdog, NVM, crypto accelerator.
+5. RTE replacement: define a Rust trait surface that mirrors
+   AUTOSAR's port/interface model just enough that ASIL-B
+   features port 1:1 from the spec.  No Arxml; trait impls are
+   the contract.
+
+*Phase 3 — Pilot ASIL-B feature port (M).*
+6. Pick one ASIL-B feature — **CrashUnlock** is the canonical
+   choice: small, well-bounded, lives entirely on M7, already
+   has its IPC message types defined.  Port to Ferrocene + RTOS
+   target.  Run it alongside the existing Classic AUTOSAR
+   implementation on a bench rig; compare cycle-accurate
+   behaviour over 1000+ injected crash events.
+7. Produce the safety-case artifacts: requirements traceability
+   (Polarion / DOORS export), software unit specification,
+   coverage analysis (MC/DC required at ASIL-B), unit + integration
+   test reports, configuration management evidence.
+
+*Phase 4 — Toolchain integration into CI (S).*
+8. Add a Ferrocene job to the existing GitHub Actions matrix.
+   `cargo +ferrocene build --target thumbv7em-none-eabihf`.
+   Cross-compiled artifact gets flashed to a QEMU ARM Cortex-M7
+   image (see item 21) for the safety-case regression suite.
+
+*Phase 5 — Full ASIL-B feature port (XL).*
+9. Port the remaining ASIL-B safety SWCs one at a time: watchdog
+   supervisor, voltage monitor, fault aggregator, safety bus,
+   wake-up controller.  Each gets the same artifact set as the
+   pilot.
+
+*Phase 6 — Decommission Classic AUTOSAR (M).*
+10. Strip the Classic AUTOSAR stack from the build manifest once
+    every ASIL-B feature has been ported and signed off.  Free
+    the licence seats.
+
+**Risks.**
+- **Ferrocene lag.**  Qualified rustc trails upstream by 3–9
+  months.  Some `std`-shaped ergonomic features (e.g. const
+  generics evolution) may not be in the qualified release for
+  another cycle.  Mitigate by writing portable code that compiles
+  on both stable and Ferrocene.
+- **Cert paperwork.**  ISO 26262 part 6 software unit verification
+  is the long pole; an OEM safety auditor signs off the toolchain
+  qualification kit + the per-feature evidence.  Budget 6 months
+  for the first feature, 1–2 months for each subsequent one.
+- **Vendor MCAL ecosystem.**  Most Tier-1 MCU vendors ship Classic
+  AUTOSAR MCAL only; a HAL crate may not exist.  Wrapping the C
+  HAL in `unsafe` Rust is fine but the FFI boundary becomes the
+  weak link in the safety case.  Pick MCU families with
+  community-supported HAL crates (STM32, Infineon AURIX has
+  embassy support) when the silicon choice is still open.
+- **SafeRTOS licence cost.**  WHIS licences per-target-MCU per-
+  project.  Build into the BOM, but cheaper than full Classic
+  AUTOSAR seats by an order of magnitude.
+
+**Selling angle (memory/preferences.md).**  "Same Rust codebase
+across QM (Linux on A53) AND ASIL-B (M7), single toolchain,
+single Cargo workspace, single CI matrix.  No Arxml, no model-
+generation tools, no vendor BSW seats.  OEM-owned end-to-end."
+
+---
+
+## 19. Kuksa.val databroker integration  *(L)*
+
+**Trigger.**  The bridge's `SignalBus` seam currently has one
+implementation: `MockBus` (in-process broadcast channels).  The
+production bus is **kuksa.val** databroker — COVESA's reference
+gRPC implementation of the VSS data model.  `kuksa_sync.rs`
+already attempts a connection on boot but the bridge doesn't
+actually round-trip signals through it; today it just retries
+forever on a closed socket (visible in any bridge log).  Replace
+MockBus with a `KuksaBus` adapter so signals flow through the
+real broker.
+
+**Built on (in `main`).**
+- `kuksa_sync.rs` — opens a gRPC channel to `localhost:55555`,
+  has the retry/back-off loop wired.
+- `SignalBus` trait — already abstracts over the bus
+  implementation; switching is a `cargo --features kuksa` away in
+  principle.
+- VSS signal IDs in `signal_ids.rs` — already mapped to VSS-4.0
+  paths the broker understands.
+
+**Plan.**
+1. **Vendor the broker.**  Ship `kuksa-databroker` as a Docker
+   container in the dev environment + a systemd unit on target.
+   Optionally embed it directly as a Rust dependency
+   (`kuksa-rust` crate) if the binary footprint allows.
+2. **`KuksaBus` adapter** implementing `SignalBus`:
+   - `subscribe(path) -> Stream<SignalValue>` → kuksa.val
+     `Subscribe` RPC, map gRPC `Datapoint` to our `SignalValue`.
+   - `publish(path, value)` → kuksa.val `Set` RPC.
+   - `latest_value(path)` → kuksa.val `GetValue` RPC.
+3. **Cargo feature flag.**  `default = ["mock"]`,
+   `kuksa = ["dep:kuksa-rust"]`.  CI builds both.  Unit tests
+   keep MockBus; integration suite gains a `kuksa-integration`
+   test crate that spins the broker via testcontainers.
+4. **Signal-type translation.**  Kuksa.val uses VSS Datapoint
+   variants; our `SignalValue` is a smaller enum.  Build a
+   bidirectional codec, exhaustive match on both sides.
+5. **Authorization.**  Production kuksa.val supports per-client
+   ACLs.  Define a vss-bridge client identity with scoped
+   read/write per signal family — wire into the systemd unit.
+6. **Regression.**  Run the existing lib + e2e suite against
+   `KuksaBus` (with the broker running in-process for tests).
+   Anything that depended on `MockBus::history()` for
+   assertions needs an equivalent query against the broker.
+
+**Risks.**
+- **Latency.**  Every publish/subscribe is now a gRPC round-trip
+  to localhost (~50 µs vs MockBus's ~µs).  Most features are
+  fine; the approach-poll loop in `KeySearchArbiter` and any
+  brake-pre-auth path may need budget revisits.
+- **Test history.**  Many tests use `bus.history()` to assert
+  the sequence of publishes.  Kuksa doesn't keep a publish log
+  per-subscriber — we'd need a thin in-test recorder layered on
+  the `KuksaBus`, or a `tee` adapter that fans out to both
+  Kuksa and an in-memory recorder.
+
+---
+
+## 20. Feature-completeness + interconnection audit  *(M)*
+
+**Trigger.**  We have 35+ features today, ~700 lib tests, ~20
+Gherkin features, but no systematic confirmation that every
+feature has the full requirements → Gherkin → unit → module → e2e
+chain, and that **cross-feature interactions** (which is where
+most real-vehicle defects live) have explicit test coverage.
+
+**Built on (in `main`).**
+- One source-of-truth file per feature (`src/features/*.rs`).
+- BDD scenario files in `features/*.feature`.
+- Unit tests embedded in each feature module.
+- e2e tests in `tests/e2e/`.
+- Integration tests in `tests/ws_integration.rs`.
+
+**Plan.**
+1. **Build the matrix.**  Script that walks
+   `src/features/*.rs` and for each feature emits a row of:
+   - Module name
+   - Public requirements doc / Gherkin file (link)
+   - Unit tests (count + names from `#[tokio::test]` discovery)
+   - Module-level tests (cucumber feature file?)
+   - e2e tests (which `.feature` references it)
+   - ws_integration coverage
+   - **Interconnections**: features that read/write the same
+     VSS signals (parse the consts from each module).
+2. **Identify gaps.**  Any row missing a column → backlog ticket.
+3. **Interconnection contracts.**  For every pair of features
+   that share a signal, document the contract — who writes,
+   who reads, who arbitrates conflicts.  Already implicit in
+   feature comments; surface as a top-level
+   `docs/feature-interconnections.md`.  Examples:
+   - `Cabin.LockStatus` written by `DoorLockArbiter`, read by
+     PerimeterAlarm, AutoRelock, SmartUnlock, KeypadLock,
+     PassiveEntry, WalkAwayLock, SlamLock.  Eight readers, one
+     writer.  Test that every reader has a "stale-cache /
+     missed-event" test (we've discovered three bugs here).
+   - `Body.Horn.IsActive` — central question: who has the
+     authority?  Today `LockFeedback` (mislock), `PanicAlarm`,
+     `PerimeterAlarm`, `ManualHorn`.  Document priority
+     ordering, add cross-feature tests for the priority
+     boundaries.
+4. **Cross-feature scenarios.**  Write Gherkin scenarios that
+   span multiple features explicitly:
+   - SmartUnlock undoes a PhoneApp lock → mislock honk + 2-flash
+     unlock pattern + LockFeedback's chime suppressed.
+   - WAL hold-off + driver returns with fob in pocket → WAL
+     proceeds on next zone tick.
+   - SlamLock inversion during a running PerimeterAlarm chime →
+     does the trim-press disarm anything?
+5. **CI gate.**  Add a "coverage matrix" job to CI that fails
+   the build if a new feature lands without all five rows
+   populated.
+
+**Risks.**  Discovery cost — there will be gaps.  Each gap
+becomes a sub-ticket.
+
+---
+
+## 21. Run the test suite on a virtualised target  *(L)*
+
+**Trigger.**  Today CI runs `cargo test` natively (Linux x86-64).
+The production target is dual-core (Cortex-M7 + Cortex-A53)
+ARM.  Bugs in endianness, atomic ordering, alignment, and
+cross-core IPC don't surface in native CI.  Run the full test
+suite on a virtualised target so we catch them before bench.
+
+**Built on (in `main`).**
+- The bridge is a single Rust binary today; cross-compilation
+  works (`cargo build --target aarch64-unknown-linux-gnu` is
+  green).
+- Item **18** brings the M7 cross-compile (Ferrocene + thumbv7em).
+- All tests use tokio + `MockBus` — no native-only deps in
+  the test harness.
+
+**Plan.**
+1. **Pick a virtualiser per side.**
+   - **A53 side**: **QEMU `aarch64-softmmu`** with `virt`
+     machine + Linux rootfs (Yocto recipe-of-record matches the
+     target image).  Mature, fast, full Linux + std.
+   - **M7 side**: **Renode** is the strongest fit — open-source,
+     scriptable, supports multi-core ARM, has libraries for
+     CAN/LIN/SPI peripherals.  QEMU's Cortex-M support exists
+     but is thinner.  Alternative: **Avocado-VT** + vendor
+     SoC simulators (Infineon Aurix has a free TriCore sim).
+2. **Cross-compile + package.**
+   - `cargo build --release --target aarch64-unknown-linux-gnu`
+     for the A53 bridge binary.
+   - `cargo +ferrocene build --release --target thumbv7em-none-eabihf`
+     for the M7 safety SWCs (gated on item 18 landing first).
+   - Bundle both into a Renode platform script that boots Linux
+     on the virtual A53 and the M7 image on the virtual M7,
+     wires up the IPC channel between them.
+3. **Port the test harness.**
+   - `tests/e2e/` runs as-is on Linux-on-QEMU; just the runner
+     environment changes.
+   - `tests/ws_integration.rs` needs the WS port forwarded out
+     of the VM so the host-side test driver can connect.
+   - A new test crate `tests/cross_core/` for the IPC
+     round-trip tests that only make sense with both cores up.
+4. **CI runners.**
+   - GitHub Actions: a self-hosted runner with KVM enabled +
+     Renode pre-installed.  Or, accept the slower nested-virt
+     path on GitHub-hosted Linux runners — Renode boots fast
+     enough that nested KVM isn't critical.
+   - Job naming: `test-virt-a53`, `test-virt-m7`,
+     `test-virt-cross-core`.  Run on PR + nightly.
+5. **Failure-injection layer.**  Renode supports scripted fault
+   injection (bit flips, missed interrupts, jittered IPC).
+   Add a tier of nightly chaos tests that walk the existing
+   feature suite under each injection.
+
+**Risks.**
+- **Renode platform descriptions** for the exact MCU + peripheral
+  set the OEM ships need to be hand-written if the silicon is
+  exotic.  Mainstream NXP / Infineon / Renesas families are
+  covered in upstream Renode; truly custom silicon may take a
+  multi-week port.
+- **CI runtime.**  Booting Linux + Renode + running the full
+  suite is minutes per PR.  Tier 2 / nightly is fine; gating
+  every PR on virt-target is probably too slow — keep the
+  current native suite as the PR gate and let virt-target run
+  on `main` post-merge + nightly.
+- **Cross-core IPC fidelity.**  Renode's CAN/LIN models are
+  packet-accurate but not always cycle-accurate.  Pure logical
+  regression is reliable; timing-sensitive races still need
+  bench validation.
 
 ---
 
