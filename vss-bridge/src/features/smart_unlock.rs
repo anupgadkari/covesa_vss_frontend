@@ -147,9 +147,7 @@ impl<B: SignalBus + Send + Sync + 'static> SmartUnlock<B> {
         // physically holds the only mechanical key.  Don't spawn a
         // hot loop that will never fire.
         if self.cfg.vehicle_line.key_source_cfg != KeySource::Peps {
-            tracing::info!(
-                "SmartUnlock: not a PEPS vehicle, feature disabled"
-            );
+            tracing::info!("SmartUnlock: not a PEPS vehicle, feature disabled");
             return;
         }
 
@@ -298,11 +296,7 @@ impl<B: SignalBus + Send + Sync + 'static> SmartUnlock<B> {
 fn is_outside_zone(z: Zone) -> bool {
     matches!(
         z,
-        Zone::LeftFront
-            | Zone::RightFront
-            | Zone::Hood
-            | Zone::Trunk
-            | Zone::Approach
+        Zone::LeftFront | Zone::RightFront | Zone::Hood | Zone::Trunk | Zone::Approach
     )
 }
 
@@ -362,9 +356,7 @@ mod tests {
         let lock_arb = Arc::new(lock_arb);
         let (ksa, handle, rx) = KeySearchArbiter::new_with_rx(Arc::clone(&bus));
         tokio::spawn(ksa.run(rx));
-        tokio::spawn(
-            SmartUnlock::new(Arc::clone(&bus), Arc::clone(&lock_arb), handle, cfg).run(),
-        );
+        tokio::spawn(SmartUnlock::new(Arc::clone(&bus), Arc::clone(&lock_arb), handle, cfg).run());
         settle().await;
         (bus, lock_arb)
     }
@@ -401,8 +393,7 @@ mod tests {
 
     fn unlock_all_dispatched(bus: &MockBus) -> bool {
         bus.history().iter().any(|(sig, val)| {
-            *sig == CENTRAL_LOCK_CMD
-                && *val == SignalValue::String("unlock_all".into())
+            *sig == CENTRAL_LOCK_CMD && *val == SignalValue::String("unlock_all".into())
         })
     }
 

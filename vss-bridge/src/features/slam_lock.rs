@@ -687,9 +687,7 @@ mod tests {
         let mislocks = bus
             .history()
             .iter()
-            .filter(|(s, v)| {
-                *s == FEEDBACK_REQUEST && *v == SignalValue::String("mislock".into())
-            })
+            .filter(|(s, v)| *s == FEEDBACK_REQUEST && *v == SignalValue::String("mislock".into()))
             .count();
         assert_eq!(
             mislocks, 1,

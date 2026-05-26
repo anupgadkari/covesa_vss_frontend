@@ -950,7 +950,13 @@ mod tests {
             });
         }
 
-        let pe = PassiveEntry::new(Arc::clone(&bus), arb, Arc::clone(&config), ksa_handle, paired);
+        let pe = PassiveEntry::new(
+            Arc::clone(&bus),
+            arb,
+            Arc::clone(&config),
+            ksa_handle,
+            paired,
+        );
         tokio::spawn(pe.run());
 
         for _ in 0..32 {

@@ -171,13 +171,11 @@ impl<B: SignalBus + Send + Sync + 'static> WalkAwayLock<B> {
         // arrives well before the last fob hits RfRange (driver shuts
         // door at the car, then walks).
         let mut door_streams = futures::stream::select_all(
-            futures::future::join_all(
-                DOOR_OPEN_SIGNALS.iter().map(|&sig| self.bus.subscribe(sig)),
-            )
-            .await
-            .into_iter()
-            .enumerate()
-            .map(|(i, s)| futures::stream::StreamExt::map(s, move |v| (i, v))),
+            futures::future::join_all(DOOR_OPEN_SIGNALS.iter().map(|&sig| self.bus.subscribe(sig)))
+                .await
+                .into_iter()
+                .enumerate()
+                .map(|(i, s)| futures::stream::StreamExt::map(s, move |v| (i, v))),
         );
         let mut trunk_open_rx = self.bus.subscribe(TRUNK_IS_OPEN).await;
         let mut hood_open_rx = self.bus.subscribe(HOOD_IS_OPEN).await;
@@ -250,8 +248,7 @@ impl<B: SignalBus + Send + Sync + 'static> WalkAwayLock<B> {
                     // and they're coming back.  Holding off here also
                     // means we never reach the interior-key scan in
                     // the common loading case, saving the LF airtime.
-                    let any_opening_open =
-                        door_open.iter().any(|&b| b) || trunk_open || hood_open;
+                    let any_opening_open = door_open.iter().any(|&b| b) || trunk_open || hood_open;
                     if any_opening_open {
                         tracing::info!(
                             door_open = ?door_open,
@@ -316,10 +313,7 @@ impl<B: SignalBus + Send + Sync + 'static> WalkAwayLock<B> {
                         // step out of approach for good.
                         let _ = self
                             .bus
-                            .publish(
-                                FEEDBACK_REQUEST,
-                                SignalValue::String("mislock".into()),
-                            )
+                            .publish(FEEDBACK_REQUEST, SignalValue::String("mislock".into()))
                             .await;
                         // Leave `was_armed` set so the next zone event
                         // can re-evaluate (e.g. the interior fob gets
@@ -547,10 +541,7 @@ mod tests {
         // Mark the cabin fob as paired so the Authenticated scan
         // returns it, and place it in Cabin via PlacedZone (the
         // arbiter's ground truth).
-        bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.Paired",
-            SignalValue::Bool(true),
-        );
+        bus.inject("Body.PEPS.Plant.KeyFob.1.Paired", SignalValue::Bool(true));
         bus.inject(
             "Body.PEPS.Plant.KeyFob.1.PlacedZone",
             SignalValue::String("Cabin".into()),
@@ -569,9 +560,8 @@ mod tests {
 
         let h = bus.history();
         assert!(
-            !h.iter()
-                .any(|(s, v)| *s == "Body.Doors.CentralLock.Command"
-                    && *v == SignalValue::String("lock_all".into())),
+            !h.iter().any(|(s, v)| *s == "Body.Doors.CentralLock.Command"
+                && *v == SignalValue::String("lock_all".into())),
             "interior paired key must block WAL; history: {:?}",
             h
         );
@@ -584,10 +574,7 @@ mod tests {
         // you left a key inside."
         let (bus, _h) = setup().await;
 
-        bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.Paired",
-            SignalValue::Bool(true),
-        );
+        bus.inject("Body.PEPS.Plant.KeyFob.1.Paired", SignalValue::Bool(true));
         bus.inject(
             "Body.PEPS.Plant.KeyFob.1.PlacedZone",
             SignalValue::String("Cabin".into()),
@@ -621,10 +608,7 @@ mod tests {
         // zero paired keys and the lock proceeds.
         let (bus, _h) = setup().await;
 
-        bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.Paired",
-            SignalValue::Bool(false),
-        );
+        bus.inject("Body.PEPS.Plant.KeyFob.1.Paired", SignalValue::Bool(false));
         bus.inject(
             "Body.PEPS.Plant.KeyFob.1.PlacedZone",
             SignalValue::String("Cabin".into()),
@@ -653,7 +637,10 @@ mod tests {
     /// leaving the approach zone with one fob.  Returns the bus so
     /// the caller can inspect history and inject more events.
     async fn walk_in_and_out(bus: &MockBus, slot: usize) {
-        bus.inject(FOB_ZONE_SIGNALS[slot], SignalValue::String("Approach".into()));
+        bus.inject(
+            FOB_ZONE_SIGNALS[slot],
+            SignalValue::String("Approach".into()),
+        );
         tokio::task::yield_now().await;
         bus.clear_history();
         bus.inject(
@@ -665,8 +652,7 @@ mod tests {
 
     fn lock_all_dispatched(bus: &MockBus) -> bool {
         bus.history().iter().any(|(s, v)| {
-            *s == "Body.Doors.CentralLock.Command"
-                && *v == SignalValue::String("lock_all".into())
+            *s == "Body.Doors.CentralLock.Command" && *v == SignalValue::String("lock_all".into())
         })
     }
 
