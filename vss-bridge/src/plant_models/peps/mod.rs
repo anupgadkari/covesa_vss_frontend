@@ -137,6 +137,11 @@ impl<B: SignalBus> PepsPlantModel<B> {
             None => return,
         };
         let old = fob.zone;
+        if old == zone {
+            // No-op edge — skip the mirror publish so we don't create
+            // a feedback loop with our own `.Zone` subscription.
+            return;
+        }
         fob.zone = zone;
         tracing::debug!(
             fob = fob.index,
@@ -144,6 +149,22 @@ impl<B: SignalBus> PepsPlantModel<B> {
             to = %zone,
             "PEPS plant: fob zone changed"
         );
+
+        // Transitional `.Zone` mirror — feature consumers that haven't
+        // migrated to `.LastObservedZone` still read `.Zone` directly.
+        // The HMI writes `.PlacedZone` only; the plant republishes the
+        // same value to `.Zone` here so the legacy subscribers keep
+        // seeing position changes.  Will be removed once every consumer
+        // is on the LastObservedZone path.  Guarded by the `old == zone`
+        // check above so a `.Zone` write doesn't feedback-loop into
+        // itself via our dual subscription.
+        let _ = self
+            .bus
+            .publish(
+                signals::KEYFOB_ZONES[index],
+                SignalValue::String(zone.to_string()),
+            )
+            .await;
 
         // Publish RSSI feedback when in an LF zone, clear when leaving.
         let rssi_signal = signals::KEYFOB_RSSIS[index];
@@ -170,6 +191,10 @@ impl<B: SignalBus> PepsPlantModel<B> {
             None => return,
         };
         let old = phone.zone;
+        if old == zone {
+            // No-op edge — skip the mirror publish (see set_fob_zone).
+            return;
+        }
         phone.zone = zone;
         tracing::debug!(
             phone = phone.index,
@@ -177,6 +202,15 @@ impl<B: SignalBus> PepsPlantModel<B> {
             to = %zone,
             "PEPS plant: phone zone changed"
         );
+
+        // Transitional `.Zone` mirror — see set_fob_zone above.
+        let _ = self
+            .bus
+            .publish(
+                signals::PHONE_ZONES[index],
+                SignalValue::String(zone.to_string()),
+            )
+            .await;
 
         let rssi_signal = signals::PHONE_RSSIS[index];
         if zone.supports_rssi() {
@@ -325,13 +359,38 @@ impl<B: SignalBus> PepsPlantModel<B> {
             self.nfc_cards.len()
         );
 
-        // Subscribe to fob zone signals — individual bindings to satisfy borrow checker.
-        let mut fz0 = self.bus.subscribe(signals::KEYFOB_ZONES[0]).await;
-        let mut fz1 = self.bus.subscribe(signals::KEYFOB_ZONES[1]).await;
-        let mut fz2 = self.bus.subscribe(signals::KEYFOB_ZONES[2]).await;
-        let mut fz3 = self.bus.subscribe(signals::KEYFOB_ZONES[3]).await;
-        let mut fz4 = self.bus.subscribe(signals::KEYFOB_ZONES[4]).await;
-        let mut fz5 = self.bus.subscribe(signals::KEYFOB_ZONES[5]).await;
+        // Subscribe to fob zone signals.  Both `.PlacedZone` (new,
+        // HMI drag-and-drop target per item #14a) and the legacy
+        // `.Zone` are accepted — the plant treats either write as a
+        // position update from the simulator and republishes back to
+        // both signals so consumers on either path stay in sync.  The
+        // dual subscription preserves backward compatibility for the
+        // many tests + consumer features that still inject / read
+        // `.Zone` directly; new code should use `.PlacedZone`.
+        let mut fz0 = futures::stream::select(
+            self.bus.subscribe(signals::KEYFOB_PLACED_ZONES[0]).await,
+            self.bus.subscribe(signals::KEYFOB_ZONES[0]).await,
+        );
+        let mut fz1 = futures::stream::select(
+            self.bus.subscribe(signals::KEYFOB_PLACED_ZONES[1]).await,
+            self.bus.subscribe(signals::KEYFOB_ZONES[1]).await,
+        );
+        let mut fz2 = futures::stream::select(
+            self.bus.subscribe(signals::KEYFOB_PLACED_ZONES[2]).await,
+            self.bus.subscribe(signals::KEYFOB_ZONES[2]).await,
+        );
+        let mut fz3 = futures::stream::select(
+            self.bus.subscribe(signals::KEYFOB_PLACED_ZONES[3]).await,
+            self.bus.subscribe(signals::KEYFOB_ZONES[3]).await,
+        );
+        let mut fz4 = futures::stream::select(
+            self.bus.subscribe(signals::KEYFOB_PLACED_ZONES[4]).await,
+            self.bus.subscribe(signals::KEYFOB_ZONES[4]).await,
+        );
+        let mut fz5 = futures::stream::select(
+            self.bus.subscribe(signals::KEYFOB_PLACED_ZONES[5]).await,
+            self.bus.subscribe(signals::KEYFOB_ZONES[5]).await,
+        );
 
         // Fob button signals (paired fobs 1..4 only).
         let mut fb0 = self.bus.subscribe(signals::KEYFOB_BUTTONS[0]).await;
@@ -339,9 +398,15 @@ impl<B: SignalBus> PepsPlantModel<B> {
         let mut fb2 = self.bus.subscribe(signals::KEYFOB_BUTTONS[2]).await;
         let mut fb3 = self.bus.subscribe(signals::KEYFOB_BUTTONS[3]).await;
 
-        // Phone zone signals.
-        let mut pz0 = self.bus.subscribe(signals::PHONE_ZONES[0]).await;
-        let mut pz1 = self.bus.subscribe(signals::PHONE_ZONES[1]).await;
+        // Phone zone signals — same dual-subscription pattern as fobs.
+        let mut pz0 = futures::stream::select(
+            self.bus.subscribe(signals::PHONE_PLACED_ZONES[0]).await,
+            self.bus.subscribe(signals::PHONE_ZONES[0]).await,
+        );
+        let mut pz1 = futures::stream::select(
+            self.bus.subscribe(signals::PHONE_PLACED_ZONES[1]).await,
+            self.bus.subscribe(signals::PHONE_ZONES[1]).await,
+        );
 
         // NFC position signals.
         let mut np0 = self.bus.subscribe(signals::NFC_POSITIONS[0]).await;

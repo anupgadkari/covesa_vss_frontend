@@ -7,7 +7,21 @@
 
 use crate::signal_bus::VssPath;
 
-// ── Key Fob Zone (input: set by HMI / test) ───────────────────────────
+// ── Key Fob Zone — TRANSITIONAL ALIAS ─────────────────────────────────
+//
+// `.Zone` is the legacy "ground truth" signal that conflated where the
+// chip was physically (driven by the HMI drag) with what the vehicle
+// had observed.  Item #14 of the post-PEPS backlog splits them:
+//
+//   `.PlacedZone`        — HMI-written ground truth (simulator-only;
+//                            real vehicles never know this directly).
+//   `.LastObservedZone`  — Arbiter-published, derived from the last
+//                            scan that covered this fob.  Realistic.
+//
+// `.Zone` is still published by `PepsPlantModel` as a mirror of
+// `PlacedZone` so unmigrated consumers (everything except
+// `walk_away_lock` post-#14a) keep working.  Will go away once every
+// consumer has moved to `LastObservedZone`.
 pub const KEYFOB_1_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.1.Zone";
 pub const KEYFOB_2_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.2.Zone";
 pub const KEYFOB_3_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.3.Zone";
@@ -15,7 +29,8 @@ pub const KEYFOB_4_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.4.Zone";
 pub const KEYFOB_5_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.5.Zone";
 pub const KEYFOB_6_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.6.Zone";
 
-/// All key fob zone signals, indexed 0..6.
+/// All key fob zone signals, indexed 0..6.  Legacy alias — see
+/// [`KEYFOB_PLACED_ZONES`] for the canonical HMI-driven signal.
 pub const KEYFOB_ZONES: [VssPath; 6] = [
     KEYFOB_1_ZONE,
     KEYFOB_2_ZONE,
@@ -23,6 +38,40 @@ pub const KEYFOB_ZONES: [VssPath; 6] = [
     KEYFOB_4_ZONE,
     KEYFOB_5_ZONE,
     KEYFOB_6_ZONE,
+];
+
+// ── Key Fob PlacedZone (input: HMI drag-and-drop target) ───────────────
+pub const KEYFOB_1_PLACED_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.1.PlacedZone";
+pub const KEYFOB_2_PLACED_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.2.PlacedZone";
+pub const KEYFOB_3_PLACED_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.3.PlacedZone";
+pub const KEYFOB_4_PLACED_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.4.PlacedZone";
+pub const KEYFOB_5_PLACED_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.5.PlacedZone";
+pub const KEYFOB_6_PLACED_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.6.PlacedZone";
+
+pub const KEYFOB_PLACED_ZONES: [VssPath; 6] = [
+    KEYFOB_1_PLACED_ZONE,
+    KEYFOB_2_PLACED_ZONE,
+    KEYFOB_3_PLACED_ZONE,
+    KEYFOB_4_PLACED_ZONE,
+    KEYFOB_5_PLACED_ZONE,
+    KEYFOB_6_PLACED_ZONE,
+];
+
+// ── Key Fob LastObservedZone (output: KeySearchArbiter publishes) ─────
+pub const KEYFOB_1_LAST_OBSERVED_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.1.LastObservedZone";
+pub const KEYFOB_2_LAST_OBSERVED_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.2.LastObservedZone";
+pub const KEYFOB_3_LAST_OBSERVED_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.3.LastObservedZone";
+pub const KEYFOB_4_LAST_OBSERVED_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.4.LastObservedZone";
+pub const KEYFOB_5_LAST_OBSERVED_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.5.LastObservedZone";
+pub const KEYFOB_6_LAST_OBSERVED_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.6.LastObservedZone";
+
+pub const KEYFOB_LAST_OBSERVED_ZONES: [VssPath; 6] = [
+    KEYFOB_1_LAST_OBSERVED_ZONE,
+    KEYFOB_2_LAST_OBSERVED_ZONE,
+    KEYFOB_3_LAST_OBSERVED_ZONE,
+    KEYFOB_4_LAST_OBSERVED_ZONE,
+    KEYFOB_5_LAST_OBSERVED_ZONE,
+    KEYFOB_6_LAST_OBSERVED_ZONE,
 ];
 
 // ── Key Fob Button Press (input: set by HMI / test) ───────────────────
@@ -103,11 +152,25 @@ pub const KEYFOB_RF_MSGS: [VssPath; 4] = [
     KEYFOB_4_RF_MSG,
 ];
 
-// ── BLE Phone Zone (input: set by HMI / test) ─────────────────────────
+// ── BLE Phone Zone — TRANSITIONAL ALIAS ───────────────────────────────
+// See KEYFOB_*_ZONE above for the migration story.
 pub const PHONE_1_ZONE: VssPath = "Body.PEPS.Plant.BlePhone.1.Zone";
 pub const PHONE_2_ZONE: VssPath = "Body.PEPS.Plant.BlePhone.2.Zone";
 
 pub const PHONE_ZONES: [VssPath; 2] = [PHONE_1_ZONE, PHONE_2_ZONE];
+
+// ── BLE Phone PlacedZone (input: HMI drag-and-drop target) ────────────
+pub const PHONE_1_PLACED_ZONE: VssPath = "Body.PEPS.Plant.BlePhone.1.PlacedZone";
+pub const PHONE_2_PLACED_ZONE: VssPath = "Body.PEPS.Plant.BlePhone.2.PlacedZone";
+
+pub const PHONE_PLACED_ZONES: [VssPath; 2] = [PHONE_1_PLACED_ZONE, PHONE_2_PLACED_ZONE];
+
+// ── BLE Phone LastObservedZone (output: arbiter publishes) ────────────
+pub const PHONE_1_LAST_OBSERVED_ZONE: VssPath = "Body.PEPS.Plant.BlePhone.1.LastObservedZone";
+pub const PHONE_2_LAST_OBSERVED_ZONE: VssPath = "Body.PEPS.Plant.BlePhone.2.LastObservedZone";
+
+pub const PHONE_LAST_OBSERVED_ZONES: [VssPath; 2] =
+    [PHONE_1_LAST_OBSERVED_ZONE, PHONE_2_LAST_OBSERVED_ZONE];
 
 // ── BLE Phone Challenge Response (output: published by plant model) ────
 pub const PHONE_1_CHALLENGE_RESP: VssPath = "Body.PEPS.Plant.BlePhone.1.ChallengeResponse";
