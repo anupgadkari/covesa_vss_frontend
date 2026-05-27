@@ -1,0 +1,266 @@
+original,target,category,note
+Body.ChargeLid.IsOpen,Vehicle.Body.Bridge.Body.ChargeLid.IsOpen,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Chime.IsActive,Vehicle.Body.Bridge.Body.Chime.IsActive,project-namespace,aggregate or actuator-intent signal; no VSS equivalent
+Body.Chime.IsSounding,Vehicle.Body.Bridge.Body.Chime.IsSounding,project-namespace,aggregate or actuator-intent signal; no VSS equivalent
+Body.Connectivity.BleLock,Vehicle.Body.Bridge.Body.Connectivity.BleLock,project-namespace,project HMI connectivity flag; no VSS equivalent
+Body.Connectivity.NfcCardPresent,Vehicle.Body.Bridge.Body.Connectivity.NfcCardPresent,project-namespace,project HMI connectivity flag; no VSS equivalent
+Body.Connectivity.NfcPhonePresent,Vehicle.Body.Bridge.Body.Connectivity.NfcPhonePresent,project-namespace,project HMI connectivity flag; no VSS equivalent
+Body.Connectivity.RemoteLock,Vehicle.Body.Bridge.Body.Connectivity.RemoteLock,project-namespace,project HMI connectivity flag; no VSS equivalent
+Body.DoesNotExist,Vehicle.Body.Bridge.Body.DoesNotExist,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Doors.AutoRelock.IsArmed,Vehicle.Body.Bridge.Body.Doors.AutoRelock.IsArmed,project-namespace,arbiter command/status signal; no VSS equivalent
+Body.Doors.AutoRelock.TimeoutSeconds,Vehicle.Body.Bridge.Body.Doors.AutoRelock.TimeoutSeconds,project-namespace,arbiter command/status signal; no VSS equivalent
+Body.Doors.CentralLock.Command,Vehicle.Body.Bridge.Body.Doors.CentralLock.Command,project-namespace,arbiter command/status signal; no VSS equivalent
+Body.Doors.CentralLock.FeedbackRequest,Vehicle.Body.Bridge.Body.Doors.CentralLock.FeedbackRequest,project-namespace,arbiter command/status signal; no VSS equivalent
+Body.Doors.Row1.Left.CloseCmd,Vehicle.Cabin.Door.Row1.DriverSide.CloseCmd,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row1.Left.Handle.Inside.IsPulled,Vehicle.Cabin.Door.Row1.DriverSide.Handle.Inside.IsPulled,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row1.Left.Handle.Outside.IsPulled,Vehicle.Cabin.Door.Row1.DriverSide.Handle.Outside.IsPulled,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row1.Left.Handle.Outside.LockPad.IsPressed,Vehicle.Cabin.Door.Row1.DriverSide.Handle.Outside.LockPad.IsPressed,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row1.Left.IsChildLockActive,Vehicle.Cabin.Door.Row1.DriverSide.IsChildLockActive,canonical-door-side-rename,Row1.Left → Row1.DriverSide (LHD assumed; flips on RHD)
+Body.Doors.Row1.Left.IsDoubleLocked,Vehicle.Cabin.Door.Row1.DriverSide.IsDoubleLocked,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row1.Left.IsLocked,Vehicle.Cabin.Door.Row1.DriverSide.IsLocked,canonical-door-side-rename,Row1.Left → Row1.DriverSide (LHD assumed; flips on RHD)
+Body.Doors.Row1.Left.IsOpen,Vehicle.Cabin.Door.Row1.DriverSide.IsOpen,canonical-door-side-rename,Row1.Left → Row1.DriverSide (LHD assumed; flips on RHD)
+Body.Doors.Row1.Left.IsRemoved,Vehicle.Cabin.Door.Row1.DriverSide.IsRemoved,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row1.Left.Latch.IsLatched,Vehicle.Cabin.Door.Row1.DriverSide.Latch.IsLatched,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row1.Left.LatchStatus,Vehicle.Cabin.Door.Row1.DriverSide.LatchStatus,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row1.Left.Soldier.IsUnlocked,Vehicle.Cabin.Door.Row1.DriverSide.Soldier.IsUnlocked,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row1.Left.Window.MotorDirection,Vehicle.Cabin.Door.Row1.DriverSide.Window.MotorDirection,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row1.Left.Window.Position,Vehicle.Cabin.Door.Row1.DriverSide.Window.Position,canonical-door-side-rename,Row1.Left → Row1.DriverSide (LHD assumed; flips on RHD)
+Body.Doors.Row1.Right.CloseCmd,Vehicle.Cabin.Door.Row1.PassengerSide.CloseCmd,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row1.Right.Handle.Inside.IsPulled,Vehicle.Cabin.Door.Row1.PassengerSide.Handle.Inside.IsPulled,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row1.Right.Handle.Outside.IsPulled,Vehicle.Cabin.Door.Row1.PassengerSide.Handle.Outside.IsPulled,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row1.Right.Handle.Outside.LockPad.IsPressed,Vehicle.Cabin.Door.Row1.PassengerSide.Handle.Outside.LockPad.IsPressed,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row1.Right.IsChildLockActive,Vehicle.Cabin.Door.Row1.PassengerSide.IsChildLockActive,canonical-door-side-rename,Row1.Right → Row1.PassengerSide (LHD assumed; flips on RHD)
+Body.Doors.Row1.Right.IsDoubleLocked,Vehicle.Cabin.Door.Row1.PassengerSide.IsDoubleLocked,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row1.Right.IsLocked,Vehicle.Cabin.Door.Row1.PassengerSide.IsLocked,canonical-door-side-rename,Row1.Right → Row1.PassengerSide (LHD assumed; flips on RHD)
+Body.Doors.Row1.Right.IsOpen,Vehicle.Cabin.Door.Row1.PassengerSide.IsOpen,canonical-door-side-rename,Row1.Right → Row1.PassengerSide (LHD assumed; flips on RHD)
+Body.Doors.Row1.Right.IsRemoved,Vehicle.Cabin.Door.Row1.PassengerSide.IsRemoved,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row1.Right.Latch.IsLatched,Vehicle.Cabin.Door.Row1.PassengerSide.Latch.IsLatched,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row1.Right.LatchStatus,Vehicle.Cabin.Door.Row1.PassengerSide.LatchStatus,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row1.Right.Soldier.IsUnlocked,Vehicle.Cabin.Door.Row1.PassengerSide.Soldier.IsUnlocked,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row1.Right.Window.MotorDirection,Vehicle.Cabin.Door.Row1.PassengerSide.Window.MotorDirection,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row1.Right.Window.Position,Vehicle.Cabin.Door.Row1.PassengerSide.Window.Position,canonical-door-side-rename,Row1.Right → Row1.PassengerSide (LHD assumed; flips on RHD)
+Body.Doors.Row2.Left.CloseCmd,Vehicle.Cabin.Door.Row2.DriverSide.CloseCmd,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row2.Left.Handle.Inside.IsPulled,Vehicle.Cabin.Door.Row2.DriverSide.Handle.Inside.IsPulled,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row2.Left.Handle.Outside.IsPulled,Vehicle.Cabin.Door.Row2.DriverSide.Handle.Outside.IsPulled,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row2.Left.IsChildLockActive,Vehicle.Cabin.Door.Row2.DriverSide.IsChildLockActive,canonical-door-side-rename,Row2.Left → Row2.DriverSide (LHD assumed; flips on RHD)
+Body.Doors.Row2.Left.IsDoubleLocked,Vehicle.Cabin.Door.Row2.DriverSide.IsDoubleLocked,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row2.Left.IsLocked,Vehicle.Cabin.Door.Row2.DriverSide.IsLocked,canonical-door-side-rename,Row2.Left → Row2.DriverSide (LHD assumed; flips on RHD)
+Body.Doors.Row2.Left.IsOpen,Vehicle.Cabin.Door.Row2.DriverSide.IsOpen,canonical-door-side-rename,Row2.Left → Row2.DriverSide (LHD assumed; flips on RHD)
+Body.Doors.Row2.Left.IsRemoved,Vehicle.Cabin.Door.Row2.DriverSide.IsRemoved,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row2.Left.Latch.IsLatched,Vehicle.Cabin.Door.Row2.DriverSide.Latch.IsLatched,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row2.Left.LatchStatus,Vehicle.Cabin.Door.Row2.DriverSide.LatchStatus,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row2.Left.Soldier.IsUnlocked,Vehicle.Cabin.Door.Row2.DriverSide.Soldier.IsUnlocked,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row2.Left.Window.MotorDirection,Vehicle.Cabin.Door.Row2.DriverSide.Window.MotorDirection,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row2.Left.Window.Position,Vehicle.Cabin.Door.Row2.DriverSide.Window.Position,canonical-door-side-rename,Row2.Left → Row2.DriverSide (LHD assumed; flips on RHD)
+Body.Doors.Row2.Right.CloseCmd,Vehicle.Cabin.Door.Row2.PassengerSide.CloseCmd,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row2.Right.Handle.Inside.IsPulled,Vehicle.Cabin.Door.Row2.PassengerSide.Handle.Inside.IsPulled,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row2.Right.Handle.Outside.IsPulled,Vehicle.Cabin.Door.Row2.PassengerSide.Handle.Outside.IsPulled,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row2.Right.IsChildLockActive,Vehicle.Cabin.Door.Row2.PassengerSide.IsChildLockActive,canonical-door-side-rename,Row2.Right → Row2.PassengerSide (LHD assumed; flips on RHD)
+Body.Doors.Row2.Right.IsDoubleLocked,Vehicle.Cabin.Door.Row2.PassengerSide.IsDoubleLocked,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row2.Right.IsLocked,Vehicle.Cabin.Door.Row2.PassengerSide.IsLocked,canonical-door-side-rename,Row2.Right → Row2.PassengerSide (LHD assumed; flips on RHD)
+Body.Doors.Row2.Right.IsOpen,Vehicle.Cabin.Door.Row2.PassengerSide.IsOpen,canonical-door-side-rename,Row2.Right → Row2.PassengerSide (LHD assumed; flips on RHD)
+Body.Doors.Row2.Right.IsRemoved,Vehicle.Cabin.Door.Row2.PassengerSide.IsRemoved,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row2.Right.Latch.IsLatched,Vehicle.Cabin.Door.Row2.PassengerSide.Latch.IsLatched,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row2.Right.LatchStatus,Vehicle.Cabin.Door.Row2.PassengerSide.LatchStatus,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row2.Right.Soldier.IsUnlocked,Vehicle.Cabin.Door.Row2.PassengerSide.Soldier.IsUnlocked,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row2.Right.Window.MotorDirection,Vehicle.Cabin.Door.Row2.PassengerSide.Window.MotorDirection,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
+Body.Doors.Row2.Right.Window.Position,Vehicle.Cabin.Door.Row2.PassengerSide.Window.Position,canonical-door-side-rename,Row2.Right → Row2.PassengerSide (LHD assumed; flips on RHD)
+Body.FuelLid.IsOpen,Vehicle.Body.Bridge.Body.FuelLid.IsOpen,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Hood.CloseCmd,Vehicle.Body.Bridge.Body.Hood.CloseCmd,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Hood.IsOpen,Vehicle.Body.Hood.IsOpen,canonical-with-vehicle-prefix,
+Body.Hood.LatchState,Vehicle.Body.Bridge.Body.Hood.LatchState,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Hood.OpenCmd,Vehicle.Body.Bridge.Body.Hood.OpenCmd,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Horn.IsActive,Vehicle.Body.Horn.IsActive,canonical-with-vehicle-prefix,
+Body.Lights.AmbientLightSensor.Illuminance,Vehicle.Body.Bridge.Body.Lights.AmbientLightSensor.Illuminance,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Lights.Backup.IsActive,Vehicle.Body.Bridge.Body.Lights.Backup.IsActive,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Lights.Beam.High.IsOn,Vehicle.Body.Lights.Beam.High.IsOn,canonical-with-vehicle-prefix,
+Body.Lights.Beam.Low.IsOn,Vehicle.Body.Lights.Beam.Low.IsOn,canonical-with-vehicle-prefix,
+Body.Lights.Brake.IsActive,Vehicle.Body.Lights.Brake.IsActive,canonical-with-vehicle-prefix,
+Body.Lights.DirectionIndicator.Left.IsSignaling,Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling,canonical-with-vehicle-prefix,
+Body.Lights.DirectionIndicator.Left.Lamp.Front.IsDefect,Vehicle.Body.Bridge.Body.Lights.DirectionIndicator.Left.Lamp.Front.IsDefect,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn,Vehicle.Body.Bridge.Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsDefect,Vehicle.Body.Bridge.Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsDefect,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsOn,Vehicle.Body.Bridge.Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsOn,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Lights.DirectionIndicator.Left.Lamp.Side.IsDefect,Vehicle.Body.Bridge.Body.Lights.DirectionIndicator.Left.Lamp.Side.IsDefect,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Lights.DirectionIndicator.Left.Lamp.Side.IsOn,Vehicle.Body.Bridge.Body.Lights.DirectionIndicator.Left.Lamp.Side.IsOn,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Lights.DirectionIndicator.Right.IsSignaling,Vehicle.Body.Lights.DirectionIndicator.Right.IsSignaling,canonical-with-vehicle-prefix,
+Body.Lights.DirectionIndicator.Right.Lamp.Front.IsDefect,Vehicle.Body.Bridge.Body.Lights.DirectionIndicator.Right.Lamp.Front.IsDefect,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn,Vehicle.Body.Bridge.Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsDefect,Vehicle.Body.Bridge.Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsDefect,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsOn,Vehicle.Body.Bridge.Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsOn,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Lights.DirectionIndicator.Right.Lamp.Side.IsDefect,Vehicle.Body.Bridge.Body.Lights.DirectionIndicator.Right.Lamp.Side.IsDefect,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Lights.DirectionIndicator.Right.Lamp.Side.IsOn,Vehicle.Body.Bridge.Body.Lights.DirectionIndicator.Right.Lamp.Side.IsOn,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Lights.Fog.Front.IsOn,Vehicle.Body.Lights.Fog.Front.IsOn,canonical-with-vehicle-prefix,
+Body.Lights.Fog.Rear.IsOn,Vehicle.Body.Lights.Fog.Rear.IsOn,canonical-with-vehicle-prefix,
+Body.Lights.Hazard.IsSignaling,Vehicle.Body.Lights.Hazard.IsSignaling,canonical-with-vehicle-prefix,
+Body.Lights.LicensePlate.IsOn,Vehicle.Body.Lights.LicensePlate.IsOn,canonical-with-vehicle-prefix,
+Body.Lights.LightSwitch,Vehicle.Body.Lights.LightSwitch,canonical-with-vehicle-prefix,
+Body.Lights.Parking.IsOn,Vehicle.Body.Lights.Parking.IsOn,canonical-with-vehicle-prefix,
+Body.Lights.Puddle.Left.IsOn,Vehicle.Body.Bridge.Body.Lights.Puddle.Left.IsOn,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Lights.Puddle.Right.IsOn,Vehicle.Body.Bridge.Body.Lights.Puddle.Right.IsOn,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Lights.Running.IsOn,Vehicle.Body.Lights.Running.IsOn,canonical-with-vehicle-prefix,
+Body.Mirror.Left.AdjustCmd,Vehicle.Body.Bridge.Body.Mirror.Left.AdjustCmd,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Mirror.Left.FoldCmd,Vehicle.Body.Bridge.Body.Mirror.Left.FoldCmd,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Mirror.Left.IsFolded,Vehicle.Body.Bridge.Body.Mirror.Left.IsFolded,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Mirror.Left.IsHeatingOn,Vehicle.Body.Bridge.Body.Mirror.Left.IsHeatingOn,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Mirror.Left.Tilt,Vehicle.Body.Bridge.Body.Mirror.Left.Tilt,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Mirror.Left.Yaw,Vehicle.Body.Bridge.Body.Mirror.Left.Yaw,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Mirror.Right.AdjustCmd,Vehicle.Body.Bridge.Body.Mirror.Right.AdjustCmd,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Mirror.Right.FoldCmd,Vehicle.Body.Bridge.Body.Mirror.Right.FoldCmd,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Mirror.Right.IsFolded,Vehicle.Body.Bridge.Body.Mirror.Right.IsFolded,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Mirror.Right.IsHeatingOn,Vehicle.Body.Bridge.Body.Mirror.Right.IsHeatingOn,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Mirror.Right.Tilt,Vehicle.Body.Bridge.Body.Mirror.Right.Tilt,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Mirror.Right.Yaw,Vehicle.Body.Bridge.Body.Mirror.Right.Yaw,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.PEPS.ApproachKeys,Vehicle.Body.Bridge.Body.PEPS.ApproachKeys,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.ApproachPoll,Vehicle.Body.Bridge.Body.PEPS.ApproachPoll,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.ApproachPollInterval,Vehicle.Body.Bridge.Body.PEPS.ApproachPollInterval,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.ApproachState,Vehicle.Body.Bridge.Body.PEPS.ApproachState,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.BleChallenge,Vehicle.Body.Bridge.Body.PEPS.BleChallenge,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.KeyPresent,Vehicle.Body.Bridge.Body.PEPS.KeyPresent,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.LfChallenge,Vehicle.Body.Bridge.Body.PEPS.LfChallenge,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.LostKeyWarning,Vehicle.Body.Bridge.Body.PEPS.LostKeyWarning,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.NfcAuthBypass,Vehicle.Body.Bridge.Body.PEPS.NfcAuthBypass,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.NfcChallenge,Vehicle.Body.Bridge.Body.PEPS.NfcChallenge,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.BlePhone.1.ChallengeResponse,Vehicle.Body.Bridge.Body.PEPS.Plant.BlePhone.1.ChallengeResponse,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.BlePhone.1.LastObservedZone,Vehicle.Body.Bridge.Body.PEPS.Plant.BlePhone.1.LastObservedZone,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.BlePhone.1.NfcTap,Vehicle.Body.Bridge.Body.PEPS.Plant.BlePhone.1.NfcTap,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.BlePhone.1.PlacedZone,Vehicle.Body.Bridge.Body.PEPS.Plant.BlePhone.1.PlacedZone,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.BlePhone.1.RssiResponse,Vehicle.Body.Bridge.Body.PEPS.Plant.BlePhone.1.RssiResponse,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.BlePhone.2.ChallengeResponse,Vehicle.Body.Bridge.Body.PEPS.Plant.BlePhone.2.ChallengeResponse,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.BlePhone.2.LastObservedZone,Vehicle.Body.Bridge.Body.PEPS.Plant.BlePhone.2.LastObservedZone,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.BlePhone.2.NfcTap,Vehicle.Body.Bridge.Body.PEPS.Plant.BlePhone.2.NfcTap,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.BlePhone.2.PlacedZone,Vehicle.Body.Bridge.Body.PEPS.Plant.BlePhone.2.PlacedZone,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.BlePhone.2.RssiResponse,Vehicle.Body.Bridge.Body.PEPS.Plant.BlePhone.2.RssiResponse,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.1.ButtonPress,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.1.ButtonPress,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.1.ChallengeResponse,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.1.ChallengeResponse,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.1.LastObservedZone,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.1.LastObservedZone,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.1.Paired,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.1.Paired,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.1.PlacedZone,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.1.PlacedZone,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.1.RfMessage,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.1.RfMessage,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.1.RssiResponse,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.1.RssiResponse,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.2.ButtonPress,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.2.ButtonPress,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.2.ChallengeResponse,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.2.ChallengeResponse,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.2.LastObservedZone,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.2.LastObservedZone,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.2.Paired,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.2.Paired,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.2.PlacedZone,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.2.PlacedZone,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.2.RfMessage,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.2.RfMessage,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.2.RssiResponse,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.2.RssiResponse,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.3.ButtonPress,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.3.ButtonPress,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.3.ChallengeResponse,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.3.ChallengeResponse,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.3.LastObservedZone,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.3.LastObservedZone,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.3.Paired,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.3.Paired,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.3.PlacedZone,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.3.PlacedZone,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.3.RfMessage,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.3.RfMessage,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.3.RssiResponse,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.3.RssiResponse,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.4.ButtonPress,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.4.ButtonPress,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.4.ChallengeResponse,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.4.ChallengeResponse,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.4.LastObservedZone,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.4.LastObservedZone,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.4.Paired,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.4.Paired,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.4.PlacedZone,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.4.PlacedZone,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.4.RfMessage,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.4.RfMessage,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.4.RssiResponse,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.4.RssiResponse,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.5.ChallengeResponse,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.5.ChallengeResponse,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.5.LastObservedZone,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.5.LastObservedZone,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.5.Paired,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.5.Paired,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.5.PlacedZone,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.5.PlacedZone,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.5.RssiResponse,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.5.RssiResponse,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.6.ChallengeResponse,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.6.ChallengeResponse,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.6.LastObservedZone,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.6.LastObservedZone,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.6.Paired,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.6.Paired,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.6.PlacedZone,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.6.PlacedZone,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.KeyFob.6.RssiResponse,Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.6.RssiResponse,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.NfcCard.1.ChallengeResponse,Vehicle.Body.Bridge.Body.PEPS.Plant.NfcCard.1.ChallengeResponse,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.NfcCard.1.Position,Vehicle.Body.Bridge.Body.PEPS.Plant.NfcCard.1.Position,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.NfcCard.2.ChallengeResponse,Vehicle.Body.Bridge.Body.PEPS.Plant.NfcCard.2.ChallengeResponse,project-namespace,simulator-internal PEPS plant state
+Body.PEPS.Plant.NfcCard.2.Position,Vehicle.Body.Bridge.Body.PEPS.Plant.NfcCard.2.Position,project-namespace,simulator-internal PEPS plant state
+Body.Power.DelayedAccessory.IsActive,Vehicle.Body.Bridge.Body.Power.DelayedAccessory.IsActive,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.PowerChildLock.MasterStatus,Vehicle.Body.Bridge.Body.PowerChildLock.MasterStatus,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Sunroof.MoveCmd,Vehicle.Body.Bridge.Body.Sunroof.MoveCmd,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Sunroof.Position,Vehicle.Body.Bridge.Body.Sunroof.Position,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Sunroof.Shade.MoveCmd,Vehicle.Body.Bridge.Body.Sunroof.Shade.MoveCmd,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Sunroof.Shade.Position,Vehicle.Body.Bridge.Body.Sunroof.Shade.Position,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Switches.DoorTrim.Row1.Left.LockButton,Vehicle.Body.Bridge.Body.Switches.DoorTrim.Row1.Left.LockButton,project-namespace,bridge-internal switch input; no VSS equivalent
+Body.Switches.DoorTrim.Row1.Left.UnlockButton,Vehicle.Body.Bridge.Body.Switches.DoorTrim.Row1.Left.UnlockButton,project-namespace,bridge-internal switch input; no VSS equivalent
+Body.Switches.DoorTrim.Row1.Right.LockButton,Vehicle.Body.Bridge.Body.Switches.DoorTrim.Row1.Right.LockButton,project-namespace,bridge-internal switch input; no VSS equivalent
+Body.Switches.DoorTrim.Row1.Right.UnlockButton,Vehicle.Body.Bridge.Body.Switches.DoorTrim.Row1.Right.UnlockButton,project-namespace,bridge-internal switch input; no VSS equivalent
+Body.Switches.DoorTrim.Row2.Left.LockButton,Vehicle.Body.Bridge.Body.Switches.DoorTrim.Row2.Left.LockButton,project-namespace,bridge-internal switch input; no VSS equivalent
+Body.Switches.DoorTrim.Row2.Right.LockButton,Vehicle.Body.Bridge.Body.Switches.DoorTrim.Row2.Right.LockButton,project-namespace,bridge-internal switch input; no VSS equivalent
+Body.Switches.Fog.Front.IsEngaged,Vehicle.Body.Bridge.Body.Switches.Fog.Front.IsEngaged,project-namespace,bridge-internal switch input; no VSS equivalent
+Body.Switches.Fog.Rear.IsEngaged,Vehicle.Body.Bridge.Body.Switches.Fog.Rear.IsEngaged,project-namespace,bridge-internal switch input; no VSS equivalent
+Body.Switches.Hazard.IsEngaged,Vehicle.Body.Bridge.Body.Switches.Hazard.IsEngaged,project-namespace,bridge-internal switch input; no VSS equivalent
+Body.Switches.HighBeam.IsEngaged,Vehicle.Body.Bridge.Body.Switches.HighBeam.IsEngaged,project-namespace,bridge-internal switch input; no VSS equivalent
+Body.Switches.Hood.Release.IsPulled,Vehicle.Body.Bridge.Body.Switches.Hood.Release.IsPulled,project-namespace,bridge-internal switch input; no VSS equivalent
+Body.Switches.Horn.IsPressed,Vehicle.Body.Bridge.Body.Switches.Horn.IsPressed,project-namespace,bridge-internal switch input; no VSS equivalent
+Body.Switches.IgnitionCylinder.Position,Vehicle.Body.Bridge.Body.Switches.IgnitionCylinder.Position,project-namespace,bridge-internal switch input; no VSS equivalent
+Body.Switches.IgnitionCylinder.RemovalInhibited,Vehicle.Body.Bridge.Body.Switches.IgnitionCylinder.RemovalInhibited,project-namespace,bridge-internal switch input; no VSS equivalent
+Body.Switches.Keyfob.LockButton,Vehicle.Body.Bridge.Body.Switches.Keyfob.LockButton,project-namespace,bridge-internal switch input; no VSS equivalent
+Body.Switches.Mirror.Direction,Vehicle.Body.Bridge.Body.Switches.Mirror.Direction,project-namespace,bridge-internal switch input; no VSS equivalent
+Body.Switches.Mirror.Fold,Vehicle.Body.Bridge.Body.Switches.Mirror.Fold,project-namespace,bridge-internal switch input; no VSS equivalent
+Body.Switches.Mirror.Select,Vehicle.Body.Bridge.Body.Switches.Mirror.Select,project-namespace,bridge-internal switch input; no VSS equivalent
+Body.Switches.Panic.IsEngaged,Vehicle.Body.Bridge.Body.Switches.Panic.IsEngaged,project-namespace,bridge-internal switch input; no VSS equivalent
+Body.Switches.PowerChildLock.IsPressed,Vehicle.Body.Bridge.Body.Switches.PowerChildLock.IsPressed,project-namespace,bridge-internal switch input; no VSS equivalent
+Body.Switches.StartStop.BacklightDutyCycle,Vehicle.Body.Bridge.Body.Switches.StartStop.BacklightDutyCycle,project-namespace,bridge-internal switch input; no VSS equivalent
+Body.Switches.StartStop.BacklightIntensity,Vehicle.Body.Bridge.Body.Switches.StartStop.BacklightIntensity,project-namespace,bridge-internal switch input; no VSS equivalent
+Body.Switches.StartStop.IsPressed,Vehicle.Body.Bridge.Body.Switches.StartStop.IsPressed,project-namespace,bridge-internal switch input; no VSS equivalent
+Body.Switches.Sunroof.Detent,Vehicle.Body.Bridge.Body.Switches.Sunroof.Detent,project-namespace,bridge-internal switch input; no VSS equivalent
+Body.Switches.Trunk.Release.IsPressed,Vehicle.Body.Bridge.Body.Switches.Trunk.Release.IsPressed,project-namespace,bridge-internal switch input; no VSS equivalent
+Body.Switches.TurnIndicator.Direction,Vehicle.Body.Bridge.Body.Switches.TurnIndicator.Direction,project-namespace,bridge-internal switch input; no VSS equivalent
+Body.Switches.Window.DriverMaster.Row1.Left.Detent,Vehicle.Body.Bridge.Body.Switches.Window.DriverMaster.Row1.Left.Detent,project-namespace,bridge-internal switch input; no VSS equivalent
+Body.Switches.Window.DriverMaster.Row1.Right.Detent,Vehicle.Body.Bridge.Body.Switches.Window.DriverMaster.Row1.Right.Detent,project-namespace,bridge-internal switch input; no VSS equivalent
+Body.Switches.Window.DriverMaster.Row2.Left.Detent,Vehicle.Body.Bridge.Body.Switches.Window.DriverMaster.Row2.Left.Detent,project-namespace,bridge-internal switch input; no VSS equivalent
+Body.Switches.Window.DriverMaster.Row2.Right.Detent,Vehicle.Body.Bridge.Body.Switches.Window.DriverMaster.Row2.Right.Detent,project-namespace,bridge-internal switch input; no VSS equivalent
+Body.Switches.Window.Local.Row1.Left.Detent,Vehicle.Body.Bridge.Body.Switches.Window.Local.Row1.Left.Detent,project-namespace,bridge-internal switch input; no VSS equivalent
+Body.Switches.Window.Local.Row1.Right.Detent,Vehicle.Body.Bridge.Body.Switches.Window.Local.Row1.Right.Detent,project-namespace,bridge-internal switch input; no VSS equivalent
+Body.Switches.Window.Local.Row2.Left.Detent,Vehicle.Body.Bridge.Body.Switches.Window.Local.Row2.Left.Detent,project-namespace,bridge-internal switch input; no VSS equivalent
+Body.Switches.Window.Local.Row2.Right.Detent,Vehicle.Body.Bridge.Body.Switches.Window.Local.Row2.Right.Detent,project-namespace,bridge-internal switch input; no VSS equivalent
+Body.Trunk.CloseCmd,Vehicle.Body.Bridge.Body.Trunk.CloseCmd,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Trunk.ExteriorButton.IsPressed,Vehicle.Body.Bridge.Body.Trunk.ExteriorButton.IsPressed,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Trunk.IsLocked,Vehicle.Body.Bridge.Body.Trunk.IsLocked,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Trunk.IsOpen,Vehicle.Body.Bridge.Body.Trunk.IsOpen,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Trunk.OpenCmd,Vehicle.Body.Bridge.Body.Trunk.OpenCmd,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Windshield.Front.Washing.IsActive,Vehicle.Body.Bridge.Body.Windshield.Front.Washing.IsActive,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Windshield.Front.Wiping.Intensity,Vehicle.Body.Windshield.Front.Wiping.Intensity,canonical-with-vehicle-prefix,
+Body.Windshield.Front.Wiping.Mode,Vehicle.Body.Windshield.Front.Wiping.Mode,canonical-with-vehicle-prefix,
+Body.Windshield.Rear.Washing.IsActive,Vehicle.Body.Bridge.Body.Windshield.Rear.Washing.IsActive,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Windshield.Rear.Wiping.Mode,Vehicle.Body.Windshield.Rear.Wiping.Mode,canonical-with-vehicle-prefix,
+Cabin.HVAC.IsAirConditioningActive,Vehicle.Cabin.HVAC.IsAirConditioningActive,canonical-with-vehicle-prefix,
+Cabin.HVAC.IsFrontDefrosterActive,Vehicle.Cabin.HVAC.IsFrontDefrosterActive,canonical-with-vehicle-prefix,
+Cabin.HVAC.IsRearDefrosterActive,Vehicle.Cabin.HVAC.IsRearDefrosterActive,canonical-with-vehicle-prefix,
+Cabin.HVAC.IsRecirculationActive,Vehicle.Cabin.HVAC.IsRecirculationActive,canonical-with-vehicle-prefix,
+Cabin.HVAC.Station.Row1.Left.AirDistribution,Vehicle.Body.Bridge.Cabin.HVAC.Station.Row1.Left.AirDistribution,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Cabin.HVAC.Station.Row1.Left.FanSpeed,Vehicle.Body.Bridge.Cabin.HVAC.Station.Row1.Left.FanSpeed,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Cabin.HVAC.Station.Row1.Left.Temperature,Vehicle.Body.Bridge.Cabin.HVAC.Station.Row1.Left.Temperature,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Cabin.HVAC.Station.Row1.Right.AirDistribution,Vehicle.Body.Bridge.Cabin.HVAC.Station.Row1.Right.AirDistribution,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Cabin.HVAC.Station.Row1.Right.FanSpeed,Vehicle.Body.Bridge.Cabin.HVAC.Station.Row1.Right.FanSpeed,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Cabin.HVAC.Station.Row1.Right.Temperature,Vehicle.Body.Bridge.Cabin.HVAC.Station.Row1.Right.Temperature,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Cabin.Lights.Ambient.Color,Vehicle.Body.Bridge.Cabin.Lights.Ambient.Color,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Cabin.Lights.Ambient.Intensity,Vehicle.Body.Bridge.Cabin.Lights.Ambient.Intensity,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Cabin.Lights.Dome.SwitchPosition,Vehicle.Body.Bridge.Cabin.Lights.Dome.SwitchPosition,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Cabin.Lights.IsDomeOn,Vehicle.Body.Bridge.Cabin.Lights.IsDomeOn,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Cabin.Lights.IsGloveBoxOn,Vehicle.Body.Bridge.Cabin.Lights.IsGloveBoxOn,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Cabin.LockStatus,Vehicle.Body.Bridge.Cabin.LockStatus,project-namespace,aggregate or actuator-intent signal; no VSS equivalent
+Cabin.LockStatus.EventNum,Vehicle.Body.Bridge.Cabin.LockStatus.EventNum,project-namespace,aggregate or actuator-intent signal; no VSS equivalent
+Cabin.LockStatus.LastRequestor,Vehicle.Body.Bridge.Cabin.LockStatus.LastRequestor,project-namespace,aggregate or actuator-intent signal; no VSS equivalent
+Cabin.Seat.Row1.Left.HeatingLevel,Vehicle.Body.Bridge.Cabin.Seat.Row1.Left.HeatingLevel,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Cabin.Seat.Row1.Left.IsHeatingOn,Vehicle.Body.Bridge.Cabin.Seat.Row1.Left.IsHeatingOn,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Cabin.Seat.Row1.Left.IsVentilationOn,Vehicle.Body.Bridge.Cabin.Seat.Row1.Left.IsVentilationOn,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Cabin.Seat.Row1.Right.HeatingLevel,Vehicle.Body.Bridge.Cabin.Seat.Row1.Right.HeatingLevel,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Cabin.Seat.Row1.Right.IsHeatingOn,Vehicle.Body.Bridge.Cabin.Seat.Row1.Right.IsHeatingOn,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Cabin.Seat.Row1.Right.IsVentilationOn,Vehicle.Body.Bridge.Cabin.Seat.Row1.Right.IsVentilationOn,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Cabin.ValetMode.IsActive,Vehicle.Body.Bridge.Cabin.ValetMode.IsActive,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Chassis.Brake.IsApplied,Vehicle.Body.Bridge.Chassis.Brake.IsApplied,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Chassis.Brake.PedalPosition,Vehicle.Chassis.Brake.PedalPosition,canonical-with-vehicle-prefix,
+Chassis.ParkingBrake.IsEngaged,Vehicle.Chassis.ParkingBrake.IsEngaged,canonical-with-vehicle-prefix,
+Vehicle.ADAS.HighBeam.OncomingVehicleDetected,Vehicle.Body.Bridge.Vehicle.ADAS.HighBeam.OncomingVehicleDetected,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Vehicle.Body.Alarm.IsActive,Vehicle.Body.Bridge.Vehicle.Body.Alarm.IsActive,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Vehicle.Body.Alarm.State,Vehicle.Body.Bridge.Vehicle.Body.Alarm.State,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Vehicle.Cabin.Infotainment.HMI.DayNightMode,Vehicle.Cabin.Infotainment.HMI.DayNightMode,canonical-as-is,
+Vehicle.Chassis.Axle.Row1.Wheel.Left.Tire.IsPressureLow,Vehicle.Chassis.Axle.Row1.Wheel.Left.Tire.IsPressureLow,canonical-as-is,
+Vehicle.Chassis.Axle.Row1.Wheel.Right.Tire.IsPressureLow,Vehicle.Chassis.Axle.Row1.Wheel.Right.Tire.IsPressureLow,canonical-as-is,
+Vehicle.Chassis.Axle.Row2.Wheel.Left.Tire.IsPressureLow,Vehicle.Chassis.Axle.Row2.Wheel.Left.Tire.IsPressureLow,canonical-as-is,
+Vehicle.Chassis.Axle.Row2.Wheel.Right.Tire.IsPressureLow,Vehicle.Chassis.Axle.Row2.Wheel.Right.Tire.IsPressureLow,canonical-as-is,
+Vehicle.LowVoltageSystemState,Vehicle.LowVoltageSystemState,canonical-as-is,
+Vehicle.Powertrain.Type,Vehicle.Powertrain.Type,canonical-as-is,
+Vehicle.Safety.CrashDetected,Vehicle.Body.Bridge.Vehicle.Safety.CrashDetected,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Vehicle.Speed,Vehicle.Speed,canonical-as-is,
+Vehicle.Starting.ImmobilizerStatus,Vehicle.Body.Bridge.Vehicle.Starting.ImmobilizerStatus,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
