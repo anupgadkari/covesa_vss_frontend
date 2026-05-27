@@ -1,12 +1,12 @@
 original,target,category,note
-Body.ChargeLid.IsOpen,Vehicle.Body.Bridge.Body.ChargeLid.IsOpen,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.ChargeLid.IsOpen,Vehicle.Body.Bridge.Body.ChargeLid.IsOpen,project-namespace,no VSS equivalent
 Body.Chime.IsActive,Vehicle.Body.Bridge.Body.Chime.IsActive,project-namespace,aggregate or actuator-intent signal; no VSS equivalent
 Body.Chime.IsSounding,Vehicle.Body.Bridge.Body.Chime.IsSounding,project-namespace,aggregate or actuator-intent signal; no VSS equivalent
 Body.Connectivity.BleLock,Vehicle.Body.Bridge.Body.Connectivity.BleLock,project-namespace,project HMI connectivity flag; no VSS equivalent
 Body.Connectivity.NfcCardPresent,Vehicle.Body.Bridge.Body.Connectivity.NfcCardPresent,project-namespace,project HMI connectivity flag; no VSS equivalent
 Body.Connectivity.NfcPhonePresent,Vehicle.Body.Bridge.Body.Connectivity.NfcPhonePresent,project-namespace,project HMI connectivity flag; no VSS equivalent
 Body.Connectivity.RemoteLock,Vehicle.Body.Bridge.Body.Connectivity.RemoteLock,project-namespace,project HMI connectivity flag; no VSS equivalent
-Body.DoesNotExist,Vehicle.Body.Bridge.Body.DoesNotExist,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.DoesNotExist,Vehicle.Body.Bridge.TestFixtures.DoesNotExist,project-namespace,deliberate non-existent path used by signal-id-lookup error-path test
 Body.Doors.AutoRelock.IsArmed,Vehicle.Body.Bridge.Body.Doors.AutoRelock.IsArmed,project-namespace,arbiter command/status signal; no VSS equivalent
 Body.Doors.AutoRelock.TimeoutSeconds,Vehicle.Body.Bridge.Body.Doors.AutoRelock.TimeoutSeconds,project-namespace,arbiter command/status signal; no VSS equivalent
 Body.Doors.CentralLock.Command,Vehicle.Body.Bridge.Body.Doors.CentralLock.Command,project-namespace,arbiter command/status signal; no VSS equivalent
@@ -65,52 +65,52 @@ Body.Doors.Row2.Right.LatchStatus,Vehicle.Cabin.Door.Row2.PassengerSide.LatchSta
 Body.Doors.Row2.Right.Soldier.IsUnlocked,Vehicle.Cabin.Door.Row2.PassengerSide.Soldier.IsUnlocked,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
 Body.Doors.Row2.Right.Window.MotorDirection,Vehicle.Cabin.Door.Row2.PassengerSide.Window.MotorDirection,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
 Body.Doors.Row2.Right.Window.Position,Vehicle.Cabin.Door.Row2.PassengerSide.Window.Position,canonical-door-side-rename,Row2.Right → Row2.PassengerSide (LHD assumed; flips on RHD)
-Body.FuelLid.IsOpen,Vehicle.Body.Bridge.Body.FuelLid.IsOpen,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Body.Hood.CloseCmd,Vehicle.Body.Bridge.Body.Hood.CloseCmd,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.FuelLid.IsOpen,Vehicle.Body.Bridge.Body.FuelLid.IsOpen,project-namespace,no VSS equivalent
+Body.Hood.CloseCmd,Vehicle.Body.Bridge.Body.Hood.CloseCmd,project-extension-mirroring,actuator-intent; VSS models Position/Switch state only
 Body.Hood.IsOpen,Vehicle.Body.Hood.IsOpen,canonical-with-vehicle-prefix,
-Body.Hood.LatchState,Vehicle.Body.Bridge.Body.Hood.LatchState,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Body.Hood.OpenCmd,Vehicle.Body.Bridge.Body.Hood.OpenCmd,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Hood.LatchState,Vehicle.Body.Bridge.Body.Hood.LatchState,project-extension-mirroring,internal latch state; VSS has no equivalent
+Body.Hood.OpenCmd,Vehicle.Body.Bridge.Body.Hood.OpenCmd,project-extension-mirroring,actuator-intent; VSS models Position/Switch state only
 Body.Horn.IsActive,Vehicle.Body.Horn.IsActive,canonical-with-vehicle-prefix,
-Body.Lights.AmbientLightSensor.Illuminance,Vehicle.Body.Bridge.Body.Lights.AmbientLightSensor.Illuminance,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Body.Lights.Backup.IsActive,Vehicle.Body.Bridge.Body.Lights.Backup.IsActive,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Lights.AmbientLightSensor.Illuminance,Vehicle.Body.Bridge.Body.Lights.AmbientLightSensor.Illuminance,project-namespace,OEM custom — not in standard VSS
+Body.Lights.Backup.IsActive,Vehicle.Body.Lights.Backup.IsOn,canonical-restructured,VSS uses .IsOn not .IsActive
 Body.Lights.Beam.High.IsOn,Vehicle.Body.Lights.Beam.High.IsOn,canonical-with-vehicle-prefix,
 Body.Lights.Beam.Low.IsOn,Vehicle.Body.Lights.Beam.Low.IsOn,canonical-with-vehicle-prefix,
 Body.Lights.Brake.IsActive,Vehicle.Body.Lights.Brake.IsActive,canonical-with-vehicle-prefix,
 Body.Lights.DirectionIndicator.Left.IsSignaling,Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling,canonical-with-vehicle-prefix,
-Body.Lights.DirectionIndicator.Left.Lamp.Front.IsDefect,Vehicle.Body.Bridge.Body.Lights.DirectionIndicator.Left.Lamp.Front.IsDefect,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn,Vehicle.Body.Bridge.Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsDefect,Vehicle.Body.Bridge.Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsDefect,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsOn,Vehicle.Body.Bridge.Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsOn,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Body.Lights.DirectionIndicator.Left.Lamp.Side.IsDefect,Vehicle.Body.Bridge.Body.Lights.DirectionIndicator.Left.Lamp.Side.IsDefect,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Body.Lights.DirectionIndicator.Left.Lamp.Side.IsOn,Vehicle.Body.Bridge.Body.Lights.DirectionIndicator.Left.Lamp.Side.IsOn,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Lights.DirectionIndicator.Left.Lamp.Front.IsDefect,Vehicle.Body.Bridge.Body.Lights.DirectionIndicator.DriverSide.Lamp.Front.IsDefect,project-extension-mirroring,per-lamp detail beyond VSS
+Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn,Vehicle.Body.Bridge.Body.Lights.DirectionIndicator.DriverSide.Lamp.Front.IsOn,project-extension-mirroring,per-lamp detail beyond VSS
+Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsDefect,Vehicle.Body.Bridge.Body.Lights.DirectionIndicator.DriverSide.Lamp.Rear.IsDefect,project-extension-mirroring,per-lamp detail beyond VSS
+Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsOn,Vehicle.Body.Bridge.Body.Lights.DirectionIndicator.DriverSide.Lamp.Rear.IsOn,project-extension-mirroring,per-lamp detail beyond VSS
+Body.Lights.DirectionIndicator.Left.Lamp.Side.IsDefect,Vehicle.Body.Bridge.Body.Lights.DirectionIndicator.DriverSide.Lamp.Side.IsDefect,project-extension-mirroring,per-lamp detail beyond VSS
+Body.Lights.DirectionIndicator.Left.Lamp.Side.IsOn,Vehicle.Body.Bridge.Body.Lights.DirectionIndicator.DriverSide.Lamp.Side.IsOn,project-extension-mirroring,per-lamp detail beyond VSS
 Body.Lights.DirectionIndicator.Right.IsSignaling,Vehicle.Body.Lights.DirectionIndicator.Right.IsSignaling,canonical-with-vehicle-prefix,
-Body.Lights.DirectionIndicator.Right.Lamp.Front.IsDefect,Vehicle.Body.Bridge.Body.Lights.DirectionIndicator.Right.Lamp.Front.IsDefect,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn,Vehicle.Body.Bridge.Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsDefect,Vehicle.Body.Bridge.Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsDefect,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsOn,Vehicle.Body.Bridge.Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsOn,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Body.Lights.DirectionIndicator.Right.Lamp.Side.IsDefect,Vehicle.Body.Bridge.Body.Lights.DirectionIndicator.Right.Lamp.Side.IsDefect,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Body.Lights.DirectionIndicator.Right.Lamp.Side.IsOn,Vehicle.Body.Bridge.Body.Lights.DirectionIndicator.Right.Lamp.Side.IsOn,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Lights.DirectionIndicator.Right.Lamp.Front.IsDefect,Vehicle.Body.Bridge.Body.Lights.DirectionIndicator.PassengerSide.Lamp.Front.IsDefect,project-extension-mirroring,per-lamp detail beyond VSS
+Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn,Vehicle.Body.Bridge.Body.Lights.DirectionIndicator.PassengerSide.Lamp.Front.IsOn,project-extension-mirroring,per-lamp detail beyond VSS
+Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsDefect,Vehicle.Body.Bridge.Body.Lights.DirectionIndicator.PassengerSide.Lamp.Rear.IsDefect,project-extension-mirroring,per-lamp detail beyond VSS
+Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsOn,Vehicle.Body.Bridge.Body.Lights.DirectionIndicator.PassengerSide.Lamp.Rear.IsOn,project-extension-mirroring,per-lamp detail beyond VSS
+Body.Lights.DirectionIndicator.Right.Lamp.Side.IsDefect,Vehicle.Body.Bridge.Body.Lights.DirectionIndicator.PassengerSide.Lamp.Side.IsDefect,project-extension-mirroring,per-lamp detail beyond VSS
+Body.Lights.DirectionIndicator.Right.Lamp.Side.IsOn,Vehicle.Body.Bridge.Body.Lights.DirectionIndicator.PassengerSide.Lamp.Side.IsOn,project-extension-mirroring,per-lamp detail beyond VSS
 Body.Lights.Fog.Front.IsOn,Vehicle.Body.Lights.Fog.Front.IsOn,canonical-with-vehicle-prefix,
 Body.Lights.Fog.Rear.IsOn,Vehicle.Body.Lights.Fog.Rear.IsOn,canonical-with-vehicle-prefix,
 Body.Lights.Hazard.IsSignaling,Vehicle.Body.Lights.Hazard.IsSignaling,canonical-with-vehicle-prefix,
 Body.Lights.LicensePlate.IsOn,Vehicle.Body.Lights.LicensePlate.IsOn,canonical-with-vehicle-prefix,
 Body.Lights.LightSwitch,Vehicle.Body.Lights.LightSwitch,canonical-with-vehicle-prefix,
 Body.Lights.Parking.IsOn,Vehicle.Body.Lights.Parking.IsOn,canonical-with-vehicle-prefix,
-Body.Lights.Puddle.Left.IsOn,Vehicle.Body.Bridge.Body.Lights.Puddle.Left.IsOn,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Body.Lights.Puddle.Right.IsOn,Vehicle.Body.Bridge.Body.Lights.Puddle.Right.IsOn,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Lights.Puddle.Left.IsOn,Vehicle.Body.Bridge.Body.Lights.Puddle.DriverSide.IsOn,project-extension-mirroring,puddle lamp not in VSS taxonomy
+Body.Lights.Puddle.Right.IsOn,Vehicle.Body.Bridge.Body.Lights.Puddle.PassengerSide.IsOn,project-extension-mirroring,puddle lamp not in VSS taxonomy
 Body.Lights.Running.IsOn,Vehicle.Body.Lights.Running.IsOn,canonical-with-vehicle-prefix,
-Body.Mirror.Left.AdjustCmd,Vehicle.Body.Bridge.Body.Mirror.Left.AdjustCmd,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Body.Mirror.Left.FoldCmd,Vehicle.Body.Bridge.Body.Mirror.Left.FoldCmd,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Body.Mirror.Left.IsFolded,Vehicle.Body.Bridge.Body.Mirror.Left.IsFolded,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Body.Mirror.Left.IsHeatingOn,Vehicle.Body.Bridge.Body.Mirror.Left.IsHeatingOn,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Body.Mirror.Left.Tilt,Vehicle.Body.Bridge.Body.Mirror.Left.Tilt,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Body.Mirror.Left.Yaw,Vehicle.Body.Bridge.Body.Mirror.Left.Yaw,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Body.Mirror.Right.AdjustCmd,Vehicle.Body.Bridge.Body.Mirror.Right.AdjustCmd,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Body.Mirror.Right.FoldCmd,Vehicle.Body.Bridge.Body.Mirror.Right.FoldCmd,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Body.Mirror.Right.IsFolded,Vehicle.Body.Bridge.Body.Mirror.Right.IsFolded,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Body.Mirror.Right.IsHeatingOn,Vehicle.Body.Bridge.Body.Mirror.Right.IsHeatingOn,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Body.Mirror.Right.Tilt,Vehicle.Body.Bridge.Body.Mirror.Right.Tilt,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Body.Mirror.Right.Yaw,Vehicle.Body.Bridge.Body.Mirror.Right.Yaw,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Mirror.Left.AdjustCmd,Vehicle.Body.Bridge.Body.Mirror.DriverSide.AdjustCmd,project-extension-mirroring,actuator-intent; VSS has IsFolded state only
+Body.Mirror.Left.FoldCmd,Vehicle.Body.Bridge.Body.Mirror.DriverSide.FoldCmd,project-extension-mirroring,actuator-intent; VSS has IsFolded state only
+Body.Mirror.Left.IsFolded,Vehicle.Body.Mirrors.DriverSide.IsFolded,canonical-restructured,Mirror → Mirrors; Left → DriverSide (LHD assumed)
+Body.Mirror.Left.IsHeatingOn,Vehicle.Body.Mirrors.DriverSide.IsHeatingOn,canonical-restructured,Mirror → Mirrors; Left → DriverSide
+Body.Mirror.Left.Tilt,Vehicle.Body.Mirrors.DriverSide.Tilt,canonical-restructured,Mirror → Mirrors; Left → DriverSide
+Body.Mirror.Left.Yaw,Vehicle.Body.Mirrors.DriverSide.Yaw,canonical-restructured,Mirror → Mirrors; Left → DriverSide
+Body.Mirror.Right.AdjustCmd,Vehicle.Body.Bridge.Body.Mirror.PassengerSide.AdjustCmd,project-extension-mirroring,actuator-intent
+Body.Mirror.Right.FoldCmd,Vehicle.Body.Bridge.Body.Mirror.PassengerSide.FoldCmd,project-extension-mirroring,actuator-intent
+Body.Mirror.Right.IsFolded,Vehicle.Body.Mirrors.PassengerSide.IsFolded,canonical-restructured,Mirror → Mirrors; Right → PassengerSide
+Body.Mirror.Right.IsHeatingOn,Vehicle.Body.Mirrors.PassengerSide.IsHeatingOn,canonical-restructured,Mirror → Mirrors; Right → PassengerSide
+Body.Mirror.Right.Tilt,Vehicle.Body.Mirrors.PassengerSide.Tilt,canonical-restructured,Mirror → Mirrors; Right → PassengerSide
+Body.Mirror.Right.Yaw,Vehicle.Body.Mirrors.PassengerSide.Yaw,canonical-restructured,Mirror → Mirrors; Right → PassengerSide
 Body.PEPS.ApproachKeys,Vehicle.Body.Bridge.Body.PEPS.ApproachKeys,project-namespace,simulator-internal PEPS plant state
 Body.PEPS.ApproachPoll,Vehicle.Body.Bridge.Body.PEPS.ApproachPoll,project-namespace,simulator-internal PEPS plant state
 Body.PEPS.ApproachPollInterval,Vehicle.Body.Bridge.Body.PEPS.ApproachPollInterval,project-namespace,simulator-internal PEPS plant state
@@ -173,12 +173,12 @@ Body.PEPS.Plant.NfcCard.1.ChallengeResponse,Vehicle.Body.Bridge.Body.PEPS.Plant.
 Body.PEPS.Plant.NfcCard.1.Position,Vehicle.Body.Bridge.Body.PEPS.Plant.NfcCard.1.Position,project-namespace,simulator-internal PEPS plant state
 Body.PEPS.Plant.NfcCard.2.ChallengeResponse,Vehicle.Body.Bridge.Body.PEPS.Plant.NfcCard.2.ChallengeResponse,project-namespace,simulator-internal PEPS plant state
 Body.PEPS.Plant.NfcCard.2.Position,Vehicle.Body.Bridge.Body.PEPS.Plant.NfcCard.2.Position,project-namespace,simulator-internal PEPS plant state
-Body.Power.DelayedAccessory.IsActive,Vehicle.Body.Bridge.Body.Power.DelayedAccessory.IsActive,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Body.PowerChildLock.MasterStatus,Vehicle.Body.Bridge.Body.PowerChildLock.MasterStatus,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Body.Sunroof.MoveCmd,Vehicle.Body.Bridge.Body.Sunroof.MoveCmd,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Body.Sunroof.Position,Vehicle.Body.Bridge.Body.Sunroof.Position,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Body.Sunroof.Shade.MoveCmd,Vehicle.Body.Bridge.Body.Sunroof.Shade.MoveCmd,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Body.Sunroof.Shade.Position,Vehicle.Body.Bridge.Body.Sunroof.Shade.Position,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Power.DelayedAccessory.IsActive,Vehicle.Body.Bridge.Body.Power.DelayedAccessory.IsActive,project-namespace,project-specific delayed-accessory output
+Body.PowerChildLock.MasterStatus,Vehicle.Body.Bridge.Body.PowerChildLock.MasterStatus,project-namespace,OEM child-lock master; VSS has per-door IsChildLockActive
+Body.Sunroof.MoveCmd,Vehicle.Body.Bridge.Sunroof.MoveCmd,project-extension-mirroring,actuator-intent; VSS has .Switch input not direct cmd
+Body.Sunroof.Position,Vehicle.Cabin.Sunroof.Position,canonical-restructured,Body.Sunroof → Cabin.Sunroof
+Body.Sunroof.Shade.MoveCmd,Vehicle.Body.Bridge.Sunroof.Shade.MoveCmd,project-extension-mirroring,actuator-intent
+Body.Sunroof.Shade.Position,Vehicle.Cabin.Sunroof.Shade.Position,canonical-restructured,Body.Sunroof.Shade → Cabin.Sunroof.Shade
 Body.Switches.DoorTrim.Row1.Left.LockButton,Vehicle.Body.Bridge.Body.Switches.DoorTrim.Row1.Left.LockButton,project-namespace,bridge-internal switch input; no VSS equivalent
 Body.Switches.DoorTrim.Row1.Left.UnlockButton,Vehicle.Body.Bridge.Body.Switches.DoorTrim.Row1.Left.UnlockButton,project-namespace,bridge-internal switch input; no VSS equivalent
 Body.Switches.DoorTrim.Row1.Right.LockButton,Vehicle.Body.Bridge.Body.Switches.DoorTrim.Row1.Right.LockButton,project-namespace,bridge-internal switch input; no VSS equivalent
@@ -213,47 +213,47 @@ Body.Switches.Window.Local.Row1.Left.Detent,Vehicle.Body.Bridge.Body.Switches.Wi
 Body.Switches.Window.Local.Row1.Right.Detent,Vehicle.Body.Bridge.Body.Switches.Window.Local.Row1.Right.Detent,project-namespace,bridge-internal switch input; no VSS equivalent
 Body.Switches.Window.Local.Row2.Left.Detent,Vehicle.Body.Bridge.Body.Switches.Window.Local.Row2.Left.Detent,project-namespace,bridge-internal switch input; no VSS equivalent
 Body.Switches.Window.Local.Row2.Right.Detent,Vehicle.Body.Bridge.Body.Switches.Window.Local.Row2.Right.Detent,project-namespace,bridge-internal switch input; no VSS equivalent
-Body.Trunk.CloseCmd,Vehicle.Body.Bridge.Body.Trunk.CloseCmd,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Body.Trunk.ExteriorButton.IsPressed,Vehicle.Body.Bridge.Body.Trunk.ExteriorButton.IsPressed,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Body.Trunk.IsLocked,Vehicle.Body.Bridge.Body.Trunk.IsLocked,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Body.Trunk.IsOpen,Vehicle.Body.Bridge.Body.Trunk.IsOpen,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Body.Trunk.OpenCmd,Vehicle.Body.Bridge.Body.Trunk.OpenCmd,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Body.Windshield.Front.Washing.IsActive,Vehicle.Body.Bridge.Body.Windshield.Front.Washing.IsActive,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Trunk.CloseCmd,Vehicle.Body.Bridge.Body.Trunk.Rear.CloseCmd,project-extension-mirroring,actuator-intent
+Body.Trunk.ExteriorButton.IsPressed,Vehicle.Body.Bridge.Body.Trunk.Rear.ExteriorButton.IsPressed,project-extension-mirroring,exterior trunk-pop button input
+Body.Trunk.IsLocked,Vehicle.Body.Trunk.Rear.IsLocked,canonical-restructured,VSS Front/Rear split
+Body.Trunk.IsOpen,Vehicle.Body.Trunk.Rear.IsOpen,canonical-restructured,VSS distinguishes Front/Rear trunks; we model rear
+Body.Trunk.OpenCmd,Vehicle.Body.Bridge.Body.Trunk.Rear.OpenCmd,project-extension-mirroring,actuator-intent; VSS has .Switch only
+Body.Windshield.Front.Washing.IsActive,Vehicle.Body.Bridge.Body.Windshield.Front.Washing.IsActive,project-extension-mirroring,washer-pump-on flag; VSS exposes WasherFluid.Level and Wiping.* but not a direct washing-active boolean
 Body.Windshield.Front.Wiping.Intensity,Vehicle.Body.Windshield.Front.Wiping.Intensity,canonical-with-vehicle-prefix,
 Body.Windshield.Front.Wiping.Mode,Vehicle.Body.Windshield.Front.Wiping.Mode,canonical-with-vehicle-prefix,
-Body.Windshield.Rear.Washing.IsActive,Vehicle.Body.Bridge.Body.Windshield.Rear.Washing.IsActive,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Body.Windshield.Rear.Washing.IsActive,Vehicle.Body.Bridge.Body.Windshield.Rear.Washing.IsActive,project-extension-mirroring,see Front equivalent
 Body.Windshield.Rear.Wiping.Mode,Vehicle.Body.Windshield.Rear.Wiping.Mode,canonical-with-vehicle-prefix,
 Cabin.HVAC.IsAirConditioningActive,Vehicle.Cabin.HVAC.IsAirConditioningActive,canonical-with-vehicle-prefix,
 Cabin.HVAC.IsFrontDefrosterActive,Vehicle.Cabin.HVAC.IsFrontDefrosterActive,canonical-with-vehicle-prefix,
 Cabin.HVAC.IsRearDefrosterActive,Vehicle.Cabin.HVAC.IsRearDefrosterActive,canonical-with-vehicle-prefix,
 Cabin.HVAC.IsRecirculationActive,Vehicle.Cabin.HVAC.IsRecirculationActive,canonical-with-vehicle-prefix,
-Cabin.HVAC.Station.Row1.Left.AirDistribution,Vehicle.Body.Bridge.Cabin.HVAC.Station.Row1.Left.AirDistribution,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Cabin.HVAC.Station.Row1.Left.FanSpeed,Vehicle.Body.Bridge.Cabin.HVAC.Station.Row1.Left.FanSpeed,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Cabin.HVAC.Station.Row1.Left.Temperature,Vehicle.Body.Bridge.Cabin.HVAC.Station.Row1.Left.Temperature,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Cabin.HVAC.Station.Row1.Right.AirDistribution,Vehicle.Body.Bridge.Cabin.HVAC.Station.Row1.Right.AirDistribution,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Cabin.HVAC.Station.Row1.Right.FanSpeed,Vehicle.Body.Bridge.Cabin.HVAC.Station.Row1.Right.FanSpeed,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Cabin.HVAC.Station.Row1.Right.Temperature,Vehicle.Body.Bridge.Cabin.HVAC.Station.Row1.Right.Temperature,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Cabin.Lights.Ambient.Color,Vehicle.Body.Bridge.Cabin.Lights.Ambient.Color,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Cabin.Lights.Ambient.Intensity,Vehicle.Body.Bridge.Cabin.Lights.Ambient.Intensity,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Cabin.Lights.Dome.SwitchPosition,Vehicle.Body.Bridge.Cabin.Lights.Dome.SwitchPosition,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Cabin.Lights.IsDomeOn,Vehicle.Body.Bridge.Cabin.Lights.IsDomeOn,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Cabin.Lights.IsGloveBoxOn,Vehicle.Body.Bridge.Cabin.Lights.IsGloveBoxOn,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Cabin.HVAC.Station.Row1.Left.AirDistribution,Vehicle.Cabin.HVAC.Station.Row1.Driver.AirDistribution,canonical-restructured,Left → Driver
+Cabin.HVAC.Station.Row1.Left.FanSpeed,Vehicle.Cabin.HVAC.Station.Row1.Driver.FanSpeed,canonical-restructured,Left → Driver
+Cabin.HVAC.Station.Row1.Left.Temperature,Vehicle.Cabin.HVAC.Station.Row1.Driver.Temperature,canonical-restructured,Left → Driver
+Cabin.HVAC.Station.Row1.Right.AirDistribution,Vehicle.Cabin.HVAC.Station.Row1.Passenger.AirDistribution,canonical-restructured,Right → Passenger
+Cabin.HVAC.Station.Row1.Right.FanSpeed,Vehicle.Cabin.HVAC.Station.Row1.Passenger.FanSpeed,canonical-restructured,Right → Passenger
+Cabin.HVAC.Station.Row1.Right.Temperature,Vehicle.Cabin.HVAC.Station.Row1.Passenger.Temperature,canonical-restructured,Right → Passenger
+Cabin.Lights.Ambient.Color,Vehicle.Body.Bridge.Cabin.Lights.Ambient.Color,project-namespace,VSS models per-position AmbientLight.RowX.DriverSide; we model a single ambient color
+Cabin.Lights.Ambient.Intensity,Vehicle.Body.Bridge.Cabin.Lights.Ambient.Intensity,project-namespace,see Color
+Cabin.Lights.Dome.SwitchPosition,Vehicle.Body.Bridge.Cabin.Light.Dome.SwitchPosition,project-extension-mirroring,3-position dome switch input; VSS has IsDomeOn state only
+Cabin.Lights.IsDomeOn,Vehicle.Cabin.Light.IsDomeOn,canonical-restructured,Lights → Light
+Cabin.Lights.IsGloveBoxOn,Vehicle.Cabin.Light.IsGloveBoxOn,canonical-restructured,Lights → Light
 Cabin.LockStatus,Vehicle.Body.Bridge.Cabin.LockStatus,project-namespace,aggregate or actuator-intent signal; no VSS equivalent
 Cabin.LockStatus.EventNum,Vehicle.Body.Bridge.Cabin.LockStatus.EventNum,project-namespace,aggregate or actuator-intent signal; no VSS equivalent
 Cabin.LockStatus.LastRequestor,Vehicle.Body.Bridge.Cabin.LockStatus.LastRequestor,project-namespace,aggregate or actuator-intent signal; no VSS equivalent
-Cabin.Seat.Row1.Left.HeatingLevel,Vehicle.Body.Bridge.Cabin.Seat.Row1.Left.HeatingLevel,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Cabin.Seat.Row1.Left.IsHeatingOn,Vehicle.Body.Bridge.Cabin.Seat.Row1.Left.IsHeatingOn,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Cabin.Seat.Row1.Left.IsVentilationOn,Vehicle.Body.Bridge.Cabin.Seat.Row1.Left.IsVentilationOn,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Cabin.Seat.Row1.Right.HeatingLevel,Vehicle.Body.Bridge.Cabin.Seat.Row1.Right.HeatingLevel,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Cabin.Seat.Row1.Right.IsHeatingOn,Vehicle.Body.Bridge.Cabin.Seat.Row1.Right.IsHeatingOn,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Cabin.Seat.Row1.Right.IsVentilationOn,Vehicle.Body.Bridge.Cabin.Seat.Row1.Right.IsVentilationOn,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Cabin.ValetMode.IsActive,Vehicle.Body.Bridge.Cabin.ValetMode.IsActive,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Chassis.Brake.IsApplied,Vehicle.Body.Bridge.Chassis.Brake.IsApplied,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Cabin.Seat.Row1.Left.HeatingLevel,Vehicle.Cabin.Seat.Row1.DriverSide.HeatingCooling,canonical-restructured,"Left → DriverSide; .HeatingLevel → .HeatingCooling (positive = heat, negative = cool in VSS)"
+Cabin.Seat.Row1.Left.IsHeatingOn,Vehicle.Body.Bridge.Cabin.Seat.Row1.DriverSide.IsHeatingOn,project-extension-mirroring,boolean is-heating; VSS only exposes HeatingCooling level
+Cabin.Seat.Row1.Left.IsVentilationOn,Vehicle.Body.Bridge.Cabin.Seat.Row1.DriverSide.IsVentilationOn,project-extension-mirroring,VSS conflates heating + cooling; ventilation isn't separately modelled
+Cabin.Seat.Row1.Right.HeatingLevel,Vehicle.Cabin.Seat.Row1.PassengerSide.HeatingCooling,canonical-restructured,Right → PassengerSide; HeatingLevel → HeatingCooling
+Cabin.Seat.Row1.Right.IsHeatingOn,Vehicle.Body.Bridge.Cabin.Seat.Row1.PassengerSide.IsHeatingOn,project-extension-mirroring,see Left
+Cabin.Seat.Row1.Right.IsVentilationOn,Vehicle.Body.Bridge.Cabin.Seat.Row1.PassengerSide.IsVentilationOn,project-extension-mirroring,see Left
+Cabin.ValetMode.IsActive,Vehicle.Body.Bridge.Cabin.ValetMode.IsActive,project-namespace,OEM valet-mode flag; not in VSS
+Chassis.Brake.IsApplied,Vehicle.Body.Bridge.Chassis.Brake.IsApplied,project-extension-mirroring,boolean brake-pressed; VSS only exposes PedalPosition (0-100)
 Chassis.Brake.PedalPosition,Vehicle.Chassis.Brake.PedalPosition,canonical-with-vehicle-prefix,
 Chassis.ParkingBrake.IsEngaged,Vehicle.Chassis.ParkingBrake.IsEngaged,canonical-with-vehicle-prefix,
-Vehicle.ADAS.HighBeam.OncomingVehicleDetected,Vehicle.Body.Bridge.Vehicle.ADAS.HighBeam.OncomingVehicleDetected,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Vehicle.Body.Alarm.IsActive,Vehicle.Body.Bridge.Vehicle.Body.Alarm.IsActive,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
-Vehicle.Body.Alarm.State,Vehicle.Body.Bridge.Vehicle.Body.Alarm.State,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Vehicle.ADAS.HighBeam.OncomingVehicleDetected,Vehicle.Body.Bridge.ADAS.HighBeam.OncomingVehicleDetected,project-namespace,AutoHighBeam OEM input; VSS has no oncoming-vehicle-detection signal
+Vehicle.Body.Alarm.IsActive,Vehicle.Body.Bridge.Alarm.IsActive,project-namespace,OEM alarm state; VSS has no alarm taxonomy
+Vehicle.Body.Alarm.State,Vehicle.Body.Bridge.Alarm.State,project-namespace,OEM alarm FSM string (DISARMED/PRE_ARMED/ARMED/ACTIVATED)
 Vehicle.Cabin.Infotainment.HMI.DayNightMode,Vehicle.Cabin.Infotainment.HMI.DayNightMode,canonical-as-is,
 Vehicle.Chassis.Axle.Row1.Wheel.Left.Tire.IsPressureLow,Vehicle.Chassis.Axle.Row1.Wheel.Left.Tire.IsPressureLow,canonical-as-is,
 Vehicle.Chassis.Axle.Row1.Wheel.Right.Tire.IsPressureLow,Vehicle.Chassis.Axle.Row1.Wheel.Right.Tire.IsPressureLow,canonical-as-is,
@@ -261,6 +261,6 @@ Vehicle.Chassis.Axle.Row2.Wheel.Left.Tire.IsPressureLow,Vehicle.Chassis.Axle.Row
 Vehicle.Chassis.Axle.Row2.Wheel.Right.Tire.IsPressureLow,Vehicle.Chassis.Axle.Row2.Wheel.Right.Tire.IsPressureLow,canonical-as-is,
 Vehicle.LowVoltageSystemState,Vehicle.LowVoltageSystemState,canonical-as-is,
 Vehicle.Powertrain.Type,Vehicle.Powertrain.Type,canonical-as-is,
-Vehicle.Safety.CrashDetected,Vehicle.Body.Bridge.Vehicle.Safety.CrashDetected,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Vehicle.Safety.CrashDetected,Vehicle.Body.Bridge.Safety.CrashDetected,project-namespace,safety-monitor signal; VSS exposes Vehicle.Service.IsServiceDue and ADAS faults but no general crash flag
 Vehicle.Speed,Vehicle.Speed,canonical-as-is,
-Vehicle.Starting.ImmobilizerStatus,Vehicle.Body.Bridge.Vehicle.Starting.ImmobilizerStatus,project-namespace-fallback,no canonical found; assigned to bridge namespace pending review
+Vehicle.Starting.ImmobilizerStatus,Vehicle.Body.Bridge.Starting.ImmobilizerStatus,project-namespace,PEPS immobiliser FSM; not in VSS

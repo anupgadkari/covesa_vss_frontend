@@ -163,23 +163,45 @@ From the full table in [`vss-v6.0-path-mapping.csv`](./vss-v6.0-path-mapping.csv
 | `canonical-as-is` | 8 | `Vehicle.LowVoltageSystemState` |
 | `canonical-with-vehicle-prefix` | 23 | `Body.Hood.IsOpen` → `Vehicle.Body.Hood.IsOpen` |
 | `canonical-door-side-rename` | 16 | `Body.Doors.Row1.Left.IsLocked` → `Vehicle.Cabin.Door.Row1.DriverSide.IsLocked` |
-| `project-namespace` | 109 | `Body.Doors.CentralLock.Command` → `Vehicle.Body.Bridge.Body.Doors.CentralLock.Command` |
-| `project-door-side-extension` | 38 | `Body.Doors.Row1.Left.Handle.Outside.IsPulled` → `Vehicle.Cabin.Door.Row1.DriverSide.Handle.Outside.IsPulled` (mirrors VSS Door schema but suffix not in v6.0) |
-| `project-namespace-fallback` | 71 | Anything that didn't match a categorisation rule — review manually before promoting |
+| `canonical-restructured` | 23 | `Body.Trunk.IsOpen` → `Vehicle.Body.Trunk.Rear.IsOpen`; `Cabin.HVAC.Station.Row1.Left.FanSpeed` → `Vehicle.Cabin.HVAC.Station.Row1.Driver.FanSpeed` |
+| `project-extension-mirroring` | 34 | `Body.Hood.OpenCmd` → `Vehicle.Body.Bridge.Body.Hood.OpenCmd` (VSS has hood Position/Switch state but no command channel) |
+| `project-door-side-extension` | 38 | `Body.Doors.Row1.Left.Handle.Outside.IsPulled` → `Vehicle.Cabin.Door.Row1.DriverSide.Handle.Outside.IsPulled` |
+| `project-namespace` | 123 | `Body.Doors.CentralLock.Command` → `Vehicle.Body.Bridge.Body.Doors.CentralLock.Command` |
 | **Total** | **265** | |
 
-The 71 fallbacks need a manual pass — they're the long tail of
-project-specific signals where the rule-based categoriser
-defaulted to the namespace bucket without recognising the signal
-family.  Review action items:
+**No remaining `fallback` rows** — sub-PR 2 closed out the long tail
+by walking each manually, looking up the v6.0 catalog, and either
+finding a restructured canonical (e.g. Trunk.Rear, HVAC Driver vs
+Left, Sunroof moved to Cabin) or assigning a project-extension or
+project-namespace path with a written justification.
 
-- HMI-only signals (`Body.HMI.*`, `Cabin.HMI.*`) — split into a
-  `Vehicle.Body.Bridge.HMI.*` subtree explicitly.
-- Alarm-state signals (`Vehicle.Body.Alarm.State`) — sit under
-  `Vehicle.Body.*` today; could promote to
-  `Vehicle.Body.Bridge.Alarm.*` for consistency.
-- Trunk arbiter signals (`Body.Trunk.Cmd`, `.IsReleased`,
-  `.OpenCmd`) — same arbiter-output story as central lock.
+## Category definitions
+
+- **`canonical-as-is`** — path already matches v6.0 exactly, no
+  rename needed.  Migration is a no-op for the path string.
+- **`canonical-with-vehicle-prefix`** — just prepend `Vehicle.`.
+- **`canonical-door-side-rename`** — same canonical except
+  `Left`/`Right` → `DriverSide`/`PassengerSide`.
+- **`canonical-restructured`** — VSS has the same signal but at a
+  different shape: trunk split into `Front`/`Rear`, HVAC station
+  side names `Driver`/`Passenger` (not `Left`/`Right`), sunroof
+  moved from `Body.*` to `Cabin.*`, mirror taxonomy `Mirrors`
+  (plural) with side enum.  These are all canonical reads; the
+  rename surface is wider but the destination is real.
+- **`project-extension-mirroring`** — the canonical parent path
+  exists but our specific leaf doesn't (commonly: VSS exposes
+  state, we add a command channel; VSS has one signal per system,
+  we add per-lamp / per-position detail).  Goes under
+  `Vehicle.Body.Bridge.*` mirroring the canonical hierarchy so
+  the relationship is visible.
+- **`project-door-side-extension`** — same as above but
+  specifically for door-side extensions: VSS doesn't subdivide
+  the door handle taxonomy as deeply as we do (LockPad, individual
+  handle pull edges), so those go under
+  `Vehicle.Cabin.Door.RowN.DriverSide.*` with our custom suffix.
+- **`project-namespace`** — fully project-specific concept with
+  no canonical parent (arbiter commands, simulator plant state,
+  alarm FSM strings, valet mode, immobiliser status, etc.).
 
 ## Staged sub-PR plan
 
@@ -194,11 +216,27 @@ Vendors `vss-bridge/specs/vss-v6.0.json`, produces
 `docs/vss-v6.0-path-mapping.csv` and this design document.  No
 code change.  Updates backlog item 22 to reference the design.
 
-### Sub-PR 2 — Manual review of the 71 fallback paths
+### Sub-PR 2 — Manual review of the 71 fallback paths *(done)*
 
-Walk the fallback rows in the CSV, decide each row's target
-namespace.  Output: updated CSV (no remaining `fallback` rows).
-Doc-only.
+All 71 fallback rows walked manually and re-categorised against
+the v6.0 catalog.  Findings:
+
+- 23 had a real canonical home that wasn't a straight rename —
+  trunk Front/Rear split, HVAC Driver/Passenger station naming,
+  sunroof moving from `Body.*` to `Cabin.*`, mirror `Mirrors`
+  (plural) + side enum.  These are now in `canonical-restructured`.
+- 34 had a canonical parent path but no leaf at the level we
+  need (commonly: VSS exposes state, we model command intents on
+  top; VSS aggregates a system signal, we expose per-lamp
+  detail).  These are now in `project-extension-mirroring` and
+  go under `Vehicle.Body.Bridge.*` mirroring the canonical
+  hierarchy.
+- 14 were genuinely project-specific (alarm FSM, valet mode,
+  immobiliser status, AutoHighBeam oncoming-vehicle input,
+  crash-detected, etc.).  These joined `project-namespace`.
+
+Output: updated `vss-v6.0-path-mapping.csv` with zero remaining
+`fallback` rows.  Doc-only.
 
 ### Sub-PR 3 — Path-canonicalisation layer in `SignalBus`
 
