@@ -27,9 +27,16 @@ document.**
   outcome but a **large architectural refactor** touching every
   feature that reasons about door sides.
 - This document proposes:
-  1. A two-tier namespace — canonical `Vehicle.*` for everything
-     that maps, plus a project-specific `Vehicle.Body.Bridge.*`
-     subtree for our extensions.
+  1. A three-namespace split — canonical `Vehicle.*` for everything
+     that maps to VSS, **`Vehicle.Controller.*`** for body-
+     controller-owned signals (arbiter commands, FSM state,
+     processed inputs, derived views), and **`Vehicle.Simulation.*`**
+     for PEPS plant / HMI affordances that don't exist on real
+     vehicles.  (Initial draft proposed a single `Vehicle.Body.Bridge.*`
+     catchall; that was discarded because "Bridge" named the
+     software artifact rather than a vehicle subsystem, and
+     because simulator signals deserve to be obviously simulator-
+     only.)
   2. Adoption of `DriverSide`/`PassengerSide` semantics and
      elimination of `dealer.driver_door_side`.
   3. A staged migration plan delivered as ~6 follow-up PRs.
@@ -94,24 +101,82 @@ relevant to us:
 
 ## Migration strategy
 
-### Two-tier namespace
+### Three-namespace split
 
-| Tier | Path root | Used for |
-|---|---|---|
-| **Canonical** | `Vehicle.*` (per v6.0 schema) | The 47 paths that have a direct VSS equivalent.  Drives bus interop with kuksa.val. |
-| **Bridge extension** | `Vehicle.Body.Bridge.*` | The 218 paths that are project-specific.  Sits under `Vehicle.Body.*` so the kuksa.val catalog can be extended with our subtree as an overlay, but namespaced so canonical consumers don't accidentally subscribe to our internals. |
+Our 265 paths land in three root namespaces:
 
-Why `Vehicle.Body.Bridge.*` rather than `Vehicle.Extension.*` or
-`Bridge.*`?
+| Tier | Path root | Used for | ~Count |
+|---|---|---|---:|
+| **Canonical** | `Vehicle.*` (per v6.0 schema) | Paths that map directly to VSS, including restructured variants and `DriverSide`/`PassengerSide` renames | 70 |
+| **Door-extension under canonical** | `Vehicle.Cabin.Door.RowN.{Driver,Passenger}Side.*` | Project-specific door-handle / lockpad signals that extend the canonical Door schema (VSS has the parent path, we add leaves) | 38 |
+| **Controller** | `Vehicle.Controller.*` | Body-controller-owned signals: arbiter command channels, FSM state, processed user-input edges, derived sensor views, per-feature outputs.  These are exactly what an OEM body engineer would call "body controller signals." | 100 |
+| **Simulation** | `Vehicle.Simulation.*` | Signals that exist *only* because we model the LF / connectivity subsystems in software, plus HMI affordances that simulate external command inputs.  Gated behind `cfg(feature = "simulator")` for production builds. | 57 |
 
-- **Stays under `Vehicle.*`** so kuksa.val's tree-walk consumers
-  see it.
-- **Names the owner** (`.Bridge`) so future engineers know which
-  subsystem these signals belong to and that they're not VSS-
-  promoted.
-- **Easy to overlay** in a VSS overlay file — when item 19 adds
-  the broker, the overlay file declares the `Vehicle.Body.Bridge.*`
-  subtree explicitly so the broker accepts it.
+**Earlier draft of this document proposed a single
+`Vehicle.Body.Bridge.*` catchall.**  That was rejected in favour
+of the three-namespace split for three reasons:
+
+1. **`Bridge` is a software-artifact name.**  The `vss-bridge`
+   binary is the executable; "Bridge" describes our code, not a
+   vehicle subsystem.  VSS is supposed to model the vehicle, not
+   the codebase that talks to it.  `Vehicle.Controller.*` names
+   a vehicle architecture concept — the body controller — which
+   any OEM body engineer recognises immediately.
+2. **Simulator signals should be obviously simulator-only.**
+   `Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.1.PlacedZone` is
+   indistinguishable from a real controller output by namespace
+   alone.  Tagging it `Vehicle.Simulation.PEPS.Plant.…` makes
+   the simulator-only status visible at a glance, and the kuksa.val
+   catalog for production builds simply omits the
+   `Vehicle.Simulation.*` subtree.
+3. **HMI affordances ≠ controller outputs.**  The four
+   `Body.Connectivity.*` HMI toggles (`RemoteLock`, `BleLock`,
+   `NfcCardPresent`, `NfcPhonePresent`) simulate inputs that on a
+   real vehicle would arrive over CAN from the telematics / NFC
+   modules.  They're not controller-produced data.  Putting them
+   under `Vehicle.Simulation.Connectivity.*` correctly reflects
+   that.
+
+### What goes where, by signal family
+
+**`Vehicle.Controller.*`** (100 paths):
+
+- Arbiter command channels: `CentralLock.Command`,
+  `Trunk.OpenCmd`/`CloseCmd`, `Hood.OpenCmd`/`CloseCmd`,
+  `Mirror.{Driver,Passenger}Side.AdjustCmd` / `FoldCmd`,
+  `Sunroof.MoveCmd`, `Sunroof.Shade.MoveCmd`.
+- FSM state aggregates: `Cabin.LockStatus` (+ `.LastRequestor` +
+  `.EventNum`), `Alarm.State` / `.IsActive`,
+  `Starting.ImmobilizerStatus`, `Cabin.ValetMode.IsActive`,
+  `AutoRelock.IsArmed`, `Power.DelayedAccessory.IsActive`,
+  `PowerChildLock.MasterStatus`.
+- Per-lamp diagnostics: `DirectionIndicator.*.Lamp.{Front,Side,Rear}.{IsOn,IsDefect}` (12 paths).
+- Per-feature outputs: `Puddle.{Driver,Passenger}Side.IsOn`,
+  `Chime.IsActive` / `.IsSounding`, `Windshield.{Front,Rear}.Washing.IsActive`,
+  `Seat.Row1.{Driver,Passenger}Side.IsHeatingOn` / `.IsVentilationOn`.
+- Processed user-input edges: trim switch lock buttons, lock-pad
+  presses, exterior trunk button, dome rotary, hood switch, etc.
+- Derived sensor views: `Chassis.Brake.IsApplied` (boolean
+  computed by the controller from VSS's `Brake.PedalPosition`),
+  `Lights.AmbientLightSensor.Illuminance`.
+- Controller-owned safety: `Safety.CrashDetected`.
+
+**`Vehicle.Simulation.*`** (57 paths):
+
+- `Simulation.PEPS.Plant.KeyFob.{1..6}.{PlacedZone, LastObservedZone, Paired, ButtonPress, ChallengeResponse, …}` — the LF antenna / fob plant model state.  Doesn't exist on a real vehicle; the LF subsystem doesn't expose "where the fob is" as a signal.
+- `Simulation.Connectivity.{RemoteLock, BleLock, NfcCardPresent, NfcPhonePresent}` — HMI affordances simulating telematics / NFC-reader inputs that the controller would receive over CAN in production.
+- `Simulation.TestFixtures.DoesNotExist` — deliberate non-existent path used by the signal-id-lookup error-path test.
+
+**`Vehicle.Cabin.Door.RowN.{Driver,Passenger}Side.*`** (38 paths,
+under canonical Door schema):
+
+- Handle pull edges: `.Handle.{Inside,Outside}.IsPulled`
+- Lock-pad presses: `.Handle.Outside.LockPad.IsPressed`
+- Close-cmd actuator intent: `.CloseCmd`
+
+These ride **under the canonical Door taxonomy** rather than
+elsewhere because the door is a canonical concept; our extension
+just adds leaves where VSS doesn't subdivide far enough.
 
 ### `DriverSide` / `PassengerSide` adoption
 
@@ -126,9 +191,9 @@ either:
   a physical Row+Side at the plant-model layer, but feature logic
   doesn't care.
 - **B. Keep `Left`/`Right` internally, add a canonical-translation
-  layer at the boundary.**  Bridge-internal paths stay
-  `Vehicle.Body.Bridge.Body.Doors.Row1.Left.IsLocked`; we
-  publish both that and the canonical
+  layer at the boundary.**  Internal paths stay
+  `Vehicle.Controller.Body.Doors.Row1.Left.IsLocked`; we publish
+  both that and the canonical
   `Vehicle.Cabin.Door.Row1.DriverSide.IsLocked` from the same
   source value, swapping side based on the cal.  Keeps the existing
   cal but doubles the path count.
@@ -163,23 +228,53 @@ From the full table in [`vss-v6.0-path-mapping.csv`](./vss-v6.0-path-mapping.csv
 | `canonical-as-is` | 8 | `Vehicle.LowVoltageSystemState` |
 | `canonical-with-vehicle-prefix` | 23 | `Body.Hood.IsOpen` → `Vehicle.Body.Hood.IsOpen` |
 | `canonical-door-side-rename` | 16 | `Body.Doors.Row1.Left.IsLocked` → `Vehicle.Cabin.Door.Row1.DriverSide.IsLocked` |
-| `project-namespace` | 109 | `Body.Doors.CentralLock.Command` → `Vehicle.Body.Bridge.Body.Doors.CentralLock.Command` |
-| `project-door-side-extension` | 38 | `Body.Doors.Row1.Left.Handle.Outside.IsPulled` → `Vehicle.Cabin.Door.Row1.DriverSide.Handle.Outside.IsPulled` (mirrors VSS Door schema but suffix not in v6.0) |
-| `project-namespace-fallback` | 71 | Anything that didn't match a categorisation rule — review manually before promoting |
+| `canonical-restructured` | 23 | `Body.Trunk.IsOpen` → `Vehicle.Body.Trunk.Rear.IsOpen`; `Cabin.HVAC.Station.Row1.Left.FanSpeed` → `Vehicle.Cabin.HVAC.Station.Row1.Driver.FanSpeed` |
+| `project-door-side-extension` | 38 | `Body.Doors.Row1.Left.Handle.Outside.IsPulled` → `Vehicle.Cabin.Door.Row1.DriverSide.Handle.Outside.IsPulled` (extends canonical Door schema) |
+| `controller-extension` | 34 | `Body.Hood.OpenCmd` → `Vehicle.Controller.Body.Hood.OpenCmd` (controller adds command channel where VSS has Position/Switch state only) |
+| `controller-namespace` | 66 | `Body.Doors.CentralLock.Command` → `Vehicle.Controller.Body.Doors.CentralLock.Command`; `Cabin.LockStatus` → `Vehicle.Controller.Cabin.LockStatus` |
+| `simulation` | 57 | `Body.PEPS.Plant.KeyFob.1.PlacedZone` → `Vehicle.Simulation.PEPS.Plant.KeyFob.1.PlacedZone`; `Body.Connectivity.RemoteLock` → `Vehicle.Simulation.Connectivity.RemoteLock` |
 | **Total** | **265** | |
 
-The 71 fallbacks need a manual pass — they're the long tail of
-project-specific signals where the rule-based categoriser
-defaulted to the namespace bucket without recognising the signal
-family.  Review action items:
+**No remaining `fallback` rows** — sub-PR 2 closed out the long tail
+by walking each manually, looking up the v6.0 catalog, and either
+finding a restructured canonical (e.g. Trunk.Rear, HVAC Driver vs
+Left, Sunroof moved to Cabin) or assigning a project-extension or
+project-namespace path with a written justification.
 
-- HMI-only signals (`Body.HMI.*`, `Cabin.HMI.*`) — split into a
-  `Vehicle.Body.Bridge.HMI.*` subtree explicitly.
-- Alarm-state signals (`Vehicle.Body.Alarm.State`) — sit under
-  `Vehicle.Body.*` today; could promote to
-  `Vehicle.Body.Bridge.Alarm.*` for consistency.
-- Trunk arbiter signals (`Body.Trunk.Cmd`, `.IsReleased`,
-  `.OpenCmd`) — same arbiter-output story as central lock.
+## Category definitions
+
+- **`canonical-as-is`** — path already matches v6.0 exactly, no
+  rename needed.  Migration is a no-op for the path string.
+- **`canonical-with-vehicle-prefix`** — just prepend `Vehicle.`.
+- **`canonical-door-side-rename`** — same canonical except
+  `Left`/`Right` → `DriverSide`/`PassengerSide`.
+- **`canonical-restructured`** — VSS has the same signal but at a
+  different shape: trunk split into `Front`/`Rear`, HVAC station
+  side names `Driver`/`Passenger` (not `Left`/`Right`), sunroof
+  moved from `Body.*` to `Cabin.*`, mirror taxonomy `Mirrors`
+  (plural) with side enum.  These are all canonical reads; the
+  rename surface is wider but the destination is real.
+- **`project-door-side-extension`** — VSS has the parent
+  `Vehicle.Cabin.Door.RowN.{Driver,Passenger}Side.*` but not the
+  fine-grained handle / lockpad leaves.  We extend the canonical
+  schema with our suffixes — these still ride under the canonical
+  Door root, not under `Vehicle.Controller.*`.
+- **`controller-extension`** — VSS has a canonical parent (e.g.
+  `Vehicle.Body.Hood.*`, `Vehicle.Body.Trunk.Rear.*`) but no
+  command-channel or per-lamp leaf.  The body controller's
+  actuator-intent and per-lamp diagnostic signals go to
+  `Vehicle.Controller.<canonical-shape>` so the mirroring
+  relationship is visible.
+- **`controller-namespace`** — fully controller-owned concept
+  with no canonical parent: `Cabin.LockStatus` aggregate, the
+  arbiter command bus (`CentralLock.Command`, `FeedbackRequest`),
+  alarm FSM, immobiliser, valet mode, etc.
+- **`simulation`** — won't exist on a real vehicle.  PEPS plant
+  model state (`Simulation.PEPS.Plant.*`), HMI affordances that
+  simulate telematics / NFC inputs (`Simulation.Connectivity.*`),
+  and test fixtures.  In production builds this subtree is
+  gated behind `cfg(feature = "simulator")` and the kuksa.val
+  catalog omits it entirely.
 
 ## Staged sub-PR plan
 
@@ -194,11 +289,36 @@ Vendors `vss-bridge/specs/vss-v6.0.json`, produces
 `docs/vss-v6.0-path-mapping.csv` and this design document.  No
 code change.  Updates backlog item 22 to reference the design.
 
-### Sub-PR 2 — Manual review of the 71 fallback paths
+### Sub-PR 2 — Manual review + namespace refactor *(done)*
 
-Walk the fallback rows in the CSV, decide each row's target
-namespace.  Output: updated CSV (no remaining `fallback` rows).
-Doc-only.
+Two activities ended up bundled into the same PR:
+
+**(a) Walk the 71 fallback rows.**  All re-categorised against
+the v6.0 catalog:
+
+- 23 had a real canonical home that wasn't a straight rename —
+  trunk Front/Rear split, HVAC Driver/Passenger station naming,
+  sunroof moving from `Body.*` to `Cabin.*`, mirror `Mirrors`
+  (plural) + side enum.  Now in `canonical-restructured`.
+- 34 had a canonical parent path but no leaf at the level we
+  need (commonly: VSS exposes state, we model command intents on
+  top; VSS aggregates a system signal, we expose per-lamp
+  detail).
+- 14 were genuinely project-specific (alarm FSM, valet mode,
+  immobiliser status, AutoHighBeam oncoming-vehicle input,
+  crash-detected, etc.).
+
+**(b) Replace `Vehicle.Body.Bridge.*` with the three-namespace
+split.**  The single `Body.Bridge.*` catchall got refactored into
+`Vehicle.Controller.*` (100 paths) and `Vehicle.Simulation.*`
+(57 paths) — see the "Three-namespace split" section above for
+the rationale.  Net: every project-* row in the CSV got its
+target re-prefixed, and two new categories (`controller-extension`,
+`controller-namespace`, `simulation`) replaced the three
+`project-*` categories from sub-PR 1 / 2(a).
+
+Output: updated `vss-v6.0-path-mapping.csv` with zero remaining
+`fallback` rows and the three-namespace split applied.  Doc-only.
 
 ### Sub-PR 3 — Path-canonicalisation layer in `SignalBus`
 
@@ -248,20 +368,22 @@ integration.
 All "VSS v4.0" comments in `signal_ids.rs`, feature files, and
 plant models become "VSS v6.0" in sub-PR 5.  Where we explicitly
 extend the spec, the comment notes the extension subtree
-(`Vehicle.Body.Bridge.*`) to make it clear the path is project-
-local.
+(`Vehicle.Controller.*` or `Vehicle.Simulation.*`) to make it
+clear which signals are controller-owned vs. simulator-only.
 
 ## Open architectural questions
 
 1. **`Cabin.LockStatus` aggregate.**  VSS models per-door
    `IsLocked`.  Our aggregate (`LOCKED` / `UNLOCKED` /
    `DRIVER_UNLOCKED` / `DOUBLE_LOCKED`) is observably useful but
-   has no canonical home.  Keep as `Vehicle.Body.Bridge.*` or
-   propose to COVESA upstream?
+   has no canonical home.  Lands at
+   `Vehicle.Controller.Cabin.LockStatus` for now; worth proposing
+   to COVESA upstream — most OEMs need an aggregate signal.
 2. **PEPS plant signals.**  500 ms of every test run touches
    these; they're simulator-only and never reach a real vehicle.
-   Should they even be on the bus in a production build, or get
-   gated behind a `cfg(feature = "simulator")`?
+   Decision: gated behind `cfg(feature = "simulator")`, surfaced
+   under `Vehicle.Simulation.PEPS.Plant.*` so production builds
+   simply omit the subtree.
 3. **Project `dealer.*` and HMI `Vehicle.Cabin.Infotainment.HMI.*`
    paths.**  Already canonical under `Vehicle.Cabin.Infotainment.*`.
    Keep canonical placement.
