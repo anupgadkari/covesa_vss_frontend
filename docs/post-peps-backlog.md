@@ -35,7 +35,7 @@ item is independently shippable as its own sub-branch / PR.
 | 19 | Kuksa.val databroker integration (replace MockBus on the SignalBus seam) | L | 📋 Program-level |
 | 20 | Feature-completeness + interconnection audit (requirements + Gherkin + tests) | M | 📋 Program-level |
 | 21 | Run the test suite on a virtualised target (QEMU / Renode / Avocado) | L | 📋 Program-level |
-| 22 | Refresh to the latest COVESA VSS release (currently pinned at v4.0) | M | 📋 Program-level |
+| 22 | Refresh to the latest COVESA VSS release (currently pinned at v4.0) | XL | 🔄 In progress — sub-PR 1 done; see [vss-v6.0-migration.md](./vss-v6.0-migration.md) |
 
 Suggested next order: **13 → 16 → 14 → 15 → 17**.  Reasoning:
 **13** is a localised migration that exercises the arbiter end-to-end
@@ -615,7 +615,18 @@ suite on a virtualised target so we catch them before bench.
 
 ---
 
-## 22. Refresh to the latest COVESA VSS release  *(M)*
+## 22. Refresh to the latest COVESA VSS release  *(L → XL after scope review)*
+
+> **Design + path mapping artifact lives at
+> [`docs/vss-v6.0-migration.md`](./vss-v6.0-migration.md) and
+> [`docs/vss-v6.0-path-mapping.csv`](./vss-v6.0-path-mapping.csv).**
+> The plan below has been superseded — see the design doc for the
+> 8-sub-PR breakdown.  Sub-PR 1 (this artifact) is **complete**.
+> Original size estimate (`M`) revised upward to `L`/`XL` after
+> discovering the project's path convention is non-canonical (`Body.*`
+> top-level) and adopting v6.0 requires a `Vehicle.*` rebase plus
+> `DriverSide` / `PassengerSide` semantics that eliminate the
+> `dealer.driver_door_side` cal.
 
 **Trigger.**  The bridge currently targets **VSS v4.0** — visible in
 the doc comments scattered through `ws_bridge.rs`, `main.rs`, and
