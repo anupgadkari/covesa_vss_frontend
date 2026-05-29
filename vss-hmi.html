@@ -177,42 +177,42 @@ const INIT_STATE={
   'Vehicle.LowVoltageSystemState':'OFF',
   'Vehicle.Powertrain.Type':'COMBUSTION',
   // Vehicle starting / ignition (owned by VehicleStartingControl).
-  'Vehicle.Controller.Body.Switches.StartStop.IsPressed':false,
-  'Vehicle.Controller.Body.Switches.IgnitionCylinder.Position':'LOCK',
-  'Vehicle.Controller.Chassis.Brake.IsApplied':false,
-  'Vehicle.Controller.Starting.ImmobilizerStatus':'LOCKED',
-  'Vehicle.Controller.Body.PEPS.NfcAuthBypass':false,
-  'Vehicle.Controller.Body.Switches.StartStop.BacklightDutyCycle':0,
-  'Vehicle.Controller.Body.Switches.StartStop.BacklightIntensity':0,
+  'Body.Switches.StartStop.IsPressed':false,
+  'Body.Switches.IgnitionCylinder.Position':'LOCK',
+  'Chassis.Brake.IsApplied':false,
+  'Vehicle.Starting.ImmobilizerStatus':'LOCKED',
+  'Body.PEPS.NfcAuthBypass':false,
+  'Body.Switches.StartStop.BacklightDutyCycle':0,
+  'Body.Switches.StartStop.BacklightIntensity':0,
   // BTSI + Key-in-Ignition Inhibit derived flags.
   'Powertrain.Transmission.ShiftLockEngaged':true,
-  'Vehicle.Controller.Body.Switches.IgnitionCylinder.RemovalInhibited':false,
+  'Body.Switches.IgnitionCylinder.RemovalInhibited':false,
   // Lights — outputs
-  'Vehicle.Body.Lights.Beam.Low.IsOn':false,
-  'Vehicle.Body.Lights.Beam.High.IsOn':false,
-  'Vehicle.Body.Lights.Running.IsOn':false,
-  'Vehicle.Body.Lights.Parking.IsOn':false,
-  'Vehicle.Body.Lights.Fog.Front.IsOn':false,
-  'Vehicle.Body.Lights.Fog.Rear.IsOn':false,
-  'Vehicle.Body.Lights.Brake.IsActive':false,
-  'Vehicle.Body.Lights.Backup.IsOn':false,
-  'Vehicle.Body.Lights.LicensePlate.IsOn':false,
-  'Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling':false,
-  'Vehicle.Body.Lights.DirectionIndicator.Right.IsSignaling':false,
-  'Vehicle.Body.Lights.Hazard.IsSignaling':false,
-  'Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn':false,
-  'Vehicle.Controller.Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn':false,
+  'Body.Lights.Beam.Low.IsOn':false,
+  'Body.Lights.Beam.High.IsOn':false,
+  'Body.Lights.Running.IsOn':false,
+  'Body.Lights.Parking.IsOn':false,
+  'Body.Lights.Fog.Front.IsOn':false,
+  'Body.Lights.Fog.Rear.IsOn':false,
+  'Body.Lights.Brake.IsActive':false,
+  'Body.Lights.Backup.IsActive':false,
+  'Body.Lights.LicensePlate.IsOn':false,
+  'Body.Lights.DirectionIndicator.Left.IsSignaling':false,
+  'Body.Lights.DirectionIndicator.Right.IsSignaling':false,
+  'Body.Lights.Hazard.IsSignaling':false,
+  'Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn':false,
+  'Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn':false,
   // Light switches — inputs
-  'Vehicle.Body.Lights.LightSwitch':'OFF',
-  'Vehicle.Controller.Body.Lights.AmbientLightSensor.Illuminance':10000,
-  'Vehicle.Controller.Body.Switches.HighBeam.IsEngaged':false,
-  'Vehicle.Controller.Body.Switches.Fog.Front.IsEngaged':false,
-  'Vehicle.Controller.Body.Switches.Fog.Rear.IsEngaged':false,
-  'Vehicle.Controller.Body.Switches.Hazard.IsEngaged':false,
-  'Vehicle.Controller.Body.Switches.TurnIndicator.Direction':'OFF',
+  'Body.Lights.LightSwitch':'OFF',
+  'Body.Lights.AmbientLightSensor.Illuminance':10000,
+  'Body.Switches.HighBeam.IsEngaged':false,
+  'Body.Switches.Fog.Front.IsEngaged':false,
+  'Body.Switches.Fog.Rear.IsEngaged':false,
+  'Body.Switches.Hazard.IsEngaged':false,
+  'Body.Switches.TurnIndicator.Direction':'OFF',
   // Braking & transmission
-  'Vehicle.Chassis.Brake.PedalPosition':0,
-  'Vehicle.Chassis.ParkingBrake.IsEngaged':true,
+  'Chassis.Brake.PedalPosition':0,
+  'Chassis.ParkingBrake.IsEngaged':true,
   // VSS encoding: 126=Park, -1=Reverse, 0=Neutral, 127=Drive, 128=Sport.
   // Boot to Park to match a real vehicle at rest.  Driver intent
   // (SelectedGear) and the plant's actual engaged gear (CurrentGear)
@@ -221,35 +221,35 @@ const INIT_STATE={
   'Powertrain.Transmission.CurrentGear':126,
   // 3-position dome switch — DOOR is the typical default in a real
   // car so the lamp comes on while loading the cabin.
-  'Vehicle.Controller.Cabin.Light.Dome.SwitchPosition':'DOOR',
+  'Cabin.Lights.Dome.SwitchPosition':'DOOR',
   // ADAS
-  'Vehicle.Controller.ADAS.HighBeam.OncomingVehicleDetected':false,
+  'Vehicle.ADAS.HighBeam.OncomingVehicleDetected':false,
   // Safety
-  'Vehicle.Controller.Safety.CrashDetected':false,
+  'Vehicle.Safety.CrashDetected':false,
   // PEPS
-  'Vehicle.Controller.Body.PEPS.KeyPresent':false,
-  'Vehicle.Controller.Body.Switches.Keyfob.LockButton':'IDLE',
-  'Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.LockButton':false,
-  'Vehicle.Controller.Body.Switches.DoorTrim.Row1.Right.LockButton':false,
-  'Vehicle.Controller.Body.Switches.DoorTrim.Row2.Left.LockButton':false,
-  'Vehicle.Controller.Body.Switches.DoorTrim.Row2.Right.LockButton':false,
-  'Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.UnlockButton':false,
-  'Vehicle.Controller.Body.Switches.DoorTrim.Row1.Right.UnlockButton':false,
-  'Vehicle.Simulation.Connectivity.RemoteLock':'IDLE',
-  'Vehicle.Simulation.Connectivity.BleLock':'IDLE',
-  'Vehicle.Simulation.Connectivity.NfcCardPresent':false,
-  'Vehicle.Simulation.Connectivity.NfcPhonePresent':false,
+  'Body.PEPS.KeyPresent':false,
+  'Body.Switches.Keyfob.LockButton':'IDLE',
+  'Body.Switches.DoorTrim.Row1.Left.LockButton':false,
+  'Body.Switches.DoorTrim.Row1.Right.LockButton':false,
+  'Body.Switches.DoorTrim.Row2.Left.LockButton':false,
+  'Body.Switches.DoorTrim.Row2.Right.LockButton':false,
+  'Body.Switches.DoorTrim.Row1.Left.UnlockButton':false,
+  'Body.Switches.DoorTrim.Row1.Right.UnlockButton':false,
+  'Body.Connectivity.RemoteLock':'IDLE',
+  'Body.Connectivity.BleLock':'IDLE',
+  'Body.Connectivity.NfcCardPresent':false,
+  'Body.Connectivity.NfcPhonePresent':false,
   // PEPS plant model
-  'Vehicle.Simulation.PEPS.Plant.KeyFob.1.PlacedZone':'OutOfRange','Vehicle.Simulation.PEPS.Plant.KeyFob.1.ButtonPress':'NONE','Vehicle.Simulation.PEPS.Plant.KeyFob.1.Paired':true,'Vehicle.Simulation.PEPS.Plant.KeyFob.1.RssiResponse':'','Vehicle.Simulation.PEPS.Plant.KeyFob.1.RfMessage':'',
-  'Vehicle.Simulation.PEPS.Plant.KeyFob.2.PlacedZone':'OutOfRange','Vehicle.Simulation.PEPS.Plant.KeyFob.2.ButtonPress':'NONE','Vehicle.Simulation.PEPS.Plant.KeyFob.2.Paired':true,'Vehicle.Simulation.PEPS.Plant.KeyFob.2.RssiResponse':'','Vehicle.Simulation.PEPS.Plant.KeyFob.2.RfMessage':'',
-  'Vehicle.Simulation.PEPS.Plant.KeyFob.3.PlacedZone':'OutOfRange','Vehicle.Simulation.PEPS.Plant.KeyFob.3.ButtonPress':'NONE','Vehicle.Simulation.PEPS.Plant.KeyFob.3.Paired':true,'Vehicle.Simulation.PEPS.Plant.KeyFob.3.RssiResponse':'','Vehicle.Simulation.PEPS.Plant.KeyFob.3.RfMessage':'',
-  'Vehicle.Simulation.PEPS.Plant.KeyFob.4.PlacedZone':'OutOfRange','Vehicle.Simulation.PEPS.Plant.KeyFob.4.ButtonPress':'NONE','Vehicle.Simulation.PEPS.Plant.KeyFob.4.Paired':true,'Vehicle.Simulation.PEPS.Plant.KeyFob.4.RssiResponse':'','Vehicle.Simulation.PEPS.Plant.KeyFob.4.RfMessage':'',
-  'Vehicle.Simulation.PEPS.Plant.KeyFob.5.PlacedZone':'OutOfRange','Vehicle.Simulation.PEPS.Plant.KeyFob.5.Paired':false,'Vehicle.Simulation.PEPS.Plant.KeyFob.5.RssiResponse':'',
-  'Vehicle.Simulation.PEPS.Plant.KeyFob.6.PlacedZone':'OutOfRange','Vehicle.Simulation.PEPS.Plant.KeyFob.6.Paired':false,'Vehicle.Simulation.PEPS.Plant.KeyFob.6.RssiResponse':'',
-  'Vehicle.Simulation.PEPS.Plant.BlePhone.1.PlacedZone':'OutOfRange','Vehicle.Simulation.PEPS.Plant.BlePhone.1.RssiResponse':'','Vehicle.Simulation.PEPS.Plant.BlePhone.1.NfcTap':'NotPresent',
-  'Vehicle.Simulation.PEPS.Plant.BlePhone.2.PlacedZone':'OutOfRange','Vehicle.Simulation.PEPS.Plant.BlePhone.2.RssiResponse':'','Vehicle.Simulation.PEPS.Plant.BlePhone.2.NfcTap':'NotPresent',
-  'Vehicle.Simulation.PEPS.Plant.NfcCard.1.Position':'NotPresent',
-  'Vehicle.Simulation.PEPS.Plant.NfcCard.2.Position':'NotPresent',
+  'Body.PEPS.Plant.KeyFob.1.PlacedZone':'OutOfRange','Body.PEPS.Plant.KeyFob.1.ButtonPress':'NONE','Body.PEPS.Plant.KeyFob.1.Paired':true,'Body.PEPS.Plant.KeyFob.1.RssiResponse':'','Body.PEPS.Plant.KeyFob.1.RfMessage':'',
+  'Body.PEPS.Plant.KeyFob.2.PlacedZone':'OutOfRange','Body.PEPS.Plant.KeyFob.2.ButtonPress':'NONE','Body.PEPS.Plant.KeyFob.2.Paired':true,'Body.PEPS.Plant.KeyFob.2.RssiResponse':'','Body.PEPS.Plant.KeyFob.2.RfMessage':'',
+  'Body.PEPS.Plant.KeyFob.3.PlacedZone':'OutOfRange','Body.PEPS.Plant.KeyFob.3.ButtonPress':'NONE','Body.PEPS.Plant.KeyFob.3.Paired':true,'Body.PEPS.Plant.KeyFob.3.RssiResponse':'','Body.PEPS.Plant.KeyFob.3.RfMessage':'',
+  'Body.PEPS.Plant.KeyFob.4.PlacedZone':'OutOfRange','Body.PEPS.Plant.KeyFob.4.ButtonPress':'NONE','Body.PEPS.Plant.KeyFob.4.Paired':true,'Body.PEPS.Plant.KeyFob.4.RssiResponse':'','Body.PEPS.Plant.KeyFob.4.RfMessage':'',
+  'Body.PEPS.Plant.KeyFob.5.PlacedZone':'OutOfRange','Body.PEPS.Plant.KeyFob.5.Paired':false,'Body.PEPS.Plant.KeyFob.5.RssiResponse':'',
+  'Body.PEPS.Plant.KeyFob.6.PlacedZone':'OutOfRange','Body.PEPS.Plant.KeyFob.6.Paired':false,'Body.PEPS.Plant.KeyFob.6.RssiResponse':'',
+  'Body.PEPS.Plant.BlePhone.1.PlacedZone':'OutOfRange','Body.PEPS.Plant.BlePhone.1.RssiResponse':'','Body.PEPS.Plant.BlePhone.1.NfcTap':'NotPresent',
+  'Body.PEPS.Plant.BlePhone.2.PlacedZone':'OutOfRange','Body.PEPS.Plant.BlePhone.2.RssiResponse':'','Body.PEPS.Plant.BlePhone.2.NfcTap':'NotPresent',
+  'Body.PEPS.Plant.NfcCard.1.Position':'NotPresent',
+  'Body.PEPS.Plant.NfcCard.2.Position':'NotPresent',
   // ── Doors — HMI-owned inputs only ────────────────────────────────────
   // Bridge-owned door state (IsLocked, IsDoubleLocked, IsOpen,
   // Latch.IsLatched, Soldier.IsUnlocked) is INTENTIONALLY OMITTED from
@@ -263,57 +263,57 @@ const INIT_STATE={
   // (LatchStatus exists in the signal catalog but has no consumers
   // today — see DoorCard comment for context.)
   // Front doors don't have child-lock — only rear (Row 2) doors do.
-  'Vehicle.Cabin.Door.Row1.Left.Window.Position':0,'Vehicle.Cabin.Door.Row1.Left.Handle.Inside.IsPulled':false,'Vehicle.Cabin.Door.Row1.Left.Handle.Outside.IsPulled':false,
-  'Vehicle.Cabin.Door.Row1.Right.Window.Position':0,'Vehicle.Cabin.Door.Row1.Right.Handle.Inside.IsPulled':false,'Vehicle.Cabin.Door.Row1.Right.Handle.Outside.IsPulled':false,
-  'Vehicle.Cabin.Door.Row2.Left.IsChildLockActive':false,'Vehicle.Cabin.Door.Row2.Left.Window.Position':0,'Vehicle.Cabin.Door.Row2.Left.Handle.Inside.IsPulled':false,'Vehicle.Cabin.Door.Row2.Left.Handle.Outside.IsPulled':false,
-  'Vehicle.Cabin.Door.Row2.Right.IsChildLockActive':false,'Vehicle.Cabin.Door.Row2.Right.Window.Position':0,'Vehicle.Cabin.Door.Row2.Right.Handle.Inside.IsPulled':false,'Vehicle.Cabin.Door.Row2.Right.Handle.Outside.IsPulled':false,
+  'Body.Doors.Row1.Left.Window.Position':0,'Body.Doors.Row1.Left.Handle.Inside.IsPulled':false,'Body.Doors.Row1.Left.Handle.Outside.IsPulled':false,
+  'Body.Doors.Row1.Right.Window.Position':0,'Body.Doors.Row1.Right.Handle.Inside.IsPulled':false,'Body.Doors.Row1.Right.Handle.Outside.IsPulled':false,
+  'Body.Doors.Row2.Left.IsChildLockActive':false,'Body.Doors.Row2.Left.Window.Position':0,'Body.Doors.Row2.Left.Handle.Inside.IsPulled':false,'Body.Doors.Row2.Left.Handle.Outside.IsPulled':false,
+  'Body.Doors.Row2.Right.IsChildLockActive':false,'Body.Doors.Row2.Right.Window.Position':0,'Body.Doors.Row2.Right.Handle.Inside.IsPulled':false,'Body.Doors.Row2.Right.Handle.Outside.IsPulled':false,
   // Window-switch 5-detent rocker defaults (NEUTRAL = at-rest centre).
-  'Vehicle.Controller.Body.Switches.Window.DriverMaster.Row1.Left.Detent':'NEUTRAL',
-  'Vehicle.Controller.Body.Switches.Window.DriverMaster.Row1.Right.Detent':'NEUTRAL',
-  'Vehicle.Controller.Body.Switches.Window.DriverMaster.Row2.Left.Detent':'NEUTRAL',
-  'Vehicle.Controller.Body.Switches.Window.DriverMaster.Row2.Right.Detent':'NEUTRAL',
-  'Vehicle.Controller.Body.Switches.Window.Local.Row1.Left.Detent':'NEUTRAL',
-  'Vehicle.Controller.Body.Switches.Window.Local.Row1.Right.Detent':'NEUTRAL',
-  'Vehicle.Controller.Body.Switches.Window.Local.Row2.Left.Detent':'NEUTRAL',
-  'Vehicle.Controller.Body.Switches.Window.Local.Row2.Right.Detent':'NEUTRAL',
+  'Body.Switches.Window.DriverMaster.Row1.Left.Detent':'NEUTRAL',
+  'Body.Switches.Window.DriverMaster.Row1.Right.Detent':'NEUTRAL',
+  'Body.Switches.Window.DriverMaster.Row2.Left.Detent':'NEUTRAL',
+  'Body.Switches.Window.DriverMaster.Row2.Right.Detent':'NEUTRAL',
+  'Body.Switches.Window.Local.Row1.Left.Detent':'NEUTRAL',
+  'Body.Switches.Window.Local.Row1.Right.Detent':'NEUTRAL',
+  'Body.Switches.Window.Local.Row2.Left.Detent':'NEUTRAL',
+  'Body.Switches.Window.Local.Row2.Right.Detent':'NEUTRAL',
   // Power child-lock + window-motor outputs (owned by features /
   // plant — seeded here so the cockpit indicators have a defined
   // initial state before the bridge publishes them).
-  'Vehicle.Controller.Body.PowerChildLock.MasterStatus':false,
+  'Body.PowerChildLock.MasterStatus':false,
   // Delayed-accessory gate (DAP).  Published by the DelayedAccessory
   // feature; gates PowerWindow (and future accessory features).
-  'Vehicle.Controller.Body.Power.DelayedAccessory.IsActive':false,
-  'Vehicle.Cabin.Door.Row1.Left.Window.MotorDirection':'STOPPED','Vehicle.Cabin.Door.Row1.Right.Window.MotorDirection':'STOPPED',
-  'Vehicle.Cabin.Door.Row2.Left.Window.MotorDirection':'STOPPED','Vehicle.Cabin.Door.Row2.Right.Window.MotorDirection':'STOPPED',
+  'Body.Power.DelayedAccessory.IsActive':false,
+  'Body.Doors.Row1.Left.Window.MotorDirection':'STOPPED','Body.Doors.Row1.Right.Window.MotorDirection':'STOPPED',
+  'Body.Doors.Row2.Left.Window.MotorDirection':'STOPPED','Body.Doors.Row2.Right.Window.MotorDirection':'STOPPED',
   // ── Body — HMI-owned inputs only ─────────────────────────────────────
-  // Vehicle.Body.Trunk.Rear.IsOpen, Vehicle.Body.Trunk.Rear.IsLocked, Vehicle.Body.Horn.IsActive are
+  // Body.Trunk.IsOpen, Body.Trunk.IsLocked, Body.Horn.IsActive are
   // bridge-owned (TrunkPlantModel + Horn arbiter) and likewise omitted.
-  'Vehicle.Body.Hood.IsOpen':false,'Vehicle.Controller.Body.Hood.LatchState':'LATCHED','Vehicle.Controller.Body.FuelLid.IsOpen':false,'Vehicle.Controller.Body.ChargeLid.IsOpen':false,
+  'Body.Hood.IsOpen':false,'Body.Hood.LatchState':'LATCHED','Body.FuelLid.IsOpen':false,'Body.ChargeLid.IsOpen':false,
   // Anti-theft alarm + auto-relock status (project extensions) — bridge-owned,
   // omitted.  PanicAlarm and AutoRelock features publish them.
   // Sunroof
-  'Vehicle.Cabin.Sunroof.Position':0,'Vehicle.Cabin.Sunroof.Shade.Position':0,'Vehicle.Controller.Body.Switches.Sunroof.Detent':'NEUTRAL',
+  'Body.Sunroof.Position':0,'Body.Sunroof.Shade.Position':0,'Body.Switches.Sunroof.Detent':'NEUTRAL',
   // Wipers
-  'Vehicle.Body.Windshield.Front.Wiping.Mode':'OFF','Vehicle.Body.Windshield.Front.Wiping.Intensity':0,'Vehicle.Controller.Body.Windshield.Front.Washing.IsActive':false,
-  'Vehicle.Body.Windshield.Rear.Wiping.Mode':'OFF','Vehicle.Controller.Body.Windshield.Rear.Washing.IsActive':false,
+  'Body.Windshield.Front.Wiping.Mode':'OFF','Body.Windshield.Front.Wiping.Intensity':0,'Body.Windshield.Front.Washing.IsActive':false,
+  'Body.Windshield.Rear.Wiping.Mode':'OFF','Body.Windshield.Rear.Washing.IsActive':false,
   // Mirrors
-  'Vehicle.Body.Mirrors.Left.IsFolded':false,'Vehicle.Body.Mirrors.Left.IsHeatingOn':false,'Vehicle.Body.Mirrors.Left.Tilt':0,'Vehicle.Body.Mirrors.Left.Yaw':0,
-  'Vehicle.Body.Mirrors.Right.IsFolded':false,'Vehicle.Body.Mirrors.Right.IsHeatingOn':false,'Vehicle.Body.Mirrors.Right.Tilt':0,'Vehicle.Body.Mirrors.Right.Yaw':0,
-  'Vehicle.Controller.Body.Switches.Mirror.Fold':false,'Vehicle.Controller.Body.Switches.Mirror.Select':'NONE','Vehicle.Controller.Body.Switches.Mirror.Direction':'NONE',
+  'Body.Mirror.Left.IsFolded':false,'Body.Mirror.Left.IsHeatingOn':false,'Body.Mirror.Left.Tilt':0,'Body.Mirror.Left.Yaw':0,
+  'Body.Mirror.Right.IsFolded':false,'Body.Mirror.Right.IsHeatingOn':false,'Body.Mirror.Right.Tilt':0,'Body.Mirror.Right.Yaw':0,
+  'Body.Switches.Mirror.Fold':false,'Body.Switches.Mirror.Select':'NONE','Body.Switches.Mirror.Direction':'NONE',
   // Cabin
-  'Vehicle.Cabin.Light.IsDomeOn':false,'Vehicle.Cabin.Light.IsGloveBoxOn':false,'Vehicle.Controller.Cabin.Lights.Ambient.Intensity':0,'Vehicle.Controller.Cabin.Lights.Ambient.Color':'#3B82F6',
-  'Vehicle.Controller.Cabin.ValetMode.IsActive':false,
-  'Vehicle.Controller.Body.Trunk.Rear.ExteriorButton.IsPressed':false,
+  'Cabin.Lights.IsDomeOn':false,'Cabin.Lights.IsGloveBoxOn':false,'Cabin.Lights.Ambient.Intensity':0,'Cabin.Lights.Ambient.Color':'#3B82F6',
+  'Cabin.ValetMode.IsActive':false,
+  'Body.Trunk.ExteriorButton.IsPressed':false,
   // HVAC
-  'Vehicle.Cabin.HVAC.IsAirConditioningActive':false,'Vehicle.Cabin.HVAC.IsRecirculationActive':false,'Vehicle.Cabin.HVAC.IsFrontDefrosterActive':false,'Vehicle.Cabin.HVAC.IsRearDefrosterActive':false,
+  'Cabin.HVAC.IsAirConditioningActive':false,'Cabin.HVAC.IsRecirculationActive':false,'Cabin.HVAC.IsFrontDefrosterActive':false,'Cabin.HVAC.IsRearDefrosterActive':false,
   // AirDistribution uses the VSS-canonical enum:
   //   AUTO / FACE / FACE_FEET / FEET / FEET_DEF / DEF
   // Default to FACE so the cockpit displays "Panel" at boot.
-  'Vehicle.Cabin.HVAC.Station.Row1.Left.Temperature':22,'Vehicle.Cabin.HVAC.Station.Row1.Left.FanSpeed':0,'Vehicle.Cabin.HVAC.Station.Row1.Left.AirDistribution':'FACE',
-  'Vehicle.Cabin.HVAC.Station.Row1.Right.Temperature':22,'Vehicle.Cabin.HVAC.Station.Row1.Right.FanSpeed':0,'Vehicle.Cabin.HVAC.Station.Row1.Right.AirDistribution':'FACE',
+  'Cabin.HVAC.Station.Row1.Left.Temperature':22,'Cabin.HVAC.Station.Row1.Left.FanSpeed':0,'Cabin.HVAC.Station.Row1.Left.AirDistribution':'FACE',
+  'Cabin.HVAC.Station.Row1.Right.Temperature':22,'Cabin.HVAC.Station.Row1.Right.FanSpeed':0,'Cabin.HVAC.Station.Row1.Right.AirDistribution':'FACE',
   // Seats
-  'Vehicle.Cabin.Seat.Row1.Left.HeatingCooling':0,'Vehicle.Controller.Cabin.Seat.Row1.Left.IsVentilationOn':false,
-  'Vehicle.Cabin.Seat.Row1.Right.HeatingCooling':0,'Vehicle.Controller.Cabin.Seat.Row1.Right.IsVentilationOn':false,
+  'Cabin.Seat.Row1.Left.HeatingLevel':0,'Cabin.Seat.Row1.Left.IsVentilationOn':false,
+  'Cabin.Seat.Row1.Right.HeatingLevel':0,'Cabin.Seat.Row1.Right.IsVentilationOn':false,
 };
 
 /* ══════ UTILITY COMPONENTS ══════ */
@@ -340,13 +340,13 @@ function CmdToggleRow({label,stateKey,openCmd,closeCmd,s,set,c=''}){
   </div>;
 }
 /* CabinTrunkReleaseRow — interior trunk-release push-button.
-   Single press pulses Vehicle.Controller.Body.Switches.Trunk.Release.IsPressed.  The
+   Single press pulses Body.Switches.Trunk.Release.IsPressed.  The
    bridge feature routes through the trunk arbiter (valet gate
    applies).  Status pill shows the live trunk state from the plant
    model so the user can see the round-trip. */
 function CabinTrunkReleaseRow({s,set}){
-  const open = !!s['Vehicle.Body.Trunk.Rear.IsOpen'];
-  const valet = !!s['Vehicle.Controller.Cabin.ValetMode.IsActive'];
+  const open = !!s['Body.Trunk.IsOpen'];
+  const valet = !!s['Cabin.ValetMode.IsActive'];
   const pillColor = valet ? 'var(--red)' : open ? 'var(--amber)' : 'var(--dim)';
   const pillText = valet ? 'VALET' : open ? 'OPEN' : 'CLOSED';
   const hint = valet
@@ -364,9 +364,9 @@ function CabinTrunkReleaseRow({s,set}){
     </div>
     <div className="ebrow">
       <button className="eb"
-        onMouseDown={()=>set('Vehicle.Controller.Body.Switches.Trunk.Release.IsPressed',true)}
-        onMouseUp={()=>set('Vehicle.Controller.Body.Switches.Trunk.Release.IsPressed',false)}
-        onMouseLeave={()=>set('Vehicle.Controller.Body.Switches.Trunk.Release.IsPressed',false)}
+        onMouseDown={()=>set('Body.Switches.Trunk.Release.IsPressed',true)}
+        onMouseUp={()=>set('Body.Switches.Trunk.Release.IsPressed',false)}
+        onMouseLeave={()=>set('Body.Switches.Trunk.Release.IsPressed',false)}
         style={{cursor:'pointer',userSelect:'none',touchAction:'none'}}>
         ▼ Press trunk release
       </button>
@@ -377,14 +377,14 @@ function CabinTrunkReleaseRow({s,set}){
   </div>;
 }
 /* HoodReleaseRow — dash-mounted hood-release lever.  Each press
-   pulses Vehicle.Controller.Body.Switches.Hood.Release.IsPulled.  HoodPlantModel runs
+   pulses Body.Switches.Hood.Release.IsPulled.  HoodPlantModel runs
    the double-pull-within-3-s state machine; the row also shows the
    current LatchState as a coloured pill so the user can see what
    the next click will (or won't) do.  Pressing while OPEN /
    HALF_LATCHED is a no-op at the plant model — but we still send
    the pull so the engineer can verify it gets ignored as expected. */
 function HoodReleaseRow({s,set}){
-  const latch = s['Vehicle.Controller.Body.Hood.LatchState'] || 'LATCHED';
+  const latch = s['Body.Hood.LatchState'] || 'LATCHED';
   const pillColor = latch==='OPEN' ? 'var(--amber)'
                   : latch==='HALF_LATCHED' ? '#FCD34D'
                   : 'var(--dim)';
@@ -403,9 +403,9 @@ function HoodReleaseRow({s,set}){
     </div>
     <div className="ebrow">
       <button className="eb"
-        onMouseDown={()=>set('Vehicle.Controller.Body.Switches.Hood.Release.IsPulled',true)}
-        onMouseUp={()=>set('Vehicle.Controller.Body.Switches.Hood.Release.IsPulled',false)}
-        onMouseLeave={()=>set('Vehicle.Controller.Body.Switches.Hood.Release.IsPulled',false)}
+        onMouseDown={()=>set('Body.Switches.Hood.Release.IsPulled',true)}
+        onMouseUp={()=>set('Body.Switches.Hood.Release.IsPulled',false)}
+        onMouseLeave={()=>set('Body.Switches.Hood.Release.IsPulled',false)}
         style={{cursor:'pointer',userSelect:'none',touchAction:'none'}}>
         ▼ Pull hood release
       </button>
@@ -428,7 +428,7 @@ function SlR({label,k,s,set,min=0,max=100,step=1,unit='%'}){
 }
 /* SunroofMotorRow — press-and-hold OPEN / CLOSE buttons + a STOP
    button + a position readout.  Drives the SunroofPlantModel via
-   `Vehicle.Controller.Sunroof.MoveCmd` (or `Vehicle.Controller.Sunroof.Shade.MoveCmd`); the
+   `Body.Sunroof.MoveCmd` (or `Body.Sunroof.Shade.MoveCmd`); the
    plant integrates Position over time.  Mouseup releases the
    button by sending STOP so the motor halts wherever the user
    lets go.  Visual position bar reads the published Position
@@ -474,11 +474,11 @@ function EnumR({label,k,s,set,opts}){
    sets Direction to the matching enum value; release sets it back to
    NONE.  The plant model integrates while non-NONE. */
 function MirrorAdjustControls({s,set}){
-  const sel=s['Vehicle.Controller.Body.Switches.Mirror.Select']||'NONE';
-  const setSel=v=>set('Vehicle.Controller.Body.Switches.Mirror.Select', v===sel?'NONE':v);
-  const dir=s['Vehicle.Controller.Body.Switches.Mirror.Direction']||'NONE';
-  const press=v=>set('Vehicle.Controller.Body.Switches.Mirror.Direction', v);
-  const release=()=>set('Vehicle.Controller.Body.Switches.Mirror.Direction', 'NONE');
+  const sel=s['Body.Switches.Mirror.Select']||'NONE';
+  const setSel=v=>set('Body.Switches.Mirror.Select', v===sel?'NONE':v);
+  const dir=s['Body.Switches.Mirror.Direction']||'NONE';
+  const press=v=>set('Body.Switches.Mirror.Direction', v);
+  const release=()=>set('Body.Switches.Mirror.Direction', 'NONE');
   // dpadBtnStyle factored out so each pad button is identical except
   // for grid placement.
   const padBtn={width:32,height:32,padding:0,borderRadius:6,
@@ -560,7 +560,7 @@ function DoorCard({label,pfx,s,set}){
     <div className="dctitle">{label}</div>
     <div className="dcr"><span className="dcl">Open</span><Tog val={s[`${p}.IsOpen`]} on={()=>set(`${p}.IsOpen`,!s[`${p}.IsOpen`])} c="a"/></div>
     <div className="dcr"><span className="dcl">Soldier</span><Tog val={s[`${p}.IsLocked`]} on={()=>set(`${p}.Soldier.IsUnlocked`,s[`${p}.IsLocked`])} c="r"/></div>
-    <div className="dcr"><span className="dcl">DblLock</span><Tog val={s[`${p}.IsDoubleLocked`]} on={()=>set('Vehicle.Controller.Body.Doors.CentralLock.Command',s[`${p}.IsDoubleLocked`]?'release_double':'lock_double')} c="r"/></div>
+    <div className="dcr"><span className="dcl">DblLock</span><Tog val={s[`${p}.IsDoubleLocked`]} on={()=>set('Body.Doors.CentralLock.Command',s[`${p}.IsDoubleLocked`]?'release_double':'lock_double')} c="r"/></div>
     <div className="dcr"><span className="dcl">Latched</span><Tog val={s[`${p}.Latch.IsLatched`]} c="v"/></div>
     {isRearDoor && (
       // Read-only indicator — IsChildLockActive is now an output of
@@ -838,24 +838,24 @@ function CombinedView({s,set,cfg,onDeviceSelect}){
   const dropZone=drag?hitTestZone(drag.x,drag.y):null;
 
   // Existing top-view signals
-  const lo=s['Vehicle.Body.Lights.Beam.Low.IsOn'],hi=s['Vehicle.Body.Lights.Beam.High.IsOn'];
-  const drl=s['Vehicle.Body.Lights.Running.IsOn'],park=s['Vehicle.Body.Lights.Parking.IsOn'];
-  const ffog=s['Vehicle.Body.Lights.Fog.Front.IsOn'],rfog=s['Vehicle.Body.Lights.Fog.Rear.IsOn'];
-  const brake=s['Vehicle.Body.Lights.Brake.IsActive'],back=s['Vehicle.Body.Lights.Backup.IsOn'];
-  const lp=s['Vehicle.Body.Lights.LicensePlate.IsOn'];
-  const lLamp=s['Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn'];
-  const rLamp=s['Vehicle.Controller.Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn'];
-  const bothCmded=s['Vehicle.Body.Lights.Hazard.IsSignaling']||(s['Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling']&&s['Vehicle.Body.Lights.DirectionIndicator.Right.IsSignaling']);
+  const lo=s['Body.Lights.Beam.Low.IsOn'],hi=s['Body.Lights.Beam.High.IsOn'];
+  const drl=s['Body.Lights.Running.IsOn'],park=s['Body.Lights.Parking.IsOn'];
+  const ffog=s['Body.Lights.Fog.Front.IsOn'],rfog=s['Body.Lights.Fog.Rear.IsOn'];
+  const brake=s['Body.Lights.Brake.IsActive'],back=s['Body.Lights.Backup.IsActive'];
+  const lp=s['Body.Lights.LicensePlate.IsOn'];
+  const lLamp=s['Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn'];
+  const rLamp=s['Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn'];
+  const bothCmded=s['Body.Lights.Hazard.IsSignaling']||(s['Body.Lights.DirectionIndicator.Left.IsSignaling']&&s['Body.Lights.DirectionIndicator.Right.IsSignaling']);
   const li=lLamp, ri=bothCmded?lLamp:rLamp;
   const hlc=hi?'#FFFFFF':lo?'#FCD34D':drl?'#C0C8D0':park?'#FEF3C7':'#0A1420';
   const hlo=hi?.95:lo?.85:drl?.45:park?.2:.04;
   const tlc=brake?'#FF2222':lo||hi||park?'#EF4444':'#1A0808';
   const tlo=brake?.95:lo||hi||park?.75:.08;
   const rlc=back?'#FFFFFF':'#1A1A2A';
-  const hood=s['Vehicle.Body.Hood.IsOpen'],trunk=s['Vehicle.Body.Trunk.Rear.IsOpen'];
+  const hood=s['Body.Hood.IsOpen'],trunk=s['Body.Trunk.IsOpen'];
   // Hood tri-state latch (LATCHED / HALF_LATCHED / OPEN).
   // Top-view click logic uses this to gate the OpenCmd / CloseCmd dispatch.
-  const hoodLatch = s['Vehicle.Controller.Body.Hood.LatchState'] || 'LATCHED';
+  const hoodLatch = s['Body.Hood.LatchState'] || 'LATCHED';
   const hoodHalf  = hoodLatch === 'HALF_LATCHED';
 
   // Exterior trunk button — would-it-open indicator.  Mirrors the
@@ -865,8 +865,8 @@ function CombinedView({s,set,cfg,onDeviceSelect}){
   //   • cabin unlocked → enabled (direct path)
   //   • cabin locked + paired fob in Trunk zone → enabled (auth path)
   //   • cabin locked + no fob in Trunk zone → disabled
-  const trunkBtnLockStatus = s['Vehicle.Controller.Cabin.LockStatus'] ?? '';
-  const trunkBtnValet      = !!s['Vehicle.Controller.Cabin.ValetMode.IsActive'];
+  const trunkBtnLockStatus = s['Cabin.LockStatus'] ?? '';
+  const trunkBtnValet      = !!s['Cabin.ValetMode.IsActive'];
   const trunkBtnFobInZone  =
     [1,2,3,4,5,6].some(i => s[`Body.PEPS.Plant.KeyFob.${i}.PlacedZone`] === 'Trunk') ||
     [1,2].some(i => s[`Body.PEPS.Plant.BlePhone.${i}.PlacedZone`] === 'Trunk');
@@ -877,23 +877,23 @@ function CombinedView({s,set,cfg,onDeviceSelect}){
   const trunkBtnEnabled =
     !trunkBtnValet && (trunkBtnUnlocked || (trunkBtnLocked && trunkBtnFobInZone));
 
-  const mlf=s['Vehicle.Body.Mirrors.Left.IsFolded'],mrf=s['Vehicle.Body.Mirrors.Right.IsFolded'];
-  const wf=s['Vehicle.Body.Windshield.Front.Wiping.Mode']!=='OFF';
+  const mlf=s['Body.Mirror.Left.IsFolded'],mrf=s['Body.Mirror.Right.IsFolded'];
+  const wf=s['Body.Windshield.Front.Wiping.Mode']!=='OFF';
   // Exterior puddle lamps — driven by Welcome (and future Farewell /
   // PerimeterAlarm) via the courtesy arbiter.  Rendered as soft blue
   // ovals projected on the ground outboard of each side mirror.
-  const puddleL=s['Vehicle.Controller.Body.Lights.Puddle.Left.IsOn'];
-  const puddleR=s['Vehicle.Controller.Body.Lights.Puddle.Right.IsOn'];
+  const puddleL=s['Body.Lights.Puddle.Left.IsOn'];
+  const puddleR=s['Body.Lights.Puddle.Right.IsOn'];
   // Interior dome / overhead courtesy lamp — claimed by Welcome via
   // the courtesy arbiter.  Rendered as a soft warm glow over the
   // front-cabin headliner area in the top view.
-  const dome=s['Vehicle.Cabin.Light.IsDomeOn'];
+  const dome=s['Cabin.Lights.IsDomeOn'];
 
   const doorsData=[
-    {pfx:'Body.Doors.Row1.Left',  open:s['Vehicle.Cabin.Door.Row1.Left.IsOpen'],  cx:85,cy:207,dx:-65,rx:60, ry:125,rw:50,rh:165,handleSide:'left'},
-    {pfx:'Body.Doors.Row1.Right', open:s['Vehicle.Cabin.Door.Row1.Right.IsOpen'], cx:275,cy:207,dx:65, rx:250,ry:125,rw:50,rh:165,handleSide:'right'},
-    {pfx:'Body.Doors.Row2.Left',  open:s['Vehicle.Cabin.Door.Row2.Left.IsOpen'],  cx:85,cy:362,dx:-65,rx:60, ry:295,rw:50,rh:135,handleSide:'left'},
-    {pfx:'Body.Doors.Row2.Right', open:s['Vehicle.Cabin.Door.Row2.Right.IsOpen'], cx:275,cy:362,dx:65, rx:250,ry:295,rw:50,rh:135,handleSide:'right'},
+    {pfx:'Body.Doors.Row1.Left',  open:s['Body.Doors.Row1.Left.IsOpen'],  cx:85,cy:207,dx:-65,rx:60, ry:125,rw:50,rh:165,handleSide:'left'},
+    {pfx:'Body.Doors.Row1.Right', open:s['Body.Doors.Row1.Right.IsOpen'], cx:275,cy:207,dx:65, rx:250,ry:125,rw:50,rh:165,handleSide:'right'},
+    {pfx:'Body.Doors.Row2.Left',  open:s['Body.Doors.Row2.Left.IsOpen'],  cx:85,cy:362,dx:-65,rx:60, ry:295,rw:50,rh:135,handleSide:'left'},
+    {pfx:'Body.Doors.Row2.Right', open:s['Body.Doors.Row2.Right.IsOpen'], cx:275,cy:362,dx:65, rx:250,ry:295,rw:50,rh:135,handleSide:'right'},
   ];
 
   const spokes=(cx,cy,r1,r2)=>[0,51.4,102.8,154.3,205.7,257.1,308.6].map(a=>{
@@ -1023,9 +1023,9 @@ function CombinedView({s,set,cfg,onDeviceSelect}){
       strokeWidth={hood||hoodHalf?2:1}
       style={{cursor:(hoodHalf||hood)?'pointer':'default'}}
       onClick={hood
-        ? ()=>set('Vehicle.Controller.Body.Hood.CloseCmd',true)
+        ? ()=>set('Body.Hood.CloseCmd',true)
         : hoodHalf
-          ? ()=>set('Vehicle.Controller.Body.Hood.OpenCmd',true)
+          ? ()=>set('Body.Hood.OpenCmd',true)
           : undefined}>
       <title>{hood
         ? 'Hood OPEN — click to close'
@@ -1249,11 +1249,11 @@ function CombinedView({s,set,cfg,onDeviceSelect}){
     <rect x="60" y="440" width="240" height="120"
       fill="#070E18" stroke={trunk?'#F59E0B':'#182030'} strokeWidth={trunk?2:1} rx="2"
       style={{cursor:trunk?'pointer':'default'}}
-      onClick={trunk?()=>set('Vehicle.Controller.Body.Trunk.Rear.CloseCmd',true):undefined}/>
+      onClick={trunk?()=>set('Body.Trunk.CloseCmd',true):undefined}/>
     {trunk&&<rect x="70" y="560" width="220" height="8" fill="#F59E0B" opacity=".5"/>}
     <rect x="60" y="560" width="240" height="20" fill="#0E1828" stroke="#1A2535" strokeWidth=".5" rx="2"
       style={{cursor:trunk?'pointer':'default'}}
-      onClick={trunk?()=>set('Vehicle.Controller.Body.Trunk.Rear.CloseCmd',true):undefined}/>
+      onClick={trunk?()=>set('Body.Trunk.CloseCmd',true):undefined}/>
     {/* Exterior trunk-button enabled indicator.  Green = pressing the
         button right now would open the trunk (cabin unlocked OR a
         paired fob is in the Trunk zone, AND valet is off).  Red =
@@ -1282,26 +1282,26 @@ function CombinedView({s,set,cfg,onDeviceSelect}){
     </rect>
 
     {/* Exterior trunk-release button — capacitive pad just above the
-        licence plate.  Mousedown publishes Vehicle.Controller.Body.Trunk.Rear.ExteriorButton.IsPressed=true,
+        licence plate.  Mousedown publishes Body.Trunk.ExteriorButton.IsPressed=true,
         mouseup/leave publishes false.  The bridge-side ExteriorTrunkButton
         feature decides what to do (direct pulse if cabin unlocked,
         deferral to PassiveEntry if locked, silent deny if valet active). */}
     <g opacity={trunkBtnEnabled?1:0.55}>
       <rect x="172" y="566" width="16" height="6" rx="1.5"
-        fill={s['Vehicle.Controller.Body.Trunk.Rear.ExteriorButton.IsPressed']?'#0DC8C8':'#1E2D40'}
-        stroke={s['Vehicle.Controller.Body.Trunk.Rear.ExteriorButton.IsPressed']?'#5EEAD4':(trunkBtnEnabled?'#3A5570':'#5A2A2A')}
+        fill={s['Body.Trunk.ExteriorButton.IsPressed']?'#0DC8C8':'#1E2D40'}
+        stroke={s['Body.Trunk.ExteriorButton.IsPressed']?'#5EEAD4':(trunkBtnEnabled?'#3A5570':'#5A2A2A')}
         strokeWidth="0.6"
         style={{pointerEvents:'none'}}/>
       <text x="180" y="570.5" textAnchor="middle"
-        fill={s['Vehicle.Controller.Body.Trunk.Rear.ExteriorButton.IsPressed']?'#021A1A':(trunkBtnEnabled?'#7BB3D9':'#9A6060')}
+        fill={s['Body.Trunk.ExteriorButton.IsPressed']?'#021A1A':(trunkBtnEnabled?'#7BB3D9':'#9A6060')}
         fontSize="3" fontWeight="bold"
         style={{pointerEvents:'none'}}>OPEN</text>
       <rect x="170" y="563" width="20" height="11" rx="2"
         fill="transparent" pointerEvents="all"
         style={{cursor:'pointer'}}
-        onMouseDown={()=>set('Vehicle.Controller.Body.Trunk.Rear.ExteriorButton.IsPressed',true)}
-        onMouseUp={()=>set('Vehicle.Controller.Body.Trunk.Rear.ExteriorButton.IsPressed',false)}
-        onMouseLeave={()=>set('Vehicle.Controller.Body.Trunk.Rear.ExteriorButton.IsPressed',false)}>
+        onMouseDown={()=>set('Body.Trunk.ExteriorButton.IsPressed',true)}
+        onMouseUp={()=>set('Body.Trunk.ExteriorButton.IsPressed',false)}
+        onMouseLeave={()=>set('Body.Trunk.ExteriorButton.IsPressed',false)}>
         <title>{
           trunkBtnValet
             ? 'Trunk button — DENIED (valet mode active)'
@@ -1431,8 +1431,8 @@ function CombinedView({s,set,cfg,onDeviceSelect}){
         <title>{ri?'Right mirror turn indicator — signaling':'Right mirror turn indicator — off'}</title>
       </rect>
     </g>
-    {s['Vehicle.Body.Mirrors.Left.IsHeatingOn']&&<circle cx="46" cy="200" r="10" fill="none" stroke="#FF4040" strokeWidth="1" opacity=".6" className="pulse"><title>Left mirror heating — active</title></circle>}
-    {s['Vehicle.Body.Mirrors.Right.IsHeatingOn']&&<circle cx="314" cy="200" r="10" fill="none" stroke="#FF4040" strokeWidth="1" opacity=".6" className="pulse"><title>Right mirror heating — active</title></circle>}
+    {s['Body.Mirror.Left.IsHeatingOn']&&<circle cx="46" cy="200" r="10" fill="none" stroke="#FF4040" strokeWidth="1" opacity=".6" className="pulse"><title>Left mirror heating — active</title></circle>}
+    {s['Body.Mirror.Right.IsHeatingOn']&&<circle cx="314" cy="200" r="10" fill="none" stroke="#FF4040" strokeWidth="1" opacity=".6" className="pulse"><title>Right mirror heating — active</title></circle>}
 
     <text x="180" y="-58" textAnchor="middle" fill="#1E2C3C" fontSize="8" fontFamily="Share Tech Mono" fontWeight="bold">▲ FRONT</text>
     <text x="180" y="605" textAnchor="middle" fill="#1E2C3C" fontSize="8" fontFamily="Share Tech Mono" fontWeight="bold">REAR ▼</text>
@@ -1499,13 +1499,13 @@ function SideView({s,set}){
   const [flipped,setFlipped]=React.useState(false);
   // "◁ LEFT SIDE" = viewing from the left = seeing the RIGHT side doors (and vice-versa)
   const side=flipped?'Right':'Left';
-  const lo=s['Vehicle.Body.Lights.Beam.Low.IsOn'],hi=s['Vehicle.Body.Lights.Beam.High.IsOn'];
-  const drl=s['Vehicle.Body.Lights.Running.IsOn'],park=s['Vehicle.Body.Lights.Parking.IsOn'];
+  const lo=s['Body.Lights.Beam.Low.IsOn'],hi=s['Body.Lights.Beam.High.IsOn'];
+  const drl=s['Body.Lights.Running.IsOn'],park=s['Body.Lights.Parking.IsOn'];
   // Turn indicator — track the side that is currently visible
   const li=s[`Body.Lights.DirectionIndicator.${side}.Lamp.Front.IsOn`];
-  const ffog=s['Vehicle.Body.Lights.Fog.Front.IsOn'],rfog=s['Vehicle.Body.Lights.Fog.Rear.IsOn'];
-  const brake=s['Vehicle.Body.Lights.Brake.IsActive'],back=s['Vehicle.Body.Lights.Backup.IsOn'];
-  const lp=s['Vehicle.Body.Lights.LicensePlate.IsOn'];
+  const ffog=s['Body.Lights.Fog.Front.IsOn'],rfog=s['Body.Lights.Fog.Rear.IsOn'];
+  const brake=s['Body.Lights.Brake.IsActive'],back=s['Body.Lights.Backup.IsActive'];
+  const lp=s['Body.Lights.LicensePlate.IsOn'];
   // Door signals — read from the visible side
   const r1pfx=`Body.Doors.Row1.${side}`, r2pfx=`Body.Doors.Row2.${side}`;
   const d1=s[r1pfx+'.IsOpen'], d2=s[r2pfx+'.IsOpen'];
@@ -1513,13 +1513,13 @@ function SideView({s,set}){
   const r2locked=s[r2pfx+'.IsLocked'], r2dbl=s[r2pfx+'.IsDoubleLocked'];
   const r1pulled=s[r1pfx+'.Handle.Outside.IsPulled'];
   const r2pulled=s[r2pfx+'.Handle.Outside.IsPulled'];
-  const hood=s['Vehicle.Body.Hood.IsOpen'],trunk=s['Vehicle.Body.Trunk.Rear.IsOpen'];
+  const hood=s['Body.Hood.IsOpen'],trunk=s['Body.Trunk.IsOpen'];
   // Hood tri-state latch (LATCHED / HALF_LATCHED / OPEN).
   // Top-view click logic uses this to gate the OpenCmd / CloseCmd dispatch.
-  const hoodLatch = s['Vehicle.Controller.Body.Hood.LatchState'] || 'LATCHED';
+  const hoodLatch = s['Body.Hood.LatchState'] || 'LATCHED';
   const hoodHalf  = hoodLatch === 'HALF_LATCHED';
-  const wf=s['Vehicle.Body.Windshield.Front.Wiping.Mode']!=='OFF';
-  const sr=s['Vehicle.Cabin.Sunroof.Position'];
+  const wf=s['Body.Windshield.Front.Wiping.Mode']!=='OFF';
+  const sr=s['Body.Sunroof.Position'];
   // Mirror — read from the visible side
   const mlf=s[`Body.Mirror.${side}.IsFolded`];
   const mheat=s[`Body.Mirror.${side}.IsHeatingOn`];
@@ -1835,7 +1835,7 @@ function SideView({s,set}){
  * see and reach.  Zones are stubbed with placeholder content today and
  * fleshed out in follow-up commits.  Each zone is dimmed/tinted when
  * the bus is in NIGHT mode (published by the DayNightModePlant from
- * `Vehicle.Body.Lights.Beam.Low.IsOn`).
+ * `Body.Lights.Beam.Low.IsOn`).
  */
 // Module-scope so its component identity is stable across renders.
 // (If defined inside CockpitView it would be re-created on every state
@@ -2085,44 +2085,44 @@ function CockpitView({s,set,cfg}){
   const passengerSide = driverSide === 'Right' ? 'Left' : 'Right';
   const mode=s['Vehicle.Cabin.Infotainment.HMI.DayNightMode'];
   const night=mode==='NIGHT';
-  const lo=s['Vehicle.Body.Lights.Beam.Low.IsOn'],hi=s['Vehicle.Body.Lights.Beam.High.IsOn'];
-  const lLamp=s['Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn'];
-  const rLamp=s['Vehicle.Controller.Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn'];
-  const bothCmded=s['Vehicle.Body.Lights.Hazard.IsSignaling']||(s['Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling']&&s['Vehicle.Body.Lights.DirectionIndicator.Right.IsSignaling']);
+  const lo=s['Body.Lights.Beam.Low.IsOn'],hi=s['Body.Lights.Beam.High.IsOn'];
+  const lLamp=s['Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn'];
+  const rLamp=s['Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn'];
+  const bothCmded=s['Body.Lights.Hazard.IsSignaling']||(s['Body.Lights.DirectionIndicator.Left.IsSignaling']&&s['Body.Lights.DirectionIndicator.Right.IsSignaling']);
   const li=lLamp,ri=bothCmded?lLamp:rLamp;
-  const doorAjar=['Vehicle.Cabin.Door.Row1.Left.IsOpen','Vehicle.Cabin.Door.Row1.Right.IsOpen','Vehicle.Cabin.Door.Row2.Left.IsOpen','Vehicle.Cabin.Door.Row2.Right.IsOpen'].some(k=>s[k]);
-  const ffog=s['Vehicle.Body.Lights.Fog.Front.IsOn'],rfog=s['Vehicle.Body.Lights.Fog.Rear.IsOn'];
-  const brake=s['Vehicle.Body.Lights.Brake.IsActive'];
-  const ac=s['Vehicle.Cabin.HVAC.IsAirConditioningActive'];
-  const defF=s['Vehicle.Cabin.HVAC.IsFrontDefrosterActive'],defR=s['Vehicle.Cabin.HVAC.IsRearDefrosterActive'];
-  const recirc=s['Vehicle.Cabin.HVAC.IsRecirculationActive'];
-  const dT=s['Vehicle.Cabin.HVAC.Station.Row1.Left.Temperature']??22;
-  const pT=s['Vehicle.Cabin.HVAC.Station.Row1.Right.Temperature']??22;
-  const heatL=s['Vehicle.Cabin.Seat.Row1.Left.HeatingCooling']||0;
-  const heatR=s['Vehicle.Cabin.Seat.Row1.Right.HeatingCooling']||0;
-  const vent1L=s['Vehicle.Controller.Cabin.Seat.Row1.Left.IsVentilationOn'];
-  const vent1R=s['Vehicle.Controller.Cabin.Seat.Row1.Right.IsVentilationOn'];
-  const trunk=s['Vehicle.Body.Trunk.Rear.IsOpen'],fuel=s['Vehicle.Controller.Body.FuelLid.IsOpen'];
-  const wf=s['Vehicle.Body.Windshield.Front.Wiping.Mode'];
-  const horn=s['Vehicle.Body.Horn.IsActive'],dome=s['Vehicle.Cabin.Light.IsDomeOn'];
-  // 3-position dome switch — drives `Vehicle.Cabin.Light.IsDomeOn` via the
+  const doorAjar=['Body.Doors.Row1.Left.IsOpen','Body.Doors.Row1.Right.IsOpen','Body.Doors.Row2.Left.IsOpen','Body.Doors.Row2.Right.IsOpen'].some(k=>s[k]);
+  const ffog=s['Body.Lights.Fog.Front.IsOn'],rfog=s['Body.Lights.Fog.Rear.IsOn'];
+  const brake=s['Body.Lights.Brake.IsActive'];
+  const ac=s['Cabin.HVAC.IsAirConditioningActive'];
+  const defF=s['Cabin.HVAC.IsFrontDefrosterActive'],defR=s['Cabin.HVAC.IsRearDefrosterActive'];
+  const recirc=s['Cabin.HVAC.IsRecirculationActive'];
+  const dT=s['Cabin.HVAC.Station.Row1.Left.Temperature']??22;
+  const pT=s['Cabin.HVAC.Station.Row1.Right.Temperature']??22;
+  const heatL=s['Cabin.Seat.Row1.Left.HeatingLevel']||0;
+  const heatR=s['Cabin.Seat.Row1.Right.HeatingLevel']||0;
+  const vent1L=s['Cabin.Seat.Row1.Left.IsVentilationOn'];
+  const vent1R=s['Cabin.Seat.Row1.Right.IsVentilationOn'];
+  const trunk=s['Body.Trunk.IsOpen'],fuel=s['Body.FuelLid.IsOpen'];
+  const wf=s['Body.Windshield.Front.Wiping.Mode'];
+  const horn=s['Body.Horn.IsActive'],dome=s['Cabin.Lights.IsDomeOn'];
+  // 3-position dome switch — drives `Cabin.Lights.IsDomeOn` via the
   // DomeSwitch feature (OFF / DOOR=on-when-any-door-open / ON).
-  const domeSw=s['Vehicle.Controller.Cabin.Light.Dome.SwitchPosition']||'OFF';
+  const domeSw=s['Cabin.Lights.Dome.SwitchPosition']||'OFF';
   // TPMS: lamp lights if ANY of the 4 wheels reports low pressure.
   const tpms=['Vehicle.Chassis.Axle.Row1.Wheel.Left.Tire.IsPressureLow',
               'Vehicle.Chassis.Axle.Row1.Wheel.Right.Tire.IsPressureLow',
               'Vehicle.Chassis.Axle.Row2.Wheel.Left.Tire.IsPressureLow',
               'Vehicle.Chassis.Axle.Row2.Wheel.Right.Tire.IsPressureLow'].some(k=>s[k]);
   // Interior door release pulls — mirror the inside handle signals.
-  const pullL=s['Vehicle.Cabin.Door.Row1.Left.Handle.Inside.IsPulled'];
-  const pullR=s['Vehicle.Cabin.Door.Row1.Right.Handle.Inside.IsPulled'];
+  const pullL=s['Body.Doors.Row1.Left.Handle.Inside.IsPulled'];
+  const pullR=s['Body.Doors.Row1.Right.Handle.Inside.IsPulled'];
   // Switches + supplementary state for the fleshed-out zones.
-  const sigDir=s['Vehicle.Controller.Body.Switches.TurnIndicator.Direction']||'OFF';
-  const hbSw=s['Vehicle.Controller.Body.Switches.HighBeam.IsEngaged'];
-  const hazSw=s['Vehicle.Controller.Body.Switches.Hazard.IsEngaged'];
-  const ffogSw=s['Vehicle.Controller.Body.Switches.Fog.Front.IsEngaged'];
-  const rfogSw=s['Vehicle.Controller.Body.Switches.Fog.Rear.IsEngaged'];
-  const lightSw=s['Vehicle.Body.Lights.LightSwitch']||'OFF';
+  const sigDir=s['Body.Switches.TurnIndicator.Direction']||'OFF';
+  const hbSw=s['Body.Switches.HighBeam.IsEngaged'];
+  const hazSw=s['Body.Switches.Hazard.IsEngaged'];
+  const ffogSw=s['Body.Switches.Fog.Front.IsEngaged'];
+  const rfogSw=s['Body.Switches.Fog.Rear.IsEngaged'];
+  const lightSw=s['Body.Lights.LightSwitch']||'OFF';
   // CurrentGear = actual engaged gear (published by TransmissionPlant);
   // drives the instrument-cluster PRND readout.
   // SelectedGear = driver's selector position (what the HMI writes);
@@ -2130,24 +2130,24 @@ function CockpitView({s,set,cfg}){
   // the plant catches up.
   const gear=s['Powertrain.Transmission.CurrentGear']??126;
   const selGear=s['Powertrain.Transmission.SelectedGear']??126;
-  const lockL=s['Vehicle.Cabin.Door.Row1.Left.IsLocked'];
-  const lockR=s['Vehicle.Cabin.Door.Row1.Right.IsLocked'];
-  const dblL=s['Vehicle.Cabin.Door.Row1.Left.IsDoubleLocked'];
-  const fanL=s['Vehicle.Cabin.HVAC.Station.Row1.Left.FanSpeed']??0;
-  const distL=s['Vehicle.Cabin.HVAC.Station.Row1.Left.AirDistribution']||'AUTO';
-  const mirL=s['Vehicle.Body.Mirrors.Left.IsFolded'],mirR=s['Vehicle.Body.Mirrors.Right.IsFolded'];
+  const lockL=s['Body.Doors.Row1.Left.IsLocked'];
+  const lockR=s['Body.Doors.Row1.Right.IsLocked'];
+  const dblL=s['Body.Doors.Row1.Left.IsDoubleLocked'];
+  const fanL=s['Cabin.HVAC.Station.Row1.Left.FanSpeed']??0;
+  const distL=s['Cabin.HVAC.Station.Row1.Left.AirDistribution']||'AUTO';
+  const mirL=s['Body.Mirror.Left.IsFolded'],mirR=s['Body.Mirror.Right.IsFolded'];
   // Mirror selector — String enum "NONE" / "LEFT" / "RIGHT".  Same
   // signal as the top-view MirrorAdjustControls; clicking SEL toggles
   // the chosen side, second click clears.
-  const mirSel=s['Vehicle.Controller.Body.Switches.Mirror.Select']||'NONE';
-  const mirDir=s['Vehicle.Controller.Body.Switches.Mirror.Direction']||'NONE';
+  const mirSel=s['Body.Switches.Mirror.Select']||'NONE';
+  const mirDir=s['Body.Switches.Mirror.Direction']||'NONE';
   // Power child-lock state — written by the PowerChildLock feature.
   // `masterChildLock` drives the cockpit indicator LED; the per-door
   // fan-out signals drive per-window indicator dimming and (via the
   // door-handle plant on the bridge) inside-pull suppression.
-  const masterChildLock=s['Vehicle.Controller.Body.PowerChildLock.MasterStatus'];
-  const childRL=s['Vehicle.Cabin.Door.Row2.Left.IsChildLockActive'];
-  const childRR=s['Vehicle.Cabin.Door.Row2.Right.IsChildLockActive'];
+  const masterChildLock=s['Body.PowerChildLock.MasterStatus'];
+  const childRL=s['Body.Doors.Row2.Left.IsChildLockActive'];
+  const childRR=s['Body.Doors.Row2.Right.IsChildLockActive'];
   // Per-window motor + position read-back (plant outputs).
   const winPos=(k)=>s[k]??0;
   const winMotor=(motor)=>s[motor]||'STOPPED';
@@ -2208,13 +2208,13 @@ function CockpitView({s,set,cfg}){
       <div style={{display:'flex',gap:10,alignItems:'center',justifyContent:'space-around',flexWrap:'wrap'}}>
         {/* 3-position dome switch: tap to cycle OFF → DOOR → ON.  The
             DomeSwitch feature converts position + door state into the
-            actual `Vehicle.Cabin.Light.IsDomeOn` claim via the courtesy
+            actual `Cabin.Lights.IsDomeOn` claim via the courtesy
             arbiter — Welcome / Farewell / PerimeterAlarm pre-empt. */}
         <div style={{display:'flex',gap:4,alignItems:'center'}}>
           <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1,marginRight:4}}>DOME:</span>
           {['OFF','DOOR','ON'].map(p=>(
             <Btn night={night} key={p} on={domeSw===p}
-              onClick={()=>set('Vehicle.Controller.Cabin.Light.Dome.SwitchPosition',p)}
+              onClick={()=>set('Cabin.Lights.Dome.SwitchPosition',p)}
               sz={9} pad={'6px 10px'} min={48}>{p}</Btn>
           ))}
           <span style={{fontFamily:'Share Tech Mono',fontSize:9,color:dome?'#FCD34D':txtDim,marginLeft:8}}>
@@ -2227,22 +2227,22 @@ function CockpitView({s,set,cfg}){
             inner-bot  = OPEN_HOLD  (proportional open while held)
             outer-bot  = OPEN_AUTO  (latches; runs shade open then roof)
             Center is the rest position; any press in auto mode cancels.
-            Writes `Vehicle.Controller.Body.Switches.Sunroof.Detent` (enum).  The
+            Writes `Body.Switches.Sunroof.Detent` (enum).  The
             SunroofControl feature owns the state machine and writes
-            both Vehicle.Controller.Sunroof.MoveCmd and Vehicle.Controller.Sunroof.Shade.MoveCmd
+            both Body.Sunroof.MoveCmd and Body.Sunroof.Shade.MoveCmd
             in the correct sequence. */}
         {(() => {
-          const sr = s['Vehicle.Cabin.Sunroof.Position'] ?? 0;
-          const sh = s['Vehicle.Cabin.Sunroof.Shade.Position'] ?? 0;
-          const detent = s['Vehicle.Controller.Body.Switches.Sunroof.Detent'] || 'NEUTRAL';
+          const sr = s['Body.Sunroof.Position'] ?? 0;
+          const sh = s['Body.Sunroof.Shade.Position'] ?? 0;
+          const detent = s['Body.Switches.Sunroof.Detent'] || 'NEUTRAL';
           // Press writes the corresponding detent value; release
           // returns to NEUTRAL (spring action).
           const press = (v) => ({
-            onMouseDown:  () => set('Vehicle.Controller.Body.Switches.Sunroof.Detent', v),
-            onMouseUp:    () => set('Vehicle.Controller.Body.Switches.Sunroof.Detent', 'NEUTRAL'),
-            onMouseLeave: () => set('Vehicle.Controller.Body.Switches.Sunroof.Detent', 'NEUTRAL'),
-            onTouchStart: (e) => { e.preventDefault(); set('Vehicle.Controller.Body.Switches.Sunroof.Detent', v); },
-            onTouchEnd:   (e) => { e.preventDefault(); set('Vehicle.Controller.Body.Switches.Sunroof.Detent', 'NEUTRAL'); },
+            onMouseDown:  () => set('Body.Switches.Sunroof.Detent', v),
+            onMouseUp:    () => set('Body.Switches.Sunroof.Detent', 'NEUTRAL'),
+            onMouseLeave: () => set('Body.Switches.Sunroof.Detent', 'NEUTRAL'),
+            onTouchStart: (e) => { e.preventDefault(); set('Body.Switches.Sunroof.Detent', v); },
+            onTouchEnd:   (e) => { e.preventDefault(); set('Body.Switches.Sunroof.Detent', 'NEUTRAL'); },
           });
           // Map current detent → handle Y offset for the visual spring.
           const handleY = {
@@ -2372,9 +2372,9 @@ function CockpitView({s,set,cfg}){
         {/* Left stalk: turn signals + high-beam pull */}
         <div style={{display:'flex',flexDirection:'column',gap:5}}>
           <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1}}>LEFT STALK</span>
-          <Btn night={night} on={sigDir==='LEFT'} onClick={()=>set('Vehicle.Controller.Body.Switches.TurnIndicator.Direction', sigDir==='LEFT'?'OFF':'LEFT')}>◄ TURN L</Btn>
-          <Btn night={night} on={sigDir==='RIGHT'} onClick={()=>set('Vehicle.Controller.Body.Switches.TurnIndicator.Direction', sigDir==='RIGHT'?'OFF':'RIGHT')}>TURN R ►</Btn>
-          <Btn night={night} on={hbSw} onClick={()=>set('Vehicle.Controller.Body.Switches.HighBeam.IsEngaged',!hbSw)}>HI-BEAM {hbSw?'●':'○'}</Btn>
+          <Btn night={night} on={sigDir==='LEFT'} onClick={()=>set('Body.Switches.TurnIndicator.Direction', sigDir==='LEFT'?'OFF':'LEFT')}>◄ TURN L</Btn>
+          <Btn night={night} on={sigDir==='RIGHT'} onClick={()=>set('Body.Switches.TurnIndicator.Direction', sigDir==='RIGHT'?'OFF':'RIGHT')}>TURN R ►</Btn>
+          <Btn night={night} on={hbSw} onClick={()=>set('Body.Switches.HighBeam.IsEngaged',!hbSw)}>HI-BEAM {hbSw?'●':'○'}</Btn>
         </div>
         {/* Wheel SVG with embedded button pads */}
         <svg viewBox="0 0 240 200" style={{width:'100%',maxHeight:200}}>
@@ -2401,9 +2401,9 @@ function CockpitView({s,set,cfg}){
           <text x="175" y="157" textAnchor="middle" fill={txtDim} fontSize="7" fontFamily="Share Tech Mono">+1 ►</text>
           {/* Horn target on center pad */}
           <circle cx="120" cy="105" r="32" fill="transparent" style={{cursor:'pointer'}}
-            onMouseDown={()=>set('Vehicle.Body.Horn.IsActive',true)}
-            onMouseUp={()=>set('Vehicle.Body.Horn.IsActive',false)}
-            onMouseLeave={()=>set('Vehicle.Body.Horn.IsActive',false)}>
+            onMouseDown={()=>set('Body.Horn.IsActive',true)}
+            onMouseUp={()=>set('Body.Horn.IsActive',false)}
+            onMouseLeave={()=>set('Body.Horn.IsActive',false)}>
             <title>Press and hold for horn</title>
           </circle>
           {horn&&<circle cx="120" cy="105" r="34" fill="none" stroke="#EF4444" strokeWidth="2" className="blink"/>}
@@ -2411,9 +2411,9 @@ function CockpitView({s,set,cfg}){
         {/* Right stalk: wiper + washer */}
         <div style={{display:'flex',flexDirection:'column',gap:5}}>
           <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1}}>WIPER STALK</span>
-          <Btn night={night} on={wf&&wf!=='OFF'} onClick={()=>set('Vehicle.Body.Windshield.Front.Wiping.Mode', WIPER_CYCLE[wf||'OFF']||'OFF')}>WIPE: {wf||'OFF'}</Btn>
+          <Btn night={night} on={wf&&wf!=='OFF'} onClick={()=>set('Body.Windshield.Front.Wiping.Mode', WIPER_CYCLE[wf||'OFF']||'OFF')}>WIPE: {wf||'OFF'}</Btn>
           <Btn night={night} on={false} onClick={()=>{}}>WASHER ⇣</Btn>
-          <Btn night={night} on={horn} onMouseDown={()=>set('Vehicle.Body.Horn.IsActive',true)} onMouseUp={()=>set('Vehicle.Body.Horn.IsActive',false)} onMouseLeave={()=>set('Vehicle.Body.Horn.IsActive',false)}>🔊 HORN</Btn>
+          <Btn night={night} on={horn} onMouseDown={()=>set('Body.Horn.IsActive',true)} onMouseUp={()=>set('Body.Horn.IsActive',false)} onMouseLeave={()=>set('Body.Horn.IsActive',false)}>🔊 HORN</Btn>
         </div>
         {/* Ignition control — circular Start/Stop button on PEPS builds,
             4-position rotary key cylinder on KeyCylinder builds.  Sits
@@ -2425,7 +2425,7 @@ function CockpitView({s,set,cfg}){
           const power     = s['Vehicle.LowVoltageSystemState'] || 'OFF';
           const running   = power === 'ON' || power === 'START';
           if (keySource === 'PEPS') {
-            const pressed = !!s['Vehicle.Controller.Body.Switches.StartStop.IsPressed'];
+            const pressed = !!s['Body.Switches.StartStop.IsPressed'];
             const ringColor = pressed ? '#EF4444'
                             : running ? '#10B981'
                             : night   ? '#3A2A12' : '#1A2838';
@@ -2439,11 +2439,11 @@ function CockpitView({s,set,cfg}){
               <span style={{fontFamily:'Share Tech Mono',fontSize:7,
                 color:night?'#7A5A1A':'#6B7E99',letterSpacing:1}}>START / STOP</span>
               <svg viewBox="0 0 70 70" style={{width:68,height:68,cursor:'pointer',userSelect:'none'}}
-                onMouseDown={()=>set('Vehicle.Controller.Body.Switches.StartStop.IsPressed',true)}
-                onMouseUp={()=>set('Vehicle.Controller.Body.Switches.StartStop.IsPressed',false)}
-                onMouseLeave={()=>set('Vehicle.Controller.Body.Switches.StartStop.IsPressed',false)}
-                onTouchStart={(e)=>{e.preventDefault();set('Vehicle.Controller.Body.Switches.StartStop.IsPressed',true);}}
-                onTouchEnd={()=>set('Vehicle.Controller.Body.Switches.StartStop.IsPressed',false)}>
+                onMouseDown={()=>set('Body.Switches.StartStop.IsPressed',true)}
+                onMouseUp={()=>set('Body.Switches.StartStop.IsPressed',false)}
+                onMouseLeave={()=>set('Body.Switches.StartStop.IsPressed',false)}
+                onTouchStart={(e)=>{e.preventDefault();set('Body.Switches.StartStop.IsPressed',true);}}
+                onTouchEnd={()=>set('Body.Switches.StartStop.IsPressed',false)}>
                 <title>Press & hold — Engine Start / Stop</title>
                 <circle cx="35" cy="35" r="30" fill={fillColor}
                   stroke={ringColor} strokeWidth={pressed?3:2}/>
@@ -2467,7 +2467,7 @@ function CockpitView({s,set,cfg}){
                   fill={textColor} fontSize="6" fontFamily="Share Tech Mono"
                   fontWeight="700" letterSpacing="0.5">ENGINE</text>
                 {/* Ring indicator overlay driven by the LED plant.
-                    Vehicle.Controller.Body.Switches.StartStop.BacklightIntensity is a
+                    Body.Switches.StartStop.BacklightIntensity is a
                     perceived-brightness value 0..100 published by
                     `StartStopLedPlant` from the ECU's PWM duty
                     cycle output.  We render the ring opacity as
@@ -2476,7 +2476,7 @@ function CockpitView({s,set,cfg}){
                     without any CSS animation.  Button pressed:
                     hidden (red pressed ring owns the visual). */}
                 {!pressed && (()=>{
-                  const intensity = Math.max(0, Math.min(100, s['Vehicle.Controller.Body.Switches.StartStop.BacklightIntensity']||0));
+                  const intensity = Math.max(0, Math.min(100, s['Body.Switches.StartStop.BacklightIntensity']||0));
                   if (intensity === 0) return null;
                   return <circle cx="35" cy="35" r="33"
                     fill="none" stroke="#10B981"
@@ -2489,7 +2489,7 @@ function CockpitView({s,set,cfg}){
           // KeyCylinder — rotary knob with 4 positions.  Click a label
           // to rotate to that detent.  START is spring-loaded: mousedown
           // sets START, mouseup returns to ON (matching real cylinders).
-          const pos = s['Vehicle.Controller.Body.Switches.IgnitionCylinder.Position'] || 'LOCK';
+          const pos = s['Body.Switches.IgnitionCylinder.Position'] || 'LOCK';
           // Five detents arranged like a real automotive cylinder:
           //   LOCK   at 7 o'clock   (clockwise rotation away from rest)
           //   OFF    at 9 o'clock
@@ -2528,7 +2528,7 @@ function CockpitView({s,set,cfg}){
                 // a muted red and short-circuit its click so the user
                 // sees the disabled state and doesn't trigger the
                 // bridge revert.
-                const removalInhibited = !!s['Vehicle.Controller.Body.Switches.IgnitionCylinder.RemovalInhibited'];
+                const removalInhibited = !!s['Body.Switches.IgnitionCylinder.RemovalInhibited'];
                 return POSITIONS.map(({p,angle})=>{
                 const rad = angle * Math.PI/180;
                 const dotR = 28;
@@ -2547,13 +2547,13 @@ function CockpitView({s,set,cfg}){
                   ? { onClick: ()=>{/* swallowed — gear interlock */} }
                   : isStart
                   ? {
-                      onMouseDown: ()=>set('Vehicle.Controller.Body.Switches.IgnitionCylinder.Position','START'),
-                      onMouseUp:   ()=>set('Vehicle.Controller.Body.Switches.IgnitionCylinder.Position','ON'),
-                      onMouseLeave:()=>set('Vehicle.Controller.Body.Switches.IgnitionCylinder.Position','ON'),
-                      onTouchStart:(e)=>{e.preventDefault();set('Vehicle.Controller.Body.Switches.IgnitionCylinder.Position','START');},
-                      onTouchEnd:  ()=>set('Vehicle.Controller.Body.Switches.IgnitionCylinder.Position','ON'),
+                      onMouseDown: ()=>set('Body.Switches.IgnitionCylinder.Position','START'),
+                      onMouseUp:   ()=>set('Body.Switches.IgnitionCylinder.Position','ON'),
+                      onMouseLeave:()=>set('Body.Switches.IgnitionCylinder.Position','ON'),
+                      onTouchStart:(e)=>{e.preventDefault();set('Body.Switches.IgnitionCylinder.Position','START');},
+                      onTouchEnd:  ()=>set('Body.Switches.IgnitionCylinder.Position','ON'),
                     }
-                  : { onClick: ()=>set('Vehicle.Controller.Body.Switches.IgnitionCylinder.Position',p) };
+                  : { onClick: ()=>set('Body.Switches.IgnitionCylinder.Position',p) };
                 return <g key={p}
                   style={{cursor:lockBlocked?'not-allowed':'pointer',
                           opacity:lockBlocked?0.55:1}}
@@ -2586,14 +2586,14 @@ function CockpitView({s,set,cfg}){
     {/* ── Headlamp / lighting switches ── */}
     <CockpitZone title="LIGHTING SWITCHES" subtitle="left dash cluster" night={night}>
       <div style={{display:'flex',gap:14,alignItems:'center',flexWrap:'wrap'}}>
-        {/* Headlamp rotary — cycles Vehicle.Body.Lights.LightSwitch.
+        {/* Headlamp rotary — cycles Body.Lights.LightSwitch.
             Static white ISO-style icons sit just outside the knob at
             each valid position so the driver sees what each detent
             does without having to read the enum text.  The amber
             pointer + the printed enum below give the current value. */}
         <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4}}>
           <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1}}>HEADLAMP</span>
-          <svg viewBox="0 0 130 130" style={{width:110,height:110,cursor:'pointer'}} onClick={()=>set('Vehicle.Body.Lights.LightSwitch', LIGHT_CYCLE[lightSw]||'OFF')}>
+          <svg viewBox="0 0 130 130" style={{width:110,height:110,cursor:'pointer'}} onClick={()=>set('Body.Lights.LightSwitch', LIGHT_CYCLE[lightSw]||'OFF')}>
             {/* Knob disc */}
             <circle cx="65" cy="65" r="34" fill={night?'#0F1726':'#0C1825'} stroke={night?'#3A2A12':'#1A2838'} strokeWidth="2"/>
             <circle cx="65" cy="65" r="5" fill="#F59E0B" opacity={lightSw==='OFF'?.2:.9}/>
@@ -2658,16 +2658,16 @@ function CockpitView({s,set,cfg}){
         </div>
         {/* Switch column */}
         <div style={{display:'grid',gridTemplateColumns:'repeat(2,auto)',gap:6}}>
-          <Btn night={night} on={ffogSw} onClick={()=>set('Vehicle.Controller.Body.Switches.Fog.Front.IsEngaged',!ffogSw)} min={110}>FOG FRONT {ffogSw?'●':'○'}</Btn>
-          <Btn night={night} on={rfogSw} onClick={()=>set('Vehicle.Controller.Body.Switches.Fog.Rear.IsEngaged',!rfogSw)} min={110}>FOG REAR {rfogSw?'●':'○'}</Btn>
-          <Btn night={night} on={hazSw} onClick={()=>set('Vehicle.Controller.Body.Switches.Hazard.IsEngaged',!hazSw)} min={110}>⚠ HAZARD {hazSw?'●':'○'}</Btn>
+          <Btn night={night} on={ffogSw} onClick={()=>set('Body.Switches.Fog.Front.IsEngaged',!ffogSw)} min={110}>FOG FRONT {ffogSw?'●':'○'}</Btn>
+          <Btn night={night} on={rfogSw} onClick={()=>set('Body.Switches.Fog.Rear.IsEngaged',!rfogSw)} min={110}>FOG REAR {rfogSw?'●':'○'}</Btn>
+          <Btn night={night} on={hazSw} onClick={()=>set('Body.Switches.Hazard.IsEngaged',!hazSw)} min={110}>⚠ HAZARD {hazSw?'●':'○'}</Btn>
         </div>
         {/* Status readout */}
         <div style={{fontFamily:'Share Tech Mono',fontSize:8,color:txtDim,display:'flex',flexDirection:'column',gap:3}}>
           <span>LO BEAM: <b style={{color:lo?'#22C55E':txtDim}}>{lo?'ON':'-'}</b></span>
           <span>HI BEAM: <b style={{color:hi?'#4A9EF5':txtDim}}>{hi?'ON':'-'}</b></span>
-          <span>PARK: <b style={{color:s['Vehicle.Body.Lights.Parking.IsOn']?'#F59E0B':txtDim}}>{s['Vehicle.Body.Lights.Parking.IsOn']?'ON':'-'}</b></span>
-          <span>DRL: <b style={{color:s['Vehicle.Body.Lights.Running.IsOn']?'#22C55E':txtDim}}>{s['Vehicle.Body.Lights.Running.IsOn']?'ON':'-'}</b></span>
+          <span>PARK: <b style={{color:s['Body.Lights.Parking.IsOn']?'#F59E0B':txtDim}}>{s['Body.Lights.Parking.IsOn']?'ON':'-'}</b></span>
+          <span>DRL: <b style={{color:s['Body.Lights.Running.IsOn']?'#22C55E':txtDim}}>{s['Body.Lights.Running.IsOn']?'ON':'-'}</b></span>
         </div>
       </div>
     </CockpitZone>
@@ -2675,14 +2675,14 @@ function CockpitView({s,set,cfg}){
     {/* ── Dash-mounted body-opening release pulls ── */}
     <CockpitZone title="BODY CLOSURE RELEASES" subtitle="dash lower-left pulls" night={night}>
       <div style={{display:'flex',gap:8,alignItems:'center'}}>
-        <Btn night={night} on={s['Vehicle.Controller.Body.Switches.Trunk.Release.IsPressed']}
-             onMouseDown={()=>set('Vehicle.Controller.Body.Switches.Trunk.Release.IsPressed',true)}
-             onMouseUp={()=>set('Vehicle.Controller.Body.Switches.Trunk.Release.IsPressed',false)}
-             onMouseLeave={()=>set('Vehicle.Controller.Body.Switches.Trunk.Release.IsPressed',false)} min={130}>TRUNK ⇧</Btn>
-        <Btn night={night} on={s['Vehicle.Controller.Body.Switches.Hood.Release.IsPulled']}
-             onMouseDown={()=>set('Vehicle.Controller.Body.Switches.Hood.Release.IsPulled',true)}
-             onMouseUp={()=>set('Vehicle.Controller.Body.Switches.Hood.Release.IsPulled',false)}
-             onMouseLeave={()=>set('Vehicle.Controller.Body.Switches.Hood.Release.IsPulled',false)} min={130}>HOOD ⇧</Btn>
+        <Btn night={night} on={s['Body.Switches.Trunk.Release.IsPressed']}
+             onMouseDown={()=>set('Body.Switches.Trunk.Release.IsPressed',true)}
+             onMouseUp={()=>set('Body.Switches.Trunk.Release.IsPressed',false)}
+             onMouseLeave={()=>set('Body.Switches.Trunk.Release.IsPressed',false)} min={130}>TRUNK ⇧</Btn>
+        <Btn night={night} on={s['Body.Switches.Hood.Release.IsPulled']}
+             onMouseDown={()=>set('Body.Switches.Hood.Release.IsPulled',true)}
+             onMouseUp={()=>set('Body.Switches.Hood.Release.IsPulled',false)}
+             onMouseLeave={()=>set('Body.Switches.Hood.Release.IsPulled',false)} min={130}>HOOD ⇧</Btn>
         <span style={{fontFamily:'Share Tech Mono',fontSize:8,color:txtDim,marginLeft:8}}>
           press-and-hold — momentary switches feed the trunk/hood release features
         </span>
@@ -2696,52 +2696,52 @@ function CockpitView({s,set,cfg}){
         <div>
           <div style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,marginBottom:2}}>DRIVER</div>
           <div style={{display:'flex',alignItems:'center',gap:4}}>
-            <Btn night={night} on={false} onClick={()=>set('Vehicle.Cabin.HVAC.Station.Row1.Left.Temperature',Math.max(16,dT-1))} sz={11} pad={'4px 8px'}>−</Btn>
+            <Btn night={night} on={false} onClick={()=>set('Cabin.HVAC.Station.Row1.Left.Temperature',Math.max(16,dT-1))} sz={11} pad={'4px 8px'}>−</Btn>
             <span style={{fontFamily:'Orbitron',fontSize:22,fontWeight:600,color:'#F59E0B',minWidth:48,textAlign:'center'}}>{dT.toFixed(0)}°</span>
-            <Btn night={night} on={false} onClick={()=>set('Vehicle.Cabin.HVAC.Station.Row1.Left.Temperature',Math.min(30,dT+1))} sz={11} pad={'4px 8px'}>+</Btn>
+            <Btn night={night} on={false} onClick={()=>set('Cabin.HVAC.Station.Row1.Left.Temperature',Math.min(30,dT+1))} sz={11} pad={'4px 8px'}>+</Btn>
           </div>
         </div>
         {/* Passenger temp +/- */}
         <div>
           <div style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,marginBottom:2}}>PASSENGER</div>
           <div style={{display:'flex',alignItems:'center',gap:4}}>
-            <Btn night={night} on={false} onClick={()=>set('Vehicle.Cabin.HVAC.Station.Row1.Right.Temperature',Math.max(16,pT-1))} sz={11} pad={'4px 8px'}>−</Btn>
+            <Btn night={night} on={false} onClick={()=>set('Cabin.HVAC.Station.Row1.Right.Temperature',Math.max(16,pT-1))} sz={11} pad={'4px 8px'}>−</Btn>
             <span style={{fontFamily:'Orbitron',fontSize:22,fontWeight:600,color:'#F59E0B',minWidth:48,textAlign:'center'}}>{pT.toFixed(0)}°</span>
-            <Btn night={night} on={false} onClick={()=>set('Vehicle.Cabin.HVAC.Station.Row1.Right.Temperature',Math.min(30,pT+1))} sz={11} pad={'4px 8px'}>+</Btn>
+            <Btn night={night} on={false} onClick={()=>set('Cabin.HVAC.Station.Row1.Right.Temperature',Math.min(30,pT+1))} sz={11} pad={'4px 8px'}>+</Btn>
           </div>
         </div>
         {/* Fan +/- with bars */}
         <div>
           <div style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,marginBottom:2}}>FAN</div>
           <div style={{display:'flex',alignItems:'center',gap:4}}>
-            <Btn night={night} on={false} onClick={()=>set('Vehicle.Cabin.HVAC.Station.Row1.Left.FanSpeed',Math.max(0,fanL-1))} sz={11} pad={'4px 8px'}>−</Btn>
+            <Btn night={night} on={false} onClick={()=>set('Cabin.HVAC.Station.Row1.Left.FanSpeed',Math.max(0,fanL-1))} sz={11} pad={'4px 8px'}>−</Btn>
             <svg viewBox="0 0 84 24" style={{width:84,height:24}}>
               {Array.from({length:7},(_,i)=>(
                 <rect key={i} x={i*12} y={20-(i*2)} width={9} height={4+i*2} rx="1"
                   fill={i<fanL?'#3B82F6':(night?'#0F1726':'#101E30')} opacity={i<fanL?1:.55}/>
               ))}
             </svg>
-            <Btn night={night} on={false} onClick={()=>set('Vehicle.Cabin.HVAC.Station.Row1.Left.FanSpeed',Math.min(7,fanL+1))} sz={11} pad={'4px 8px'}>+</Btn>
+            <Btn night={night} on={false} onClick={()=>set('Cabin.HVAC.Station.Row1.Left.FanSpeed',Math.min(7,fanL+1))} sz={11} pad={'4px 8px'}>+</Btn>
           </div>
         </div>
         {/* Air distribution mode cycle */}
         <div>
           <div style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,marginBottom:2}}>MODE</div>
-          <Btn night={night} on={distL!=='AUTO'} onClick={()=>set('Vehicle.Cabin.HVAC.Station.Row1.Left.AirDistribution',DIST_CYCLE[distL]||'AUTO')} min={120}>{DIST_LABEL[distL]||distL}</Btn>
+          <Btn night={night} on={distL!=='AUTO'} onClick={()=>set('Cabin.HVAC.Station.Row1.Left.AirDistribution',DIST_CYCLE[distL]||'AUTO')} min={120}>{DIST_LABEL[distL]||distL}</Btn>
         </div>
       </div>
       <div style={{display:'flex',gap:6,marginBottom:8,flexWrap:'wrap'}}>
-        <Btn night={night} on={ac} onClick={()=>set('Vehicle.Cabin.HVAC.IsAirConditioningActive',!ac)}>A/C {ac?'●':'○'}</Btn>
-        <Btn night={night} on={recirc} onClick={()=>set('Vehicle.Cabin.HVAC.IsRecirculationActive',!recirc)}>RECIRC {recirc?'●':'○'}</Btn>
-        <Btn night={night} on={defF} onClick={()=>set('Vehicle.Cabin.HVAC.IsFrontDefrosterActive',!defF)}>DEF-FRONT {defF?'●':'○'}</Btn>
-        <Btn night={night} on={defR} onClick={()=>set('Vehicle.Cabin.HVAC.IsRearDefrosterActive',!defR)}>DEF-REAR {defR?'●':'○'}</Btn>
+        <Btn night={night} on={ac} onClick={()=>set('Cabin.HVAC.IsAirConditioningActive',!ac)}>A/C {ac?'●':'○'}</Btn>
+        <Btn night={night} on={recirc} onClick={()=>set('Cabin.HVAC.IsRecirculationActive',!recirc)}>RECIRC {recirc?'●':'○'}</Btn>
+        <Btn night={night} on={defF} onClick={()=>set('Cabin.HVAC.IsFrontDefrosterActive',!defF)}>DEF-FRONT {defF?'●':'○'}</Btn>
+        <Btn night={night} on={defR} onClick={()=>set('Cabin.HVAC.IsRearDefrosterActive',!defR)}>DEF-REAR {defR?'●':'○'}</Btn>
       </div>
       <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
         <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,alignSelf:'center',marginRight:4,letterSpacing:1}}>SEATS:</span>
-        <Btn night={night} on={heatL>0} onClick={()=>set('Vehicle.Cabin.Seat.Row1.Left.HeatingCooling',[3,0,1,2][heatL])}>DRV HEAT {heatL}</Btn>
-        <Btn night={night} on={heatR>0} onClick={()=>set('Vehicle.Cabin.Seat.Row1.Right.HeatingCooling',[3,0,1,2][heatR])}>PAS HEAT {heatR}</Btn>
-        <Btn night={night} on={vent1L} onClick={()=>set('Vehicle.Controller.Cabin.Seat.Row1.Left.IsVentilationOn',!vent1L)}>DRV VENT {vent1L?'●':'○'}</Btn>
-        <Btn night={night} on={vent1R} onClick={()=>set('Vehicle.Controller.Cabin.Seat.Row1.Right.IsVentilationOn',!vent1R)}>PAS VENT {vent1R?'●':'○'}</Btn>
+        <Btn night={night} on={heatL>0} onClick={()=>set('Cabin.Seat.Row1.Left.HeatingLevel',[3,0,1,2][heatL])}>DRV HEAT {heatL}</Btn>
+        <Btn night={night} on={heatR>0} onClick={()=>set('Cabin.Seat.Row1.Right.HeatingLevel',[3,0,1,2][heatR])}>PAS HEAT {heatR}</Btn>
+        <Btn night={night} on={vent1L} onClick={()=>set('Cabin.Seat.Row1.Left.IsVentilationOn',!vent1L)}>DRV VENT {vent1L?'●':'○'}</Btn>
+        <Btn night={night} on={vent1R} onClick={()=>set('Cabin.Seat.Row1.Right.IsVentilationOn',!vent1R)}>PAS VENT {vent1R?'●':'○'}</Btn>
       </div>
     </CockpitZone>
 
@@ -2938,7 +2938,7 @@ function CockpitView({s,set,cfg}){
            source conflict resolution, and the stuck-switch
            watchdog; the WindowPlant ramps the position at 10 %/s.
          - Power child lock: momentary push on
-           Vehicle.Controller.Body.Switches.PowerChildLock.IsPressed.  The
+           Body.Switches.PowerChildLock.IsPressed.  The
            PowerChildLock feature toggles MasterStatus + both rear
            IsChildLockActive on each rising edge.  Door plant
            suppresses inside-pull on a child-locked door; the local
@@ -2953,11 +2953,11 @@ function CockpitView({s,set,cfg}){
               the bus; the button itself is never "on" (no persistent
               highlight on a momentary push). */}
           <Btn night={night} on={false}
-            onClick={()=>{set('Vehicle.Controller.Body.Switches.Mirror.Fold',true);setTimeout(()=>set('Vehicle.Controller.Body.Switches.Mirror.Fold',false),60);}}
+            onClick={()=>{set('Body.Switches.Mirror.Fold',true);setTimeout(()=>set('Body.Switches.Mirror.Fold',false),60);}}
             sz={9} pad={'7px 12px'} min={90}>FOLD {(mirL&&mirR)?'●':'○'}</Btn>
           <div style={{display:'flex',gap:5}}>
-            <Btn night={night} on={mirSel==='LEFT'}  onClick={()=>set('Vehicle.Controller.Body.Switches.Mirror.Select', mirSel==='LEFT' ?'NONE':'LEFT')}  sz={9} pad={'6px 10px'} min={42}>SEL L</Btn>
-            <Btn night={night} on={mirSel==='RIGHT'} onClick={()=>set('Vehicle.Controller.Body.Switches.Mirror.Select', mirSel==='RIGHT'?'NONE':'RIGHT')} sz={9} pad={'6px 10px'} min={42}>SEL R</Btn>
+            <Btn night={night} on={mirSel==='LEFT'}  onClick={()=>set('Body.Switches.Mirror.Select', mirSel==='LEFT' ?'NONE':'LEFT')}  sz={9} pad={'6px 10px'} min={42}>SEL L</Btn>
+            <Btn night={night} on={mirSel==='RIGHT'} onClick={()=>set('Body.Switches.Mirror.Select', mirSel==='RIGHT'?'NONE':'RIGHT')} sz={9} pad={'6px 10px'} min={42}>SEL R</Btn>
           </div>
           <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1}}>
             {mirSel==='NONE'?'no side selected':`adjusting ${mirSel}`}
@@ -2971,9 +2971,9 @@ function CockpitView({s,set,cfg}){
           const dirBtn = (v, label) => {
             const lit = mirDir === v;
             const press = enabled ? {
-              onMouseDown: () => set('Vehicle.Controller.Body.Switches.Mirror.Direction', v),
-              onMouseUp:   () => set('Vehicle.Controller.Body.Switches.Mirror.Direction', 'NONE'),
-              onMouseLeave:() => { if (mirDir === v) set('Vehicle.Controller.Body.Switches.Mirror.Direction', 'NONE'); },
+              onMouseDown: () => set('Body.Switches.Mirror.Direction', v),
+              onMouseUp:   () => set('Body.Switches.Mirror.Direction', 'NONE'),
+              onMouseLeave:() => { if (mirDir === v) set('Body.Switches.Mirror.Direction', 'NONE'); },
             } : {};
             return <button {...press} disabled={!enabled} style={{
               width:36,height:36,padding:0,borderRadius:6,
@@ -3013,10 +3013,10 @@ function CockpitView({s,set,cfg}){
         <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1,display:'block',marginBottom:4}}>WINDOWS — 2×2 master pack (UP = close, DOWN = open; outer detents latch AUTO):</span>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,maxWidth:260}}>
           {[
-            {pos:'Vehicle.Cabin.Door.Row1.Left.Window.Position',  motor:'Vehicle.Cabin.Door.Row1.Left.Window.MotorDirection',  det:'Vehicle.Controller.Body.Switches.Window.DriverMaster.Row1.Left.Detent',  l:driverSide==='Left' ?'FL (drv)':'FL (pas)'},
-            {pos:'Vehicle.Cabin.Door.Row1.Right.Window.Position', motor:'Vehicle.Cabin.Door.Row1.Right.Window.MotorDirection', det:'Vehicle.Controller.Body.Switches.Window.DriverMaster.Row1.Right.Detent', l:driverSide==='Right'?'FR (drv)':'FR (pas)'},
-            {pos:'Vehicle.Cabin.Door.Row2.Left.Window.Position',  motor:'Vehicle.Cabin.Door.Row2.Left.Window.MotorDirection',  det:'Vehicle.Controller.Body.Switches.Window.DriverMaster.Row2.Left.Detent',  l:'RL', childLock:childRL},
-            {pos:'Vehicle.Cabin.Door.Row2.Right.Window.Position', motor:'Vehicle.Cabin.Door.Row2.Right.Window.MotorDirection', det:'Vehicle.Controller.Body.Switches.Window.DriverMaster.Row2.Right.Detent', l:'RR', childLock:childRR},
+            {pos:'Body.Doors.Row1.Left.Window.Position',  motor:'Body.Doors.Row1.Left.Window.MotorDirection',  det:'Body.Switches.Window.DriverMaster.Row1.Left.Detent',  l:driverSide==='Left' ?'FL (drv)':'FL (pas)'},
+            {pos:'Body.Doors.Row1.Right.Window.Position', motor:'Body.Doors.Row1.Right.Window.MotorDirection', det:'Body.Switches.Window.DriverMaster.Row1.Right.Detent', l:driverSide==='Right'?'FR (drv)':'FR (pas)'},
+            {pos:'Body.Doors.Row2.Left.Window.Position',  motor:'Body.Doors.Row2.Left.Window.MotorDirection',  det:'Body.Switches.Window.DriverMaster.Row2.Left.Detent',  l:'RL', childLock:childRL},
+            {pos:'Body.Doors.Row2.Right.Window.Position', motor:'Body.Doors.Row2.Right.Window.MotorDirection', det:'Body.Switches.Window.DriverMaster.Row2.Right.Detent', l:'RR', childLock:childRR},
           ].map(({pos,motor,det,l,childLock})=>(
             <WindowRocker key={pos} s={s} set={set} night={night}
               detentKey={det} posKey={pos} motorKey={motor}
@@ -3026,16 +3026,16 @@ function CockpitView({s,set,cfg}){
       </div>
 
       {/* Master child-lock indicator + push.  Single momentary
-          button on Vehicle.Controller.Body.Switches.PowerChildLock.IsPressed; the
+          button on Body.Switches.PowerChildLock.IsPressed; the
           PowerChildLock feature toggles MasterStatus on each rising
           edge and fans it out to both rear-door IsChildLockActive
           outputs.  The LED reflects MasterStatus (feature output —
           read-only); the click writes the input. */}
       {(() => {
         const press = {
-          onMouseDown: () => set('Vehicle.Controller.Body.Switches.PowerChildLock.IsPressed', true),
-          onMouseUp:   () => set('Vehicle.Controller.Body.Switches.PowerChildLock.IsPressed', false),
-          onMouseLeave:() => set('Vehicle.Controller.Body.Switches.PowerChildLock.IsPressed', false),
+          onMouseDown: () => set('Body.Switches.PowerChildLock.IsPressed', true),
+          onMouseUp:   () => set('Body.Switches.PowerChildLock.IsPressed', false),
+          onMouseLeave:() => set('Body.Switches.PowerChildLock.IsPressed', false),
         };
         return <div style={{display:'flex',gap:10,marginTop:10,alignItems:'center',flexWrap:'wrap'}}>
           <span style={{fontFamily:'Share Tech Mono',fontSize:7,color:txtDim,letterSpacing:1}}>SAFETY:</span>
@@ -3098,9 +3098,9 @@ function CockpitView({s,set,cfg}){
         {/* DAP — gates PowerWindow (and other accessory features later).
             Active when ign is on, OR within 2 min after ign off provided
             no door has opened.  When OFF the cockpit windows won't move. */}
-        <span style={{color: s['Vehicle.Controller.Body.Power.DelayedAccessory.IsActive']?'#10D98A':'#EF4444'}}
+        <span style={{color: s['Body.Power.DelayedAccessory.IsActive']?'#10D98A':'#EF4444'}}
               title="Delayed accessory power: ign-on, or 2-min courtesy window after ign-off (kills on door-open).">
-          ACC PWR: <b>{s['Vehicle.Controller.Body.Power.DelayedAccessory.IsActive']?'ON':'OFF'}</b>
+          ACC PWR: <b>{s['Body.Power.DelayedAccessory.IsActive']?'ON':'OFF'}</b>
         </span>
       </div>
     </CockpitZone>
@@ -3145,7 +3145,7 @@ function fobOccupyingCylinder(s){
 function isFobLockedInCylinder(s, cfg){
   const keySource = cfg?.vehicle_line?.key_source_cfg || 'PEPS';
   if(keySource !== 'KeyCylinder') return false;
-  const pos = s['Vehicle.Controller.Body.Switches.IgnitionCylinder.Position'] || 'LOCK';
+  const pos = s['Body.Switches.IgnitionCylinder.Position'] || 'LOCK';
   return pos !== 'LOCK' && pos !== 'OFF';
 }
 
@@ -3467,15 +3467,15 @@ function DevicePanel({s, set, cfg, sel, setSel}){
 
 function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
   // VehicleStartingControl is the sole writer of Vehicle.LowVoltageSystemState
-  // and Vehicle.Controller.Starting.ImmobilizerStatus.  The HMI displays these read-only
+  // and Vehicle.Starting.ImmobilizerStatus.  The HMI displays these read-only
   // and writes the input signals the feature subscribes to:
-  //   - Vehicle.Controller.Body.Switches.StartStop.IsPressed       (PEPS mode)
-  //   - Vehicle.Controller.Body.Switches.IgnitionCylinder.Position (KeyCylinder mode)
+  //   - Body.Switches.StartStop.IsPressed       (PEPS mode)
+  //   - Body.Switches.IgnitionCylinder.Position (KeyCylinder mode)
   const keySource = cfg?.vehicle_line?.key_source_cfg || 'PEPS';
   const powerMode = s['Vehicle.LowVoltageSystemState'] || 'OFF';
-  const immo      = s['Vehicle.Controller.Starting.ImmobilizerStatus'] || 'LOCKED';
-  const cylPos    = s['Vehicle.Controller.Body.Switches.IgnitionCylinder.Position'] || 'LOCK';
-  const startPressed = !!s['Vehicle.Controller.Body.Switches.StartStop.IsPressed'];
+  const immo      = s['Vehicle.Starting.ImmobilizerStatus'] || 'LOCKED';
+  const cylPos    = s['Body.Switches.IgnitionCylinder.Position'] || 'LOCK';
+  const startPressed = !!s['Body.Switches.StartStop.IsPressed'];
   const immoColor = {
     'AUTHENTICATED':'#10B981', 'AUTHENTICATING':'#F59E0B',
     'FAILED':'#EF4444',        'LOCKED':'#6B7E99',
@@ -3527,9 +3527,9 @@ function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
           <div style={{display:'flex',flexDirection:'column',gap:3,marginTop:4}}>
             <span className="cn">Start / Stop Button <span style={{color:'var(--muted)',fontSize:9}}>(press & hold)</span></span>
             <button className={`eb ${startPressed?'on':''}`}
-              onMouseDown={()=>set('Vehicle.Controller.Body.Switches.StartStop.IsPressed',true)}
-              onMouseUp={()=>set('Vehicle.Controller.Body.Switches.StartStop.IsPressed',false)}
-              onMouseLeave={()=>set('Vehicle.Controller.Body.Switches.StartStop.IsPressed',false)}
+              onMouseDown={()=>set('Body.Switches.StartStop.IsPressed',true)}
+              onMouseUp={()=>set('Body.Switches.StartStop.IsPressed',false)}
+              onMouseLeave={()=>set('Body.Switches.StartStop.IsPressed',false)}
               style={{cursor:'pointer',userSelect:'none',touchAction:'none'}}>
               ⏻ ENGINE START / STOP
             </button>
@@ -3542,7 +3542,7 @@ function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
             <div className="ebrow">
               {['LOCK','OFF','ACC','ON','START'].map(p=>(
                 <button key={p} className={`eb ${cylPos===p?'on':''}`}
-                  onClick={()=>set('Vehicle.Controller.Body.Switches.IgnitionCylinder.Position',p)}>{p}</button>
+                  onClick={()=>set('Body.Switches.IgnitionCylinder.Position',p)}>{p}</button>
               ))}
             </div>
           </div>
@@ -3552,21 +3552,21 @@ function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
           opts={['COMBUSTION','HYBRID','ELECTRIC']}/>
         {/* Valet mode — published by infotainment in production.
             When ON, the trunk arbiter's ValetGate suppresses every
-            Vehicle.Controller.Body.Trunk.Rear.OpenCmd (RKE, exterior button, future phone
+            Body.Trunk.OpenCmd (RKE, exterior button, future phone
             app).  Cabin doors and other features are unaffected. */}
         <div style={{display:'flex',flexDirection:'column',gap:3}}>
           <span className="cn">Valet Mode</span>
           <div className="ebrow">
-            <button className={`eb ${!s['Vehicle.Controller.Cabin.ValetMode.IsActive']?'on':''}`}
-              onClick={()=>set('Vehicle.Controller.Cabin.ValetMode.IsActive',false)}>OFF</button>
-            <button className={`eb ${s['Vehicle.Controller.Cabin.ValetMode.IsActive']?'on':''}`}
-              onClick={()=>set('Vehicle.Controller.Cabin.ValetMode.IsActive',true)}>ON</button>
+            <button className={`eb ${!s['Cabin.ValetMode.IsActive']?'on':''}`}
+              onClick={()=>set('Cabin.ValetMode.IsActive',false)}>OFF</button>
+            <button className={`eb ${s['Cabin.ValetMode.IsActive']?'on':''}`}
+              onClick={()=>set('Cabin.ValetMode.IsActive',true)}>ON</button>
           </div>
         </div>
       </SG>
 
       <SG title="Light Control" vss="Body.Lights" lit={anyLight}>
-        <EnumR label="Mode" k="Vehicle.Body.Lights.LightSwitch" s={s} set={set}
+        <EnumR label="Mode" k="Body.Lights.LightSwitch" s={s} set={set}
           opts={['OFF','POSITION','DRL','AUTO','BEAM']}/>
         <div style={{marginTop:4,padding:'8px',background:'var(--s2)',borderRadius:'var(--r4)',border:'1px solid var(--bdr)'}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:6}}>
@@ -3580,43 +3580,43 @@ function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
           </div>
           <input type="range" className="slr" min={0} max={100000} step={500}
             value={lux} style={{marginTop:0,marginBottom:6}}
-            onChange={e=>set('Vehicle.Controller.Body.Lights.AmbientLightSensor.Illuminance',parseInt(e.target.value))}/>
+            onChange={e=>set('Body.Lights.AmbientLightSensor.Illuminance',parseInt(e.target.value))}/>
           <div className="ebrow">
             {[{l:'Night',v:5},{l:'Tunnel',v:50},{l:'Dusk',v:100},{l:'Twilight',v:300},{l:'Overcast',v:2000},{l:'Day',v:25000}].map(p=>(
-              <button key={p.l} className={`eb ${lux===p.v?'on':''}`} onClick={()=>set('Vehicle.Controller.Body.Lights.AmbientLightSensor.Illuminance',p.v)}>{p.l}</button>
+              <button key={p.l} className={`eb ${lux===p.v?'on':''}`} onClick={()=>set('Body.Lights.AmbientLightSensor.Illuminance',p.v)}>{p.l}</button>
             ))}
           </div>
         </div>
         <div className="cr" style={{marginTop:4}}>
           <span className="cn">Front Fog</span>
-          <Tog val={s['Vehicle.Controller.Body.Switches.Fog.Front.IsEngaged']} on={()=>set('Vehicle.Controller.Body.Switches.Fog.Front.IsEngaged',!s['Vehicle.Controller.Body.Switches.Fog.Front.IsEngaged'])} c="b"/>
+          <Tog val={s['Body.Switches.Fog.Front.IsEngaged']} on={()=>set('Body.Switches.Fog.Front.IsEngaged',!s['Body.Switches.Fog.Front.IsEngaged'])} c="b"/>
         </div>
         <div className="cr">
           <span className="cn">Rear Fog</span>
-          <Tog val={s['Vehicle.Controller.Body.Switches.Fog.Rear.IsEngaged']} on={()=>set('Vehicle.Controller.Body.Switches.Fog.Rear.IsEngaged',!s['Vehicle.Controller.Body.Switches.Fog.Rear.IsEngaged'])} c="r"/>
+          <Tog val={s['Body.Switches.Fog.Rear.IsEngaged']} on={()=>set('Body.Switches.Fog.Rear.IsEngaged',!s['Body.Switches.Fog.Rear.IsEngaged'])} c="r"/>
         </div>
         <div className="cr">
           <span className="cn">High Beam Stalk</span>
-          <Tog val={s['Vehicle.Controller.Body.Switches.HighBeam.IsEngaged']} on={()=>set('Vehicle.Controller.Body.Switches.HighBeam.IsEngaged',!s['Vehicle.Controller.Body.Switches.HighBeam.IsEngaged'])} c="b"/>
+          <Tog val={s['Body.Switches.HighBeam.IsEngaged']} on={()=>set('Body.Switches.HighBeam.IsEngaged',!s['Body.Switches.HighBeam.IsEngaged'])} c="b"/>
         </div>
       </SG>
 
       <SG title="Turn / Hazard / Horn" vss="Body.Switches">
         <div className="cr">
           <span className="cn">Hazard</span>
-          <Tog val={s['Vehicle.Controller.Body.Switches.Hazard.IsEngaged']} on={()=>set('Vehicle.Controller.Body.Switches.Hazard.IsEngaged',!s['Vehicle.Controller.Body.Switches.Hazard.IsEngaged'])} c="a"/>
+          <Tog val={s['Body.Switches.Hazard.IsEngaged']} on={()=>set('Body.Switches.Hazard.IsEngaged',!s['Body.Switches.Hazard.IsEngaged'])} c="a"/>
         </div>
-        <EnumR label="Turn Stalk" k="Vehicle.Controller.Body.Switches.TurnIndicator.Direction" s={s} set={set} opts={['OFF','LEFT','RIGHT']}/>
+        <EnumR label="Turn Stalk" k="Body.Switches.TurnIndicator.Direction" s={s} set={set} opts={['OFF','LEFT','RIGHT']}/>
         {/* Steering-wheel horn pad — press-and-hold.  Goes through
             ManualHorn → horn_arbiter at Medium priority; PanicAlarm
-            at High still wins if it's running.  Vehicle.Body.Horn.IsActive
+            at High still wins if it's running.  Body.Horn.IsActive
             output drives the horn icon at the bottom of the dash. */}
         <div className="cr" style={{marginTop:2}}>
-          <span className={`cn ${s['Vehicle.Body.Horn.IsActive']?'on':''}`}>Horn</span>
-          <button className={`eb ${s['Vehicle.Body.Horn.IsActive']?'on':''}`}
-            onMouseDown={()=>set('Vehicle.Controller.Body.Switches.Horn.IsPressed',true)}
-            onMouseUp={()=>set('Vehicle.Controller.Body.Switches.Horn.IsPressed',false)}
-            onMouseLeave={()=>set('Vehicle.Controller.Body.Switches.Horn.IsPressed',false)}
+          <span className={`cn ${s['Body.Horn.IsActive']?'on':''}`}>Horn</span>
+          <button className={`eb ${s['Body.Horn.IsActive']?'on':''}`}
+            onMouseDown={()=>set('Body.Switches.Horn.IsPressed',true)}
+            onMouseUp={()=>set('Body.Switches.Horn.IsPressed',false)}
+            onMouseLeave={()=>set('Body.Switches.Horn.IsPressed',false)}
             style={{cursor:'pointer',userSelect:'none',touchAction:'none'}}>
             🔊 Press & hold
           </button>
@@ -3624,10 +3624,10 @@ function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
       </SG>
 
       <SG title="Braking & Transmission" vss="Chassis">
-        <SlR label="Brake Pedal" k="Vehicle.Chassis.Brake.PedalPosition" s={s} set={set} min={0} max={100} step={1} unit="%"/>
+        <SlR label="Brake Pedal" k="Chassis.Brake.PedalPosition" s={s} set={set} min={0} max={100} step={1} unit="%"/>
         <div className="cr">
           <span className="cn">Parking Brake</span>
-          <Tog val={s['Vehicle.Chassis.ParkingBrake.IsEngaged']} on={()=>set('Vehicle.Chassis.ParkingBrake.IsEngaged',!s['Vehicle.Chassis.ParkingBrake.IsEngaged'])} c="r"/>
+          <Tog val={s['Chassis.ParkingBrake.IsEngaged']} on={()=>set('Chassis.ParkingBrake.IsEngaged',!s['Chassis.ParkingBrake.IsEngaged'])} c="r"/>
         </div>
         {/* Driver writes SelectedGear (intent); TransmissionPlant
             mirrors it to CurrentGear (actual).  The label appends the
@@ -3640,10 +3640,10 @@ function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
       <SG title="ADAS" vss="Vehicle.ADAS">
         <div className="cr">
           <span className="cn" style={{flex:1}}>Oncoming Vehicle</span>
-          <button className={`eb ${s['Vehicle.Controller.ADAS.HighBeam.OncomingVehicleDetected']?'on':''}`}
-            style={s['Vehicle.Controller.ADAS.HighBeam.OncomingVehicleDetected']?{background:'#EF4444',borderColor:'#EF4444',color:'#fff'}:{}}
-            onClick={()=>set('Vehicle.Controller.ADAS.HighBeam.OncomingVehicleDetected',!s['Vehicle.Controller.ADAS.HighBeam.OncomingVehicleDetected'])}>
-            {s['Vehicle.Controller.ADAS.HighBeam.OncomingVehicleDetected']?'DETECTED':'Clear'}
+          <button className={`eb ${s['Vehicle.ADAS.HighBeam.OncomingVehicleDetected']?'on':''}`}
+            style={s['Vehicle.ADAS.HighBeam.OncomingVehicleDetected']?{background:'#EF4444',borderColor:'#EF4444',color:'#fff'}:{}}
+            onClick={()=>set('Vehicle.ADAS.HighBeam.OncomingVehicleDetected',!s['Vehicle.ADAS.HighBeam.OncomingVehicleDetected'])}>
+            {s['Vehicle.ADAS.HighBeam.OncomingVehicleDetected']?'DETECTED':'Clear'}
           </button>
         </div>
       </SG>
@@ -3657,23 +3657,23 @@ function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
           *unique* to the arbiter is the published lock-state event
           stream, which features like AutoRelock and PerimeterAlarm
           gate on. */}
-      <SG title="Lock Status" vss="Vehicle.Controller.Cabin.LockStatus">
+      <SG title="Lock Status" vss="Cabin.LockStatus">
         <div className="cr">
           <span className="cn">LockStatus</span>
-          <CfgReadOnly val={s['Vehicle.Controller.Cabin.LockStatus']||'—'}/>
+          <CfgReadOnly val={s['Cabin.LockStatus']||'—'}/>
         </div>
         <div className="cr">
           <span className="cn">LastRequestor</span>
-          <CfgReadOnly val={s['Vehicle.Controller.Cabin.LockStatus.LastRequestor']||'—'}/>
+          <CfgReadOnly val={s['Cabin.LockStatus.LastRequestor']||'—'}/>
         </div>
         <div className="cr">
           <span className="cn">EventNum</span>
-          <CfgReadOnly val={s['Vehicle.Controller.Cabin.LockStatus.EventNum']??'—'}/>
+          <CfgReadOnly val={s['Cabin.LockStatus.EventNum']??'—'}/>
         </div>
       </SG>
 
       <SG title="Safety" vss="Vehicle.Safety">
-        <div className="cr"><span className="cn">Crash Detected</span><Tog val={s['Vehicle.Controller.Safety.CrashDetected']} on={()=>set('Vehicle.Controller.Safety.CrashDetected',!s['Vehicle.Controller.Safety.CrashDetected'])} c="r"/></div>
+        <div className="cr"><span className="cn">Crash Detected</span><Tog val={s['Vehicle.Safety.CrashDetected']} on={()=>set('Vehicle.Safety.CrashDetected',!s['Vehicle.Safety.CrashDetected'])} c="r"/></div>
       </SG>
 
       <SG title="PEPS Devices" vss="Body.PEPS.Plant">
@@ -3784,23 +3784,23 @@ function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
             cabin (low on the dash or in driver footwell).  Routes
             through the trunk arbiter so the valet gate applies.
             No lock-state or auth check — the user is already in the
-            cabin.  Result is visible in the top view via Vehicle.Body.Trunk.Rear.IsOpen. */}
+            cabin.  Result is visible in the top view via Body.Trunk.IsOpen. */}
         <CabinTrunkReleaseRow s={s} set={set}/>
-        <BR label="Fuel lid open"    k="Vehicle.Controller.Body.FuelLid.IsOpen"    s={s} set={set} c="a"/>
-        <BR label="Charge lid open"  k="Vehicle.Controller.Body.ChargeLid.IsOpen"  s={s} set={set} c="t"/>
+        <BR label="Fuel lid open"    k="Body.FuelLid.IsOpen"    s={s} set={set} c="a"/>
+        <BR label="Charge lid open"  k="Body.ChargeLid.IsOpen"  s={s} set={set} c="t"/>
       </SG>
 
       <SG title="Wipers & Washers" vss="Body.Windshield">
-        <EnumR label="Front mode" k="Vehicle.Body.Windshield.Front.Wiping.Mode" s={s} set={set} opts={['OFF','SLOW','MEDIUM','FAST','INTERVAL']}/>
-        <SlR label="Front intensity" k="Vehicle.Body.Windshield.Front.Wiping.Intensity" s={s} set={set} min={0} max={5} step={1} unit="/5"/>
-        <BR label="Front washer" k="Vehicle.Controller.Body.Windshield.Front.Washing.IsActive" s={s} set={set} c="b"/>
+        <EnumR label="Front mode" k="Body.Windshield.Front.Wiping.Mode" s={s} set={set} opts={['OFF','SLOW','MEDIUM','FAST','INTERVAL']}/>
+        <SlR label="Front intensity" k="Body.Windshield.Front.Wiping.Intensity" s={s} set={set} min={0} max={5} step={1} unit="/5"/>
+        <BR label="Front washer" k="Body.Windshield.Front.Washing.IsActive" s={s} set={set} c="b"/>
         <div className="hdiv2"/>
-        <EnumR label="Rear mode" k="Vehicle.Body.Windshield.Rear.Wiping.Mode" s={s} set={set} opts={['OFF','SLOW','MEDIUM','FAST']}/>
-        <BR label="Rear washer" k="Vehicle.Controller.Body.Windshield.Rear.Washing.IsActive" s={s} set={set} c="b"/>
+        <EnumR label="Rear mode" k="Body.Windshield.Rear.Wiping.Mode" s={s} set={set} opts={['OFF','SLOW','MEDIUM','FAST']}/>
+        <BR label="Rear washer" k="Body.Windshield.Rear.Washing.IsActive" s={s} set={set} c="b"/>
       </SG>
 
       <SG title="Mirror" vss="Body.Mirror">
-        {/* Fold momentary press — drives Vehicle.Controller.Body.Switches.Mirror.Fold.
+        {/* Fold momentary press — drives Body.Switches.Mirror.Fold.
             The MirrorFold feature treats each false→true edge as a
             press and toggles `intended_fold_state` (= !last_fold_cmd).
             Per-side IsFolded readouts below are read-only feedback
@@ -3808,7 +3808,7 @@ function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
             now; HMI cannot write them directly). */}
         <div className="dcr" style={{marginBottom:6}}>
           <span className="dcl">Fold switch</span>
-          <button onMouseDown={()=>{set('Vehicle.Controller.Body.Switches.Mirror.Fold',true);setTimeout(()=>set('Vehicle.Controller.Body.Switches.Mirror.Fold',false),60);}}
+          <button onMouseDown={()=>{set('Body.Switches.Mirror.Fold',true);setTimeout(()=>set('Body.Switches.Mirror.Fold',false),60);}}
                   style={{padding:'4px 14px',borderRadius:4,border:'1px solid var(--bdr2)',background:'var(--s3)',color:'var(--white)',fontFamily:'var(--fm)',fontSize:9,fontWeight:700,cursor:'pointer'}}>
             ↻ FOLD / UNFOLD
           </button>
@@ -3840,7 +3840,7 @@ function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
           ))}
         </div>
         {/* Adjust controls — Side selector picks which mirror responds,
-            then the DPad drives Vehicle.Controller.Body.Switches.Mirror.Direction while
+            then the DPad drives Body.Switches.Mirror.Direction while
             held.  Plant model integrates at 50%/sec to ±100. */}
         <MirrorAdjustControls s={s} set={set}/>
       </SG>
@@ -3850,37 +3850,37 @@ function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
             motor model (5 s full travel).  Mouseup → STOP, freezing
             the position wherever it is.  SunroofPlantModel owns and
             NVM-persists Position + Shade.Position. */}
-        <SunroofMotorRow label="Roof position"  cmd="Vehicle.Controller.Sunroof.MoveCmd"
-          posKey="Vehicle.Cabin.Sunroof.Position" s={s} set={set}/>
-        <SunroofMotorRow label="Shade position" cmd="Vehicle.Controller.Sunroof.Shade.MoveCmd"
-          posKey="Vehicle.Cabin.Sunroof.Shade.Position" s={s} set={set}/>
+        <SunroofMotorRow label="Roof position"  cmd="Body.Sunroof.MoveCmd"
+          posKey="Body.Sunroof.Position" s={s} set={set}/>
+        <SunroofMotorRow label="Shade position" cmd="Body.Sunroof.Shade.MoveCmd"
+          posKey="Body.Sunroof.Shade.Position" s={s} set={set}/>
       </SG>
 
       <SG title="Cabin Lighting" vss="Cabin.Lights">
-        <BR label="Dome light"     k="Vehicle.Cabin.Light.IsDomeOn"         s={s} set={set} c="a"/>
-        <BR label="Glovebox light" k="Vehicle.Cabin.Light.IsGloveBoxOn"     s={s} set={set} c="a"/>
-        <SlR label="Ambient intensity" k="Vehicle.Controller.Cabin.Lights.Ambient.Intensity" s={s} set={set} min={0} max={100} step={5} unit="%"/>
+        <BR label="Dome light"     k="Cabin.Lights.IsDomeOn"         s={s} set={set} c="a"/>
+        <BR label="Glovebox light" k="Cabin.Lights.IsGloveBoxOn"     s={s} set={set} c="a"/>
+        <SlR label="Ambient intensity" k="Cabin.Lights.Ambient.Intensity" s={s} set={set} min={0} max={100} step={5} unit="%"/>
         <div className="cr">
           <span className="cn">Ambient color</span>
-          <input type="color" value={s['Vehicle.Controller.Cabin.Lights.Ambient.Color']||'#3B82F6'}
-            onChange={e=>set('Vehicle.Controller.Cabin.Lights.Ambient.Color',e.target.value)}
+          <input type="color" value={s['Cabin.Lights.Ambient.Color']||'#3B82F6'}
+            onChange={e=>set('Cabin.Lights.Ambient.Color',e.target.value)}
             style={{width:32,height:20,border:'1px solid var(--bdr2)',borderRadius:3,background:'transparent',cursor:'pointer',padding:1}}/>
         </div>
       </SG>
 
       <SG title="HVAC" vss="Cabin.HVAC">
-        <BR label="A/C active"       k="Vehicle.Cabin.HVAC.IsAirConditioningActive" s={s} set={set} c="b"/>
-        <BR label="Recirculation"    k="Vehicle.Cabin.HVAC.IsRecirculationActive"   s={s} set={set} c="t"/>
-        <BR label="Front defroster"  k="Vehicle.Cabin.HVAC.IsFrontDefrosterActive"  s={s} set={set} c="b"/>
-        <BR label="Rear defroster"   k="Vehicle.Cabin.HVAC.IsRearDefrosterActive"   s={s} set={set} c="b"/>
+        <BR label="A/C active"       k="Cabin.HVAC.IsAirConditioningActive" s={s} set={set} c="b"/>
+        <BR label="Recirculation"    k="Cabin.HVAC.IsRecirculationActive"   s={s} set={set} c="t"/>
+        <BR label="Front defroster"  k="Cabin.HVAC.IsFrontDefrosterActive"  s={s} set={set} c="b"/>
+        <BR label="Rear defroster"   k="Cabin.HVAC.IsRearDefrosterActive"   s={s} set={set} c="b"/>
         <div className="hdiv2"/>
-        <SlR label="Driver temp"   k="Vehicle.Cabin.HVAC.Station.Row1.Left.Temperature"  s={s} set={set} min={16} max={30} step={0.5} unit="°C"/>
-        <SlR label="Driver fan"    k="Vehicle.Cabin.HVAC.Station.Row1.Left.FanSpeed"     s={s} set={set} min={0} max={7} step={1} unit="/7"/>
-        <EnumR label="Driver vent" k="Vehicle.Cabin.HVAC.Station.Row1.Left.AirDistribution" s={s} set={set} opts={['AUTO','FACE','FACE_FEET','FEET','FEET_DEF','DEF']}/>
+        <SlR label="Driver temp"   k="Cabin.HVAC.Station.Row1.Left.Temperature"  s={s} set={set} min={16} max={30} step={0.5} unit="°C"/>
+        <SlR label="Driver fan"    k="Cabin.HVAC.Station.Row1.Left.FanSpeed"     s={s} set={set} min={0} max={7} step={1} unit="/7"/>
+        <EnumR label="Driver vent" k="Cabin.HVAC.Station.Row1.Left.AirDistribution" s={s} set={set} opts={['AUTO','FACE','FACE_FEET','FEET','FEET_DEF','DEF']}/>
         <div className="hdiv2"/>
-        <SlR label="Pass temp"    k="Vehicle.Cabin.HVAC.Station.Row1.Right.Temperature"  s={s} set={set} min={16} max={30} step={0.5} unit="°C"/>
-        <SlR label="Pass fan"     k="Vehicle.Cabin.HVAC.Station.Row1.Right.FanSpeed"     s={s} set={set} min={0} max={7} step={1} unit="/7"/>
-        <EnumR label="Pass vent"  k="Vehicle.Cabin.HVAC.Station.Row1.Right.AirDistribution" s={s} set={set} opts={['AUTO','FACE','FACE_FEET','FEET','FEET_DEF','DEF']}/>
+        <SlR label="Pass temp"    k="Cabin.HVAC.Station.Row1.Right.Temperature"  s={s} set={set} min={16} max={30} step={0.5} unit="°C"/>
+        <SlR label="Pass fan"     k="Cabin.HVAC.Station.Row1.Right.FanSpeed"     s={s} set={set} min={0} max={7} step={1} unit="/7"/>
+        <EnumR label="Pass vent"  k="Cabin.HVAC.Station.Row1.Right.AirDistribution" s={s} set={set} opts={['AUTO','FACE','FACE_FEET','FEET','FEET_DEF','DEF']}/>
       </SG>
 
       <SG title="Seats" vss="Cabin.Seat">
@@ -3905,7 +3905,7 @@ function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
 function ControlPanel({s,set,cfg,inline=false}){
   const anyDoor=['Row1.Left','Row1.Right','Row2.Left','Row2.Right'].some(d=>s[`Body.Doors.${d}.IsOpen`]);
   const anyLight=Object.keys(s).some(k=>k.startsWith('Body.Lights')&&s[k]===true);
-  const lux=s['Vehicle.Controller.Body.Lights.AmbientLightSensor.Illuminance']??10000;
+  const lux=s['Body.Lights.AmbientLightSensor.Illuminance']??10000;
   if(inline) return <div style={{flex:1,overflowY:'auto',padding:'16px 20px',scrollbarWidth:'thin',scrollbarColor:'var(--bdr2) transparent'}}>
     <ControlPanelContent s={s} set={set} cfg={cfg} anyDoor={anyDoor} anyLight={anyLight} lux={lux}/>
   </div>;
@@ -4230,11 +4230,11 @@ function App(){
   // banner derives "remaining = duration - elapsed" client-side.
   // Mirrors the cabin-state rules in
   // `vss-bridge/src/features/perimeter_alarm.rs`:
-  //   • prearmStartedAt — set when Vehicle.Controller.Cabin.LockStatus enters
+  //   • prearmStartedAt — set when Cabin.LockStatus enters
   //     LOCKED / DOUBLE_LOCKED from any non-armable state, cleared
   //     when it returns to UNLOCKED / DRIVER_UNLOCKED.
-  //   • chimeStartedAt  — set on the first Vehicle.Controller.Body.Chime.IsActive=TRUE
-  //     edge of a sequence, cleared when Vehicle.Controller.Alarm.IsActive
+  //   • chimeStartedAt  — set on the first Body.Chime.IsActive=TRUE
+  //     edge of a sequence, cleared when Vehicle.Body.Alarm.IsActive
   //     escalates to TRUE or the cabin unlocks (silent disarm).
   const [prearmStartedAt,setPrearmStartedAt]=useState(null);
   const [chimeStartedAt,setChimeStartedAt]=useState(null);
@@ -4244,8 +4244,8 @@ function App(){
   const attemptsRef=useRef(0);
   // Tracks the wall-clock of the most recent CHIME=true edge so the
   // banner watchdog below can tell when the chime has actually stopped
-  // pulsing (e.g. ignition-cancel mid-chime, where Vehicle.Controller.Cabin.LockStatus is
-  // still LOCKED and Vehicle.Controller.Alarm.IsActive is still FALSE — none
+  // pulsing (e.g. ignition-cancel mid-chime, where Cabin.LockStatus is
+  // still LOCKED and Vehicle.Body.Alarm.IsActive is still FALSE — none
   // of the other "clear" conditions fire).
   const chimeLastTrueRef=useRef(null);
 
@@ -4253,7 +4253,7 @@ function App(){
 
   // AutoRelock countdown banner.  `IsArmed` controls visibility.
   // For RESET-on-press behaviour we replicate the same filter
-  // AutoRelock applies internally — watch `Vehicle.Controller.Cabin.LockStatus.EventNum`
+  // AutoRelock applies internally — watch `Cabin.LockStatus.EventNum`
   // and re-stamp `relockArmedAt` whenever an event matches the
   // "external unlock" rule.  Mirror of
   // `auto_relock.rs::EXTERNAL_UNLOCK_REQUESTORS` and `UNLOCK_STATES`;
@@ -4261,10 +4261,10 @@ function App(){
   const RELOCK_EXT_REQUESTORS = ['KeyfobRke','KeyfobPeps','PassiveEntry',
                                  'PhoneApp','PhoneBle','NfcCard','NfcPhone'];
   const RELOCK_UNLOCK_STATES = ['UNLOCKED','DRIVER_UNLOCKED'];
-  const relockArmed = !!s['Vehicle.Controller.Body.Doors.AutoRelock.IsArmed'];
-  const lockEventNum  = s['Vehicle.Controller.Cabin.LockStatus.EventNum']      ?? 0;
-  const lockStatus    = s['Vehicle.Controller.Cabin.LockStatus']               ?? '';
-  const lockRequestor = s['Vehicle.Controller.Cabin.LockStatus.LastRequestor'] ?? '';
+  const relockArmed = !!s['Body.Doors.AutoRelock.IsArmed'];
+  const lockEventNum  = s['Cabin.LockStatus.EventNum']      ?? 0;
+  const lockStatus    = s['Cabin.LockStatus']               ?? '';
+  const lockRequestor = s['Cabin.LockStatus.LastRequestor'] ?? '';
   const isQualifyingArmEvent =
         RELOCK_UNLOCK_STATES.includes(lockStatus) &&
         RELOCK_EXT_REQUESTORS.includes(lockRequestor);
@@ -4303,8 +4303,8 @@ function App(){
   // CHIME=true while no alarm is active; clear when the alarm
   // escalates (ALARM_STATUS=true) or the cabin returns to unlocked
   // (silent disarm during chime — REQ-PERI-012).
-  const chimeActive  = !!s['Vehicle.Controller.Body.Chime.IsActive'];
-  const alarmActive  = !!s['Vehicle.Controller.Alarm.IsActive'];
+  const chimeActive  = !!s['Body.Chime.IsActive'];
+  const alarmActive  = !!s['Vehicle.Body.Alarm.IsActive'];
   // Authoritative perimeter-alarm state from the bridge.  Gating the
   // banners on this string (rather than the HMI's lock-status guess)
   // prevents the "ARMING IN" banner from restarting after a chime is
@@ -4313,7 +4313,7 @@ function App(){
   // Possible values: 'DISARMED' | 'PRE_ARMED' | 'ARMED' | 'ACTIVATED'.
   // Until the WS snapshot lands the field is undefined; treat as
   // 'DISARMED' so we don't paint stale banners.
-  const alarmState = s['Vehicle.Controller.Alarm.State'] || 'DISARMED';
+  const alarmState = s['Vehicle.Body.Alarm.State'] || 'DISARMED';
   useEffect(()=>{
     if(alarmActive || !isCabinArmable){
       setChimeStartedAt(null);
@@ -4445,8 +4445,8 @@ function App(){
     setRebooting(true);
   };
 
-  const lo=s['Vehicle.Body.Lights.Beam.Low.IsOn'],hi=s['Vehicle.Body.Lights.Beam.High.IsOn'];
-  const ffog=s['Vehicle.Body.Lights.Fog.Front.IsOn'],rfog=s['Vehicle.Body.Lights.Fog.Rear.IsOn'];
+  const lo=s['Body.Lights.Beam.Low.IsOn'],hi=s['Body.Lights.Beam.High.IsOn'];
+  const ffog=s['Body.Lights.Fog.Front.IsOn'],rfog=s['Body.Lights.Fog.Rear.IsOn'];
   const activeCount=Object.values(s).filter(v=>v===true).length;
   const viewLabel=VIEWS.find(v=>v.id===view)?.label||'';
 
@@ -4491,7 +4491,7 @@ function App(){
         <div className="ctbar">
           <span className="ctlabel"><b>VSS</b> · {viewLabel}</span>
           {/* Perimeter-alarm state pill — always visible, drawn from
-              the bridge's authoritative `Vehicle.Controller.Alarm.State`.
+              the bridge's authoritative `Vehicle.Body.Alarm.State`.
               Replaces what used to be a mental model of "is the cabin
               locked × is the chime pulsing × wall-clock since lock"
               with a single string the bridge owns. */}
@@ -4518,7 +4518,7 @@ function App(){
               captured at the FALSE→TRUE transition. */}
           {(() => {
             if(!relockArmed || !relockArmedAt) return null;
-            const total = s['Vehicle.Controller.Body.Doors.AutoRelock.TimeoutSeconds'] || 45;
+            const total = s['Body.Doors.AutoRelock.TimeoutSeconds'] || 45;
             const elapsed = Math.floor((tickNow - relockArmedAt) / 1000);
             const remaining = Math.max(0, total - elapsed);
             return (
@@ -4529,7 +4529,7 @@ function App(){
               </span>
             );
           })()}
-          {/* Vehicle.Controller.Alarm.IsActive — full anti-intrusion alarm
+          {/* Vehicle.Body.Alarm.IsActive — full anti-intrusion alarm
               is sounding (chime escalated to horn + lights, OR PanicAlarm
               was triggered).  Highest-priority banner; shown alone — the
               chime banner is suppressed because chimeStartedAt clears
@@ -4602,16 +4602,16 @@ function App(){
           {[
             {label:'LIGHTS', active:Object.keys(s).some(k=>k.startsWith('Body.Lights')&&s[k]===true),c:'var(--amber)'},
             {label:'DOORS',  active:['Row1.Left','Row1.Right','Row2.Left','Row2.Right'].some(d=>s[`Body.Doors.${d}.IsOpen`]),c:'var(--amber)'},
-            {label:'WIPERS', active:s['Vehicle.Body.Windshield.Front.Wiping.Mode']!=='OFF',c:'var(--blue)'},
-            {label:'HVAC',   active:s['Vehicle.Cabin.HVAC.IsAirConditioningActive'],c:'var(--teal)'},
-            {label:'HORN',   active:s['Vehicle.Body.Horn.IsActive'],c:'var(--red)',horn:true},
-            {label:'CHIME',  active:s['Vehicle.Controller.Body.Chime.IsSounding'],c:'var(--amber)',chime:true},
+            {label:'WIPERS', active:s['Body.Windshield.Front.Wiping.Mode']!=='OFF',c:'var(--blue)'},
+            {label:'HVAC',   active:s['Cabin.HVAC.IsAirConditioningActive'],c:'var(--teal)'},
+            {label:'HORN',   active:s['Body.Horn.IsActive'],c:'var(--red)',horn:true},
+            {label:'CHIME',  active:s['Body.Chime.IsSounding'],c:'var(--amber)',chime:true},
             {label:'PEPS',   active:[1,2,3,4,5,6].some(i=>s[`Body.PEPS.Plant.KeyFob.${i}.PlacedZone`]&&s[`Body.PEPS.Plant.KeyFob.${i}.PlacedZone`]!=='OutOfRange')||[1,2].some(i=>s[`Body.PEPS.Plant.BlePhone.${i}.PlacedZone`]&&s[`Body.PEPS.Plant.BlePhone.${i}.PlacedZone`]!=='OutOfRange'),c:'var(--teal)'},
           ].map(({label,active,c,horn,chime})=>(
             <div key={label} className="sti">
               {horn ? (
                 /* Horn-with-sound-waves visualisation: the indicator dot is
-                   replaced by a small horn icon; when Vehicle.Body.Horn.IsActive
+                   replaced by a small horn icon; when Body.Horn.IsActive
                    is TRUE, three concentric red ripples emanate outward,
                    matching the horn's audible pulse. */
                 <span className={`horn-viz${active?' active':''}`} title={active?'Horn active — chirping':'Horn idle'}>
@@ -4630,7 +4630,7 @@ function App(){
                 </span>
               ) : chime ? (
                 /* Chime visualisation — bell icon with three concentric
-                   amber ripples that emanate when Vehicle.Controller.Body.Chime.IsSounding
+                   amber ripples that emanate when Body.Chime.IsSounding
                    is TRUE.  Same shape as the horn visualisation but in
                    amber + slightly slower so the user reads "warning
                    chime" vs "intrusion alarm" at a glance. */

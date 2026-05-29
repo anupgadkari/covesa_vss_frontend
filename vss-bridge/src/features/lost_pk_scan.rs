@@ -223,8 +223,8 @@ mod tests {
 
     fn place(bus: &MockBus, slot: u8, zone: &str) {
         let path = match slot {
-            1 => "Vehicle.Simulation.PEPS.Plant.KeyFob.1.PlacedZone",
-            2 => "Vehicle.Simulation.PEPS.Plant.KeyFob.2.PlacedZone",
+            1 => "Vehicle.Simulation.KeyFob.1.PlacedZone",
+            2 => "Vehicle.Simulation.KeyFob.2.PlacedZone",
             _ => panic!("unknown slot"),
         };
         bus.inject(path, SignalValue::String(zone.into()));

@@ -1140,17 +1140,17 @@ async fn given_paired_fob_in_zone(w: &mut VssWorld, slot: u8, zone: String) {
     // arbiter's approach poll to fire before LastObservedZone was
     // published, which is racy at the e2e timing layer.
     let placed: VssPath = match slot {
-        1 => "Vehicle.Simulation.PEPS.Plant.KeyFob.1.PlacedZone",
-        2 => "Vehicle.Simulation.PEPS.Plant.KeyFob.2.PlacedZone",
-        3 => "Vehicle.Simulation.PEPS.Plant.KeyFob.3.PlacedZone",
-        4 => "Vehicle.Simulation.PEPS.Plant.KeyFob.4.PlacedZone",
+        1 => "Vehicle.Simulation.KeyFob.1.PlacedZone",
+        2 => "Vehicle.Simulation.KeyFob.2.PlacedZone",
+        3 => "Vehicle.Simulation.KeyFob.3.PlacedZone",
+        4 => "Vehicle.Simulation.KeyFob.4.PlacedZone",
         _ => unreachable!(),
     };
     let observed: VssPath = match slot {
-        1 => "Vehicle.Simulation.PEPS.Plant.KeyFob.1.LastObservedZone",
-        2 => "Vehicle.Simulation.PEPS.Plant.KeyFob.2.LastObservedZone",
-        3 => "Vehicle.Simulation.PEPS.Plant.KeyFob.3.LastObservedZone",
-        4 => "Vehicle.Simulation.PEPS.Plant.KeyFob.4.LastObservedZone",
+        1 => "Vehicle.Simulation.KeyFob.1.LastObservedZone",
+        2 => "Vehicle.Simulation.KeyFob.2.LastObservedZone",
+        3 => "Vehicle.Simulation.KeyFob.3.LastObservedZone",
+        4 => "Vehicle.Simulation.KeyFob.4.LastObservedZone",
         _ => unreachable!(),
     };
     let val = SignalValue::String(zone_string(&zone));
@@ -1163,13 +1163,13 @@ async fn given_paired_phone_in_zone(w: &mut VssWorld, slot: u8, zone: String) {
     w.ensure_passive_entry_started().await;
     assert!((1..=2).contains(&slot), "paired phones are slots 1..=2");
     let placed: VssPath = match slot {
-        1 => "Vehicle.Simulation.PEPS.Plant.BlePhone.1.PlacedZone",
-        2 => "Vehicle.Simulation.PEPS.Plant.BlePhone.2.PlacedZone",
+        1 => "Vehicle.Simulation.BlePhone.1.PlacedZone",
+        2 => "Vehicle.Simulation.BlePhone.2.PlacedZone",
         _ => unreachable!(),
     };
     let observed: VssPath = match slot {
-        1 => "Vehicle.Simulation.PEPS.Plant.BlePhone.1.LastObservedZone",
-        2 => "Vehicle.Simulation.PEPS.Plant.BlePhone.2.LastObservedZone",
+        1 => "Vehicle.Simulation.BlePhone.1.LastObservedZone",
+        2 => "Vehicle.Simulation.BlePhone.2.LastObservedZone",
         _ => unreachable!(),
     };
     let val = SignalValue::String(zone_string(&zone));
@@ -1186,13 +1186,13 @@ async fn given_unpaired_fob_in_zone(w: &mut VssWorld, slot: u8, zone: String) {
         "unpaired fobs are slots 5, 6 (1..=4 are paired)"
     );
     let placed: VssPath = match slot {
-        5 => "Vehicle.Simulation.PEPS.Plant.KeyFob.5.PlacedZone",
-        6 => "Vehicle.Simulation.PEPS.Plant.KeyFob.6.PlacedZone",
+        5 => "Vehicle.Simulation.KeyFob.5.PlacedZone",
+        6 => "Vehicle.Simulation.KeyFob.6.PlacedZone",
         _ => unreachable!(),
     };
     let observed: VssPath = match slot {
-        5 => "Vehicle.Simulation.PEPS.Plant.KeyFob.5.LastObservedZone",
-        6 => "Vehicle.Simulation.PEPS.Plant.KeyFob.6.LastObservedZone",
+        5 => "Vehicle.Simulation.KeyFob.5.LastObservedZone",
+        6 => "Vehicle.Simulation.KeyFob.6.LastObservedZone",
         _ => unreachable!(),
     };
     let val = SignalValue::String(zone_string(&zone));
@@ -1207,18 +1207,18 @@ async fn given_no_devices_positioned(w: &mut VssWorld) {
     // explicit so the scenario is robust to any prior step having
     // moved a device.
     for path in [
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.1.PlacedZone",
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.2.PlacedZone",
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.3.PlacedZone",
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.4.PlacedZone",
-        "Vehicle.Simulation.PEPS.Plant.BlePhone.1.PlacedZone",
-        "Vehicle.Simulation.PEPS.Plant.BlePhone.2.PlacedZone",
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.1.LastObservedZone",
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.2.LastObservedZone",
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.3.LastObservedZone",
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.4.LastObservedZone",
-        "Vehicle.Simulation.PEPS.Plant.BlePhone.1.LastObservedZone",
-        "Vehicle.Simulation.PEPS.Plant.BlePhone.2.LastObservedZone",
+        "Vehicle.Simulation.KeyFob.1.PlacedZone",
+        "Vehicle.Simulation.KeyFob.2.PlacedZone",
+        "Vehicle.Simulation.KeyFob.3.PlacedZone",
+        "Vehicle.Simulation.KeyFob.4.PlacedZone",
+        "Vehicle.Simulation.BlePhone.1.PlacedZone",
+        "Vehicle.Simulation.BlePhone.2.PlacedZone",
+        "Vehicle.Simulation.KeyFob.1.LastObservedZone",
+        "Vehicle.Simulation.KeyFob.2.LastObservedZone",
+        "Vehicle.Simulation.KeyFob.3.LastObservedZone",
+        "Vehicle.Simulation.KeyFob.4.LastObservedZone",
+        "Vehicle.Simulation.BlePhone.1.LastObservedZone",
+        "Vehicle.Simulation.BlePhone.2.LastObservedZone",
     ] {
         w.inject(path, SignalValue::String("OutOfRange".into()))
             .await;

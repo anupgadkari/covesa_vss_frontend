@@ -738,10 +738,10 @@ mod tests {
     fn place_fob_in_cabin(bus: &MockBus, slot: u8) {
         bus.inject(
             match slot {
-                1 => "Vehicle.Simulation.PEPS.Plant.KeyFob.1.PlacedZone",
-                2 => "Vehicle.Simulation.PEPS.Plant.KeyFob.2.PlacedZone",
-                3 => "Vehicle.Simulation.PEPS.Plant.KeyFob.3.PlacedZone",
-                4 => "Vehicle.Simulation.PEPS.Plant.KeyFob.4.PlacedZone",
+                1 => "Vehicle.Simulation.KeyFob.1.PlacedZone",
+                2 => "Vehicle.Simulation.KeyFob.2.PlacedZone",
+                3 => "Vehicle.Simulation.KeyFob.3.PlacedZone",
+                4 => "Vehicle.Simulation.KeyFob.4.PlacedZone",
                 _ => panic!("unknown slot"),
             },
             SignalValue::String("Cabin".into()),
@@ -750,10 +750,10 @@ mod tests {
     fn place_fob_in_cylinder(bus: &MockBus, slot: u8) {
         bus.inject(
             match slot {
-                1 => "Vehicle.Simulation.PEPS.Plant.KeyFob.1.PlacedZone",
-                2 => "Vehicle.Simulation.PEPS.Plant.KeyFob.2.PlacedZone",
-                3 => "Vehicle.Simulation.PEPS.Plant.KeyFob.3.PlacedZone",
-                4 => "Vehicle.Simulation.PEPS.Plant.KeyFob.4.PlacedZone",
+                1 => "Vehicle.Simulation.KeyFob.1.PlacedZone",
+                2 => "Vehicle.Simulation.KeyFob.2.PlacedZone",
+                3 => "Vehicle.Simulation.KeyFob.3.PlacedZone",
+                4 => "Vehicle.Simulation.KeyFob.4.PlacedZone",
                 _ => panic!("unknown slot"),
             },
             SignalValue::String("KeyCylinder".into()),
@@ -797,7 +797,7 @@ mod tests {
         settle().await;
 
         let observed = bus.history().iter().any(|(s, v)| {
-            *s == "Vehicle.Simulation.PEPS.Plant.KeyFob.1.LastObservedZone"
+            *s == "Vehicle.Simulation.KeyFob.1.LastObservedZone"
                 && *v == SignalValue::String("Cabin".into())
         });
         assert!(
@@ -1057,7 +1057,7 @@ mod tests {
         // it out so the immobilizer goes FAILED and power stays OFF.
         let bus = setup(cfg_peps()).await;
         bus.inject(
-            "Vehicle.Simulation.PEPS.Plant.KeyFob.1.Paired",
+            "Vehicle.Simulation.KeyFob.1.Paired",
             SignalValue::Bool(false),
         );
         place_fob_in_cabin(&bus, 1);
@@ -1141,7 +1141,7 @@ mod tests {
         // Remove fob, then rotate to ON.  Session flag should still
         // accept the rotation because we already authenticated.
         bus.inject(
-            "Vehicle.Simulation.PEPS.Plant.KeyFob.1.PlacedZone",
+            "Vehicle.Simulation.KeyFob.1.PlacedZone",
             SignalValue::String("OutOfRange".into()),
         );
         bus.inject(CYLINDER_IN, SignalValue::String("ON".into()));
@@ -1190,7 +1190,7 @@ mod tests {
         // Remove the key — session was already established, OFF→ON
         // must still work.
         bus.inject(
-            "Vehicle.Simulation.PEPS.Plant.KeyFob.1.PlacedZone",
+            "Vehicle.Simulation.KeyFob.1.PlacedZone",
             SignalValue::String("OutOfRange".into()),
         );
         bus.inject(CYLINDER_IN, SignalValue::String("ON".into()));
@@ -1295,7 +1295,7 @@ mod tests {
         assert_eq!(latest_immo(&bus).as_deref(), Some("LOCKED"));
         // Remove fob; rotation back to ACC should now fail.
         bus.inject(
-            "Vehicle.Simulation.PEPS.Plant.KeyFob.1.PlacedZone",
+            "Vehicle.Simulation.KeyFob.1.PlacedZone",
             SignalValue::String("OutOfRange".into()),
         );
         bus.inject(CYLINDER_IN, SignalValue::String("ACC".into()));

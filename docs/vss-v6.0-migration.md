@@ -348,7 +348,46 @@ across the whole codebase at once:
 Result: clean build, 686 lib + 8 ws_integration + 35 e2e
 scenarios green (1 pre-existing WIP skip in `hazard.feature`),
 clippy + fmt clean.  No alias layer; legacy paths are simply
-gone.
+gone — **on the bridge side.**
+
+#### Follow-on: the HMI couldn't be renamed by regex
+
+A later sweep found the HMI references signal paths *compositionally*
+— prefix props (`<DoorCard pfx="Body.Doors.Row1.Left" />` then
+`pfx + ".IsOpen"`), template literals, and string concat — ~270
+references a full-path literal regex fundamentally cannot reach.
+The literal rename left the HMI half-renamed and partially broken
+(device placement, window animation, lock visualisation), which
+CI didn't catch because Playwright isn't a PR gate and cargo tests
+don't execute HMI JS.
+
+Rather than attempt a fragile per-site HMI rename, the HMI was
+**reverted to its legacy `Body.*` vocabulary** (fully self-
+consistent), and a **WS-boundary translation shim** was added:
+
+- `hmi_alias.rs` — a 257-entry `(canonical, legacy)` table plus
+  `to_hmi()` / `from_hmi()`, generated from the path-mapping CSV
+  with the KeyFob/BlePhone/NfcCard simplification folded in.
+- `ws_bridge.rs` translates at exactly the wire boundary:
+  outbound state snapshots get their keys mapped canonical →
+  legacy (`hmi_state_message`); inbound `sensor` messages get
+  their `path` mapped legacy → canonical before matching
+  `INPUT_SIGNALS`.  Internally `output_state` stays canonical, so
+  the boot-readiness gate and signal lists are untouched.
+- `ws_integration.rs` simulates an HMI client, so it speaks the
+  legacy wire vocabulary too (reverted to `Body.*`).
+
+The HMI's own canonicalisation is now a separate, Playwright-
+verified sub-PR; when it lands, `hmi_alias.rs` is deleted.
+
+#### Follow-on: KeyFob/BlePhone/NfcCard simplification
+
+`Vehicle.Simulation.PEPS.Plant.{KeyFob,BlePhone,NfcCard}.*` was
+simplified to `Vehicle.Simulation.{KeyFob,BlePhone,NfcCard}.*` —
+`Vehicle.Simulation.` already conveys "simulator" and the device
+families are inherently PEPS, so the `PEPS.Plant.` segment was
+pure redundancy.  Safe on the bridge (all match-arm literals, no
+collisions); the shim carries the translation for the HMI.
 
 ### Sub-PR 4 — Adopt `DriverSide` / `PassengerSide` in feature code *(deferred)*
 

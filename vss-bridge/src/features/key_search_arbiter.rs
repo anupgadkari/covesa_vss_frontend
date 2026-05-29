@@ -704,13 +704,13 @@ fn rssi_for_zone(z: Zone) -> i8 {
 /// same partial-information world a real PEPS feature does.
 fn fob_placed_zone_signal(slot: KeySlot) -> VssPath {
     match slot {
-        0 => "Vehicle.Simulation.PEPS.Plant.KeyFob.1.PlacedZone",
-        1 => "Vehicle.Simulation.PEPS.Plant.KeyFob.2.PlacedZone",
-        2 => "Vehicle.Simulation.PEPS.Plant.KeyFob.3.PlacedZone",
-        3 => "Vehicle.Simulation.PEPS.Plant.KeyFob.4.PlacedZone",
-        4 => "Vehicle.Simulation.PEPS.Plant.BlePhone.1.PlacedZone",
-        5 => "Vehicle.Simulation.PEPS.Plant.BlePhone.2.PlacedZone",
-        _ => "Vehicle.Simulation.PEPS.Plant.KeyFob.1.PlacedZone", // defensive; never hit at runtime
+        0 => "Vehicle.Simulation.KeyFob.1.PlacedZone",
+        1 => "Vehicle.Simulation.KeyFob.2.PlacedZone",
+        2 => "Vehicle.Simulation.KeyFob.3.PlacedZone",
+        3 => "Vehicle.Simulation.KeyFob.4.PlacedZone",
+        4 => "Vehicle.Simulation.BlePhone.1.PlacedZone",
+        5 => "Vehicle.Simulation.BlePhone.2.PlacedZone",
+        _ => "Vehicle.Simulation.KeyFob.1.PlacedZone", // defensive; never hit at runtime
     }
 }
 
@@ -719,13 +719,13 @@ fn fob_placed_zone_signal(slot: KeySlot) -> VssPath {
 /// to instead of the legacy `.Zone` mirror.
 fn fob_last_observed_zone_signal(slot: KeySlot) -> VssPath {
     match slot {
-        0 => "Vehicle.Simulation.PEPS.Plant.KeyFob.1.LastObservedZone",
-        1 => "Vehicle.Simulation.PEPS.Plant.KeyFob.2.LastObservedZone",
-        2 => "Vehicle.Simulation.PEPS.Plant.KeyFob.3.LastObservedZone",
-        3 => "Vehicle.Simulation.PEPS.Plant.KeyFob.4.LastObservedZone",
-        4 => "Vehicle.Simulation.PEPS.Plant.BlePhone.1.LastObservedZone",
-        5 => "Vehicle.Simulation.PEPS.Plant.BlePhone.2.LastObservedZone",
-        _ => "Vehicle.Simulation.PEPS.Plant.KeyFob.1.LastObservedZone",
+        0 => "Vehicle.Simulation.KeyFob.1.LastObservedZone",
+        1 => "Vehicle.Simulation.KeyFob.2.LastObservedZone",
+        2 => "Vehicle.Simulation.KeyFob.3.LastObservedZone",
+        3 => "Vehicle.Simulation.KeyFob.4.LastObservedZone",
+        4 => "Vehicle.Simulation.BlePhone.1.LastObservedZone",
+        5 => "Vehicle.Simulation.BlePhone.2.LastObservedZone",
+        _ => "Vehicle.Simulation.KeyFob.1.LastObservedZone",
     }
 }
 
@@ -737,17 +737,17 @@ fn fob_last_observed_zone_signal(slot: KeySlot) -> VssPath {
 /// `true` keeps phones in the authenticated cohort by default.
 fn fob_paired_signal(slot: KeySlot) -> VssPath {
     match slot {
-        0 => "Vehicle.Simulation.PEPS.Plant.KeyFob.1.Paired",
-        1 => "Vehicle.Simulation.PEPS.Plant.KeyFob.2.Paired",
-        2 => "Vehicle.Simulation.PEPS.Plant.KeyFob.3.Paired",
-        3 => "Vehicle.Simulation.PEPS.Plant.KeyFob.4.Paired",
+        0 => "Vehicle.Simulation.KeyFob.1.Paired",
+        1 => "Vehicle.Simulation.KeyFob.2.Paired",
+        2 => "Vehicle.Simulation.KeyFob.3.Paired",
+        3 => "Vehicle.Simulation.KeyFob.4.Paired",
         // Phones: no .Paired signal in the simulator today — point at
         // a fob path that we never write `false` to so the subscription
         // is harmless.  Filter defaults to "paired" when no value
         // arrives, so phones remain eligible for Authenticated scans.
-        4 => "Vehicle.Simulation.PEPS.Plant.KeyFob.1.Paired",
-        5 => "Vehicle.Simulation.PEPS.Plant.KeyFob.1.Paired",
-        _ => "Vehicle.Simulation.PEPS.Plant.KeyFob.1.Paired",
+        4 => "Vehicle.Simulation.KeyFob.1.Paired",
+        5 => "Vehicle.Simulation.KeyFob.1.Paired",
+        _ => "Vehicle.Simulation.KeyFob.1.Paired",
     }
 }
 

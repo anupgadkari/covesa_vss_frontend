@@ -334,36 +334,36 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // every feature consumer reads `.LastObservedZone` (see
         // KeySearchArbiter).
         // PEPS plant model — key fob button presses
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.1.ButtonPress" => Some(0x0010_0011),
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.2.ButtonPress" => Some(0x0010_0012),
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.3.ButtonPress" => Some(0x0010_0013),
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.4.ButtonPress" => Some(0x0010_0014),
+        "Vehicle.Simulation.KeyFob.1.ButtonPress" => Some(0x0010_0011),
+        "Vehicle.Simulation.KeyFob.2.ButtonPress" => Some(0x0010_0012),
+        "Vehicle.Simulation.KeyFob.3.ButtonPress" => Some(0x0010_0013),
+        "Vehicle.Simulation.KeyFob.4.ButtonPress" => Some(0x0010_0014),
         // PEPS plant model — key fob pairing
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.1.Paired" => Some(0x0010_0021),
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.2.Paired" => Some(0x0010_0022),
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.3.Paired" => Some(0x0010_0023),
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.4.Paired" => Some(0x0010_0024),
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.5.Paired" => Some(0x0010_0025),
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.6.Paired" => Some(0x0010_0026),
+        "Vehicle.Simulation.KeyFob.1.Paired" => Some(0x0010_0021),
+        "Vehicle.Simulation.KeyFob.2.Paired" => Some(0x0010_0022),
+        "Vehicle.Simulation.KeyFob.3.Paired" => Some(0x0010_0023),
+        "Vehicle.Simulation.KeyFob.4.Paired" => Some(0x0010_0024),
+        "Vehicle.Simulation.KeyFob.5.Paired" => Some(0x0010_0025),
+        "Vehicle.Simulation.KeyFob.6.Paired" => Some(0x0010_0026),
         // PEPS plant model — key fob challenge responses
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.1.ChallengeResponse" => Some(0x0010_0031),
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.2.ChallengeResponse" => Some(0x0010_0032),
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.3.ChallengeResponse" => Some(0x0010_0033),
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.4.ChallengeResponse" => Some(0x0010_0034),
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.5.ChallengeResponse" => Some(0x0010_0035),
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.6.ChallengeResponse" => Some(0x0010_0036),
+        "Vehicle.Simulation.KeyFob.1.ChallengeResponse" => Some(0x0010_0031),
+        "Vehicle.Simulation.KeyFob.2.ChallengeResponse" => Some(0x0010_0032),
+        "Vehicle.Simulation.KeyFob.3.ChallengeResponse" => Some(0x0010_0033),
+        "Vehicle.Simulation.KeyFob.4.ChallengeResponse" => Some(0x0010_0034),
+        "Vehicle.Simulation.KeyFob.5.ChallengeResponse" => Some(0x0010_0035),
+        "Vehicle.Simulation.KeyFob.6.ChallengeResponse" => Some(0x0010_0036),
         // PEPS plant model — key fob RSSI responses
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.1.RssiResponse" => Some(0x0010_0041),
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.2.RssiResponse" => Some(0x0010_0042),
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.3.RssiResponse" => Some(0x0010_0043),
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.4.RssiResponse" => Some(0x0010_0044),
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.5.RssiResponse" => Some(0x0010_0045),
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.6.RssiResponse" => Some(0x0010_0046),
+        "Vehicle.Simulation.KeyFob.1.RssiResponse" => Some(0x0010_0041),
+        "Vehicle.Simulation.KeyFob.2.RssiResponse" => Some(0x0010_0042),
+        "Vehicle.Simulation.KeyFob.3.RssiResponse" => Some(0x0010_0043),
+        "Vehicle.Simulation.KeyFob.4.RssiResponse" => Some(0x0010_0044),
+        "Vehicle.Simulation.KeyFob.5.RssiResponse" => Some(0x0010_0045),
+        "Vehicle.Simulation.KeyFob.6.RssiResponse" => Some(0x0010_0046),
         // PEPS plant model — key fob RF messages
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.1.RfMessage" => Some(0x0010_0051),
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.2.RfMessage" => Some(0x0010_0052),
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.3.RfMessage" => Some(0x0010_0053),
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.4.RfMessage" => Some(0x0010_0054),
+        "Vehicle.Simulation.KeyFob.1.RfMessage" => Some(0x0010_0051),
+        "Vehicle.Simulation.KeyFob.2.RfMessage" => Some(0x0010_0052),
+        "Vehicle.Simulation.KeyFob.3.RfMessage" => Some(0x0010_0053),
+        "Vehicle.Simulation.KeyFob.4.RfMessage" => Some(0x0010_0054),
         // PlacedZone — where the device physically is.  In production
         // the vehicle never knows this directly; this signal exists
         // only because the simulator user can drag chips around in
@@ -372,30 +372,30 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // periodic LF scans, surfaced as LastObservedZone.  The
         // legacy `.Zone` signal is now a transitional mirror of
         // `.PlacedZone` until all consumers migrate.
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.1.PlacedZone" => Some(0x0010_0061),
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.2.PlacedZone" => Some(0x0010_0062),
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.3.PlacedZone" => Some(0x0010_0063),
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.4.PlacedZone" => Some(0x0010_0064),
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.5.PlacedZone" => Some(0x0010_0065),
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.6.PlacedZone" => Some(0x0010_0066),
+        "Vehicle.Simulation.KeyFob.1.PlacedZone" => Some(0x0010_0061),
+        "Vehicle.Simulation.KeyFob.2.PlacedZone" => Some(0x0010_0062),
+        "Vehicle.Simulation.KeyFob.3.PlacedZone" => Some(0x0010_0063),
+        "Vehicle.Simulation.KeyFob.4.PlacedZone" => Some(0x0010_0064),
+        "Vehicle.Simulation.KeyFob.5.PlacedZone" => Some(0x0010_0065),
+        "Vehicle.Simulation.KeyFob.6.PlacedZone" => Some(0x0010_0066),
         // LastObservedZone — published by the KeySearchArbiter after
         // each scan.  This is what real PEPS features should consume
         // (and what the legacy `.Zone` mirror will eventually mean).
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.1.LastObservedZone" => Some(0x0010_0071),
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.2.LastObservedZone" => Some(0x0010_0072),
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.3.LastObservedZone" => Some(0x0010_0073),
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.4.LastObservedZone" => Some(0x0010_0074),
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.5.LastObservedZone" => Some(0x0010_0075),
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.6.LastObservedZone" => Some(0x0010_0076),
+        "Vehicle.Simulation.KeyFob.1.LastObservedZone" => Some(0x0010_0071),
+        "Vehicle.Simulation.KeyFob.2.LastObservedZone" => Some(0x0010_0072),
+        "Vehicle.Simulation.KeyFob.3.LastObservedZone" => Some(0x0010_0073),
+        "Vehicle.Simulation.KeyFob.4.LastObservedZone" => Some(0x0010_0074),
+        "Vehicle.Simulation.KeyFob.5.LastObservedZone" => Some(0x0010_0075),
+        "Vehicle.Simulation.KeyFob.6.LastObservedZone" => Some(0x0010_0076),
         // PEPS plant model — BlePhone `.Zone` (IDs 0x0011_0001 /
         // 0x0011_0002) retired in item #14 follow-up — see KeyFob
         // note above.
         // PEPS plant model — BLE phone challenge responses
-        "Vehicle.Simulation.PEPS.Plant.BlePhone.1.ChallengeResponse" => Some(0x0011_0011),
-        "Vehicle.Simulation.PEPS.Plant.BlePhone.2.ChallengeResponse" => Some(0x0011_0012),
+        "Vehicle.Simulation.BlePhone.1.ChallengeResponse" => Some(0x0011_0011),
+        "Vehicle.Simulation.BlePhone.2.ChallengeResponse" => Some(0x0011_0012),
         // PEPS plant model — BLE phone RSSI responses
-        "Vehicle.Simulation.PEPS.Plant.BlePhone.1.RssiResponse" => Some(0x0011_0021),
-        "Vehicle.Simulation.PEPS.Plant.BlePhone.2.RssiResponse" => Some(0x0011_0022),
+        "Vehicle.Simulation.BlePhone.1.RssiResponse" => Some(0x0011_0021),
+        "Vehicle.Simulation.BlePhone.2.RssiResponse" => Some(0x0011_0022),
         // BLE phone NFC tap — String enum with the same `NfcPosition`
         // values as the dedicated NFC card path (`NotPresent`,
         // `DriverHandle`, `PushButton`).  Distinct from `.Zone` so the
@@ -404,20 +404,20 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // the explicit NFC tap event (NfcEntry on tap) as a separate
         // signal.  Real phones expose BLE and NFC as independent
         // radios; the simulator now mirrors that.
-        "Vehicle.Simulation.PEPS.Plant.BlePhone.1.NfcTap" => Some(0x0011_0031),
-        "Vehicle.Simulation.PEPS.Plant.BlePhone.2.NfcTap" => Some(0x0011_0032),
+        "Vehicle.Simulation.BlePhone.1.NfcTap" => Some(0x0011_0031),
+        "Vehicle.Simulation.BlePhone.2.NfcTap" => Some(0x0011_0032),
         // BLE phone PlacedZone / LastObservedZone — same model as the
         // KeyFob signals above.
-        "Vehicle.Simulation.PEPS.Plant.BlePhone.1.PlacedZone" => Some(0x0011_0041),
-        "Vehicle.Simulation.PEPS.Plant.BlePhone.2.PlacedZone" => Some(0x0011_0042),
-        "Vehicle.Simulation.PEPS.Plant.BlePhone.1.LastObservedZone" => Some(0x0011_0051),
-        "Vehicle.Simulation.PEPS.Plant.BlePhone.2.LastObservedZone" => Some(0x0011_0052),
+        "Vehicle.Simulation.BlePhone.1.PlacedZone" => Some(0x0011_0041),
+        "Vehicle.Simulation.BlePhone.2.PlacedZone" => Some(0x0011_0042),
+        "Vehicle.Simulation.BlePhone.1.LastObservedZone" => Some(0x0011_0051),
+        "Vehicle.Simulation.BlePhone.2.LastObservedZone" => Some(0x0011_0052),
         // PEPS plant model — NFC card positions
-        "Vehicle.Simulation.PEPS.Plant.NfcCard.1.Position" => Some(0x0012_0001),
-        "Vehicle.Simulation.PEPS.Plant.NfcCard.2.Position" => Some(0x0012_0002),
+        "Vehicle.Simulation.NfcCard.1.Position" => Some(0x0012_0001),
+        "Vehicle.Simulation.NfcCard.2.Position" => Some(0x0012_0002),
         // PEPS plant model — NFC card challenge responses
-        "Vehicle.Simulation.PEPS.Plant.NfcCard.1.ChallengeResponse" => Some(0x0012_0011),
-        "Vehicle.Simulation.PEPS.Plant.NfcCard.2.ChallengeResponse" => Some(0x0012_0012),
+        "Vehicle.Simulation.NfcCard.1.ChallengeResponse" => Some(0x0012_0011),
+        "Vehicle.Simulation.NfcCard.2.ChallengeResponse" => Some(0x0012_0012),
         // PEPS vehicle-side challenge/poll signals
         "Vehicle.Controller.Body.PEPS.LfChallenge" => Some(0x0013_0001),
         "Vehicle.Controller.Body.PEPS.BleChallenge" => Some(0x0013_0002),
@@ -1039,203 +1039,83 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Vehicle.Controller.Safety.CrashDetected", 0x000F_0001),
     // PEPS plant model — `.Zone` retired (IDs 0x0010_0001..0x0010_0006).
     // PEPS plant model — key fob button presses
-    (
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.1.ButtonPress",
-        0x0010_0011,
-    ),
-    (
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.2.ButtonPress",
-        0x0010_0012,
-    ),
-    (
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.3.ButtonPress",
-        0x0010_0013,
-    ),
-    (
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.4.ButtonPress",
-        0x0010_0014,
-    ),
+    ("Vehicle.Simulation.KeyFob.1.ButtonPress", 0x0010_0011),
+    ("Vehicle.Simulation.KeyFob.2.ButtonPress", 0x0010_0012),
+    ("Vehicle.Simulation.KeyFob.3.ButtonPress", 0x0010_0013),
+    ("Vehicle.Simulation.KeyFob.4.ButtonPress", 0x0010_0014),
     // PEPS plant model — key fob pairing
-    ("Vehicle.Simulation.PEPS.Plant.KeyFob.1.Paired", 0x0010_0021),
-    ("Vehicle.Simulation.PEPS.Plant.KeyFob.2.Paired", 0x0010_0022),
-    ("Vehicle.Simulation.PEPS.Plant.KeyFob.3.Paired", 0x0010_0023),
-    ("Vehicle.Simulation.PEPS.Plant.KeyFob.4.Paired", 0x0010_0024),
-    ("Vehicle.Simulation.PEPS.Plant.KeyFob.5.Paired", 0x0010_0025),
-    ("Vehicle.Simulation.PEPS.Plant.KeyFob.6.Paired", 0x0010_0026),
+    ("Vehicle.Simulation.KeyFob.1.Paired", 0x0010_0021),
+    ("Vehicle.Simulation.KeyFob.2.Paired", 0x0010_0022),
+    ("Vehicle.Simulation.KeyFob.3.Paired", 0x0010_0023),
+    ("Vehicle.Simulation.KeyFob.4.Paired", 0x0010_0024),
+    ("Vehicle.Simulation.KeyFob.5.Paired", 0x0010_0025),
+    ("Vehicle.Simulation.KeyFob.6.Paired", 0x0010_0026),
     // PEPS plant model — key fob challenge responses
-    (
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.1.ChallengeResponse",
-        0x0010_0031,
-    ),
-    (
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.2.ChallengeResponse",
-        0x0010_0032,
-    ),
-    (
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.3.ChallengeResponse",
-        0x0010_0033,
-    ),
-    (
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.4.ChallengeResponse",
-        0x0010_0034,
-    ),
-    (
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.5.ChallengeResponse",
-        0x0010_0035,
-    ),
-    (
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.6.ChallengeResponse",
-        0x0010_0036,
-    ),
+    ("Vehicle.Simulation.KeyFob.1.ChallengeResponse", 0x0010_0031),
+    ("Vehicle.Simulation.KeyFob.2.ChallengeResponse", 0x0010_0032),
+    ("Vehicle.Simulation.KeyFob.3.ChallengeResponse", 0x0010_0033),
+    ("Vehicle.Simulation.KeyFob.4.ChallengeResponse", 0x0010_0034),
+    ("Vehicle.Simulation.KeyFob.5.ChallengeResponse", 0x0010_0035),
+    ("Vehicle.Simulation.KeyFob.6.ChallengeResponse", 0x0010_0036),
     // PEPS plant model — key fob RSSI responses
-    (
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.1.RssiResponse",
-        0x0010_0041,
-    ),
-    (
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.2.RssiResponse",
-        0x0010_0042,
-    ),
-    (
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.3.RssiResponse",
-        0x0010_0043,
-    ),
-    (
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.4.RssiResponse",
-        0x0010_0044,
-    ),
-    (
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.5.RssiResponse",
-        0x0010_0045,
-    ),
-    (
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.6.RssiResponse",
-        0x0010_0046,
-    ),
+    ("Vehicle.Simulation.KeyFob.1.RssiResponse", 0x0010_0041),
+    ("Vehicle.Simulation.KeyFob.2.RssiResponse", 0x0010_0042),
+    ("Vehicle.Simulation.KeyFob.3.RssiResponse", 0x0010_0043),
+    ("Vehicle.Simulation.KeyFob.4.RssiResponse", 0x0010_0044),
+    ("Vehicle.Simulation.KeyFob.5.RssiResponse", 0x0010_0045),
+    ("Vehicle.Simulation.KeyFob.6.RssiResponse", 0x0010_0046),
     // PEPS plant model — key fob RF messages
-    (
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.1.RfMessage",
-        0x0010_0051,
-    ),
-    (
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.2.RfMessage",
-        0x0010_0052,
-    ),
-    (
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.3.RfMessage",
-        0x0010_0053,
-    ),
-    (
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.4.RfMessage",
-        0x0010_0054,
-    ),
-    (
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.1.PlacedZone",
-        0x0010_0061,
-    ),
-    (
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.2.PlacedZone",
-        0x0010_0062,
-    ),
-    (
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.3.PlacedZone",
-        0x0010_0063,
-    ),
-    (
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.4.PlacedZone",
-        0x0010_0064,
-    ),
-    (
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.5.PlacedZone",
-        0x0010_0065,
-    ),
-    (
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.6.PlacedZone",
-        0x0010_0066,
-    ),
-    (
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.1.LastObservedZone",
-        0x0010_0071,
-    ),
-    (
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.2.LastObservedZone",
-        0x0010_0072,
-    ),
-    (
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.3.LastObservedZone",
-        0x0010_0073,
-    ),
-    (
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.4.LastObservedZone",
-        0x0010_0074,
-    ),
-    (
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.5.LastObservedZone",
-        0x0010_0075,
-    ),
-    (
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.6.LastObservedZone",
-        0x0010_0076,
-    ),
+    ("Vehicle.Simulation.KeyFob.1.RfMessage", 0x0010_0051),
+    ("Vehicle.Simulation.KeyFob.2.RfMessage", 0x0010_0052),
+    ("Vehicle.Simulation.KeyFob.3.RfMessage", 0x0010_0053),
+    ("Vehicle.Simulation.KeyFob.4.RfMessage", 0x0010_0054),
+    ("Vehicle.Simulation.KeyFob.1.PlacedZone", 0x0010_0061),
+    ("Vehicle.Simulation.KeyFob.2.PlacedZone", 0x0010_0062),
+    ("Vehicle.Simulation.KeyFob.3.PlacedZone", 0x0010_0063),
+    ("Vehicle.Simulation.KeyFob.4.PlacedZone", 0x0010_0064),
+    ("Vehicle.Simulation.KeyFob.5.PlacedZone", 0x0010_0065),
+    ("Vehicle.Simulation.KeyFob.6.PlacedZone", 0x0010_0066),
+    ("Vehicle.Simulation.KeyFob.1.LastObservedZone", 0x0010_0071),
+    ("Vehicle.Simulation.KeyFob.2.LastObservedZone", 0x0010_0072),
+    ("Vehicle.Simulation.KeyFob.3.LastObservedZone", 0x0010_0073),
+    ("Vehicle.Simulation.KeyFob.4.LastObservedZone", 0x0010_0074),
+    ("Vehicle.Simulation.KeyFob.5.LastObservedZone", 0x0010_0075),
+    ("Vehicle.Simulation.KeyFob.6.LastObservedZone", 0x0010_0076),
     // PEPS plant model — BlePhone `.Zone` retired (IDs 0x0011_0001 / 0x0011_0002).
     // PEPS plant model — BLE phone challenge responses
     (
-        "Vehicle.Simulation.PEPS.Plant.BlePhone.1.ChallengeResponse",
+        "Vehicle.Simulation.BlePhone.1.ChallengeResponse",
         0x0011_0011,
     ),
     (
-        "Vehicle.Simulation.PEPS.Plant.BlePhone.2.ChallengeResponse",
+        "Vehicle.Simulation.BlePhone.2.ChallengeResponse",
         0x0011_0012,
     ),
     // PEPS plant model — BLE phone RSSI responses
+    ("Vehicle.Simulation.BlePhone.1.RssiResponse", 0x0011_0021),
+    ("Vehicle.Simulation.BlePhone.2.RssiResponse", 0x0011_0022),
+    ("Vehicle.Simulation.BlePhone.1.NfcTap", 0x0011_0031),
+    ("Vehicle.Simulation.BlePhone.2.NfcTap", 0x0011_0032),
+    ("Vehicle.Simulation.BlePhone.1.PlacedZone", 0x0011_0041),
+    ("Vehicle.Simulation.BlePhone.2.PlacedZone", 0x0011_0042),
     (
-        "Vehicle.Simulation.PEPS.Plant.BlePhone.1.RssiResponse",
-        0x0011_0021,
-    ),
-    (
-        "Vehicle.Simulation.PEPS.Plant.BlePhone.2.RssiResponse",
-        0x0011_0022,
-    ),
-    (
-        "Vehicle.Simulation.PEPS.Plant.BlePhone.1.NfcTap",
-        0x0011_0031,
-    ),
-    (
-        "Vehicle.Simulation.PEPS.Plant.BlePhone.2.NfcTap",
-        0x0011_0032,
-    ),
-    (
-        "Vehicle.Simulation.PEPS.Plant.BlePhone.1.PlacedZone",
-        0x0011_0041,
-    ),
-    (
-        "Vehicle.Simulation.PEPS.Plant.BlePhone.2.PlacedZone",
-        0x0011_0042,
-    ),
-    (
-        "Vehicle.Simulation.PEPS.Plant.BlePhone.1.LastObservedZone",
+        "Vehicle.Simulation.BlePhone.1.LastObservedZone",
         0x0011_0051,
     ),
     (
-        "Vehicle.Simulation.PEPS.Plant.BlePhone.2.LastObservedZone",
+        "Vehicle.Simulation.BlePhone.2.LastObservedZone",
         0x0011_0052,
     ),
     // PEPS plant model — NFC card positions
-    (
-        "Vehicle.Simulation.PEPS.Plant.NfcCard.1.Position",
-        0x0012_0001,
-    ),
-    (
-        "Vehicle.Simulation.PEPS.Plant.NfcCard.2.Position",
-        0x0012_0002,
-    ),
+    ("Vehicle.Simulation.NfcCard.1.Position", 0x0012_0001),
+    ("Vehicle.Simulation.NfcCard.2.Position", 0x0012_0002),
     // PEPS plant model — NFC card challenge responses
     (
-        "Vehicle.Simulation.PEPS.Plant.NfcCard.1.ChallengeResponse",
+        "Vehicle.Simulation.NfcCard.1.ChallengeResponse",
         0x0012_0011,
     ),
     (
-        "Vehicle.Simulation.PEPS.Plant.NfcCard.2.ChallengeResponse",
+        "Vehicle.Simulation.NfcCard.2.ChallengeResponse",
         0x0012_0012,
     ),
     // PEPS vehicle-side challenge/poll signals

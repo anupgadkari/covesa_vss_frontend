@@ -69,15 +69,15 @@ use crate::signal_bus::SignalBus;
 // partial-information world a real PEPS feature does — it can only
 // react to what the antennas actually saw, not to HMI ground truth.
 const FOB_ZONE_SIGNALS: [&str; 4] = [
-    "Vehicle.Simulation.PEPS.Plant.KeyFob.1.LastObservedZone",
-    "Vehicle.Simulation.PEPS.Plant.KeyFob.2.LastObservedZone",
-    "Vehicle.Simulation.PEPS.Plant.KeyFob.3.LastObservedZone",
-    "Vehicle.Simulation.PEPS.Plant.KeyFob.4.LastObservedZone",
+    "Vehicle.Simulation.KeyFob.1.LastObservedZone",
+    "Vehicle.Simulation.KeyFob.2.LastObservedZone",
+    "Vehicle.Simulation.KeyFob.3.LastObservedZone",
+    "Vehicle.Simulation.KeyFob.4.LastObservedZone",
 ];
 
 const PHONE_ZONE_SIGNALS: [&str; 2] = [
-    "Vehicle.Simulation.PEPS.Plant.BlePhone.1.LastObservedZone",
-    "Vehicle.Simulation.PEPS.Plant.BlePhone.2.LastObservedZone",
+    "Vehicle.Simulation.BlePhone.1.LastObservedZone",
+    "Vehicle.Simulation.BlePhone.2.LastObservedZone",
 ];
 
 const NUM_FOBS: usize = 4;
@@ -506,7 +506,7 @@ mod tests {
         // its cache; the next poll publishes LastObservedZone=Approach;
         // walk-away arms.
         bus.inject(
-            "Vehicle.Simulation.PEPS.Plant.KeyFob.1.PlacedZone",
+            "Vehicle.Simulation.KeyFob.1.PlacedZone",
             SignalValue::String("Approach".into()),
         );
         sleep(Duration::from_millis(80)).await; // let a couple of polls run
@@ -517,7 +517,7 @@ mod tests {
         // LastObservedZone=OutOfRange.  Walk-away sees the transition
         // and fires.
         bus.inject(
-            "Vehicle.Simulation.PEPS.Plant.KeyFob.1.PlacedZone",
+            "Vehicle.Simulation.KeyFob.1.PlacedZone",
             SignalValue::String("OutOfRange".into()),
         );
         // Allow time for: the next approach poll to publish OutOfRange,
@@ -548,11 +548,11 @@ mod tests {
         // returns it, and place it in Cabin via PlacedZone (the
         // arbiter's ground truth).
         bus.inject(
-            "Vehicle.Simulation.PEPS.Plant.KeyFob.1.Paired",
+            "Vehicle.Simulation.KeyFob.1.Paired",
             SignalValue::Bool(true),
         );
         bus.inject(
-            "Vehicle.Simulation.PEPS.Plant.KeyFob.1.PlacedZone",
+            "Vehicle.Simulation.KeyFob.1.PlacedZone",
             SignalValue::String("Cabin".into()),
         );
 
@@ -586,11 +586,11 @@ mod tests {
         let (bus, _h) = setup().await;
 
         bus.inject(
-            "Vehicle.Simulation.PEPS.Plant.KeyFob.1.Paired",
+            "Vehicle.Simulation.KeyFob.1.Paired",
             SignalValue::Bool(true),
         );
         bus.inject(
-            "Vehicle.Simulation.PEPS.Plant.KeyFob.1.PlacedZone",
+            "Vehicle.Simulation.KeyFob.1.PlacedZone",
             SignalValue::String("Cabin".into()),
         );
 
@@ -623,11 +623,11 @@ mod tests {
         let (bus, _h) = setup().await;
 
         bus.inject(
-            "Vehicle.Simulation.PEPS.Plant.KeyFob.1.Paired",
+            "Vehicle.Simulation.KeyFob.1.Paired",
             SignalValue::Bool(false),
         );
         bus.inject(
-            "Vehicle.Simulation.PEPS.Plant.KeyFob.1.PlacedZone",
+            "Vehicle.Simulation.KeyFob.1.PlacedZone",
             SignalValue::String("Cabin".into()),
         );
 

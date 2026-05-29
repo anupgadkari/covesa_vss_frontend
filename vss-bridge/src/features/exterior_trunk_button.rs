@@ -263,10 +263,10 @@ mod tests {
 
     fn place_fob_at_trunk(bus: &MockBus, slot: u8) {
         let path = match slot {
-            1 => "Vehicle.Simulation.PEPS.Plant.KeyFob.1.PlacedZone",
-            2 => "Vehicle.Simulation.PEPS.Plant.KeyFob.2.PlacedZone",
-            3 => "Vehicle.Simulation.PEPS.Plant.KeyFob.3.PlacedZone",
-            4 => "Vehicle.Simulation.PEPS.Plant.KeyFob.4.PlacedZone",
+            1 => "Vehicle.Simulation.KeyFob.1.PlacedZone",
+            2 => "Vehicle.Simulation.KeyFob.2.PlacedZone",
+            3 => "Vehicle.Simulation.KeyFob.3.PlacedZone",
+            4 => "Vehicle.Simulation.KeyFob.4.PlacedZone",
             _ => panic!("unknown slot"),
         };
         bus.inject(path, SignalValue::String("Trunk".into()));
@@ -383,7 +383,7 @@ mod tests {
         let bus = setup().await;
         bus.inject(LOCK_STATUS, SignalValue::String("LOCKED".into()));
         bus.inject(
-            "Vehicle.Simulation.PEPS.Plant.KeyFob.1.PlacedZone",
+            "Vehicle.Simulation.KeyFob.1.PlacedZone",
             SignalValue::String("LeftFront".into()),
         );
         settle().await;
@@ -418,7 +418,7 @@ mod tests {
         let bus = setup().await;
         bus.inject(LOCK_STATUS, SignalValue::String("LOCKED".into()));
         bus.inject(
-            "Vehicle.Simulation.PEPS.Plant.KeyFob.1.Paired",
+            "Vehicle.Simulation.KeyFob.1.Paired",
             SignalValue::Bool(false),
         );
         place_fob_at_trunk(&bus, 1);

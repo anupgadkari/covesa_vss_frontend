@@ -70,37 +70,37 @@ const INPUT_SIGNALS: &[VssPath] = &[
     // foundation + follow-up).  The legacy `.Zone` alias has been
     // retired now that every consumer reads `.LastObservedZone` from
     // the KeySearchArbiter instead.
-    "Vehicle.Simulation.PEPS.Plant.KeyFob.1.PlacedZone",
-    "Vehicle.Simulation.PEPS.Plant.KeyFob.2.PlacedZone",
-    "Vehicle.Simulation.PEPS.Plant.KeyFob.3.PlacedZone",
-    "Vehicle.Simulation.PEPS.Plant.KeyFob.4.PlacedZone",
-    "Vehicle.Simulation.PEPS.Plant.KeyFob.5.PlacedZone",
-    "Vehicle.Simulation.PEPS.Plant.KeyFob.6.PlacedZone",
-    "Vehicle.Simulation.PEPS.Plant.KeyFob.1.ButtonPress",
-    "Vehicle.Simulation.PEPS.Plant.KeyFob.2.ButtonPress",
-    "Vehicle.Simulation.PEPS.Plant.KeyFob.3.ButtonPress",
-    "Vehicle.Simulation.PEPS.Plant.KeyFob.4.ButtonPress",
-    "Vehicle.Simulation.PEPS.Plant.BlePhone.1.PlacedZone",
-    "Vehicle.Simulation.PEPS.Plant.BlePhone.2.PlacedZone",
+    "Vehicle.Simulation.KeyFob.1.PlacedZone",
+    "Vehicle.Simulation.KeyFob.2.PlacedZone",
+    "Vehicle.Simulation.KeyFob.3.PlacedZone",
+    "Vehicle.Simulation.KeyFob.4.PlacedZone",
+    "Vehicle.Simulation.KeyFob.5.PlacedZone",
+    "Vehicle.Simulation.KeyFob.6.PlacedZone",
+    "Vehicle.Simulation.KeyFob.1.ButtonPress",
+    "Vehicle.Simulation.KeyFob.2.ButtonPress",
+    "Vehicle.Simulation.KeyFob.3.ButtonPress",
+    "Vehicle.Simulation.KeyFob.4.ButtonPress",
+    "Vehicle.Simulation.BlePhone.1.PlacedZone",
+    "Vehicle.Simulation.BlePhone.2.PlacedZone",
     // LastObservedZone is the consumer-facing signal published by
     // the KeySearchArbiter after each scan.  In production no one
     // else writes it.  Allowed here as an HMI / e2e input so the
     // gherkin suite can drive consumer features deterministically
     // without waiting for the next approach poll to fire.
-    "Vehicle.Simulation.PEPS.Plant.KeyFob.1.LastObservedZone",
-    "Vehicle.Simulation.PEPS.Plant.KeyFob.2.LastObservedZone",
-    "Vehicle.Simulation.PEPS.Plant.KeyFob.3.LastObservedZone",
-    "Vehicle.Simulation.PEPS.Plant.KeyFob.4.LastObservedZone",
-    "Vehicle.Simulation.PEPS.Plant.KeyFob.5.LastObservedZone",
-    "Vehicle.Simulation.PEPS.Plant.KeyFob.6.LastObservedZone",
-    "Vehicle.Simulation.PEPS.Plant.BlePhone.1.LastObservedZone",
-    "Vehicle.Simulation.PEPS.Plant.BlePhone.2.LastObservedZone",
+    "Vehicle.Simulation.KeyFob.1.LastObservedZone",
+    "Vehicle.Simulation.KeyFob.2.LastObservedZone",
+    "Vehicle.Simulation.KeyFob.3.LastObservedZone",
+    "Vehicle.Simulation.KeyFob.4.LastObservedZone",
+    "Vehicle.Simulation.KeyFob.5.LastObservedZone",
+    "Vehicle.Simulation.KeyFob.6.LastObservedZone",
+    "Vehicle.Simulation.BlePhone.1.LastObservedZone",
+    "Vehicle.Simulation.BlePhone.2.LastObservedZone",
     // Phone NFC tap — separate signal from .Zone so BLE proximity
     // (PassiveEntry) and NFC tap (NfcEntry) are independent.
-    "Vehicle.Simulation.PEPS.Plant.BlePhone.1.NfcTap",
-    "Vehicle.Simulation.PEPS.Plant.BlePhone.2.NfcTap",
-    "Vehicle.Simulation.PEPS.Plant.NfcCard.1.Position",
-    "Vehicle.Simulation.PEPS.Plant.NfcCard.2.Position",
+    "Vehicle.Simulation.BlePhone.1.NfcTap",
+    "Vehicle.Simulation.BlePhone.2.NfcTap",
+    "Vehicle.Simulation.NfcCard.1.Position",
+    "Vehicle.Simulation.NfcCard.2.Position",
     // Door handle plant model inputs — HMI top-view physical interactions.
     "Vehicle.Cabin.Door.Row1.Left.Handle.Inside.IsPulled",
     "Vehicle.Cabin.Door.Row1.Right.Handle.Inside.IsPulled",
@@ -289,18 +289,18 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     "Vehicle.Controller.Body.Lights.DirectionIndicator.Right.Lamp.Side.IsOn",
     "Vehicle.Controller.Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsOn",
     // PEPS plant model outputs — RSSI, challenge responses, RF messages.
-    "Vehicle.Simulation.PEPS.Plant.KeyFob.1.RssiResponse",
-    "Vehicle.Simulation.PEPS.Plant.KeyFob.2.RssiResponse",
-    "Vehicle.Simulation.PEPS.Plant.KeyFob.3.RssiResponse",
-    "Vehicle.Simulation.PEPS.Plant.KeyFob.4.RssiResponse",
-    "Vehicle.Simulation.PEPS.Plant.KeyFob.5.RssiResponse",
-    "Vehicle.Simulation.PEPS.Plant.KeyFob.6.RssiResponse",
-    "Vehicle.Simulation.PEPS.Plant.KeyFob.1.RfMessage",
-    "Vehicle.Simulation.PEPS.Plant.KeyFob.2.RfMessage",
-    "Vehicle.Simulation.PEPS.Plant.KeyFob.3.RfMessage",
-    "Vehicle.Simulation.PEPS.Plant.KeyFob.4.RfMessage",
-    "Vehicle.Simulation.PEPS.Plant.BlePhone.1.RssiResponse",
-    "Vehicle.Simulation.PEPS.Plant.BlePhone.2.RssiResponse",
+    "Vehicle.Simulation.KeyFob.1.RssiResponse",
+    "Vehicle.Simulation.KeyFob.2.RssiResponse",
+    "Vehicle.Simulation.KeyFob.3.RssiResponse",
+    "Vehicle.Simulation.KeyFob.4.RssiResponse",
+    "Vehicle.Simulation.KeyFob.5.RssiResponse",
+    "Vehicle.Simulation.KeyFob.6.RssiResponse",
+    "Vehicle.Simulation.KeyFob.1.RfMessage",
+    "Vehicle.Simulation.KeyFob.2.RfMessage",
+    "Vehicle.Simulation.KeyFob.3.RfMessage",
+    "Vehicle.Simulation.KeyFob.4.RfMessage",
+    "Vehicle.Simulation.BlePhone.1.RssiResponse",
+    "Vehicle.Simulation.BlePhone.2.RssiResponse",
     // Trunk plant model output — open/close state driven by RKE or CloseCmd.
     "Vehicle.Body.Trunk.Rear.IsOpen",
     // Hood plant model outputs — tri-state latch + IsOpen companion.
@@ -394,14 +394,14 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     // after each scan that covers the slot (item #14a).  Features
     // that need realistic per-key positions subscribe here instead
     // of reading the legacy `.Zone` ground-truth mirror.
-    "Vehicle.Simulation.PEPS.Plant.KeyFob.1.LastObservedZone",
-    "Vehicle.Simulation.PEPS.Plant.KeyFob.2.LastObservedZone",
-    "Vehicle.Simulation.PEPS.Plant.KeyFob.3.LastObservedZone",
-    "Vehicle.Simulation.PEPS.Plant.KeyFob.4.LastObservedZone",
-    "Vehicle.Simulation.PEPS.Plant.KeyFob.5.LastObservedZone",
-    "Vehicle.Simulation.PEPS.Plant.KeyFob.6.LastObservedZone",
-    "Vehicle.Simulation.PEPS.Plant.BlePhone.1.LastObservedZone",
-    "Vehicle.Simulation.PEPS.Plant.BlePhone.2.LastObservedZone",
+    "Vehicle.Simulation.KeyFob.1.LastObservedZone",
+    "Vehicle.Simulation.KeyFob.2.LastObservedZone",
+    "Vehicle.Simulation.KeyFob.3.LastObservedZone",
+    "Vehicle.Simulation.KeyFob.4.LastObservedZone",
+    "Vehicle.Simulation.KeyFob.5.LastObservedZone",
+    "Vehicle.Simulation.KeyFob.6.LastObservedZone",
+    "Vehicle.Simulation.BlePhone.1.LastObservedZone",
+    "Vehicle.Simulation.BlePhone.2.LastObservedZone",
 ];
 
 /// Subset of `OUTPUT_SIGNALS` whose authoritative boot value comes from
@@ -447,7 +447,21 @@ const ESSENTIAL_BOOT_SIGNALS: &[VssPath] = &[
 ];
 
 /// Shared state snapshot sent to HMI clients.
+/// Keyed by **canonical** bus path internally; keys are translated to
+/// the HMI's legacy vocabulary only at wire-serialisation time.
 type StateSnapshot = HashMap<&'static str, serde_json::Value>;
+
+/// Build the `{"state": …}` WebSocket message from a canonical-keyed
+/// snapshot, translating every key to the legacy vocabulary the HMI
+/// speaks (see `hmi_alias`).  This is the single point where the
+/// canonical ↔ legacy boundary is crossed on the outbound side.
+fn hmi_state_message(snapshot: &StateSnapshot) -> String {
+    let translated: serde_json::Map<String, serde_json::Value> = snapshot
+        .iter()
+        .map(|(k, v)| (crate::hmi_alias::to_hmi(k).to_string(), v.clone()))
+        .collect();
+    serde_json::json!({ "state": translated }).to_string()
+}
 
 pub struct WsBridge<B: SignalBus> {
     bus: Arc<B>,
@@ -527,6 +541,10 @@ impl<B: SignalBus> WsBridge<B> {
                     let json_val = signal_value_to_json(&val);
                     {
                         let mut s = state.lock().await;
+                        // Keyed by canonical bus path internally; the
+                        // legacy-vocabulary translation for the HMI
+                        // happens only at wire-serialisation time
+                        // (see `hmi_state_message`).
                         s.insert(signal, json_val);
                     }
                     dirty.notify_one();
@@ -568,8 +586,7 @@ impl<B: SignalBus> WsBridge<B> {
                             let _ = ready_tx.send(true);
                         }
                     }
-                    let msg = serde_json::json!({ "state": snapshot });
-                    let _ = tx.send(msg.to_string());
+                    let _ = tx.send(hmi_state_message(&snapshot));
                 }
             });
         }
@@ -660,8 +677,9 @@ async fn handle_connection<B: SignalBus>(
     {
         let snapshot = output_state.lock().await.clone();
         if !snapshot.is_empty() {
-            let msg = serde_json::json!({ "state": snapshot });
-            ws_tx.send(Message::Text(msg.to_string().into())).await?;
+            ws_tx
+                .send(Message::Text(hmi_state_message(&snapshot).into()))
+                .await?;
         }
     }
 
@@ -1026,7 +1044,10 @@ async fn handle_hmi_message<B: SignalBus>(text: &str, bus: &Arc<B>) {
     }
 
     let path = match parsed.get("path").and_then(|v| v.as_str()) {
-        Some(p) => p,
+        // Translate the HMI's legacy vocabulary to the canonical bus
+        // path before matching against INPUT_SIGNALS (no-op for
+        // unaliased paths, which then fall through and get rejected).
+        Some(p) => crate::hmi_alias::from_hmi(p),
         None => {
             tracing::warn!("HMI: missing 'path' field");
             return;

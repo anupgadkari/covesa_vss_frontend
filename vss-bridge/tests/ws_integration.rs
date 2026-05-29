@@ -206,16 +206,11 @@ async fn hazard_switch_activates_both_indicators_via_ws() {
     let bridge = BridgeProcess::start();
     let (mut tx, mut rx) = connect_ws(&bridge.ws_url()).await;
 
-    send_sensor(
-        &mut tx,
-        "Vehicle.Controller.Body.Switches.Hazard.IsEngaged",
-        json!(true),
-    )
-    .await;
+    send_sensor(&mut tx, "Body.Switches.Hazard.IsEngaged", json!(true)).await;
 
     let left_ok = wait_for_state(
         &mut rx,
-        "Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling",
+        "Body.Lights.DirectionIndicator.Left.IsSignaling",
         json!(true),
         Duration::from_secs(2),
     )
@@ -231,7 +226,7 @@ async fn turn_stalk_requires_ignition_on() {
     // Ignition defaults to OFF — stalk should have no effect.
     send_sensor(
         &mut tx,
-        "Vehicle.Controller.Body.Switches.TurnIndicator.Direction",
+        "Body.Switches.TurnIndicator.Direction",
         json!("RIGHT"),
     )
     .await;
@@ -239,7 +234,7 @@ async fn turn_stalk_requires_ignition_on() {
     // Wait briefly — should NOT see Right.IsSignaling = true.
     let right = wait_for_state(
         &mut rx,
-        "Vehicle.Body.Lights.DirectionIndicator.Right.IsSignaling",
+        "Body.Lights.DirectionIndicator.Right.IsSignaling",
         json!(true),
         Duration::from_millis(500),
     )
@@ -258,7 +253,7 @@ async fn hazard_engaged_then_disengaged_with_turn_resuming() {
 
     send_sensor(
         &mut tx,
-        "Vehicle.Controller.Body.Switches.TurnIndicator.Direction",
+        "Body.Switches.TurnIndicator.Direction",
         json!("RIGHT"),
     )
     .await;
@@ -266,7 +261,7 @@ async fn hazard_engaged_then_disengaged_with_turn_resuming() {
     // Wait for right indicator to start
     let right_on = wait_for_state(
         &mut rx,
-        "Vehicle.Body.Lights.DirectionIndicator.Right.IsSignaling",
+        "Body.Lights.DirectionIndicator.Right.IsSignaling",
         json!(true),
         Duration::from_secs(2),
     )
@@ -277,15 +272,10 @@ async fn hazard_engaged_then_disengaged_with_turn_resuming() {
     );
 
     // Engage hazard
-    send_sensor(
-        &mut tx,
-        "Vehicle.Controller.Body.Switches.Hazard.IsEngaged",
-        json!(true),
-    )
-    .await;
+    send_sensor(&mut tx, "Body.Switches.Hazard.IsEngaged", json!(true)).await;
     let left_on = wait_for_state(
         &mut rx,
-        "Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling",
+        "Body.Lights.DirectionIndicator.Left.IsSignaling",
         json!(true),
         Duration::from_secs(2),
     )
@@ -293,17 +283,12 @@ async fn hazard_engaged_then_disengaged_with_turn_resuming() {
     assert!(left_on, "Left should signal after hazard engage");
 
     // Disengage hazard — right should resume, left should go off
-    send_sensor(
-        &mut tx,
-        "Vehicle.Controller.Body.Switches.Hazard.IsEngaged",
-        json!(false),
-    )
-    .await;
+    send_sensor(&mut tx, "Body.Switches.Hazard.IsEngaged", json!(false)).await;
 
     // Right should still be true (Turn MEDIUM claim resumes)
     let right_still = wait_for_state(
         &mut rx,
-        "Vehicle.Body.Lights.DirectionIndicator.Right.IsSignaling",
+        "Body.Lights.DirectionIndicator.Right.IsSignaling",
         json!(true),
         Duration::from_secs(2),
     )
@@ -320,15 +305,10 @@ async fn plant_model_blinks_at_expected_rate() {
     let (mut tx, mut rx) = connect_ws(&bridge.ws_url()).await;
 
     // Engage hazard (ignition-independent).
-    send_sensor(
-        &mut tx,
-        "Vehicle.Controller.Body.Switches.Hazard.IsEngaged",
-        json!(true),
-    )
-    .await;
+    send_sensor(&mut tx, "Body.Switches.Hazard.IsEngaged", json!(true)).await;
 
     // Wait for the first lamp event to appear.
-    let lamp_path = "Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn";
+    let lamp_path = "Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn";
     let started = wait_for_state(&mut rx, lamp_path, json!(true), Duration::from_secs(2)).await;
     assert!(started, "plant model should start blinking");
 
@@ -355,26 +335,16 @@ async fn passive_entry_unlocks_driver_door_via_handle_pull() {
 
     // Make sure doors start locked so we'll see the unlock transition.
     // Lock the per-door state via CentralLock.Command (sets IsLocked
-    // per door), AND publish Vehicle.Controller.Cabin.LockStatus = LOCKED so the
+    // per door), AND publish Cabin.LockStatus = LOCKED so the
     // PassiveEntry cabin-state gate (new in this PR) lets the pull
     // through.  HMI direct-write bypasses the arbiter, so it doesn't
-    // automatically update Vehicle.Controller.Cabin.LockStatus — we need both signals
+    // automatically update Cabin.LockStatus — we need both signals
     // for a realistic "doors are locked" simulation.
-    send_sensor(
-        &mut tx,
-        "Vehicle.Controller.Body.Doors.CentralLock.Command",
-        json!("lock_all"),
-    )
-    .await;
-    send_sensor(
-        &mut tx,
-        "Vehicle.Controller.Cabin.LockStatus",
-        json!("LOCKED"),
-    )
-    .await;
+    send_sensor(&mut tx, "Body.Doors.CentralLock.Command", json!("lock_all")).await;
+    send_sensor(&mut tx, "Cabin.LockStatus", json!("LOCKED")).await;
     let locked = wait_for_state(
         &mut rx,
-        "Vehicle.Cabin.Door.Row1.Left.IsLocked",
+        "Body.Doors.Row1.Left.IsLocked",
         json!(true),
         Duration::from_secs(2),
     )
@@ -387,13 +357,13 @@ async fn passive_entry_unlocks_driver_door_via_handle_pull() {
     // next approach poll to fire.
     send_sensor(
         &mut tx,
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.1.PlacedZone",
+        "Body.PEPS.Plant.KeyFob.1.PlacedZone",
         json!("LeftFront"),
     )
     .await;
     send_sensor(
         &mut tx,
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.1.LastObservedZone",
+        "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
         json!("LeftFront"),
     )
     .await;
@@ -405,7 +375,7 @@ async fn passive_entry_unlocks_driver_door_via_handle_pull() {
     // Pull the driver-door outside handle.
     send_sensor(
         &mut tx,
-        "Vehicle.Cabin.Door.Row1.Left.Handle.Outside.IsPulled",
+        "Body.Doors.Row1.Left.Handle.Outside.IsPulled",
         json!(true),
     )
     .await;
@@ -414,7 +384,7 @@ async fn passive_entry_unlocks_driver_door_via_handle_pull() {
     // plus ~50 ms arbiter / plant model latency.
     let unlocked = wait_for_state(
         &mut rx,
-        "Vehicle.Cabin.Door.Row1.Left.IsLocked",
+        "Body.Doors.Row1.Left.IsLocked",
         json!(false),
         Duration::from_secs(2),
     )
@@ -431,15 +401,10 @@ async fn passive_entry_no_device_in_zone_keeps_doors_locked() {
     let bridge = BridgeProcess::start();
     let (mut tx, mut rx) = connect_ws(&bridge.ws_url()).await;
 
-    send_sensor(
-        &mut tx,
-        "Vehicle.Controller.Body.Doors.CentralLock.Command",
-        json!("lock_all"),
-    )
-    .await;
+    send_sensor(&mut tx, "Body.Doors.CentralLock.Command", json!("lock_all")).await;
     let locked = wait_for_state(
         &mut rx,
-        "Vehicle.Cabin.Door.Row1.Left.IsLocked",
+        "Body.Doors.Row1.Left.IsLocked",
         json!(true),
         Duration::from_secs(2),
     )
@@ -449,7 +414,7 @@ async fn passive_entry_no_device_in_zone_keeps_doors_locked() {
     // No paired device positioned anywhere.  Pull the handle.
     send_sensor(
         &mut tx,
-        "Vehicle.Cabin.Door.Row1.Left.Handle.Outside.IsPulled",
+        "Body.Doors.Row1.Left.Handle.Outside.IsPulled",
         json!(true),
     )
     .await;
@@ -458,7 +423,7 @@ async fn passive_entry_no_device_in_zone_keeps_doors_locked() {
     // be locked.
     let still_locked = !wait_for_state(
         &mut rx,
-        "Vehicle.Cabin.Door.Row1.Left.IsLocked",
+        "Body.Doors.Row1.Left.IsLocked",
         json!(false),
         Duration::from_millis(500),
     )
@@ -479,20 +444,20 @@ async fn welcome_arms_puddle_lamps_on_approach_entry() {
     // PassiveEntry test above.
     send_sensor(
         &mut tx,
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.1.PlacedZone",
+        "Body.PEPS.Plant.KeyFob.1.PlacedZone",
         json!("Approach"),
     )
     .await;
     send_sensor(
         &mut tx,
-        "Vehicle.Simulation.PEPS.Plant.KeyFob.1.LastObservedZone",
+        "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
         json!("Approach"),
     )
     .await;
 
     let on = wait_for_state(
         &mut rx,
-        "Vehicle.Controller.Body.Lights.Puddle.Left.IsOn",
+        "Body.Lights.Puddle.Left.IsOn",
         json!(true),
         Duration::from_secs(2),
     )
@@ -510,7 +475,7 @@ async fn keypad_lock_blocked_when_no_fob_outside() {
     // No paired device anywhere.  Press the lock pad and hold for >500 ms.
     send_sensor(
         &mut tx,
-        "Vehicle.Cabin.Door.Row1.Left.Handle.Outside.LockPad.IsPressed",
+        "Body.Doors.Row1.Left.Handle.Outside.LockPad.IsPressed",
         json!(true),
     )
     .await;
@@ -519,7 +484,7 @@ async fn keypad_lock_blocked_when_no_fob_outside() {
     // lock state change reaches the HMI within the window.
     let locked = wait_for_state(
         &mut rx,
-        "Vehicle.Cabin.Door.Row1.Left.IsLocked",
+        "Body.Doors.Row1.Left.IsLocked",
         json!(true),
         Duration::from_millis(800),
     )

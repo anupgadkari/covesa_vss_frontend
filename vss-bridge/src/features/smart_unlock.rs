@@ -367,17 +367,17 @@ mod tests {
 
     fn place(bus: &MockBus, slot: u8, zone: Zone) {
         let path = match slot {
-            1 => "Vehicle.Simulation.PEPS.Plant.KeyFob.1.PlacedZone",
-            2 => "Vehicle.Simulation.PEPS.Plant.KeyFob.2.PlacedZone",
-            3 => "Vehicle.Simulation.PEPS.Plant.KeyFob.3.PlacedZone",
+            1 => "Vehicle.Simulation.KeyFob.1.PlacedZone",
+            2 => "Vehicle.Simulation.KeyFob.2.PlacedZone",
+            3 => "Vehicle.Simulation.KeyFob.3.PlacedZone",
             _ => panic!("unknown slot"),
         };
         bus.inject(path, SignalValue::String(zone.as_str().into()));
         // The arbiter's `Authenticated` path filters out unpaired fobs.
         let paired_path = match slot {
-            1 => "Vehicle.Simulation.PEPS.Plant.KeyFob.1.Paired",
-            2 => "Vehicle.Simulation.PEPS.Plant.KeyFob.2.Paired",
-            3 => "Vehicle.Simulation.PEPS.Plant.KeyFob.3.Paired",
+            1 => "Vehicle.Simulation.KeyFob.1.Paired",
+            2 => "Vehicle.Simulation.KeyFob.2.Paired",
+            3 => "Vehicle.Simulation.KeyFob.3.Paired",
             _ => unreachable!(),
         };
         bus.inject(paired_path, SignalValue::Bool(true));
