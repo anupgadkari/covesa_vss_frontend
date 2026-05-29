@@ -473,6 +473,29 @@ Out of scope for the rebase; covered separately in backlog item
 cabin lighting taxonomy, Driver.IdentifierType for PEPS
 integration.
 
+### Follow-up — Unify fob buttons through the RfMessage chain *(deferred)*
+
+The namespace refinement parked the two fob-mounted buttons at
+`Vehicle.Simulation.KeyFob.Switch.{Panic,Lock}` as interim homes.
+But the per-fob `Vehicle.Simulation.KeyFob.N.ButtonPress` →
+authenticated `RfMessage` chain already handles every fob button,
+and `FobButton` already includes `PanicAlarm`.  The clean target:
+
+- Route panic through the same chain: a panic press becomes
+  `ButtonPress = "PANIC_ALARM"` → `RfMessage(PanicAlarm)`,
+  authenticated like lock/unlock.
+- `PanicAlarm` consumes that `RfMessage`, owns its engaged-state
+  internally (no more writing `false` back to its own input
+  signal — a current smell), and publishes only
+  `Vehicle.Body.Alarm.IsActive` (the canonical vehicle-state).
+- Delete the now-redundant `Vehicle.Simulation.KeyFob.Switch.Panic`
+  aggregate **and** the vestigial `Vehicle.Simulation.KeyFob.Switch.Lock`
+  (nothing consumes the latter — RKE already uses the RfMessage
+  chain for lock).
+
+A behavioural refactor of `PanicAlarm` + its tests, so kept out of
+the rename/relocation PRs.
+
 ## Doc-comment update
 
 All "VSS v4.0" comments in `signal_ids.rs`, feature files, and
