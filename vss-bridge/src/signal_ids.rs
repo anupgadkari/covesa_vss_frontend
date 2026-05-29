@@ -562,11 +562,11 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
 
         // Vehicle starting / ignition (block 0x001E).
         //
-        // `Vehicle.Cabin.StartStopSwitch.IsPressed` — momentary push of the
+        // `Vehicle.PowerMode.StartStopSwitch.IsPressed` — momentary push of the
         //   start/stop button.  Only meaningful when
         //   `VehicleLineCal::key_source_cfg == Peps`; on KeyCylinder
         //   builds the HMI omits the button entirely.
-        // `Vehicle.Cabin.IgnitionCylinder.Position` — String enum
+        // `Vehicle.PowerMode.IgnitionCylinder.Position` — String enum
         //   ("LOCK" | "ACC" | "ON" | "START") published by the cockpit
         //   rotary cylinder.  Only used when `key_source_cfg ==
         //   KeyCylinder`.  Spring-loaded START detent returns to ON
@@ -578,8 +578,8 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         //   ("LOCKED" | "AUTHENTICATING" | "AUTHENTICATED" | "FAILED")
         //   published by VehicleStartingControl based on the result of
         //   the immobilizer challenge issued via the KeySearchArbiter.
-        "Vehicle.Cabin.StartStopSwitch.IsPressed" => Some(0x001E_0001),
-        "Vehicle.Cabin.IgnitionCylinder.Position" => Some(0x001E_0002),
+        "Vehicle.PowerMode.StartStopSwitch.IsPressed" => Some(0x001E_0001),
+        "Vehicle.PowerMode.IgnitionCylinder.Position" => Some(0x001E_0002),
         "Vehicle.Chassis.Brake.IsApplied" => Some(0x001E_0003),
         "Vehicle.Controller.Starting.ImmobilizerStatus" => Some(0x001E_0004),
 
@@ -1182,8 +1182,8 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
         0x001D_0003,
     ),
     // Vehicle starting / ignition (block 0x001E).
-    ("Vehicle.Cabin.StartStopSwitch.IsPressed", 0x001E_0001),
-    ("Vehicle.Cabin.IgnitionCylinder.Position", 0x001E_0002),
+    ("Vehicle.PowerMode.StartStopSwitch.IsPressed", 0x001E_0001),
+    ("Vehicle.PowerMode.IgnitionCylinder.Position", 0x001E_0002),
     ("Vehicle.Chassis.Brake.IsApplied", 0x001E_0003),
     ("Vehicle.Controller.Starting.ImmobilizerStatus", 0x001E_0004),
     ("Powertrain.Transmission.ShiftLockEngaged", 0x001E_0005),

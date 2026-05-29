@@ -606,7 +606,7 @@ const HMI_ALIASES: &[(VssPath, VssPath)] = &[
         "Body.Switches.Horn.IsPressed",
     ),
     (
-        "Vehicle.Cabin.IgnitionCylinder.Position",
+        "Vehicle.PowerMode.IgnitionCylinder.Position",
         "Body.Switches.IgnitionCylinder.Position",
     ),
     (
@@ -646,7 +646,7 @@ const HMI_ALIASES: &[(VssPath, VssPath)] = &[
         "Body.Switches.StartStop.BacklightIntensity",
     ),
     (
-        "Vehicle.Cabin.StartStopSwitch.IsPressed",
+        "Vehicle.PowerMode.StartStopSwitch.IsPressed",
         "Body.Switches.StartStop.IsPressed",
     ),
     (

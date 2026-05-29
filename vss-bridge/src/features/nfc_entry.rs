@@ -51,7 +51,7 @@
 //!    after `NFC_BYPASS_WINDOW`).  VehicleStartingControl reads
 //!    this as proof the user authenticated via NFC and skips its
 //!    normal cabin Authenticated scan.
-//! 2. Publishes a momentary `Vehicle.Cabin.StartStopSwitch.IsPressed`
+//! 2. Publishes a momentary `Vehicle.PowerMode.StartStopSwitch.IsPressed`
 //!    rising-then-falling edge so VSC's PEPS press handler fires.
 //!
 //! Net effect: an NFC tap on the start-button pad is equivalent to
@@ -70,7 +70,7 @@ use crate::ipc_message::{FeatureId, SignalValue};
 use crate::signal_bus::{SignalBus, VssPath};
 
 const LOCK_STATUS: VssPath = "Vehicle.Cabin.LockStatus";
-const START_STOP: VssPath = "Vehicle.Cabin.StartStopSwitch.IsPressed";
+const START_STOP: VssPath = "Vehicle.PowerMode.StartStopSwitch.IsPressed";
 const NFC_AUTH_BYPASS: VssPath = "Vehicle.Controller.Body.PEPS.NfcAuthBypass";
 
 /// How long the NFC bypass stays valid after a tap.  Long enough
@@ -395,7 +395,7 @@ mod tests {
     /// Helper: did the bus see a momentary StartStop rising edge?
     fn start_press_was_fired(bus: &MockBus) -> bool {
         bus.history().into_iter().any(|(s, v)| {
-            s == "Vehicle.Cabin.StartStopSwitch.IsPressed" && v == SignalValue::Bool(true)
+            s == "Vehicle.PowerMode.StartStopSwitch.IsPressed" && v == SignalValue::Bool(true)
         })
     }
 

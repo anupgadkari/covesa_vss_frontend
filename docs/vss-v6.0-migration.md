@@ -141,8 +141,16 @@ of them out:
   window rockers under `…Window.Switch.{Local,Master}Detent`; mirror
   switch under `Vehicle.Body.Mirrors.Switch.*`; sunroof under
   `Vehicle.Cabin.Sunroof.Switch.Detent`; hood/trunk release, horn,
-  child-lock, start-stop, ignition-cylinder at their respective
-  component homes.
+  child-lock at their respective component homes.  The two
+  power-mode controls — `StartStop.IsPressed` (PEPS) and
+  `IgnitionCylinder.Position` (KeyCylinder) — go to a function-named
+  `Vehicle.PowerMode.*` branch rather than `Cabin.*`: they're
+  power-mode controls, not cabin furniture, and grouping them names
+  what they do.  The power-mode *state* stays at the canonical
+  top-level `Vehicle.LowVoltageSystemState` (LOCK/OFF/ACC/ON/START),
+  which `PowerMode.*` thematically pairs with.  (The controller-side
+  `IgnitionCylinder.RemovalInhibited` stays in `Vehicle.Controller.*`
+  — it's a controller output, not a user control.)
 - **2 fob-mounted switches** → `Vehicle.Simulation.KeyFob.Switch.*`.
   The panic and keyfob-lock buttons are physically *on the keyfob*,
   not on the vehicle — so a vehicle-component home was wrong

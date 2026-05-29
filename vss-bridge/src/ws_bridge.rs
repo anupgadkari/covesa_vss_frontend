@@ -212,8 +212,8 @@ const INPUT_SIGNALS: &[VssPath] = &[
     //   • StartStop.IsPressed       — PEPS push-button momentary.
     //   • IgnitionCylinder.Position — KeyCylinder rotary (String enum
     //     "LOCK" | "ACC" | "ON" | "START"; spring-loaded START).
-    "Vehicle.Cabin.StartStopSwitch.IsPressed",
-    "Vehicle.Cabin.IgnitionCylinder.Position",
+    "Vehicle.PowerMode.StartStopSwitch.IsPressed",
+    "Vehicle.PowerMode.IgnitionCylinder.Position",
 ];
 
 /// Signals the bridge pushes back to the HMI (actuator outputs from arbiters).
