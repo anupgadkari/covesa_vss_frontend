@@ -14,7 +14,7 @@ Feature: Perimeter Alarm (anti-intrusion alarm on unauthorised door open)
   #   • Body.Doors.Row{1,2}.{Left,Right}.IsOpen   — trigger source
   #   • Vehicle.Cabin.LockStatus                          — arming gate
   #   • Vehicle.Cabin.LockStatus.LastRequestor            — disarm-source identity
-  #   • Vehicle.Body.Alarm.PanicSwitch.IsEngaged             — disarm via panic press
+  #   • Vehicle.Simulation.KeyFob.Switch.Panic             — disarm via panic press
   #
   # On the FALSE→TRUE edge of Vehicle.Cabin.LockStatus into LOCKED / DOUBLE_LOCKED
   # the feature starts a 20 s pre-arm timer.  Until the timer elapses,
@@ -117,7 +117,7 @@ Feature: Perimeter Alarm (anti-intrusion alarm on unauthorised door open)
   #               candidates would let an attacker who reached the
   #               keypad bypass the alarm.
   #
-  # REQ-PERI-011: When Vehicle.Body.Alarm.PanicSwitch.IsEngaged transitions to TRUE
+  # REQ-PERI-011: When Vehicle.Simulation.KeyFob.Switch.Panic transitions to TRUE
   #               while a PerimeterAlarm sequence is running (any phase),
   #               the PerimeterAlarm feature SHALL immediately disarm
   #               (same teardown path as REQ-PERI-009).  This lets the
@@ -291,7 +291,7 @@ Feature: Perimeter Alarm (anti-intrusion alarm on unauthorised door open)
   # --- REQ-PERI-011 ---
   Scenario: Panic-button press during full alarm disarms immediately
     Given a PerimeterAlarm sequence is in the full-alarm phase
-    When Vehicle.Body.Alarm.PanicSwitch.IsEngaged transitions to TRUE
+    When Vehicle.Simulation.KeyFob.Switch.Panic transitions to TRUE
     Then Vehicle.Body.Alarm.IsActive becomes FALSE
     And the PerimeterAlarm feature has released all arbiter claims
 
@@ -315,7 +315,7 @@ Feature: Perimeter Alarm (anti-intrusion alarm on unauthorised door open)
   # --- REQ-PERI-014 ---
   Scenario: Panic press while perimeter alarm runs cleanly hands off control
     Given a PerimeterAlarm sequence is in the full-alarm phase
-    When Vehicle.Body.Alarm.PanicSwitch.IsEngaged transitions to TRUE
+    When Vehicle.Simulation.KeyFob.Switch.Panic transitions to TRUE
     Then PerimeterAlarm releases its Lighting and Horn arbiter claims
     And PanicAlarm may now claim the same actuators without contention
 

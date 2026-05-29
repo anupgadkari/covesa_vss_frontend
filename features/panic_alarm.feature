@@ -7,13 +7,13 @@ Feature: Panic Alarm
   # -------------------------------------------------------------------------
   # Requirements
   # -------------------------------------------------------------------------
-  # REQ-PANIC-001: When Vehicle.Body.Alarm.PanicSwitch.IsEngaged transitions FALSE→TRUE,
+  # REQ-PANIC-001: When Vehicle.Simulation.KeyFob.Switch.Panic transitions FALSE→TRUE,
   #               the PanicAlarm feature SHALL request both
   #               DirectionIndicator.Left.IsSignaling and
   #               DirectionIndicator.Right.IsSignaling = TRUE via the
   #               Lighting arbiter at priority HIGH (3).
   #
-  # REQ-PANIC-002: When Vehicle.Body.Alarm.PanicSwitch.IsEngaged is TRUE, the
+  # REQ-PANIC-002: When Vehicle.Simulation.KeyFob.Switch.Panic is TRUE, the
   #               PanicAlarm feature SHALL request Vehicle.Body.Horn.IsActive = TRUE
   #               via the Horn arbiter at priority HIGH (3) on the same edges
   #               as the indicator pulses, producing chirps perfectly
@@ -23,7 +23,7 @@ Feature: Panic Alarm
   #               indicators and horn at a 1 Hz cadence (400 ms ON, 600 ms
   #               OFF), matching typical OEM panic alarms.
   #
-  # REQ-PANIC-004: When Vehicle.Body.Alarm.PanicSwitch.IsEngaged transitions TRUE→FALSE,
+  # REQ-PANIC-004: When Vehicle.Simulation.KeyFob.Switch.Panic transitions TRUE→FALSE,
   #               the PanicAlarm feature SHALL release its Lighting arbiter
   #               claims on both DirectionIndicator.Left.IsSignaling and
   #               DirectionIndicator.Right.IsSignaling, and its Horn arbiter
@@ -51,7 +51,7 @@ Feature: Panic Alarm
   #               release-and-reclaim arbiter slots on a duplicate edge.
   #
   # REQ-PANIC-008: Each authenticated PANIC press from a paired keyfob
-  #               SHALL toggle Vehicle.Body.Alarm.PanicSwitch.IsEngaged.  Press once
+  #               SHALL toggle Vehicle.Simulation.KeyFob.Switch.Panic.  Press once
   #               to start the alarm; press again to cancel.  The RKE
   #               feature is the publisher of this signal; PanicAlarm only
   #               consumes it.
@@ -75,7 +75,7 @@ Feature: Panic Alarm
   #
   # REQ-PANIC-011: When the alarm is cancelled by an unlock feedback, the
   #               PanicAlarm feature SHALL self-publish
-  #               Vehicle.Body.Alarm.PanicSwitch.IsEngaged = FALSE so the switch state
+  #               Vehicle.Simulation.KeyFob.Switch.Panic = FALSE so the switch state
   #               on the bus matches the alarm's actual state.
   #
   # REQ-PANIC-012: A "lock" feedback (AutoRelock, WalkAwayLock, Keypad)
@@ -91,7 +91,7 @@ Feature: Panic Alarm
   # --- REQ-PANIC-001, REQ-PANIC-002, REQ-PANIC-005 ---
   Scenario: Engaging panic alarm starts synchronized blink + chirp
     Given the panic switch is not engaged
-    When Vehicle.Body.Alarm.PanicSwitch.IsEngaged transitions to TRUE
+    When Vehicle.Simulation.KeyFob.Switch.Panic transitions to TRUE
     Then Vehicle.Body.Alarm.IsActive becomes TRUE
     And the PanicAlarm feature requests DirectionIndicator.Left.IsSignaling = TRUE at priority HIGH
     And the PanicAlarm feature requests DirectionIndicator.Right.IsSignaling = TRUE at priority HIGH
@@ -111,7 +111,7 @@ Feature: Panic Alarm
   Scenario: Disengaging panic alarm stops blink + chirp and clears the status flag
     Given the panic switch is engaged
     And both indicators and the horn are active under PanicAlarm
-    When Vehicle.Body.Alarm.PanicSwitch.IsEngaged transitions to FALSE
+    When Vehicle.Simulation.KeyFob.Switch.Panic transitions to FALSE
     Then the PanicAlarm feature releases its claim on DirectionIndicator.Left.IsSignaling
     And the PanicAlarm feature releases its claim on DirectionIndicator.Right.IsSignaling
     And the PanicAlarm feature releases its claim on Vehicle.Body.Horn.IsActive
@@ -129,7 +129,7 @@ Feature: Panic Alarm
   Scenario: Panic alarm operates with ignition OFF
     Given the vehicle low-voltage system is in state "OFF"
     And the panic switch is not engaged
-    When Vehicle.Body.Alarm.PanicSwitch.IsEngaged transitions to TRUE
+    When Vehicle.Simulation.KeyFob.Switch.Panic transitions to TRUE
     Then Vehicle.Body.Alarm.IsActive becomes TRUE
     And the PanicAlarm feature requests DirectionIndicator.Left.IsSignaling = TRUE at priority HIGH
     And the PanicAlarm feature requests Vehicle.Body.Horn.IsActive = TRUE at priority HIGH
@@ -138,7 +138,7 @@ Feature: Panic Alarm
   Scenario: Panic alarm operates with ignition ACC
     Given the vehicle low-voltage system is in state "ACC"
     And the panic switch is not engaged
-    When Vehicle.Body.Alarm.PanicSwitch.IsEngaged transitions to TRUE
+    When Vehicle.Simulation.KeyFob.Switch.Panic transitions to TRUE
     Then Vehicle.Body.Alarm.IsActive becomes TRUE
     And the PanicAlarm feature requests Vehicle.Body.Horn.IsActive = TRUE at priority HIGH
 
@@ -146,7 +146,7 @@ Feature: Panic Alarm
   Scenario: Re-engage while already running is a no-op
     Given the panic switch is engaged
     And Vehicle.Body.Alarm.IsActive is TRUE
-    When Vehicle.Body.Alarm.PanicSwitch.IsEngaged is set to TRUE again
+    When Vehicle.Simulation.KeyFob.Switch.Panic is set to TRUE again
     Then Vehicle.Body.Alarm.IsActive is not re-published
     And the pulse loop continues uninterrupted at the existing cadence
 
@@ -154,9 +154,9 @@ Feature: Panic Alarm
   Scenario: Disengaging panic while hazard remains engaged restores hazard control
     Given the hazard switch is engaged
     And both indicators are signaling at priority HIGH due to hazard
-    When Vehicle.Body.Alarm.PanicSwitch.IsEngaged transitions to TRUE
+    When Vehicle.Simulation.KeyFob.Switch.Panic transitions to TRUE
     Then the PanicAlarm feature claims both indicators at priority HIGH (latest-wins on tie)
-    When Vehicle.Body.Alarm.PanicSwitch.IsEngaged transitions to FALSE
+    When Vehicle.Simulation.KeyFob.Switch.Panic transitions to FALSE
     Then the PanicAlarm feature releases both indicators
     And Hazard's still-engaged claim resumes control of both indicators
 
@@ -166,7 +166,7 @@ Feature: Panic Alarm
     And Vehicle.Body.Alarm.IsActive is TRUE
     When a successful authenticated unlock publishes FeedbackRequest = "unlock"
     Then Vehicle.Body.Alarm.IsActive becomes FALSE
-    And Vehicle.Body.Alarm.PanicSwitch.IsEngaged is self-published as FALSE
+    And Vehicle.Simulation.KeyFob.Switch.Panic is self-published as FALSE
 
   # --- REQ-PANIC-012 ---
   Scenario: A "lock" feedback does NOT cancel an active panic alarm

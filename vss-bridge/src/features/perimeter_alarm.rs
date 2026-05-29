@@ -35,7 +35,7 @@
 //!    PassiveEntry, PEPS, phone, NFC) AND `Vehicle.Cabin.LockStatus` is
 //!    `UNLOCKED` or `DRIVER_UNLOCKED`.  Models "the user came back
 //!    and proved they own the vehicle."
-//! 2. **Panic button press** — `Vehicle.Body.Alarm.PanicSwitch.IsEngaged`
+//! 2. **Panic button press** — `Vehicle.Simulation.KeyFob.Switch.Panic`
 //!    transitions to `true` from any source (paired fob, HMI test,
 //!    telematics).  Same pattern PanicAlarm uses, treats the user
 //!    grabbing the panic button as a "stop everything" override.
@@ -91,7 +91,7 @@ const DOOR_OPEN_SIGNALS: [VssPath; 4] = [
 
 const LOCK_STATUS: VssPath = "Vehicle.Cabin.LockStatus";
 const LAST_REQUESTOR: VssPath = "Vehicle.Cabin.LockStatus.LastRequestor";
-const PANIC_SWITCH: VssPath = "Vehicle.Body.Alarm.PanicSwitch.IsEngaged";
+const PANIC_SWITCH: VssPath = "Vehicle.Simulation.KeyFob.Switch.Panic";
 const ALARM_STATUS: VssPath = "Vehicle.Body.Alarm.IsActive";
 /// Authoritative perimeter-alarm state, published by this feature on
 /// every transition so the HMI / telematics display a single string

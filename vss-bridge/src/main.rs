@@ -629,7 +629,7 @@ async fn boot_simulation_stack(
     // `Vehicle.LowVoltageSystemState` is seeded by `VehicleStartingControl`
     // (sole writer); no top-level publish here.
     bus.publish(
-        "Vehicle.Body.Alarm.PanicSwitch.IsEngaged",
+        "Vehicle.Simulation.KeyFob.Switch.Panic",
         SignalValue::Bool(false),
     )
     .await?;

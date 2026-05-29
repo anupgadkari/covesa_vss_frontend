@@ -193,11 +193,11 @@ Body.Switches.Hood.Release.IsPulled,Vehicle.Body.Hood.ReleaseSwitch.IsPulled,swi
 Body.Switches.Horn.IsPressed,Vehicle.Body.Horn.Switch.IsPressed,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
 Body.Switches.IgnitionCylinder.Position,Vehicle.Cabin.IgnitionCylinder.Position,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
 Body.Switches.IgnitionCylinder.RemovalInhibited,Vehicle.Controller.Body.Switches.IgnitionCylinder.RemovalInhibited,controller-namespace,bridge-internal switch input; no VSS equivalent
-Body.Switches.Keyfob.LockButton,Vehicle.Body.Keyfob.Switch.Lock,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
+Body.Switches.Keyfob.LockButton,Vehicle.Simulation.KeyFob.Switch.Lock,simulation,"fob-mounted switch — input from the simulated keyfob, not a vehicle component"
 Body.Switches.Mirror.Direction,Vehicle.Body.Mirrors.Switch.Direction,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
 Body.Switches.Mirror.Fold,Vehicle.Body.Mirrors.Switch.Fold,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
 Body.Switches.Mirror.Select,Vehicle.Body.Mirrors.Switch.Select,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
-Body.Switches.Panic.IsEngaged,Vehicle.Body.Alarm.PanicSwitch.IsEngaged,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
+Body.Switches.Panic.IsEngaged,Vehicle.Simulation.KeyFob.Switch.Panic,simulation,"fob-mounted switch — input from the simulated keyfob, not a vehicle component"
 Body.Switches.PowerChildLock.IsPressed,Vehicle.Cabin.ChildLock.Switch.IsPressed,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
 Body.Switches.StartStop.BacklightDutyCycle,Vehicle.Controller.Body.Switches.StartStop.BacklightDutyCycle,controller-namespace,bridge-internal switch input; no VSS equivalent
 Body.Switches.StartStop.BacklightIntensity,Vehicle.Controller.Body.Switches.StartStop.BacklightIntensity,controller-namespace,bridge-internal switch input; no VSS equivalent

@@ -42,7 +42,7 @@ const INPUT_SIGNALS: &[VssPath] = &[
     "Powertrain.Transmission.SelectedGear",
     "Vehicle.Body.Lights.LightSwitch",
     "Vehicle.Controller.Body.PEPS.KeyPresent",
-    "Vehicle.Body.Keyfob.Switch.Lock",
+    "Vehicle.Simulation.KeyFob.Switch.Lock",
     "Vehicle.Cabin.Door.Row1.Left.Switch.Lock",
     "Vehicle.Cabin.Door.Row1.Right.Switch.Lock",
     "Vehicle.Cabin.Door.Row2.Left.Switch.Lock",
@@ -364,7 +364,7 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     // Panic switch — set by RKE on PANIC press, cleared by PanicAlarm
     // on cancel-via-unlock.  HMI consumes this to keep its own alarm
     // toggle state in sync.
-    "Vehicle.Body.Alarm.PanicSwitch.IsEngaged",
+    "Vehicle.Simulation.KeyFob.Switch.Panic",
     // AutoRelock status — drives the HMI countdown banner.  IsArmed
     // is published TRUE when the timer starts, FALSE on every exit.
     // TimeoutSeconds is published once per arm so the HMI can render
@@ -441,7 +441,7 @@ const ESSENTIAL_BOOT_SIGNALS: &[VssPath] = &[
     "Vehicle.Cabin.Sunroof.Position",
     "Vehicle.Cabin.Sunroof.Shade.Position",
     // Status flags published once at boot from main.rs.
-    "Vehicle.Body.Alarm.PanicSwitch.IsEngaged",
+    "Vehicle.Simulation.KeyFob.Switch.Panic",
     "Vehicle.Body.Alarm.IsActive",
     "Vehicle.Controller.Body.Doors.AutoRelock.IsArmed",
 ];

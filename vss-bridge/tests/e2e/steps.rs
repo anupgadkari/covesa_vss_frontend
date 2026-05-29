@@ -32,7 +32,7 @@ use vss_bridge::signal_bus::VssPath;
 const LEFT_SIGNALING: VssPath = "Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling";
 const RIGHT_SIGNALING: VssPath = "Vehicle.Body.Lights.DirectionIndicator.Right.IsSignaling";
 const HORN: VssPath = "Vehicle.Body.Horn.IsActive";
-const PANIC_SWITCH: VssPath = "Vehicle.Body.Alarm.PanicSwitch.IsEngaged";
+const PANIC_SWITCH: VssPath = "Vehicle.Simulation.KeyFob.Switch.Panic";
 const ALARM_STATUS: VssPath = "Vehicle.Body.Alarm.IsActive";
 
 // PassiveEntry observable outputs — the door-lock arbiter publishes
@@ -776,17 +776,17 @@ async fn panic_engage_helper(w: &mut VssWorld, val: bool) {
 
 // ---- When: panic switch transitions ----
 
-#[when("Vehicle.Body.Alarm.PanicSwitch.IsEngaged transitions to TRUE")]
+#[when("Vehicle.Simulation.KeyFob.Switch.Panic transitions to TRUE")]
 async fn when_panic_engage(w: &mut VssWorld) {
     panic_engage_helper(w, true).await;
 }
 
-#[when("Vehicle.Body.Alarm.PanicSwitch.IsEngaged transitions to FALSE")]
+#[when("Vehicle.Simulation.KeyFob.Switch.Panic transitions to FALSE")]
 async fn when_panic_disengage(w: &mut VssWorld) {
     panic_engage_helper(w, false).await;
 }
 
-#[when("Vehicle.Body.Alarm.PanicSwitch.IsEngaged is set to TRUE again")]
+#[when("Vehicle.Simulation.KeyFob.Switch.Panic is set to TRUE again")]
 async fn when_panic_re_engage(w: &mut VssWorld) {
     w.bus().clear_history();
     w.inject(PANIC_SWITCH, SignalValue::Bool(true)).await;
@@ -1061,7 +1061,7 @@ async fn when_lock_feedback(w: &mut VssWorld) {
     settle().await;
 }
 
-#[then("Vehicle.Body.Alarm.PanicSwitch.IsEngaged is self-published as FALSE")]
+#[then("Vehicle.Simulation.KeyFob.Switch.Panic is self-published as FALSE")]
 async fn then_panic_switch_self_published_false(w: &mut VssWorld) {
     assert_eq!(
         w.current_value(PANIC_SWITCH),

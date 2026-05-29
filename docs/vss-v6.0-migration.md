@@ -134,15 +134,25 @@ of them out:
   `Hood.LatchState` → `Vehicle.Body.Hood.*`; `Alarm.IsActive` →
   `Vehicle.Body.Alarm.IsActive`; `Cabin.LockStatus` (aggregate value)
   → `Vehicle.Cabin.LockStatus`.
-- **31 user-operated switch inputs** → canonical component homes,
+- **29 vehicle-mounted switch inputs** → canonical component homes,
   following VSS's own `.Switch` precedent: hazard/high-beam/fog/turn
   switches under `Vehicle.Body.Lights.*.Switch.*`; trim lock/unlock
   buttons under `Vehicle.Cabin.Door.RowN.Side.Switch.{Lock,Unlock}`;
   window rockers under `…Window.Switch.{Local,Master}Detent`; mirror
   switch under `Vehicle.Body.Mirrors.Switch.*`; sunroof under
   `Vehicle.Cabin.Sunroof.Switch.Detent`; hood/trunk release, horn,
-  child-lock, panic, start-stop, ignition-cylinder, keyfob at their
-  respective component homes.
+  child-lock, start-stop, ignition-cylinder at their respective
+  component homes.
+- **2 fob-mounted switches** → `Vehicle.Simulation.KeyFob.Switch.*`.
+  The panic and keyfob-lock buttons are physically *on the keyfob*,
+  not on the vehicle — so a vehicle-component home was wrong
+  (`Vehicle.Body.Alarm.PanicSwitch` corrected here).  The keyfob is
+  a simulated device, and a fob-button-as-bus-signal is inherently
+  a simulator construct — on a real vehicle the press arrives over
+  RF and the BCM decodes an RKE command.  `Panic.IsEngaged` →
+  `Vehicle.Simulation.KeyFob.Switch.Panic`; the lock button →
+  `Vehicle.Simulation.KeyFob.Switch.Lock`, consistent with the
+  existing per-fob `Vehicle.Simulation.KeyFob.N.ButtonPress`.
 
 **Deliberately kept in `Vehicle.Controller.*`** (layer 2/3 plumbing,
 not user input): `Alarm.State` (FSM enum — distinct from the

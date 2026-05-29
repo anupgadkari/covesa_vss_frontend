@@ -1,9 +1,9 @@
 //! Panic Alarm — synchronized direction-indicator blink + horn chirps
 //! triggered by a paired keyfob's PANIC button (or any other source that
-//! engages `Vehicle.Body.Alarm.PanicSwitch.IsEngaged`).
+//! engages `Vehicle.Simulation.KeyFob.Switch.Panic`).
 //!
 //! # Inputs
-//!   - `Vehicle.Body.Alarm.PanicSwitch.IsEngaged` (Bool) — toggled by RKE on a
+//!   - `Vehicle.Simulation.KeyFob.Switch.Panic` (Bool) — toggled by RKE on a
 //!     paired-keyfob PANIC press, or by other sources (HMI test button,
 //!     telematics remote panic, intrusion sensor).
 //!
@@ -43,7 +43,7 @@
 //! alarm — matches typical OEM behaviour where returning to the vehicle
 //! and unlocking it (RKE / smart entry / phone / BLE / NFC) is treated
 //! as proof that the user is back.  When this happens, PanicAlarm
-//! self-publishes `Vehicle.Body.Alarm.PanicSwitch.IsEngaged = false` so the source
+//! self-publishes `Vehicle.Simulation.KeyFob.Switch.Panic = false` so the source
 //! of truth stays consistent with internal state.
 
 use std::sync::Arc;
@@ -58,7 +58,7 @@ use crate::signal_bus::{SignalBus, VssPath};
 
 // ── Signal constants ───────────────────────────────────────────────────────
 
-const PANIC_SWITCH: VssPath = "Vehicle.Body.Alarm.PanicSwitch.IsEngaged";
+const PANIC_SWITCH: VssPath = "Vehicle.Simulation.KeyFob.Switch.Panic";
 
 const LEFT_INDICATOR: VssPath = "Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling";
 const RIGHT_INDICATOR: VssPath = "Vehicle.Body.Lights.DirectionIndicator.Right.IsSignaling";
