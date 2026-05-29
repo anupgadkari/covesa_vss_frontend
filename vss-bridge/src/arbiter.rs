@@ -679,7 +679,7 @@ impl DoorLockArbiter {
         Self::new_with_nvm(allow_list, bus, None)
     }
 
-    /// Like `new`, but with an `NvmStore` for persisting `Vehicle.Controller.Cabin.LockStatus`
+    /// Like `new`, but with an `NvmStore` for persisting `Vehicle.Cabin.LockStatus`
     /// across power cycles.  Use this in production wiring; tests can use
     /// `new` to get a transient arbiter.
     pub fn new_with_nvm<B: SignalBus>(
@@ -737,7 +737,7 @@ async fn door_lock_loop<B: SignalBus>(
     let mut pending: Option<DoorLockRequest> = None;
     let mut crash_lockout_until: Option<tokio::time::Instant> = None;
 
-    // Boot-time republish of persisted `Vehicle.Controller.Cabin.LockStatus`.  Subscribers
+    // Boot-time republish of persisted `Vehicle.Cabin.LockStatus`.  Subscribers
     // (MirrorFold AUTO, future security features) need to see this on
     // boot; a fresh broadcast subscription would otherwise wait for
     // the next command before getting any value.
@@ -758,7 +758,7 @@ async fn door_lock_loop<B: SignalBus>(
         "UNLOCKED".into()
     };
 
-    // Monotonic counter for `Vehicle.Controller.Cabin.LockStatus.EventNum`.  The value
+    // Monotonic counter for `Vehicle.Cabin.LockStatus.EventNum`.  The value
     // `0` is reserved as the "publisher reset" sentinel — published
     // exactly once at boot, never again.  Real events count `1, 2, …,
     // u16::MAX, 1, 2, …` (wrap skips `0`) so subscribers can rely on
@@ -900,22 +900,22 @@ pub const FEEDBACK_REQUEST: VssPath = "Vehicle.Controller.Body.Doors.CentralLock
 /// Dispatch a lock command to the SignalBus as a single high-level token.
 /// Vehicle-level central lock status — published by the door-lock
 /// arbiter on every accepted command.  Many features subscribe.
-pub const CABIN_LOCK_STATUS: VssPath = "Vehicle.Controller.Cabin.LockStatus";
+pub const CABIN_LOCK_STATUS: VssPath = "Vehicle.Cabin.LockStatus";
 
 /// Companion signal: identity of the feature that requested the most
 /// recent accepted central-lock command.  String form of `FeatureId`
 /// (e.g. "KeyfobRke", "PassiveEntry").  Published in lockstep with
 /// every `EVENT_NUM` bump so subscribers can filter on requestor.
-pub const CABIN_LOCK_LAST_REQUESTOR: VssPath = "Vehicle.Controller.Cabin.LockStatus.LastRequestor";
+pub const CABIN_LOCK_LAST_REQUESTOR: VssPath = "Vehicle.Cabin.LockStatus.LastRequestor";
 
 /// Companion signal: monotonic counter incremented on every accepted
 /// central-lock command (wraps at u16::MAX).  Subscribers use the
 /// *change* in this value as the "a new lock command happened"
-/// trigger, even when the resolved `Vehicle.Controller.Cabin.LockStatus` enum value is
+/// trigger, even when the resolved `Vehicle.Cabin.LockStatus` enum value is
 /// unchanged.
-pub const CABIN_LOCK_EVENT_NUM: VssPath = "Vehicle.Controller.Cabin.LockStatus.EventNum";
+pub const CABIN_LOCK_EVENT_NUM: VssPath = "Vehicle.Cabin.LockStatus.EventNum";
 
-/// Map a `LockCommand` to its `Vehicle.Controller.Cabin.LockStatus` enum value.
+/// Map a `LockCommand` to its `Vehicle.Cabin.LockStatus` enum value.
 fn lock_status_for(cmd: LockCommand) -> &'static str {
     match cmd {
         LockCommand::UnlockAll => "UNLOCKED",
@@ -1054,7 +1054,7 @@ fn door_lock_allow_list() -> Vec<DoorLockAllowEntry> {
 }
 
 /// Create the DoorLock arbiter with all authorized lock requestors —
-/// transient (no NVM).  For tests / scenarios where `Vehicle.Controller.Cabin.LockStatus`
+/// transient (no NVM).  For tests / scenarios where `Vehicle.Cabin.LockStatus`
 /// persistence is not required.
 pub fn door_lock_arbiter<B: SignalBus>(
     bus: Arc<B>,
@@ -1066,7 +1066,7 @@ pub fn door_lock_arbiter<B: SignalBus>(
     DoorLockArbiter::new(door_lock_allow_list(), bus)
 }
 
-/// Production variant of `door_lock_arbiter` — persists `Vehicle.Controller.Cabin.LockStatus`
+/// Production variant of `door_lock_arbiter` — persists `Vehicle.Cabin.LockStatus`
 /// across power cycles via the supplied `NvmStore`.
 pub fn door_lock_arbiter_with_nvm<B: SignalBus>(
     bus: Arc<B>,
@@ -1855,7 +1855,7 @@ mod tests {
 
         // Only the first command (PEPS unlock) should be dispatched.
         // Filter to CENTRAL_LOCK_CMD only — the arbiter also publishes
-        // Vehicle.Controller.Cabin.LockStatus on each accepted command, which we don't
+        // Vehicle.Cabin.LockStatus on each accepted command, which we don't
         // care about here.
         let cmd_history = |bus: &MockBus| -> Vec<(VssPath, SignalValue)> {
             bus.history()

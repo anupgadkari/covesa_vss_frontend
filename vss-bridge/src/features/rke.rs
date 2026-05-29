@@ -272,7 +272,7 @@ pub struct RkeFeature<B: SignalBus> {
     /// Pending first half of a LOCK+UNLOCK combo for toggle detection.
     pending_combo: Option<PendingCombo>,
     /// Latched panic-alarm state.  Each authenticated PANIC press flips this
-    /// and publishes the new value on Vehicle.Controller.Body.Switches.Panic.IsEngaged.
+    /// and publishes the new value on Vehicle.Body.Alarm.PanicSwitch.IsEngaged.
     panic_engaged: bool,
     /// Pending first half of a DOUBLE panic press.  Only used when
     /// `vehicle_line.panic_press_mode = Double`; ignored in `Single`.
@@ -607,7 +607,7 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
     ///
     /// The activation gesture is selected by `vehicle_line.panic_press_mode`:
     ///
-    /// - `SINGLE` (default): each press toggles `Vehicle.Controller.Body.Switches.Panic.IsEngaged`.
+    /// - `SINGLE` (default): each press toggles `Vehicle.Body.Alarm.PanicSwitch.IsEngaged`.
     ///   Press once to start, press again to cancel.
     /// - `DOUBLE`: two presses from the same fob within
     ///   `PANIC_DOUBLE_PRESS_WINDOW_SECS` are required to engage.  A
@@ -682,7 +682,7 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
         let _ = self
             .bus
             .publish(
-                "Vehicle.Controller.Body.Switches.Panic.IsEngaged",
+                "Vehicle.Body.Alarm.PanicSwitch.IsEngaged",
                 crate::ipc_message::SignalValue::Bool(self.panic_engaged),
             )
             .await;
@@ -703,13 +703,13 @@ impl<B: SignalBus + Send + Sync + 'static> RkeFeature<B> {
         let mut rf1 = self.bus.subscribe(KEYFOB_RF_MSGS[1]).await;
         let mut rf2 = self.bus.subscribe(KEYFOB_RF_MSGS[2]).await;
         let mut rf3 = self.bus.subscribe(KEYFOB_RF_MSGS[3]).await;
-        // Mirror Vehicle.Controller.Body.Switches.Panic.IsEngaged so the next PANIC press toggles
+        // Mirror Vehicle.Body.Alarm.PanicSwitch.IsEngaged so the next PANIC press toggles
         // from whatever the bus currently shows — important when PanicAlarm
         // self-cancels on a successful unlock and writes FALSE back to the
         // switch.  Without this, the local latch and the bus could drift.
         let mut panic_rx = self
             .bus
-            .subscribe("Vehicle.Controller.Body.Switches.Panic.IsEngaged")
+            .subscribe("Vehicle.Body.Alarm.PanicSwitch.IsEngaged")
             .await;
 
         tracing::info!("RKE feature started");
@@ -1197,14 +1197,14 @@ mod tests {
 
         feature.handle_authenticated(1, FobButton::PanicAlarm).await;
         assert_eq!(
-            bus.latest_value("Vehicle.Controller.Body.Switches.Panic.IsEngaged"),
+            bus.latest_value("Vehicle.Body.Alarm.PanicSwitch.IsEngaged"),
             Some(SignalValue::Bool(true)),
             "SINGLE mode: first press must engage immediately"
         );
 
         feature.handle_authenticated(1, FobButton::PanicAlarm).await;
         assert_eq!(
-            bus.latest_value("Vehicle.Controller.Body.Switches.Panic.IsEngaged"),
+            bus.latest_value("Vehicle.Body.Alarm.PanicSwitch.IsEngaged"),
             Some(SignalValue::Bool(false)),
             "SINGLE mode: second press must disengage"
         );
@@ -1228,9 +1228,10 @@ mod tests {
         feature.handle_authenticated(1, FobButton::PanicAlarm).await;
         // Single press alone must NOT publish PANIC=true.
         assert!(
-            bus.history().iter().all(|(s, v)| !(*s
-                == "Vehicle.Controller.Body.Switches.Panic.IsEngaged"
-                && *v == SignalValue::Bool(true))),
+            bus.history()
+                .iter()
+                .all(|(s, v)| !(*s == "Vehicle.Body.Alarm.PanicSwitch.IsEngaged"
+                    && *v == SignalValue::Bool(true))),
             "DOUBLE mode: first press alone must not engage"
         );
         assert!(feature.pending_panic_double.is_some());
@@ -1253,7 +1254,7 @@ mod tests {
         feature.handle_authenticated(1, FobButton::PanicAlarm).await;
 
         assert_eq!(
-            bus.latest_value("Vehicle.Controller.Body.Switches.Panic.IsEngaged"),
+            bus.latest_value("Vehicle.Body.Alarm.PanicSwitch.IsEngaged"),
             Some(SignalValue::Bool(true)),
             "DOUBLE mode: second press within window must engage"
         );
@@ -1285,7 +1286,7 @@ mod tests {
         feature.handle_authenticated(1, FobButton::PanicAlarm).await;
         assert!(!feature.panic_engaged);
         assert_eq!(
-            bus.latest_value("Vehicle.Controller.Body.Switches.Panic.IsEngaged"),
+            bus.latest_value("Vehicle.Body.Alarm.PanicSwitch.IsEngaged"),
             Some(SignalValue::Bool(false)),
             "DOUBLE mode: cancel must be a single press"
         );
@@ -1317,9 +1318,10 @@ mod tests {
         assert!(!feature.panic_engaged);
         assert!(feature.pending_panic_double.is_some());
         assert!(
-            bus.history().iter().all(|(s, v)| !(*s
-                == "Vehicle.Controller.Body.Switches.Panic.IsEngaged"
-                && *v == SignalValue::Bool(true))),
+            bus.history()
+                .iter()
+                .all(|(s, v)| !(*s == "Vehicle.Body.Alarm.PanicSwitch.IsEngaged"
+                    && *v == SignalValue::Bool(true))),
             "different-fob presses must not engage"
         );
     }
@@ -1341,7 +1343,7 @@ mod tests {
 
         feature.handle_authenticated(1, FobButton::PanicAlarm).await;
         assert_eq!(
-            bus.latest_value("Vehicle.Controller.Body.Switches.Panic.IsEngaged"),
+            bus.latest_value("Vehicle.Body.Alarm.PanicSwitch.IsEngaged"),
             Some(SignalValue::Bool(true)),
             "LONG_PRESS fallback: behaves as SINGLE until plant-model wiring lands"
         );

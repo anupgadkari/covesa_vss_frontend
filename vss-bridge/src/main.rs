@@ -582,7 +582,7 @@ async fn boot_simulation_stack(
     // Drives the cockpit view's night-backlit rendering style.  Future
     // extensions: ambient light sensor, GPS sunset, tunnel detection.
     set.spawn(DayNightModePlant::new(Arc::clone(&bus)).run());
-    // Brake plant: derives Vehicle.Controller.Chassis.Brake.IsApplied (bool) from
+    // Brake plant: derives Vehicle.Chassis.Brake.IsApplied (bool) from
     // Vehicle.Chassis.Brake.PedalPosition (Uint8 %) with hysteresis.
     // Consumed by the upcoming VehicleStartingControl feature.
     set.spawn(BrakePlant::new(Arc::clone(&bus)).run());
@@ -629,15 +629,12 @@ async fn boot_simulation_stack(
     // `Vehicle.LowVoltageSystemState` is seeded by `VehicleStartingControl`
     // (sole writer); no top-level publish here.
     bus.publish(
-        "Vehicle.Controller.Body.Switches.Panic.IsEngaged",
+        "Vehicle.Body.Alarm.PanicSwitch.IsEngaged",
         SignalValue::Bool(false),
     )
     .await?;
-    bus.publish(
-        "Vehicle.Controller.Alarm.IsActive",
-        SignalValue::Bool(false),
-    )
-    .await?;
+    bus.publish("Vehicle.Body.Alarm.IsActive", SignalValue::Bool(false))
+        .await?;
     bus.publish(
         "Vehicle.Controller.Body.Doors.AutoRelock.IsArmed",
         SignalValue::Bool(false),

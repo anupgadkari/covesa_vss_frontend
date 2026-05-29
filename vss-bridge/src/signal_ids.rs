@@ -157,10 +157,10 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Vehicle.Body.Hood.IsOpen" => Some(0x0006_0001),
         // Hood — HoodPlantModel runs a tri-state latch FSM
         // (LATCHED / HALF_LATCHED / OPEN), publishes both the
-        // tri-state on `Vehicle.Controller.Body.Hood.LatchState` and the convenience
+        // tri-state on `Vehicle.Body.Hood.LatchState` and the convenience
         // `Vehicle.Body.Hood.IsOpen` (true iff fully OPEN), persists the
         // tri-state in NVM.  Inputs:
-        //   • Vehicle.Controller.Body.Switches.Hood.Release.IsPulled — dash release
+        //   • Vehicle.Body.Hood.ReleaseSwitch.IsPulled — dash release
         //     lever momentary; double-pull within 3 s while LATCHED
         //     → HALF_LATCHED.
         //   • Vehicle.Controller.Body.Hood.OpenCmd  — top-view click while HALF_LATCHED
@@ -170,7 +170,7 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         //     a gravity drop from open to engage both pawls).
         "Vehicle.Controller.Body.Hood.OpenCmd" => Some(0x0006_000B),
         "Vehicle.Controller.Body.Hood.CloseCmd" => Some(0x0006_000C),
-        "Vehicle.Controller.Body.Hood.LatchState" => Some(0x0006_000D),
+        "Vehicle.Body.Hood.LatchState" => Some(0x0006_000D),
         "Vehicle.Body.Trunk.Rear.IsOpen" => Some(0x0006_0002),
         "Vehicle.Body.Trunk.Rear.IsLocked" => Some(0x0006_0003),
         "Vehicle.Body.Horn.IsActive" => Some(0x0006_0004),
@@ -187,8 +187,8 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Vehicle.Controller.Body.Chime.IsSounding" => Some(0x0006_000F),
         "Vehicle.Controller.Body.Trunk.Rear.OpenCmd" => Some(0x0006_0007),
         "Vehicle.Controller.Body.Trunk.Rear.CloseCmd" => Some(0x0006_0008),
-        "Vehicle.Controller.Body.FuelLid.IsOpen" => Some(0x0006_0005),
-        "Vehicle.Controller.Body.ChargeLid.IsOpen" => Some(0x0006_0006),
+        "Vehicle.Body.FuelLid.IsOpen" => Some(0x0006_0005),
+        "Vehicle.Body.ChargeLid.IsOpen" => Some(0x0006_0006),
         // Exterior trunk-release button — capacitive press above the
         // license plate.  HMI-publishable momentary input; consumed by
         // the ExteriorTrunkButton feature.  Name is neutral on the
@@ -246,13 +246,13 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Vehicle.Controller.Body.PEPS.KeyPresent" => Some(0x000B_0001),
 
         // Switch / stalk inputs (overlay — not in standard VSS v6.0)
-        "Vehicle.Controller.Body.Switches.Hazard.IsEngaged" => Some(0x000D_0001),
-        "Vehicle.Controller.Body.Switches.TurnIndicator.Direction" => Some(0x000D_0002),
-        "Vehicle.Controller.Body.Switches.HighBeam.IsEngaged" => Some(0x000D_0003),
+        "Vehicle.Body.Lights.Hazard.Switch.IsEngaged" => Some(0x000D_0001),
+        "Vehicle.Body.Lights.DirectionIndicator.Switch.Direction" => Some(0x000D_0002),
+        "Vehicle.Body.Lights.Beam.High.Switch.IsEngaged" => Some(0x000D_0003),
         "Vehicle.Chassis.ParkingBrake.IsEngaged" => Some(0x000D_0004),
-        "Vehicle.Controller.Body.Switches.Fog.Front.IsEngaged" => Some(0x000D_0005),
-        "Vehicle.Controller.Body.Switches.Fog.Rear.IsEngaged" => Some(0x000D_0006),
-        "Vehicle.Controller.Body.Switches.Panic.IsEngaged" => Some(0x000D_0007),
+        "Vehicle.Body.Lights.Fog.Front.Switch.IsEngaged" => Some(0x000D_0005),
+        "Vehicle.Body.Lights.Fog.Rear.Switch.IsEngaged" => Some(0x000D_0006),
+        "Vehicle.Body.Alarm.PanicSwitch.IsEngaged" => Some(0x000D_0007),
         // Mirror control switches (project extension — VSS does not
         // define mirror movement controls).
         // - Fold: bool, momentary (false→true edge = press).
@@ -260,28 +260,28 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         //   Allowed values: 'NONE','LEFT','RIGHT'.
         // - Direction: enum, joystick output. 'NONE' on release.
         //   Allowed values: 'NONE','UP','DOWN','LEFT','RIGHT'.
-        "Vehicle.Controller.Body.Switches.Mirror.Fold" => Some(0x000D_0010),
-        "Vehicle.Controller.Body.Switches.Mirror.Select" => Some(0x000D_0011),
-        "Vehicle.Controller.Body.Switches.Mirror.Direction" => Some(0x000D_0012),
+        "Vehicle.Body.Mirrors.Switch.Fold" => Some(0x000D_0010),
+        "Vehicle.Body.Mirrors.Switch.Select" => Some(0x000D_0011),
+        "Vehicle.Body.Mirrors.Switch.Direction" => Some(0x000D_0012),
         // Hood release lever (under the dash) — momentary pull.  Two
         // pulls within 3 s while LATCHED → HALF_LATCHED via the
         // HoodPlantModel state machine.
-        "Vehicle.Controller.Body.Switches.Hood.Release.IsPulled" => Some(0x000D_0020),
+        "Vehicle.Body.Hood.ReleaseSwitch.IsPulled" => Some(0x000D_0020),
         // Cabin trunk release switch — typical placement is a
         // push-button low on the dash or a pull handle in the
         // driver footwell.  Privileged interior control: no lock-
         // state or auth gate.  Valet mode is enforced at the trunk
         // arbiter's `ValetGate` (same chokepoint as RKE TrunkRelease
         // and the exterior button).
-        "Vehicle.Controller.Body.Switches.Trunk.Release.IsPressed" => Some(0x000D_0021),
+        "Vehicle.Body.Trunk.Rear.ReleaseSwitch.IsPressed" => Some(0x000D_0021),
         // Steering-wheel horn pad — momentary press.  ManualHorn
         // feature claims Vehicle.Body.Horn.IsActive at Medium priority while
         // pressed; releases on release.  PanicAlarm at High preempts
         // when the alarm is engaged.
-        "Vehicle.Controller.Body.Switches.Horn.IsPressed" => Some(0x000D_0022),
+        "Vehicle.Body.Horn.Switch.IsPressed" => Some(0x000D_0022),
 
         // Anti-theft alarm status (project extension — not in standard VSS v6.0)
-        "Vehicle.Controller.Alarm.IsActive" => Some(0x0006_0009),
+        "Vehicle.Body.Alarm.IsActive" => Some(0x0006_0009),
         // Authoritative perimeter-alarm state enum, single writer is
         // PerimeterAlarm.  Values: "DISARMED" | "PRE_ARMED" | "ARMED" |
         // "ACTIVATED".  HMI displays this directly instead of computing
@@ -304,17 +304,17 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Powertrain.Transmission.SelectedGear" => Some(0x000C_0005),
 
         // Door lock inputs (overlay — DoorLockInputs.vspec)
-        "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.LockButton" => Some(0x000E_0001),
-        "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Right.LockButton" => Some(0x000E_0002),
-        "Vehicle.Controller.Body.Switches.DoorTrim.Row2.Left.LockButton" => Some(0x000E_0003),
-        "Vehicle.Controller.Body.Switches.DoorTrim.Row2.Right.LockButton" => Some(0x000E_0004),
+        "Vehicle.Cabin.Door.Row1.Left.Switch.Lock" => Some(0x000E_0001),
+        "Vehicle.Cabin.Door.Row1.Right.Switch.Lock" => Some(0x000E_0002),
+        "Vehicle.Cabin.Door.Row2.Left.Switch.Lock" => Some(0x000E_0003),
+        "Vehicle.Cabin.Door.Row2.Right.Switch.Lock" => Some(0x000E_0004),
         // Interior trim unlock buttons — Row 1 only (driver and front
         // passenger door panels).  No auth needed (egress safety); the
         // PerimeterAlarm feature watches these to escalate when an
         // unlock fires while the alarm is armed.
-        "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.UnlockButton" => Some(0x000E_0005),
-        "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Right.UnlockButton" => Some(0x000E_0006),
-        "Vehicle.Controller.Body.Switches.Keyfob.LockButton" => Some(0x000E_0010),
+        "Vehicle.Cabin.Door.Row1.Left.Switch.Unlock" => Some(0x000E_0005),
+        "Vehicle.Cabin.Door.Row1.Right.Switch.Unlock" => Some(0x000E_0006),
+        "Vehicle.Body.Keyfob.Switch.Lock" => Some(0x000E_0010),
         "Vehicle.Simulation.Connectivity.RemoteLock" => Some(0x000E_0020),
         "Vehicle.Simulation.Connectivity.BleLock" => Some(0x000E_0021),
         "Vehicle.Simulation.Connectivity.NfcCardPresent" => Some(0x000E_0030),
@@ -327,7 +327,7 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Vehicle.Cabin.Door.Row2.Right.IsRemoved" => Some(0x000E_0043),
 
         // Safety signals
-        "Vehicle.Controller.Safety.CrashDetected" => Some(0x000F_0001),
+        "Vehicle.CrashDetected" => Some(0x000F_0001),
 
         // PEPS plant model — `.Zone` (IDs 0x0010_0001..0x0010_0006)
         // retired in item #14 follow-up.  HMI writes `.PlacedZone`;
@@ -441,28 +441,28 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // walk-away-cancel, security-alarm-arm, etc.).  Soldier-knob
         // moves do NOT update this — it reflects the *commanded* state.
         // Allowed values: 'UNLOCKED','DRIVER_UNLOCKED','LOCKED','DOUBLE_LOCKED'.
-        "Vehicle.Controller.Cabin.LockStatus" => Some(0x0014_0005),
+        "Vehicle.Cabin.LockStatus" => Some(0x0014_0005),
         // Identity of the feature whose request the arbiter accepted on the
         // most recent central-lock dispatch.  String form of `FeatureId`
         // (e.g. "KeyfobRke", "PassiveEntry").  Lets downstream features
         // (AutoRelock today) gate behaviour on the source of an unlock
         // without coupling to per-source signals or having to be added
         // to a publisher's allow-list.
-        "Vehicle.Controller.Cabin.LockStatus.LastRequestor" => Some(0x0014_0006),
+        "Vehicle.Cabin.LockStatus.LastRequestor" => Some(0x0014_0006),
         // Monotonic counter incremented on every accepted central-lock
         // command (wraps at u16::MAX).  Subscribers use the *change* in
         // this value as the "a new lock command happened" trigger,
-        // even when the resolved `Vehicle.Controller.Cabin.LockStatus` enum value is
+        // even when the resolved `Vehicle.Cabin.LockStatus` enum value is
         // unchanged (e.g. UnlockAll dispatched twice when already
         // unlocked).  Lets AutoRelock restart its 45s timer on every
         // qualifying press, not just on state transitions.
-        "Vehicle.Controller.Cabin.LockStatus.EventNum" => Some(0x0014_0007),
+        "Vehicle.Cabin.LockStatus.EventNum" => Some(0x0014_0007),
 
         // Power child-lock momentary push (driver master panel) +
         // latched master output.  PowerChildLock feature observes the
         // press, toggles MasterStatus and fans it out to the per-door
         // Body.Doors.Row2.{Left,Right}.IsChildLockActive signals.
-        "Vehicle.Controller.Body.Switches.PowerChildLock.IsPressed" => Some(0x0014_0008),
+        "Vehicle.Cabin.ChildLock.Switch.IsPressed" => Some(0x0014_0008),
         "Vehicle.Controller.Body.PowerChildLock.MasterStatus" => Some(0x0014_0009),
 
         // Ambient light sensor (OEM custom — not in standard VSS v6.0).
@@ -481,7 +481,7 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
 
         // ADAS camera signals (OEM custom — block 0x0016).
         // OncomingVehicleDetected: true when forward camera sees oncoming headlights.
-        "Vehicle.Controller.ADAS.HighBeam.OncomingVehicleDetected" => Some(0x0016_0001),
+        "Vehicle.ADAS.HighBeam.OncomingVehicleDetected" => Some(0x0016_0001),
 
         // ── Standard COVESA VSS v6.0 paths (block 0x0018) ──────────────
         //
@@ -512,28 +512,20 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // Driver-master pack: one Detent per window.  Always defined
         // for all 4 windows regardless of LHD/RHD — the master pack
         // sits on the driver's door card and covers every window.
-        "Vehicle.Controller.Body.Switches.Window.DriverMaster.Row1.Left.Detent" => {
-            Some(0x001A_0001)
-        }
-        "Vehicle.Controller.Body.Switches.Window.DriverMaster.Row1.Right.Detent" => {
-            Some(0x001A_0002)
-        }
-        "Vehicle.Controller.Body.Switches.Window.DriverMaster.Row2.Left.Detent" => {
-            Some(0x001A_0003)
-        }
-        "Vehicle.Controller.Body.Switches.Window.DriverMaster.Row2.Right.Detent" => {
-            Some(0x001A_0004)
-        }
+        "Vehicle.Cabin.Door.Row1.Left.Window.Switch.MasterDetent" => Some(0x001A_0001),
+        "Vehicle.Cabin.Door.Row1.Right.Window.Switch.MasterDetent" => Some(0x001A_0002),
+        "Vehicle.Cabin.Door.Row2.Left.Window.Switch.MasterDetent" => Some(0x001A_0003),
+        "Vehicle.Cabin.Door.Row2.Right.Window.Switch.MasterDetent" => Some(0x001A_0004),
         // Local per-door switches — defined symmetrically for all 4
         // doors.  The HMI only writes the side configured as
         // **passenger** for the driver's row (Local.Row1.{!driver}) so
         // there's no double-write from the driver's own door (which
         // is covered by DriverMaster).  Local.Row1.{driver-side}
         // stays defined so tests can inject it.
-        "Vehicle.Controller.Body.Switches.Window.Local.Row1.Left.Detent" => Some(0x001A_0011),
-        "Vehicle.Controller.Body.Switches.Window.Local.Row1.Right.Detent" => Some(0x001A_0012),
-        "Vehicle.Controller.Body.Switches.Window.Local.Row2.Left.Detent" => Some(0x001A_0013),
-        "Vehicle.Controller.Body.Switches.Window.Local.Row2.Right.Detent" => Some(0x001A_0014),
+        "Vehicle.Cabin.Door.Row1.Left.Window.Switch.LocalDetent" => Some(0x001A_0011),
+        "Vehicle.Cabin.Door.Row1.Right.Window.Switch.LocalDetent" => Some(0x001A_0012),
+        "Vehicle.Cabin.Door.Row2.Left.Window.Switch.LocalDetent" => Some(0x001A_0013),
+        "Vehicle.Cabin.Door.Row2.Right.Window.Switch.LocalDetent" => Some(0x001A_0014),
         // Window-motor commanded direction (String enum UP / DOWN /
         // STOPPED).  Published by the `window_arbiter` from the
         // winning claim; consumed by the per-window plant which
@@ -549,7 +541,7 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // simulator-panel SunroofMotorRow) on every press / release.
         // Consumed by the `SunroofControl` feature which sequences
         // the two motors and handles auto-mode latching.
-        "Vehicle.Controller.Body.Switches.Sunroof.Detent" => Some(0x001B_0001),
+        "Vehicle.Cabin.Sunroof.Switch.Detent" => Some(0x001B_0001),
 
         // Delayed-accessory power latch.  Published by the
         // DelayedAccessory feature.  Gates PowerWindow today; other
@@ -570,25 +562,25 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
 
         // Vehicle starting / ignition (block 0x001E).
         //
-        // `Vehicle.Controller.Body.Switches.StartStop.IsPressed` — momentary push of the
+        // `Vehicle.Cabin.StartStopSwitch.IsPressed` — momentary push of the
         //   start/stop button.  Only meaningful when
         //   `VehicleLineCal::key_source_cfg == Peps`; on KeyCylinder
         //   builds the HMI omits the button entirely.
-        // `Vehicle.Controller.Body.Switches.IgnitionCylinder.Position` — String enum
+        // `Vehicle.Cabin.IgnitionCylinder.Position` — String enum
         //   ("LOCK" | "ACC" | "ON" | "START") published by the cockpit
         //   rotary cylinder.  Only used when `key_source_cfg ==
         //   KeyCylinder`.  Spring-loaded START detent returns to ON
         //   when released.
-        // `Vehicle.Controller.Chassis.Brake.IsApplied` — bool, derived by the brake plant
+        // `Vehicle.Chassis.Brake.IsApplied` — bool, derived by the brake plant
         //   from `Vehicle.Chassis.Brake.PedalPosition` (threshold-debounced).
         //   VehicleStartingControl reads this to decide jump-to-RUN.
         // `Vehicle.Controller.Starting.ImmobilizerStatus` — String enum
         //   ("LOCKED" | "AUTHENTICATING" | "AUTHENTICATED" | "FAILED")
         //   published by VehicleStartingControl based on the result of
         //   the immobilizer challenge issued via the KeySearchArbiter.
-        "Vehicle.Controller.Body.Switches.StartStop.IsPressed" => Some(0x001E_0001),
-        "Vehicle.Controller.Body.Switches.IgnitionCylinder.Position" => Some(0x001E_0002),
-        "Vehicle.Controller.Chassis.Brake.IsApplied" => Some(0x001E_0003),
+        "Vehicle.Cabin.StartStopSwitch.IsPressed" => Some(0x001E_0001),
+        "Vehicle.Cabin.IgnitionCylinder.Position" => Some(0x001E_0002),
+        "Vehicle.Chassis.Brake.IsApplied" => Some(0x001E_0003),
         "Vehicle.Controller.Starting.ImmobilizerStatus" => Some(0x001E_0004),
 
         // Brake / Transmission Shift Interlock (BTSI) + Key-in-Ignition
@@ -860,9 +852,9 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Vehicle.Controller.Body.Chime.IsSounding", 0x0006_000F),
     ("Vehicle.Controller.Body.Trunk.Rear.OpenCmd", 0x0006_0007),
     ("Vehicle.Controller.Body.Trunk.Rear.CloseCmd", 0x0006_0008),
-    ("Vehicle.Controller.Body.FuelLid.IsOpen", 0x0006_0005),
-    ("Vehicle.Controller.Body.ChargeLid.IsOpen", 0x0006_0006),
-    ("Vehicle.Controller.Alarm.IsActive", 0x0006_0009),
+    ("Vehicle.Body.FuelLid.IsOpen", 0x0006_0005),
+    ("Vehicle.Body.ChargeLid.IsOpen", 0x0006_0006),
+    ("Vehicle.Body.Alarm.IsActive", 0x0006_0009),
     ("Vehicle.Controller.Alarm.State", 0x0006_0010),
     (
         "Vehicle.Controller.Body.Trunk.Rear.ExteriorButton.IsPressed",
@@ -870,7 +862,7 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ),
     ("Vehicle.Controller.Body.Hood.OpenCmd", 0x0006_000B),
     ("Vehicle.Controller.Body.Hood.CloseCmd", 0x0006_000C),
-    ("Vehicle.Controller.Body.Hood.LatchState", 0x0006_000D),
+    ("Vehicle.Body.Hood.LatchState", 0x0006_000D),
     (
         "Vehicle.Controller.Body.Doors.AutoRelock.IsArmed",
         0x000A_0040,
@@ -939,52 +931,31 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Vehicle.Cabin.Seat.Row1.Right.HeatingCooling", 0x000A_0013),
     ("Vehicle.Controller.Body.PEPS.KeyPresent", 0x000B_0001),
     // Switch / stalk inputs (overlay)
+    ("Vehicle.Body.Lights.Hazard.Switch.IsEngaged", 0x000D_0001),
     (
-        "Vehicle.Controller.Body.Switches.Hazard.IsEngaged",
-        0x000D_0001,
-    ),
-    (
-        "Vehicle.Controller.Body.Switches.TurnIndicator.Direction",
+        "Vehicle.Body.Lights.DirectionIndicator.Switch.Direction",
         0x000D_0002,
     ),
     (
-        "Vehicle.Controller.Body.Switches.HighBeam.IsEngaged",
+        "Vehicle.Body.Lights.Beam.High.Switch.IsEngaged",
         0x000D_0003,
     ),
     ("Vehicle.Chassis.ParkingBrake.IsEngaged", 0x000D_0004),
     (
-        "Vehicle.Controller.Body.Switches.Fog.Front.IsEngaged",
+        "Vehicle.Body.Lights.Fog.Front.Switch.IsEngaged",
         0x000D_0005,
     ),
+    ("Vehicle.Body.Lights.Fog.Rear.Switch.IsEngaged", 0x000D_0006),
+    ("Vehicle.Body.Alarm.PanicSwitch.IsEngaged", 0x000D_0007),
+    ("Vehicle.Body.Mirrors.Switch.Fold", 0x000D_0010),
+    ("Vehicle.Body.Mirrors.Switch.Select", 0x000D_0011),
+    ("Vehicle.Body.Mirrors.Switch.Direction", 0x000D_0012),
+    ("Vehicle.Body.Hood.ReleaseSwitch.IsPulled", 0x000D_0020),
     (
-        "Vehicle.Controller.Body.Switches.Fog.Rear.IsEngaged",
-        0x000D_0006,
-    ),
-    (
-        "Vehicle.Controller.Body.Switches.Panic.IsEngaged",
-        0x000D_0007,
-    ),
-    ("Vehicle.Controller.Body.Switches.Mirror.Fold", 0x000D_0010),
-    (
-        "Vehicle.Controller.Body.Switches.Mirror.Select",
-        0x000D_0011,
-    ),
-    (
-        "Vehicle.Controller.Body.Switches.Mirror.Direction",
-        0x000D_0012,
-    ),
-    (
-        "Vehicle.Controller.Body.Switches.Hood.Release.IsPulled",
-        0x000D_0020,
-    ),
-    (
-        "Vehicle.Controller.Body.Switches.Trunk.Release.IsPressed",
+        "Vehicle.Body.Trunk.Rear.ReleaseSwitch.IsPressed",
         0x000D_0021,
     ),
-    (
-        "Vehicle.Controller.Body.Switches.Horn.IsPressed",
-        0x000D_0022,
-    ),
+    ("Vehicle.Body.Horn.Switch.IsPressed", 0x000D_0022),
     // Chassis / Powertrain
     ("Vehicle.Chassis.Brake.PedalPosition", 0x000C_0001),
     ("Powertrain.Transmission.CurrentGear", 0x000C_0002),
@@ -992,34 +963,13 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Vehicle.Body.Lights.LightSwitch", 0x000C_0004),
     ("Powertrain.Transmission.SelectedGear", 0x000C_0005),
     // Door lock inputs (overlay — DoorLockInputs.vspec)
-    (
-        "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.LockButton",
-        0x000E_0001,
-    ),
-    (
-        "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Right.LockButton",
-        0x000E_0002,
-    ),
-    (
-        "Vehicle.Controller.Body.Switches.DoorTrim.Row2.Left.LockButton",
-        0x000E_0003,
-    ),
-    (
-        "Vehicle.Controller.Body.Switches.DoorTrim.Row2.Right.LockButton",
-        0x000E_0004,
-    ),
-    (
-        "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.UnlockButton",
-        0x000E_0005,
-    ),
-    (
-        "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Right.UnlockButton",
-        0x000E_0006,
-    ),
-    (
-        "Vehicle.Controller.Body.Switches.Keyfob.LockButton",
-        0x000E_0010,
-    ),
+    ("Vehicle.Cabin.Door.Row1.Left.Switch.Lock", 0x000E_0001),
+    ("Vehicle.Cabin.Door.Row1.Right.Switch.Lock", 0x000E_0002),
+    ("Vehicle.Cabin.Door.Row2.Left.Switch.Lock", 0x000E_0003),
+    ("Vehicle.Cabin.Door.Row2.Right.Switch.Lock", 0x000E_0004),
+    ("Vehicle.Cabin.Door.Row1.Left.Switch.Unlock", 0x000E_0005),
+    ("Vehicle.Cabin.Door.Row1.Right.Switch.Unlock", 0x000E_0006),
+    ("Vehicle.Body.Keyfob.Switch.Lock", 0x000E_0010),
     ("Vehicle.Simulation.Connectivity.RemoteLock", 0x000E_0020),
     ("Vehicle.Simulation.Connectivity.BleLock", 0x000E_0021),
     (
@@ -1036,7 +986,7 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Vehicle.Cabin.Door.Row2.Left.IsRemoved", 0x000E_0042),
     ("Vehicle.Cabin.Door.Row2.Right.IsRemoved", 0x000E_0043),
     // Safety signals
-    ("Vehicle.Controller.Safety.CrashDetected", 0x000F_0001),
+    ("Vehicle.CrashDetected", 0x000F_0001),
     // PEPS plant model — `.Zone` retired (IDs 0x0010_0001..0x0010_0006).
     // PEPS plant model — key fob button presses
     ("Vehicle.Simulation.KeyFob.1.ButtonPress", 0x0010_0011),
@@ -1140,16 +1090,10 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
         "Vehicle.Controller.Body.Doors.CentralLock.Command",
         0x0014_0004,
     ),
-    ("Vehicle.Controller.Cabin.LockStatus", 0x0014_0005),
-    (
-        "Vehicle.Controller.Cabin.LockStatus.LastRequestor",
-        0x0014_0006,
-    ),
-    ("Vehicle.Controller.Cabin.LockStatus.EventNum", 0x0014_0007),
-    (
-        "Vehicle.Controller.Body.Switches.PowerChildLock.IsPressed",
-        0x0014_0008,
-    ),
+    ("Vehicle.Cabin.LockStatus", 0x0014_0005),
+    ("Vehicle.Cabin.LockStatus.LastRequestor", 0x0014_0006),
+    ("Vehicle.Cabin.LockStatus.EventNum", 0x0014_0007),
+    ("Vehicle.Cabin.ChildLock.Switch.IsPressed", 0x0014_0008),
     (
         "Vehicle.Controller.Body.PowerChildLock.MasterStatus",
         0x0014_0009,
@@ -1158,10 +1102,7 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
         "Vehicle.Controller.Body.Lights.AmbientLightSensor.Illuminance",
         0x0015_0001,
     ),
-    (
-        "Vehicle.Controller.ADAS.HighBeam.OncomingVehicleDetected",
-        0x0016_0001,
-    ),
+    ("Vehicle.ADAS.HighBeam.OncomingVehicleDetected", 0x0016_0001),
     ("Vehicle.Cabin.Infotainment.HMI.DayNightMode", 0x0018_0001),
     (
         "Vehicle.Chassis.Axle.Row1.Wheel.Left.Tire.IsPressureLow",
@@ -1182,35 +1123,35 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Vehicle.Controller.Cabin.ValetMode.IsActive", 0x0017_0001),
     // Power-window block (0x001A) — Detent enums per switch.
     (
-        "Vehicle.Controller.Body.Switches.Window.DriverMaster.Row1.Left.Detent",
+        "Vehicle.Cabin.Door.Row1.Left.Window.Switch.MasterDetent",
         0x001A_0001,
     ),
     (
-        "Vehicle.Controller.Body.Switches.Window.DriverMaster.Row1.Right.Detent",
+        "Vehicle.Cabin.Door.Row1.Right.Window.Switch.MasterDetent",
         0x001A_0002,
     ),
     (
-        "Vehicle.Controller.Body.Switches.Window.DriverMaster.Row2.Left.Detent",
+        "Vehicle.Cabin.Door.Row2.Left.Window.Switch.MasterDetent",
         0x001A_0003,
     ),
     (
-        "Vehicle.Controller.Body.Switches.Window.DriverMaster.Row2.Right.Detent",
+        "Vehicle.Cabin.Door.Row2.Right.Window.Switch.MasterDetent",
         0x001A_0004,
     ),
     (
-        "Vehicle.Controller.Body.Switches.Window.Local.Row1.Left.Detent",
+        "Vehicle.Cabin.Door.Row1.Left.Window.Switch.LocalDetent",
         0x001A_0011,
     ),
     (
-        "Vehicle.Controller.Body.Switches.Window.Local.Row1.Right.Detent",
+        "Vehicle.Cabin.Door.Row1.Right.Window.Switch.LocalDetent",
         0x001A_0012,
     ),
     (
-        "Vehicle.Controller.Body.Switches.Window.Local.Row2.Left.Detent",
+        "Vehicle.Cabin.Door.Row2.Left.Window.Switch.LocalDetent",
         0x001A_0013,
     ),
     (
-        "Vehicle.Controller.Body.Switches.Window.Local.Row2.Right.Detent",
+        "Vehicle.Cabin.Door.Row2.Right.Window.Switch.LocalDetent",
         0x001A_0014,
     ),
     (
@@ -1229,10 +1170,7 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
         "Vehicle.Cabin.Door.Row2.Right.Window.MotorDirection",
         0x001A_0024,
     ),
-    (
-        "Vehicle.Controller.Body.Switches.Sunroof.Detent",
-        0x001B_0001,
-    ),
+    ("Vehicle.Cabin.Sunroof.Switch.Detent", 0x001B_0001),
     (
         "Vehicle.Controller.Body.Power.DelayedAccessory.IsActive",
         0x001C_0001,
@@ -1244,15 +1182,9 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
         0x001D_0003,
     ),
     // Vehicle starting / ignition (block 0x001E).
-    (
-        "Vehicle.Controller.Body.Switches.StartStop.IsPressed",
-        0x001E_0001,
-    ),
-    (
-        "Vehicle.Controller.Body.Switches.IgnitionCylinder.Position",
-        0x001E_0002,
-    ),
-    ("Vehicle.Controller.Chassis.Brake.IsApplied", 0x001E_0003),
+    ("Vehicle.Cabin.StartStopSwitch.IsPressed", 0x001E_0001),
+    ("Vehicle.Cabin.IgnitionCylinder.Position", 0x001E_0002),
+    ("Vehicle.Chassis.Brake.IsApplied", 0x001E_0003),
     ("Vehicle.Controller.Starting.ImmobilizerStatus", 0x001E_0004),
     ("Powertrain.Transmission.ShiftLockEngaged", 0x001E_0005),
     (

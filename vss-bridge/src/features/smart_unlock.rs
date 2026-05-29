@@ -13,9 +13,9 @@
 //!
 //! # Trigger
 //!
-//! On every `Vehicle.Controller.Cabin.LockStatus.EventNum` bump (the arbiter's "this
-//! lock event is fully published" wakeup, with `Vehicle.Controller.Cabin.LockStatus` and
-//! `Vehicle.Controller.Cabin.LockStatus.LastRequestor` guaranteed coherent), evaluate:
+//! On every `Vehicle.Cabin.LockStatus.EventNum` bump (the arbiter's "this
+//! lock event is fully published" wakeup, with `Vehicle.Cabin.LockStatus` and
+//! `Vehicle.Cabin.LockStatus.LastRequestor` guaranteed coherent), evaluate:
 //!
 //! 1. Vehicle is on a PEPS line (`key_source_cfg == Peps`).
 //!    Cylinder-key vehicles physically can't lock with the key in
@@ -24,7 +24,7 @@
 //! 2. Ignition is OFF (`Vehicle.LowVoltageSystemState ∈ {OFF, LOCK}`).
 //!    ACC / ON / START mean somebody is at the wheel — Smart Unlock
 //!    must not contradict an active driver.
-//! 3. `Vehicle.Controller.Cabin.LockStatus` ∈ {`LOCKED`, `DOUBLE_LOCKED`} — only a fresh
+//! 3. `Vehicle.Cabin.LockStatus` ∈ {`LOCKED`, `DOUBLE_LOCKED`} — only a fresh
 //!    lock event matters.
 //! 4. `LastRequestor` ∈ {`PhoneApp`, `SlamLock`} — these are the only
 //!    lock paths that don't come with built-in proof of a paired-key
@@ -76,9 +76,9 @@ use crate::ipc_message::{FeatureId, SignalValue};
 use crate::plant_models::peps::zone::Zone;
 use crate::signal_bus::{SignalBus, VssPath};
 
-const LOCK_STATUS: VssPath = "Vehicle.Controller.Cabin.LockStatus";
-const LAST_REQUESTOR: VssPath = "Vehicle.Controller.Cabin.LockStatus.LastRequestor";
-const LOCK_EVENT_NUM: VssPath = "Vehicle.Controller.Cabin.LockStatus.EventNum";
+const LOCK_STATUS: VssPath = "Vehicle.Cabin.LockStatus";
+const LAST_REQUESTOR: VssPath = "Vehicle.Cabin.LockStatus.LastRequestor";
+const LOCK_EVENT_NUM: VssPath = "Vehicle.Cabin.LockStatus.EventNum";
 const IGNITION_STATE: VssPath = "Vehicle.LowVoltageSystemState";
 
 /// `LastRequestor` strings that should trigger Smart Unlock.

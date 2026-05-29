@@ -2,7 +2,7 @@
 //! the driver moves the turn signal stalk.
 //!
 //! Subscribes to:
-//!   - Vehicle.Controller.Body.Switches.TurnIndicator.Direction (overlay sensor — stalk)
+//!   - Vehicle.Body.Lights.DirectionIndicator.Switch.Direction (overlay sensor — stalk)
 //!     Values: "OFF", "LEFT", "RIGHT"
 //!   - Vehicle.LowVoltageSystemState (ignition / power mode)
 //!     Turn signals only operate when ignition is ON or START.
@@ -57,7 +57,7 @@ use crate::ipc_message::{FeatureId, Priority, SignalValue};
 use crate::signal_bus::{SignalBus, VssPath};
 
 /// Physical turn signal stalk input (overlay signal).
-const TURN_STALK: VssPath = "Vehicle.Controller.Body.Switches.TurnIndicator.Direction";
+const TURN_STALK: VssPath = "Vehicle.Body.Lights.DirectionIndicator.Switch.Direction";
 
 /// Power state signal — standard VSS v6.0.
 const POWER_STATE: VssPath = "Vehicle.LowVoltageSystemState";
@@ -708,7 +708,7 @@ mod tests {
 
         bus.clear_history();
         bus.inject(
-            "Vehicle.Controller.Body.Switches.Hazard.IsEngaged",
+            "Vehicle.Body.Lights.Hazard.Switch.IsEngaged",
             SignalValue::Bool(true),
         );
         settle().await;

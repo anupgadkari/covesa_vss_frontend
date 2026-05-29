@@ -4,7 +4,7 @@
 //! Subscribes to:
 //!   - Body.Doors.Row[1,2].{Left,Right}.IsLocked  (STATE_UPDATE)
 //!   - Body.Doors.Row[1,2].{Left,Right}.IsOpen     (STATE_UPDATE)
-//!   - Vehicle.Controller.Safety.CrashDetected                 (STATE_UPDATE)
+//!   - Vehicle.CrashDetected                 (STATE_UPDATE)
 //!   - Vehicle.LowVoltageSystemState                (STATE_UPDATE)
 //!
 //! Outputs:
@@ -34,7 +34,7 @@ use crate::signal_bus::{SignalBus, VssPath};
 const DEFAULT_RELOCK_TIMEOUT: Duration = Duration::from_secs(45);
 
 /// Crash detection signal from the Safety Monitor.
-const CRASH_SIGNAL: VssPath = "Vehicle.Controller.Safety.CrashDetected";
+const CRASH_SIGNAL: VssPath = "Vehicle.CrashDetected";
 
 /// Power state signal — standard VSS v6.0.
 const POWER_STATE_SIGNAL: VssPath = "Vehicle.LowVoltageSystemState";
@@ -51,14 +51,14 @@ const STATUS_TIMEOUT_SECS: VssPath = "Vehicle.Controller.Body.Doors.AutoRelock.T
 /// on every accepted command (status itself is deduplicated; companion
 /// signals always publish).  AutoRelock reads the latest value of
 /// this signal at every `EVENT_NUM` bump to decide whether to arm.
-const LOCK_STATUS: VssPath = "Vehicle.Controller.Cabin.LockStatus";
+const LOCK_STATUS: VssPath = "Vehicle.Cabin.LockStatus";
 
 /// Identity of the feature whose request the arbiter accepted on the
 /// most recent central-lock dispatch.  AutoRelock filters arming
 /// against the `EXTERNAL_UNLOCK_REQUESTORS` set so only physical-key
 /// / phone / fob unlocks trigger the relock timer; interior soldier
 /// knobs, AutoLock, and HMI diagnostic toggles don't arm.
-const LOCK_LAST_REQUESTOR: VssPath = "Vehicle.Controller.Cabin.LockStatus.LastRequestor";
+const LOCK_LAST_REQUESTOR: VssPath = "Vehicle.Cabin.LockStatus.LastRequestor";
 
 /// `LastRequestor` strings that should arm AutoRelock.  These are
 /// the physical-external unlock paths — the user is acting from
@@ -205,8 +205,8 @@ impl<B: SignalBus> AutoRelock<B> {
 
         // Arming triggers from the door-lock arbiter — published in
         // order on every accepted command:
-        //   1. `Vehicle.Controller.Cabin.LockStatus`            (current state enum)
-        //   2. `Vehicle.Controller.Cabin.LockStatus.LastRequestor` (FeatureId string)
+        //   1. `Vehicle.Cabin.LockStatus`            (current state enum)
+        //   2. `Vehicle.Cabin.LockStatus.LastRequestor` (FeatureId string)
         //
         // We track the latest value of each in a local cache and
         // arm on every `LastRequestor` tick — that signal is
@@ -387,7 +387,7 @@ impl<B: SignalBus> AutoRelock<B> {
                 if matches!(timer_result, TimerOutcome::Restart) {
                     // Re-publish TimeoutSeconds so any HMI countdown
                     // that reads the latest value sees a fresh tick.
-                    // The HMI also subscribes to `Vehicle.Controller.Cabin.LockStatus.EventNum`
+                    // The HMI also subscribes to `Vehicle.Cabin.LockStatus.EventNum`
                     // independently and re-stamps its visual timer on
                     // every qualifying unlock event — `IsArmed` stays
                     // `true` across restarts so this signal can stay
@@ -578,11 +578,11 @@ mod tests {
         let (bus, _arb, _handle) = setup(Duration::from_millis(100)).await;
 
         bus.inject(
-            "Vehicle.Controller.Cabin.LockStatus",
+            "Vehicle.Cabin.LockStatus",
             SignalValue::String("UNLOCKED".into()),
         );
         bus.inject(
-            "Vehicle.Controller.Cabin.LockStatus.LastRequestor",
+            "Vehicle.Cabin.LockStatus.LastRequestor",
             SignalValue::String("KeyfobRke".into()),
         );
         tokio::task::yield_now().await;
@@ -620,11 +620,11 @@ mod tests {
 
         // Now fire the qualifying unlock.  Per spec this must NOT arm.
         bus.inject(
-            "Vehicle.Controller.Cabin.LockStatus",
+            "Vehicle.Cabin.LockStatus",
             SignalValue::String("UNLOCKED".into()),
         );
         bus.inject(
-            "Vehicle.Controller.Cabin.LockStatus.LastRequestor",
+            "Vehicle.Cabin.LockStatus.LastRequestor",
             SignalValue::String("KeyfobRke".into()),
         );
         tokio::task::yield_now().await;
@@ -658,11 +658,11 @@ mod tests {
         let (bus, _arb, _handle) = setup(Duration::from_millis(200)).await;
 
         bus.inject(
-            "Vehicle.Controller.Cabin.LockStatus",
+            "Vehicle.Cabin.LockStatus",
             SignalValue::String("UNLOCKED".into()),
         );
         bus.inject(
-            "Vehicle.Controller.Cabin.LockStatus.LastRequestor",
+            "Vehicle.Cabin.LockStatus.LastRequestor",
             SignalValue::String("KeyfobRke".into()),
         );
         tokio::task::yield_now().await;
@@ -693,11 +693,11 @@ mod tests {
         let (bus, _arb, _handle) = setup(Duration::from_millis(200)).await;
 
         bus.inject(
-            "Vehicle.Controller.Cabin.LockStatus",
+            "Vehicle.Cabin.LockStatus",
             SignalValue::String("UNLOCKED".into()),
         );
         bus.inject(
-            "Vehicle.Controller.Cabin.LockStatus.LastRequestor",
+            "Vehicle.Cabin.LockStatus.LastRequestor",
             SignalValue::String("KeyfobRke".into()),
         );
         tokio::task::yield_now().await;
@@ -732,11 +732,11 @@ mod tests {
 
         // Unlock → timer starts
         bus.inject(
-            "Vehicle.Controller.Cabin.LockStatus",
+            "Vehicle.Cabin.LockStatus",
             SignalValue::String("UNLOCKED".into()),
         );
         bus.inject(
-            "Vehicle.Controller.Cabin.LockStatus.LastRequestor",
+            "Vehicle.Cabin.LockStatus.LastRequestor",
             SignalValue::String("KeyfobRke".into()),
         );
         tokio::task::yield_now().await;
@@ -785,11 +785,11 @@ mod tests {
         // Now verify it works again: unlock → timeout → LOCK
         bus.clear_history();
         bus.inject(
-            "Vehicle.Controller.Cabin.LockStatus",
+            "Vehicle.Cabin.LockStatus",
             SignalValue::String("UNLOCKED".into()),
         );
         bus.inject(
-            "Vehicle.Controller.Cabin.LockStatus.LastRequestor",
+            "Vehicle.Cabin.LockStatus.LastRequestor",
             SignalValue::String("KeyfobRke".into()),
         );
         tokio::task::yield_now().await;
@@ -825,11 +825,11 @@ mod tests {
 
         // Unlock during DISABLED — should be ignored
         bus.inject(
-            "Vehicle.Controller.Cabin.LockStatus",
+            "Vehicle.Cabin.LockStatus",
             SignalValue::String("UNLOCKED".into()),
         );
         bus.inject(
-            "Vehicle.Controller.Cabin.LockStatus.LastRequestor",
+            "Vehicle.Cabin.LockStatus.LastRequestor",
             SignalValue::String("KeyfobRke".into()),
         );
         tokio::task::yield_now().await;
@@ -877,11 +877,11 @@ mod tests {
 
         bus.clear_history();
         bus.inject(
-            "Vehicle.Controller.Cabin.LockStatus",
+            "Vehicle.Cabin.LockStatus",
             SignalValue::String("UNLOCKED".into()),
         );
         bus.inject(
-            "Vehicle.Controller.Cabin.LockStatus.LastRequestor",
+            "Vehicle.Cabin.LockStatus.LastRequestor",
             SignalValue::String("KeyfobRke".into()),
         );
         tokio::task::yield_now().await;
@@ -940,11 +940,11 @@ mod tests {
         let (bus, _arbiter, _h) = setup(Duration::from_millis(100)).await;
 
         bus.inject(
-            "Vehicle.Controller.Cabin.LockStatus",
+            "Vehicle.Cabin.LockStatus",
             SignalValue::String("UNLOCKED".into()),
         );
         bus.inject(
-            "Vehicle.Controller.Cabin.LockStatus.LastRequestor",
+            "Vehicle.Cabin.LockStatus.LastRequestor",
             SignalValue::String("PassiveEntry".into()),
         );
         sleep(Duration::from_millis(200)).await;
@@ -972,11 +972,11 @@ mod tests {
 
         // Press 1.
         bus.inject(
-            "Vehicle.Controller.Cabin.LockStatus",
+            "Vehicle.Cabin.LockStatus",
             SignalValue::String("UNLOCKED".into()),
         );
         bus.inject(
-            "Vehicle.Controller.Cabin.LockStatus.LastRequestor",
+            "Vehicle.Cabin.LockStatus.LastRequestor",
             SignalValue::String("KeyfobRke".into()),
         );
 
@@ -988,11 +988,11 @@ mod tests {
         // Press 2 — same status, fresh requestor publish.  This
         // should restart the timer from 0.
         bus.inject(
-            "Vehicle.Controller.Cabin.LockStatus",
+            "Vehicle.Cabin.LockStatus",
             SignalValue::String("UNLOCKED".into()),
         );
         bus.inject(
-            "Vehicle.Controller.Cabin.LockStatus.LastRequestor",
+            "Vehicle.Cabin.LockStatus.LastRequestor",
             SignalValue::String("KeyfobRke".into()),
         );
 
@@ -1056,11 +1056,11 @@ mod tests {
 
         // Step 2: now an external RKE unlock arms AutoRelock.
         bus.inject(
-            "Vehicle.Controller.Cabin.LockStatus",
+            "Vehicle.Cabin.LockStatus",
             SignalValue::String("UNLOCKED".into()),
         );
         bus.inject(
-            "Vehicle.Controller.Cabin.LockStatus.LastRequestor",
+            "Vehicle.Cabin.LockStatus.LastRequestor",
             SignalValue::String("KeyfobRke".into()),
         );
 
@@ -1088,11 +1088,11 @@ mod tests {
         let (bus, _arbiter, _h) = setup(Duration::from_millis(100)).await;
 
         bus.inject(
-            "Vehicle.Controller.Cabin.LockStatus",
+            "Vehicle.Cabin.LockStatus",
             SignalValue::String("UNLOCKED".into()),
         );
         bus.inject(
-            "Vehicle.Controller.Cabin.LockStatus.LastRequestor",
+            "Vehicle.Cabin.LockStatus.LastRequestor",
             SignalValue::String("DoorTrimButton".into()),
         );
         sleep(Duration::from_millis(200)).await;

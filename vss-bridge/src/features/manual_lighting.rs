@@ -17,7 +17,7 @@
 //! Low beam activates when the reading falls below
 //! `auto_headlamp_lux_threshold` (calibrated in `VehicleLineCal`,
 //! default 200 lux — aligned with ECE R48 §6.1 dusk/dawn threshold).
-//! High beam follows `Vehicle.Controller.Body.Switches.HighBeam.IsEngaged` while low beam is on.
+//! High beam follows `Vehicle.Body.Lights.Beam.High.Switch.IsEngaged` while low beam is on.
 //!
 //! The ambient sensor starts at u16::MAX (full daylight) so that AUTO mode
 //! does not switch the headlamps on at cold boot before any sensor reading
@@ -25,7 +25,7 @@
 //!
 //! # High beam interlock
 //!
-//! `Vehicle.Controller.Body.Switches.HighBeam.IsEngaged` (Bool) — latched stalk toggle.
+//! `Vehicle.Body.Lights.Beam.High.Switch.IsEngaged` (Bool) — latched stalk toggle.
 //! High beam only activates when low beam is currently on.
 //!
 //! # Ignition gate
@@ -47,7 +47,7 @@ use crate::signal_bus::{SignalBus, VssPath};
 // ── Signal constants ───────────────────────────────────────────────────────
 
 const LIGHT_SWITCH: &str = "Vehicle.Body.Lights.LightSwitch";
-const HIGH_BEAM_SWITCH: &str = "Vehicle.Controller.Body.Switches.HighBeam.IsEngaged";
+const HIGH_BEAM_SWITCH: &str = "Vehicle.Body.Lights.Beam.High.Switch.IsEngaged";
 const POWER_STATE: &str = "Vehicle.LowVoltageSystemState";
 const ILLUMINANCE: &str = "Vehicle.Controller.Body.Lights.AmbientLightSensor.Illuminance";
 

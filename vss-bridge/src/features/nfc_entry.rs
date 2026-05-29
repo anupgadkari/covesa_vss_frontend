@@ -36,7 +36,7 @@
 //!
 //! # Short-circuit on already-unlocked
 //!
-//! If `Vehicle.Controller.Cabin.LockStatus` already reads `UNLOCKED`, a tap is a no-op
+//! If `Vehicle.Cabin.LockStatus` already reads `UNLOCKED`, a tap is a no-op
 //! (the user pulled the handle twice, or the car was already open).
 //! `DRIVER_UNLOCKED` still escalates — a deliberate tap on the
 //! B-pillar reader is a clear "open everything" intent.
@@ -51,7 +51,7 @@
 //!    after `NFC_BYPASS_WINDOW`).  VehicleStartingControl reads
 //!    this as proof the user authenticated via NFC and skips its
 //!    normal cabin Authenticated scan.
-//! 2. Publishes a momentary `Vehicle.Controller.Body.Switches.StartStop.IsPressed`
+//! 2. Publishes a momentary `Vehicle.Cabin.StartStopSwitch.IsPressed`
 //!    rising-then-falling edge so VSC's PEPS press handler fires.
 //!
 //! Net effect: an NFC tap on the start-button pad is equivalent to
@@ -69,8 +69,8 @@ use crate::arbiter::{DoorLockArbiter, DoorLockRequest, LockCommand, FEEDBACK_REQ
 use crate::ipc_message::{FeatureId, SignalValue};
 use crate::signal_bus::{SignalBus, VssPath};
 
-const LOCK_STATUS: VssPath = "Vehicle.Controller.Cabin.LockStatus";
-const START_STOP: VssPath = "Vehicle.Controller.Body.Switches.StartStop.IsPressed";
+const LOCK_STATUS: VssPath = "Vehicle.Cabin.LockStatus";
+const START_STOP: VssPath = "Vehicle.Cabin.StartStopSwitch.IsPressed";
 const NFC_AUTH_BYPASS: VssPath = "Vehicle.Controller.Body.PEPS.NfcAuthBypass";
 
 /// How long the NFC bypass stays valid after a tap.  Long enough
@@ -395,8 +395,7 @@ mod tests {
     /// Helper: did the bus see a momentary StartStop rising edge?
     fn start_press_was_fired(bus: &MockBus) -> bool {
         bus.history().into_iter().any(|(s, v)| {
-            s == "Vehicle.Controller.Body.Switches.StartStop.IsPressed"
-                && v == SignalValue::Bool(true)
+            s == "Vehicle.Cabin.StartStopSwitch.IsPressed" && v == SignalValue::Bool(true)
         })
     }
 

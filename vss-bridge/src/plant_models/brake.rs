@@ -1,4 +1,4 @@
-//! Brake plant model — derives `Vehicle.Controller.Chassis.Brake.IsApplied` (bool) from
+//! Brake plant model — derives `Vehicle.Chassis.Brake.IsApplied` (bool) from
 //! the raw `Vehicle.Chassis.Brake.PedalPosition` (Uint8, 0–100 %).
 //!
 //! In production this signal would come from one of several places —
@@ -32,7 +32,7 @@
 //!
 //! # Single writer
 //!
-//! Single writer of `Vehicle.Controller.Chassis.Brake.IsApplied`.
+//! Single writer of `Vehicle.Chassis.Brake.IsApplied`.
 
 use std::sync::Arc;
 
@@ -42,7 +42,7 @@ use crate::ipc_message::SignalValue;
 use crate::signal_bus::{SignalBus, VssPath};
 
 const PEDAL_IN: VssPath = "Vehicle.Chassis.Brake.PedalPosition";
-const APPLIED_OUT: VssPath = "Vehicle.Controller.Chassis.Brake.IsApplied";
+const APPLIED_OUT: VssPath = "Vehicle.Chassis.Brake.IsApplied";
 
 const PRESS_THRESHOLD_PCT: u8 = 5;
 const RELEASE_THRESHOLD_PCT: u8 = 2;

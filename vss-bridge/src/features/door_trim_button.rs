@@ -68,10 +68,10 @@
 //!
 //! Subscribes to (FALSE→TRUE edges only):
 //! ```text
-//! Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.LockButton
-//! Vehicle.Controller.Body.Switches.DoorTrim.Row1.Right.LockButton
-//! Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.UnlockButton
-//! Vehicle.Controller.Body.Switches.DoorTrim.Row1.Right.UnlockButton
+//! Vehicle.Cabin.Door.Row1.Left.Switch.Lock
+//! Vehicle.Cabin.Door.Row1.Right.Switch.Lock
+//! Vehicle.Cabin.Door.Row1.Left.Switch.Unlock
+//! Vehicle.Cabin.Door.Row1.Right.Switch.Unlock
 //! ```
 //!
 //! Row 2 LockButton signals exist in the bus catalogue for
@@ -99,15 +99,13 @@ use crate::ipc_message::{FeatureId, SignalValue};
 use crate::signal_bus::{SignalBus, VssPath};
 
 const LOCK_BUTTONS: [VssPath; 2] = [
-    "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.LockButton",
-    "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Right.LockButton",
+    "Vehicle.Cabin.Door.Row1.Left.Switch.Lock",
+    "Vehicle.Cabin.Door.Row1.Right.Switch.Lock",
 ];
 
-const LEFT_UNLOCK_BUTTON: VssPath =
-    "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.UnlockButton";
-const RIGHT_UNLOCK_BUTTON: VssPath =
-    "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Right.UnlockButton";
-const LOCK_STATUS: VssPath = "Vehicle.Controller.Cabin.LockStatus";
+const LEFT_UNLOCK_BUTTON: VssPath = "Vehicle.Cabin.Door.Row1.Left.Switch.Unlock";
+const RIGHT_UNLOCK_BUTTON: VssPath = "Vehicle.Cabin.Door.Row1.Right.Switch.Unlock";
+const LOCK_STATUS: VssPath = "Vehicle.Cabin.LockStatus";
 
 const DOOR_OPEN_SIGNALS: [VssPath; 4] = [
     "Vehicle.Cabin.Door.Row1.Left.IsOpen",
@@ -376,7 +374,7 @@ mod tests {
     async fn driver_trim_lock_button_locks_all() {
         let bus = setup().await;
         bus.inject(
-            "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.LockButton",
+            "Vehicle.Cabin.Door.Row1.Left.Switch.Lock",
             SignalValue::Bool(true),
         );
         settle().await;
@@ -402,7 +400,7 @@ mod tests {
     async fn passenger_trim_lock_button_locks_all() {
         let bus = setup().await;
         bus.inject(
-            "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Right.LockButton",
+            "Vehicle.Cabin.Door.Row1.Right.Switch.Lock",
             SignalValue::Bool(true),
         );
         settle().await;
@@ -424,7 +422,7 @@ mod tests {
         // UnlockAll.  Matches PassiveEntry / SlamLock routing.
         let bus = setup_with_cals(VehicleLineCal::default(), true, DriverDoorSide::Left).await;
         bus.inject(
-            "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.UnlockButton",
+            "Vehicle.Cabin.Door.Row1.Left.Switch.Unlock",
             SignalValue::Bool(true),
         );
         settle().await;
@@ -450,7 +448,7 @@ mod tests {
         // back to UnlockAll (no stage-1 routing on this vehicle line).
         let bus = setup_with_cals(VehicleLineCal::default(), false, DriverDoorSide::Left).await;
         bus.inject(
-            "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.UnlockButton",
+            "Vehicle.Cabin.Door.Row1.Left.Switch.Unlock",
             SignalValue::Bool(true),
         );
         settle().await;
@@ -474,7 +472,7 @@ mod tests {
             let bus =
                 setup_with_cals(VehicleLineCal::default(), two_stage, DriverDoorSide::Left).await;
             bus.inject(
-                "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Right.UnlockButton",
+                "Vehicle.Cabin.Door.Row1.Right.Switch.Unlock",
                 SignalValue::Bool(true),
             );
             settle().await;
@@ -499,7 +497,7 @@ mod tests {
         // (covered by rhd_passenger_trim_unlock_always_unlock_all).
         let bus = setup_with_cals(VehicleLineCal::default(), true, DriverDoorSide::Right).await;
         bus.inject(
-            "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Right.UnlockButton",
+            "Vehicle.Cabin.Door.Row1.Right.Switch.Unlock",
             SignalValue::Bool(true),
         );
         settle().await;
@@ -521,7 +519,7 @@ mod tests {
         // of two_stage_unlock.
         let bus = setup_with_cals(VehicleLineCal::default(), true, DriverDoorSide::Right).await;
         bus.inject(
-            "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.UnlockButton",
+            "Vehicle.Cabin.Door.Row1.Left.Switch.Unlock",
             SignalValue::Bool(true),
         );
         settle().await;
@@ -545,10 +543,10 @@ mod tests {
         let bus = setup_with_cals(VehicleLineCal::default(), true, DriverDoorSide::Left).await;
 
         // Simulate the cabin coming up in DRIVER_UNLOCKED before the
-        // press — the trim feature subscribes to Vehicle.Controller.Cabin.LockStatus,
+        // press — the trim feature subscribes to Vehicle.Cabin.LockStatus,
         // injects replay this directly into the cache.
         bus.inject(
-            "Vehicle.Controller.Cabin.LockStatus",
+            "Vehicle.Cabin.LockStatus",
             SignalValue::String("DRIVER_UNLOCKED".into()),
         );
         for _ in 0..16 {
@@ -556,7 +554,7 @@ mod tests {
         }
 
         bus.inject(
-            "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.UnlockButton",
+            "Vehicle.Cabin.Door.Row1.Left.Switch.Unlock",
             SignalValue::Bool(true),
         );
         settle().await;
@@ -577,14 +575,14 @@ mod tests {
         // routes through stage-1.
         let bus = setup_with_cals(VehicleLineCal::default(), true, DriverDoorSide::Left).await;
         bus.inject(
-            "Vehicle.Controller.Cabin.LockStatus",
+            "Vehicle.Cabin.LockStatus",
             SignalValue::String("LOCKED".into()),
         );
         for _ in 0..16 {
             tokio::task::yield_now().await;
         }
         bus.inject(
-            "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.UnlockButton",
+            "Vehicle.Cabin.Door.Row1.Left.Switch.Unlock",
             SignalValue::Bool(true),
         );
         settle().await;
@@ -606,14 +604,14 @@ mod tests {
         // escalation rule for the driver side doesn't change this.
         let bus = setup_with_cals(VehicleLineCal::default(), true, DriverDoorSide::Left).await;
         bus.inject(
-            "Vehicle.Controller.Cabin.LockStatus",
+            "Vehicle.Cabin.LockStatus",
             SignalValue::String("DRIVER_UNLOCKED".into()),
         );
         for _ in 0..16 {
             tokio::task::yield_now().await;
         }
         bus.inject(
-            "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Right.UnlockButton",
+            "Vehicle.Cabin.Door.Row1.Right.Switch.Unlock",
             SignalValue::Bool(true),
         );
         settle().await;
@@ -638,14 +636,14 @@ mod tests {
         // button maps to "driver."
         for driver_side in [DriverDoorSide::Left, DriverDoorSide::Right] {
             for side_signal in [
-                "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.LockButton",
-                "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Right.LockButton",
-                "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.UnlockButton",
-                "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Right.UnlockButton",
+                "Vehicle.Cabin.Door.Row1.Left.Switch.Lock",
+                "Vehicle.Cabin.Door.Row1.Right.Switch.Lock",
+                "Vehicle.Cabin.Door.Row1.Left.Switch.Unlock",
+                "Vehicle.Cabin.Door.Row1.Right.Switch.Unlock",
             ] {
                 let bus = setup_with_cals(VehicleLineCal::default(), true, driver_side).await;
                 bus.inject(
-                    "Vehicle.Controller.Cabin.LockStatus",
+                    "Vehicle.Cabin.LockStatus",
                     SignalValue::String("DOUBLE_LOCKED".into()),
                 );
                 for _ in 0..16 {
@@ -678,7 +676,7 @@ mod tests {
     async fn release_edge_is_a_noop() {
         let bus = setup().await;
         bus.inject(
-            "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.LockButton",
+            "Vehicle.Cabin.Door.Row1.Left.Switch.Lock",
             SignalValue::Bool(false),
         );
         settle().await;
@@ -695,13 +693,13 @@ mod tests {
     async fn last_requestor_is_door_trim_button() {
         let bus = setup().await;
         bus.inject(
-            "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.LockButton",
+            "Vehicle.Cabin.Door.Row1.Left.Switch.Lock",
             SignalValue::Bool(true),
         );
         settle().await;
 
         assert_eq!(
-            bus.latest_value("Vehicle.Controller.Cabin.LockStatus.LastRequestor"),
+            bus.latest_value("Vehicle.Cabin.LockStatus.LastRequestor"),
             Some(SignalValue::String("DoorTrimButton".into())),
             "DoorTrimButton must be the last requestor recorded by the arbiter"
         );
@@ -731,18 +729,18 @@ mod tests {
         }
 
         bus.inject(
-            "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.LockButton",
+            "Vehicle.Cabin.Door.Row1.Left.Switch.Lock",
             SignalValue::Bool(true),
         );
         settle().await;
 
         assert_eq!(
-            bus.latest_value("Vehicle.Controller.Cabin.LockStatus.LastRequestor"),
+            bus.latest_value("Vehicle.Cabin.LockStatus.LastRequestor"),
             Some(SignalValue::String("SlamLock".into())),
             "US slam-lock must publish SlamLock as the requestor"
         );
         assert_eq!(
-            bus.latest_value("Vehicle.Controller.Cabin.LockStatus"),
+            bus.latest_value("Vehicle.Cabin.LockStatus"),
             Some(SignalValue::String("LOCKED".into()))
         );
     }
@@ -768,13 +766,13 @@ mod tests {
         }
 
         bus.inject(
-            "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.LockButton",
+            "Vehicle.Cabin.Door.Row1.Left.Switch.Lock",
             SignalValue::Bool(true),
         );
         settle().await;
 
         assert_eq!(
-            bus.latest_value("Vehicle.Controller.Cabin.LockStatus.LastRequestor"),
+            bus.latest_value("Vehicle.Cabin.LockStatus.LastRequestor"),
             Some(SignalValue::String("DoorTrimButton".into())),
             "EU slam-lock-protect: DoorTrimButton stays the lock requestor; SlamLock undoes it later"
         );
@@ -793,13 +791,13 @@ mod tests {
             let bus = setup_with_cal(vl).await;
             // Doors stay closed (no inject).
             bus.inject(
-                "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.LockButton",
+                "Vehicle.Cabin.Door.Row1.Left.Switch.Lock",
                 SignalValue::Bool(true),
             );
             settle().await;
 
             assert_eq!(
-                bus.latest_value("Vehicle.Controller.Cabin.LockStatus.LastRequestor"),
+                bus.latest_value("Vehicle.Cabin.LockStatus.LastRequestor"),
                 Some(SignalValue::String("DoorTrimButton".into())),
                 "doors closed must always dispatch as DoorTrimButton (cal protect={})",
                 protect

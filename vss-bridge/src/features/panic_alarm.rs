@@ -1,9 +1,9 @@
 //! Panic Alarm — synchronized direction-indicator blink + horn chirps
 //! triggered by a paired keyfob's PANIC button (or any other source that
-//! engages `Vehicle.Controller.Body.Switches.Panic.IsEngaged`).
+//! engages `Vehicle.Body.Alarm.PanicSwitch.IsEngaged`).
 //!
 //! # Inputs
-//!   - `Vehicle.Controller.Body.Switches.Panic.IsEngaged` (Bool) — toggled by RKE on a
+//!   - `Vehicle.Body.Alarm.PanicSwitch.IsEngaged` (Bool) — toggled by RKE on a
 //!     paired-keyfob PANIC press, or by other sources (HMI test button,
 //!     telematics remote panic, intrusion sensor).
 //!
@@ -11,7 +11,7 @@
 //!   - `Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling`  via Lighting arbiter @ HIGH
 //!   - `Vehicle.Body.Lights.DirectionIndicator.Right.IsSignaling` via Lighting arbiter @ HIGH
 //!   - `Vehicle.Body.Horn.IsActive`                                via Horn arbiter @ HIGH
-//!   - `Vehicle.Controller.Alarm.IsActive` (Bool) — direct publish (single-owner
+//!   - `Vehicle.Body.Alarm.IsActive` (Bool) — direct publish (single-owner
 //!     status flag for telematics / HMI / fault logging).
 //!
 //! # Behaviour
@@ -26,7 +26,7 @@
 //!
 //! When `IsEngaged` transitions TRUE→FALSE, the loop is aborted, the
 //! lighting + horn arbiter claims are released, and
-//! `Vehicle.Controller.Alarm.IsActive` is published `false`.
+//! `Vehicle.Body.Alarm.IsActive` is published `false`.
 //!
 //! # Ignition independence
 //! Like Hazard, panic alarm is a security feature and operates regardless
@@ -43,7 +43,7 @@
 //! alarm — matches typical OEM behaviour where returning to the vehicle
 //! and unlocking it (RKE / smart entry / phone / BLE / NFC) is treated
 //! as proof that the user is back.  When this happens, PanicAlarm
-//! self-publishes `Vehicle.Controller.Body.Switches.Panic.IsEngaged = false` so the source
+//! self-publishes `Vehicle.Body.Alarm.PanicSwitch.IsEngaged = false` so the source
 //! of truth stays consistent with internal state.
 
 use std::sync::Arc;
@@ -58,12 +58,12 @@ use crate::signal_bus::{SignalBus, VssPath};
 
 // ── Signal constants ───────────────────────────────────────────────────────
 
-const PANIC_SWITCH: VssPath = "Vehicle.Controller.Body.Switches.Panic.IsEngaged";
+const PANIC_SWITCH: VssPath = "Vehicle.Body.Alarm.PanicSwitch.IsEngaged";
 
 const LEFT_INDICATOR: VssPath = "Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling";
 const RIGHT_INDICATOR: VssPath = "Vehicle.Body.Lights.DirectionIndicator.Right.IsSignaling";
 const HORN: VssPath = "Vehicle.Body.Horn.IsActive";
-const ALARM_STATUS: VssPath = "Vehicle.Controller.Alarm.IsActive";
+const ALARM_STATUS: VssPath = "Vehicle.Body.Alarm.IsActive";
 
 // ── Pulse cadence ──────────────────────────────────────────────────────────
 
@@ -120,7 +120,7 @@ impl<B: SignalBus + Send + Sync + 'static> PanicAlarm<B> {
         });
 
         let mut switch_rx = self.bus.subscribe(PANIC_SWITCH).await;
-        // Subscribe to the shared `Vehicle.Controller.Alarm.IsActive` flag so a
+        // Subscribe to the shared `Vehicle.Body.Alarm.IsActive` flag so a
         // panic-button press during another alarm (e.g. PerimeterAlarm)
         // is correctly interpreted as "cancel that alarm" rather than
         // "start a new panic alarm."  PerimeterAlarm separately watches
@@ -156,7 +156,7 @@ impl<B: SignalBus + Send + Sync + 'static> PanicAlarm<B> {
             }
 
             // Engagement gate: if another feature has already asserted
-            // `Vehicle.Controller.Alarm.IsActive` (PerimeterAlarm), a fresh
+            // `Vehicle.Body.Alarm.IsActive` (PerimeterAlarm), a fresh
             // `PANIC_SWITCH=true` is the user telling us to *cancel*
             // that alarm, not start a panic alarm.  PerimeterAlarm
             // sees the same press on its own subscription and disarms;
@@ -322,7 +322,7 @@ mod tests {
         assert_eq!(
             bus.latest_value(ALARM_STATUS),
             Some(SignalValue::Bool(true)),
-            "Vehicle.Controller.Alarm.IsActive should be TRUE after engage"
+            "Vehicle.Body.Alarm.IsActive should be TRUE after engage"
         );
 
         // First ON-edge: indicators + horn all TRUE.
@@ -417,7 +417,7 @@ mod tests {
         bus.inject(PANIC_SWITCH, SignalValue::Bool(true));
         settle(1).await;
 
-        // Run through several pulse cycles and then count Vehicle.Controller.Alarm.IsActive
+        // Run through several pulse cycles and then count Vehicle.Body.Alarm.IsActive
         // publishes — should be exactly one (the initial TRUE), regardless of
         // how many times the lights/horn cycled.
         bus.clear_history();
@@ -616,7 +616,7 @@ mod tests {
     }
 
     /// Regression: a panic-button press while another alarm (e.g.
-    /// PerimeterAlarm) has already asserted `Vehicle.Controller.Alarm.IsActive`
+    /// PerimeterAlarm) has already asserted `Vehicle.Body.Alarm.IsActive`
     /// is the user's "cancel" gesture — PanicAlarm must NOT engage
     /// its own pulse loop on top of the existing alarm.  PerimeterAlarm
     /// separately watches the same panic press and disarms itself; the

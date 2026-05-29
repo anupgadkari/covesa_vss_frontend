@@ -3,7 +3,7 @@
 //!
 //! ```text
 //!  HMI / sim-panel rocker
-//!      │  Vehicle.Controller.Body.Switches.Sunroof.Detent
+//!      │  Vehicle.Cabin.Sunroof.Switch.Detent
 //!      │     NEUTRAL / OPEN_HOLD / OPEN_AUTO / CLOSE_HOLD / CLOSE_AUTO
 //!      ▼
 //!  SunroofControl feature              ← this module
@@ -59,7 +59,7 @@ use tokio::select;
 use crate::ipc_message::SignalValue;
 use crate::signal_bus::{SignalBus, VssPath};
 
-const DETENT: VssPath = "Vehicle.Controller.Body.Switches.Sunroof.Detent";
+const DETENT: VssPath = "Vehicle.Cabin.Sunroof.Switch.Detent";
 const ROOF_CMD: VssPath = "Vehicle.Controller.Sunroof.MoveCmd";
 const SHADE_CMD: VssPath = "Vehicle.Controller.Sunroof.Shade.MoveCmd";
 const ROOF_POS: VssPath = "Vehicle.Cabin.Sunroof.Position";

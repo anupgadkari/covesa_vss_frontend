@@ -13,7 +13,7 @@
 //! 3. The lights stay on until any of:
 //!    - The hold timer expires (`dealer.farewell_hold_secs`,
 //!      default 20 s).
-//!    - The vehicle is locked (`Vehicle.Controller.Cabin.LockStatus` enters `LOCKED` or
+//!    - The vehicle is locked (`Vehicle.Cabin.LockStatus` enters `LOCKED` or
 //!      `DOUBLE_LOCKED`).  The driver is gone; secure the cabin.
 //!    - The ignition comes back ON (driver got back in / never
 //!      really left).
@@ -60,7 +60,7 @@ const PUDDLE_RIGHT: VssPath = "Vehicle.Controller.Body.Lights.Puddle.Right.IsOn"
 const DOME: VssPath = "Vehicle.Cabin.Light.IsDomeOn";
 
 const POWER_STATE: VssPath = "Vehicle.LowVoltageSystemState";
-const LOCK_STATUS: VssPath = "Vehicle.Controller.Cabin.LockStatus";
+const LOCK_STATUS: VssPath = "Vehicle.Cabin.LockStatus";
 
 const DOOR_OPEN_SIGNALS: [VssPath; 4] = [
     "Vehicle.Cabin.Door.Row1.Left.IsOpen",

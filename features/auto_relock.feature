@@ -47,7 +47,7 @@ Feature: Auto Relock
   #              running, and a second unlock event arrives (e.g., from
   #              a different requestor), the timer SHALL restart.
   #
-  # REQ-ARL-009: If Vehicle.Controller.Safety.CrashDetected transitions to TRUE at
+  # REQ-ARL-009: If Vehicle.CrashDetected transitions to TRUE at
   #              any time, the Auto Relock feature SHALL immediately and
   #              permanently cancel the relock timer (if running) and
   #              enter a DISABLED state. The feature SHALL NOT start any
@@ -59,7 +59,7 @@ Feature: Auto Relock
   #              first responders.
   #
   # REQ-ARL-010: The Auto Relock feature SHALL additionally subscribe
-  #              to Vehicle.Controller.Safety.CrashDetected (STATE_UPDATE from
+  #              to Vehicle.CrashDetected (STATE_UPDATE from
   #              Safety Monitor) to implement REQ-ARL-009.
   #
   # REQ-ARL-011: On vehicles with removable doors (DoorConfig.removable =
@@ -223,7 +223,7 @@ Feature: Auto Relock
     Given all present doors are locked
     And the vehicle is unlocked (relock timer starts)
     And 10 seconds elapse
-    When Vehicle.Controller.Safety.CrashDetected transitions to TRUE
+    When Vehicle.CrashDetected transitions to TRUE
     Then the relock timer is immediately cancelled
     And the Auto Relock feature enters the DISABLED state
     And the Auto Relock feature does NOT request LOCK — not now, not later
@@ -231,13 +231,13 @@ Feature: Auto Relock
   # --- REQ-ARL-009 ---
   Scenario: Crash before any unlock — feature disables
     Given the vehicle is running normally (no crash)
-    When Vehicle.Controller.Safety.CrashDetected transitions to TRUE
+    When Vehicle.CrashDetected transitions to TRUE
     Then the Auto Relock feature enters the DISABLED state
     And no future unlock event will start a relock timer
 
   # --- REQ-ARL-009 ---
   Scenario: Feature re-enables after power cycle (OFF → ON)
-    Given Vehicle.Controller.Safety.CrashDetected was TRUE (feature is DISABLED)
+    Given Vehicle.CrashDetected was TRUE (feature is DISABLED)
     When Vehicle.LowVoltageSystemState transitions to "OFF"
     And then Vehicle.LowVoltageSystemState transitions to "ON"
     Then the Auto Relock feature re-enters the ENABLED state
@@ -245,7 +245,7 @@ Feature: Auto Relock
 
   # --- REQ-ARL-009 ---
   Scenario: Feature re-enables after power cycle (OFF → ACC → ON)
-    Given Vehicle.Controller.Safety.CrashDetected was TRUE (feature is DISABLED)
+    Given Vehicle.CrashDetected was TRUE (feature is DISABLED)
     When Vehicle.LowVoltageSystemState transitions to "OFF"
     And then Vehicle.LowVoltageSystemState transitions to "ACC"
     And then Vehicle.LowVoltageSystemState transitions to "ON"

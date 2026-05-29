@@ -396,18 +396,12 @@ const HMI_ALIASES: &[(VssPath, VssPath)] = &[
         "Chassis.ParkingBrake.IsEngaged",
     ),
     (
-        "Vehicle.Controller.ADAS.HighBeam.OncomingVehicleDetected",
+        "Vehicle.ADAS.HighBeam.OncomingVehicleDetected",
         "Vehicle.ADAS.HighBeam.OncomingVehicleDetected",
     ),
-    (
-        "Vehicle.Controller.Alarm.IsActive",
-        "Vehicle.Body.Alarm.IsActive",
-    ),
+    ("Vehicle.Body.Alarm.IsActive", "Vehicle.Body.Alarm.IsActive"),
     ("Vehicle.Controller.Alarm.State", "Vehicle.Body.Alarm.State"),
-    (
-        "Vehicle.Controller.Body.ChargeLid.IsOpen",
-        "Body.ChargeLid.IsOpen",
-    ),
+    ("Vehicle.Body.ChargeLid.IsOpen", "Body.ChargeLid.IsOpen"),
     (
         "Vehicle.Controller.Body.Chime.IsActive",
         "Body.Chime.IsActive",
@@ -432,18 +426,12 @@ const HMI_ALIASES: &[(VssPath, VssPath)] = &[
         "Vehicle.Controller.Body.Doors.CentralLock.FeedbackRequest",
         "Body.Doors.CentralLock.FeedbackRequest",
     ),
-    (
-        "Vehicle.Controller.Body.FuelLid.IsOpen",
-        "Body.FuelLid.IsOpen",
-    ),
+    ("Vehicle.Body.FuelLid.IsOpen", "Body.FuelLid.IsOpen"),
     (
         "Vehicle.Controller.Body.Hood.CloseCmd",
         "Body.Hood.CloseCmd",
     ),
-    (
-        "Vehicle.Controller.Body.Hood.LatchState",
-        "Body.Hood.LatchState",
-    ),
+    ("Vehicle.Body.Hood.LatchState", "Body.Hood.LatchState"),
     ("Vehicle.Controller.Body.Hood.OpenCmd", "Body.Hood.OpenCmd"),
     (
         "Vehicle.Controller.Body.Lights.AmbientLightSensor.Illuminance",
@@ -570,55 +558,55 @@ const HMI_ALIASES: &[(VssPath, VssPath)] = &[
         "Body.PowerChildLock.MasterStatus",
     ),
     (
-        "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.LockButton",
+        "Vehicle.Cabin.Door.Row1.Left.Switch.Lock",
         "Body.Switches.DoorTrim.Row1.Left.LockButton",
     ),
     (
-        "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.UnlockButton",
+        "Vehicle.Cabin.Door.Row1.Left.Switch.Unlock",
         "Body.Switches.DoorTrim.Row1.Left.UnlockButton",
     ),
     (
-        "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Right.LockButton",
+        "Vehicle.Cabin.Door.Row1.Right.Switch.Lock",
         "Body.Switches.DoorTrim.Row1.Right.LockButton",
     ),
     (
-        "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Right.UnlockButton",
+        "Vehicle.Cabin.Door.Row1.Right.Switch.Unlock",
         "Body.Switches.DoorTrim.Row1.Right.UnlockButton",
     ),
     (
-        "Vehicle.Controller.Body.Switches.DoorTrim.Row2.Left.LockButton",
+        "Vehicle.Cabin.Door.Row2.Left.Switch.Lock",
         "Body.Switches.DoorTrim.Row2.Left.LockButton",
     ),
     (
-        "Vehicle.Controller.Body.Switches.DoorTrim.Row2.Right.LockButton",
+        "Vehicle.Cabin.Door.Row2.Right.Switch.Lock",
         "Body.Switches.DoorTrim.Row2.Right.LockButton",
     ),
     (
-        "Vehicle.Controller.Body.Switches.Fog.Front.IsEngaged",
+        "Vehicle.Body.Lights.Fog.Front.Switch.IsEngaged",
         "Body.Switches.Fog.Front.IsEngaged",
     ),
     (
-        "Vehicle.Controller.Body.Switches.Fog.Rear.IsEngaged",
+        "Vehicle.Body.Lights.Fog.Rear.Switch.IsEngaged",
         "Body.Switches.Fog.Rear.IsEngaged",
     ),
     (
-        "Vehicle.Controller.Body.Switches.Hazard.IsEngaged",
+        "Vehicle.Body.Lights.Hazard.Switch.IsEngaged",
         "Body.Switches.Hazard.IsEngaged",
     ),
     (
-        "Vehicle.Controller.Body.Switches.HighBeam.IsEngaged",
+        "Vehicle.Body.Lights.Beam.High.Switch.IsEngaged",
         "Body.Switches.HighBeam.IsEngaged",
     ),
     (
-        "Vehicle.Controller.Body.Switches.Hood.Release.IsPulled",
+        "Vehicle.Body.Hood.ReleaseSwitch.IsPulled",
         "Body.Switches.Hood.Release.IsPulled",
     ),
     (
-        "Vehicle.Controller.Body.Switches.Horn.IsPressed",
+        "Vehicle.Body.Horn.Switch.IsPressed",
         "Body.Switches.Horn.IsPressed",
     ),
     (
-        "Vehicle.Controller.Body.Switches.IgnitionCylinder.Position",
+        "Vehicle.Cabin.IgnitionCylinder.Position",
         "Body.Switches.IgnitionCylinder.Position",
     ),
     (
@@ -626,27 +614,27 @@ const HMI_ALIASES: &[(VssPath, VssPath)] = &[
         "Body.Switches.IgnitionCylinder.RemovalInhibited",
     ),
     (
-        "Vehicle.Controller.Body.Switches.Keyfob.LockButton",
+        "Vehicle.Body.Keyfob.Switch.Lock",
         "Body.Switches.Keyfob.LockButton",
     ),
     (
-        "Vehicle.Controller.Body.Switches.Mirror.Direction",
+        "Vehicle.Body.Mirrors.Switch.Direction",
         "Body.Switches.Mirror.Direction",
     ),
     (
-        "Vehicle.Controller.Body.Switches.Mirror.Fold",
+        "Vehicle.Body.Mirrors.Switch.Fold",
         "Body.Switches.Mirror.Fold",
     ),
     (
-        "Vehicle.Controller.Body.Switches.Mirror.Select",
+        "Vehicle.Body.Mirrors.Switch.Select",
         "Body.Switches.Mirror.Select",
     ),
     (
-        "Vehicle.Controller.Body.Switches.Panic.IsEngaged",
+        "Vehicle.Body.Alarm.PanicSwitch.IsEngaged",
         "Body.Switches.Panic.IsEngaged",
     ),
     (
-        "Vehicle.Controller.Body.Switches.PowerChildLock.IsPressed",
+        "Vehicle.Cabin.ChildLock.Switch.IsPressed",
         "Body.Switches.PowerChildLock.IsPressed",
     ),
     (
@@ -658,51 +646,51 @@ const HMI_ALIASES: &[(VssPath, VssPath)] = &[
         "Body.Switches.StartStop.BacklightIntensity",
     ),
     (
-        "Vehicle.Controller.Body.Switches.StartStop.IsPressed",
+        "Vehicle.Cabin.StartStopSwitch.IsPressed",
         "Body.Switches.StartStop.IsPressed",
     ),
     (
-        "Vehicle.Controller.Body.Switches.Sunroof.Detent",
+        "Vehicle.Cabin.Sunroof.Switch.Detent",
         "Body.Switches.Sunroof.Detent",
     ),
     (
-        "Vehicle.Controller.Body.Switches.Trunk.Release.IsPressed",
+        "Vehicle.Body.Trunk.Rear.ReleaseSwitch.IsPressed",
         "Body.Switches.Trunk.Release.IsPressed",
     ),
     (
-        "Vehicle.Controller.Body.Switches.TurnIndicator.Direction",
+        "Vehicle.Body.Lights.DirectionIndicator.Switch.Direction",
         "Body.Switches.TurnIndicator.Direction",
     ),
     (
-        "Vehicle.Controller.Body.Switches.Window.DriverMaster.Row1.Left.Detent",
+        "Vehicle.Cabin.Door.Row1.Left.Window.Switch.MasterDetent",
         "Body.Switches.Window.DriverMaster.Row1.Left.Detent",
     ),
     (
-        "Vehicle.Controller.Body.Switches.Window.DriverMaster.Row1.Right.Detent",
+        "Vehicle.Cabin.Door.Row1.Right.Window.Switch.MasterDetent",
         "Body.Switches.Window.DriverMaster.Row1.Right.Detent",
     ),
     (
-        "Vehicle.Controller.Body.Switches.Window.DriverMaster.Row2.Left.Detent",
+        "Vehicle.Cabin.Door.Row2.Left.Window.Switch.MasterDetent",
         "Body.Switches.Window.DriverMaster.Row2.Left.Detent",
     ),
     (
-        "Vehicle.Controller.Body.Switches.Window.DriverMaster.Row2.Right.Detent",
+        "Vehicle.Cabin.Door.Row2.Right.Window.Switch.MasterDetent",
         "Body.Switches.Window.DriverMaster.Row2.Right.Detent",
     ),
     (
-        "Vehicle.Controller.Body.Switches.Window.Local.Row1.Left.Detent",
+        "Vehicle.Cabin.Door.Row1.Left.Window.Switch.LocalDetent",
         "Body.Switches.Window.Local.Row1.Left.Detent",
     ),
     (
-        "Vehicle.Controller.Body.Switches.Window.Local.Row1.Right.Detent",
+        "Vehicle.Cabin.Door.Row1.Right.Window.Switch.LocalDetent",
         "Body.Switches.Window.Local.Row1.Right.Detent",
     ),
     (
-        "Vehicle.Controller.Body.Switches.Window.Local.Row2.Left.Detent",
+        "Vehicle.Cabin.Door.Row2.Left.Window.Switch.LocalDetent",
         "Body.Switches.Window.Local.Row2.Left.Detent",
     ),
     (
-        "Vehicle.Controller.Body.Switches.Window.Local.Row2.Right.Detent",
+        "Vehicle.Cabin.Door.Row2.Right.Window.Switch.LocalDetent",
         "Body.Switches.Window.Local.Row2.Right.Detent",
     ),
     (
@@ -737,13 +725,13 @@ const HMI_ALIASES: &[(VssPath, VssPath)] = &[
         "Vehicle.Controller.Cabin.Lights.Ambient.Intensity",
         "Cabin.Lights.Ambient.Intensity",
     ),
-    ("Vehicle.Controller.Cabin.LockStatus", "Cabin.LockStatus"),
+    ("Vehicle.Cabin.LockStatus", "Cabin.LockStatus"),
     (
-        "Vehicle.Controller.Cabin.LockStatus.EventNum",
+        "Vehicle.Cabin.LockStatus.EventNum",
         "Cabin.LockStatus.EventNum",
     ),
     (
-        "Vehicle.Controller.Cabin.LockStatus.LastRequestor",
+        "Vehicle.Cabin.LockStatus.LastRequestor",
         "Cabin.LockStatus.LastRequestor",
     ),
     (
@@ -766,14 +754,8 @@ const HMI_ALIASES: &[(VssPath, VssPath)] = &[
         "Vehicle.Controller.Cabin.ValetMode.IsActive",
         "Cabin.ValetMode.IsActive",
     ),
-    (
-        "Vehicle.Controller.Chassis.Brake.IsApplied",
-        "Chassis.Brake.IsApplied",
-    ),
-    (
-        "Vehicle.Controller.Safety.CrashDetected",
-        "Vehicle.Safety.CrashDetected",
-    ),
+    ("Vehicle.Chassis.Brake.IsApplied", "Chassis.Brake.IsApplied"),
+    ("Vehicle.CrashDetected", "Vehicle.Safety.CrashDetected"),
     (
         "Vehicle.Controller.Starting.ImmobilizerStatus",
         "Vehicle.Starting.ImmobilizerStatus",

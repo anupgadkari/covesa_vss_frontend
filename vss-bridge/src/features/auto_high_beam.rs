@@ -22,7 +22,7 @@
 //!
 //! # Signal
 //!
-//! - **Input**: `Vehicle.Controller.ADAS.HighBeam.OncomingVehicleDetected` — `Bool(true)` when
+//! - **Input**: `Vehicle.ADAS.HighBeam.OncomingVehicleDetected` — `Bool(true)` when
 //!   the ADAS camera reports a risk of glare; `Bool(false)` when path is clear.
 //!
 //! # Hysteresis
@@ -40,7 +40,7 @@ use crate::signal_bus::SignalBus;
 
 // ── Signal constants ───────────────────────────────────────────────────────
 
-const ADAS_ONCOMING: &str = "Vehicle.Controller.ADAS.HighBeam.OncomingVehicleDetected";
+const ADAS_ONCOMING: &str = "Vehicle.ADAS.HighBeam.OncomingVehicleDetected";
 const HIGH_BEAM_OUT: &str = "Vehicle.Body.Lights.Beam.High.IsOn";
 
 // ── Feature struct ─────────────────────────────────────────────────────────
