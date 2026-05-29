@@ -41,22 +41,34 @@ use tokio::time::{sleep, Sleep};
 use crate::ipc_message::SignalValue;
 use crate::signal_bus::{SignalBus, VssPath};
 
-const LEFT_INTENT: VssPath = "Body.Lights.DirectionIndicator.Left.IsSignaling";
-const RIGHT_INTENT: VssPath = "Body.Lights.DirectionIndicator.Right.IsSignaling";
+const LEFT_INTENT: VssPath = "Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling";
+const RIGHT_INTENT: VssPath = "Vehicle.Body.Lights.DirectionIndicator.Right.IsSignaling";
 
-const LEFT_DEFECT_FRONT: VssPath = "Body.Lights.DirectionIndicator.Left.Lamp.Front.IsDefect";
-const LEFT_DEFECT_SIDE: VssPath = "Body.Lights.DirectionIndicator.Left.Lamp.Side.IsDefect";
-const LEFT_DEFECT_REAR: VssPath = "Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsDefect";
-const RIGHT_DEFECT_FRONT: VssPath = "Body.Lights.DirectionIndicator.Right.Lamp.Front.IsDefect";
-const RIGHT_DEFECT_SIDE: VssPath = "Body.Lights.DirectionIndicator.Right.Lamp.Side.IsDefect";
-const RIGHT_DEFECT_REAR: VssPath = "Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsDefect";
+const LEFT_DEFECT_FRONT: VssPath =
+    "Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Front.IsDefect";
+const LEFT_DEFECT_SIDE: VssPath =
+    "Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Side.IsDefect";
+const LEFT_DEFECT_REAR: VssPath =
+    "Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsDefect";
+const RIGHT_DEFECT_FRONT: VssPath =
+    "Vehicle.Controller.Body.Lights.DirectionIndicator.Right.Lamp.Front.IsDefect";
+const RIGHT_DEFECT_SIDE: VssPath =
+    "Vehicle.Controller.Body.Lights.DirectionIndicator.Right.Lamp.Side.IsDefect";
+const RIGHT_DEFECT_REAR: VssPath =
+    "Vehicle.Controller.Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsDefect";
 
-const LEFT_LAMP_FRONT: VssPath = "Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn";
-const LEFT_LAMP_SIDE: VssPath = "Body.Lights.DirectionIndicator.Left.Lamp.Side.IsOn";
-const LEFT_LAMP_REAR: VssPath = "Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsOn";
-const RIGHT_LAMP_FRONT: VssPath = "Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn";
-const RIGHT_LAMP_SIDE: VssPath = "Body.Lights.DirectionIndicator.Right.Lamp.Side.IsOn";
-const RIGHT_LAMP_REAR: VssPath = "Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsOn";
+const LEFT_LAMP_FRONT: VssPath =
+    "Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn";
+const LEFT_LAMP_SIDE: VssPath =
+    "Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Side.IsOn";
+const LEFT_LAMP_REAR: VssPath =
+    "Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsOn";
+const RIGHT_LAMP_FRONT: VssPath =
+    "Vehicle.Controller.Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn";
+const RIGHT_LAMP_SIDE: VssPath =
+    "Vehicle.Controller.Body.Lights.DirectionIndicator.Right.Lamp.Side.IsOn";
+const RIGHT_LAMP_REAR: VssPath =
+    "Vehicle.Controller.Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsOn";
 
 const LEFT_LAMPS: [VssPath; 3] = [LEFT_LAMP_FRONT, LEFT_LAMP_SIDE, LEFT_LAMP_REAR];
 const RIGHT_LAMPS: [VssPath; 3] = [RIGHT_LAMP_FRONT, RIGHT_LAMP_SIDE, RIGHT_LAMP_REAR];

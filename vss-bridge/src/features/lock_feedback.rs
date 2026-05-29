@@ -1,6 +1,6 @@
 //! Lock / Unlock Feedback Flash — visual confirmation on direction indicators.
 //!
-//! Subscribes to `Body.Doors.CentralLock.FeedbackRequest` (published by
+//! Subscribes to `Vehicle.Controller.Body.Doors.CentralLock.FeedbackRequest` (published by
 //! external-origin features: RKE, WalkAwayLock, KeypadLock, AutoRelock)
 //! and plays a timed flash pattern on both direction indicators via the
 //! Lighting domain arbiter at **priority HIGH**.
@@ -14,7 +14,7 @@
 //! | `"lock"`         | 1 flash unit                           |
 //! | `"unlock"`       | flash unit · 300 ms gap · flash unit  |
 //! | `"trunk_unlock"` | Same as unlock + arm trunk-close latch |
-//! | `"mislock"`      | 350 ms `Body.Horn.IsActive` pulse — no flash |
+//! | `"mislock"`      | 350 ms `Vehicle.Body.Horn.IsActive` pulse — no flash |
 //!
 //! # Preemption
 //!
@@ -32,7 +32,7 @@
 //! # When `"mislock"` is published
 //!
 //! - `slam_lock.rs` — the EU slam-lock-protect inversion path (trim
-//!   button + door ajar) used to publish `Body.Horn.IsActive` directly;
+//!   button + door ajar) used to publish `Vehicle.Body.Horn.IsActive` directly;
 //!   now routes through `"mislock"` so all user-facing feedback is
 //!   centralised here.
 //! - `smart_unlock.rs` — fires before dispatching the lockout-recovery
@@ -44,7 +44,7 @@
 //! # Trunk-close lock feedback
 //!
 //! When a `"trunk_unlock"` request is received the feature sets an internal
-//! flag. When `Body.Trunk.IsOpen` subsequently transitions to `false`, a
+//! flag. When `Vehicle.Body.Trunk.Rear.IsOpen` subsequently transitions to `false`, a
 //! `"lock"` pattern is played automatically.
 
 use std::sync::Arc;
@@ -61,11 +61,11 @@ use crate::signal_bus::{SignalBus, VssPath};
 
 // ── Signal constants ───────────────────────────────────────────────────────
 
-const LEFT_SIG: VssPath = "Body.Lights.DirectionIndicator.Left.IsSignaling";
-const RIGHT_SIG: VssPath = "Body.Lights.DirectionIndicator.Right.IsSignaling";
-const TRUNK_OPEN_SIG: VssPath = "Body.Trunk.IsOpen";
-const CHIME: VssPath = "Body.Chime.IsActive";
-const HORN: VssPath = "Body.Horn.IsActive";
+const LEFT_SIG: VssPath = "Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling";
+const RIGHT_SIG: VssPath = "Vehicle.Body.Lights.DirectionIndicator.Right.IsSignaling";
+const TRUNK_OPEN_SIG: VssPath = "Vehicle.Body.Trunk.Rear.IsOpen";
+const CHIME: VssPath = "Vehicle.Controller.Body.Chime.IsActive";
+const HORN: VssPath = "Vehicle.Body.Horn.IsActive";
 
 /// Mislock honk duration — matches the pattern previously hard-coded
 /// in `slam_lock.rs` (deliberately longer than the lock-confirm
@@ -82,10 +82,10 @@ const LOCK_CHIME_MS: u64 = 300;
 
 /// Door IsLocked signals tracked to determine whether the cabin is secured.
 const DOOR_LOCKED_SIGNALS: [VssPath; 4] = [
-    "Body.Doors.Row1.Left.IsLocked",
-    "Body.Doors.Row1.Right.IsLocked",
-    "Body.Doors.Row2.Left.IsLocked",
-    "Body.Doors.Row2.Right.IsLocked",
+    "Vehicle.Cabin.Door.Row1.Left.IsLocked",
+    "Vehicle.Cabin.Door.Row1.Right.IsLocked",
+    "Vehicle.Cabin.Door.Row2.Left.IsLocked",
+    "Vehicle.Cabin.Door.Row2.Right.IsLocked",
 ];
 
 /// Door IsOpen signals tracked so the lock-confirmation chime can be
@@ -93,10 +93,10 @@ const DOOR_LOCKED_SIGNALS: [VssPath; 4] = [
 /// `slam_lock.rs`.  No point cheerfully chirping "locked!" when the
 /// next thing the user will hear is the mislock honk.
 const DOOR_OPEN_SIGNALS: [VssPath; 4] = [
-    "Body.Doors.Row1.Left.IsOpen",
-    "Body.Doors.Row1.Right.IsOpen",
-    "Body.Doors.Row2.Left.IsOpen",
-    "Body.Doors.Row2.Right.IsOpen",
+    "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+    "Vehicle.Cabin.Door.Row1.Right.IsOpen",
+    "Vehicle.Cabin.Door.Row2.Left.IsOpen",
+    "Vehicle.Cabin.Door.Row2.Right.IsOpen",
 ];
 
 // ── Flash timing ───────────────────────────────────────────────────────────
@@ -192,7 +192,7 @@ impl<B: SignalBus + Send + Sync + 'static> LockFeedback<B> {
                                 // mislock (e.g. SmartUnlock's UnlockAll, or
                                 // SlamLock's inversion) drives the visual.
                                 //
-                                // Single-writer caveat on `Body.Horn.IsActive`
+                                // Single-writer caveat on `Vehicle.Body.Horn.IsActive`
                                 // matches what slam_lock.rs used to do —
                                 // PerimeterAlarm / PanicAlarm are mutually
                                 // exclusive with lock-feedback flows in
@@ -228,7 +228,7 @@ impl<B: SignalBus + Send + Sync + 'static> LockFeedback<B> {
                     // the dealer cal.  Fire-and-forget — the chime pulse
                     // is shorter than the flash so it always finishes
                     // before the next FeedbackRequest can preempt.
-                    // Body.Chime.IsActive is single-writer for now
+                    // Vehicle.Controller.Body.Chime.IsActive is single-writer for now
                     // (PerimeterAlarm pulses it during its 12 s warning
                     // phase, which is mutually exclusive with a successful
                     // RKE/PEPS lock since arming requires the cabin to
@@ -433,7 +433,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn mislock_kind_fires_horn_pulse_and_releases() {
-        // "mislock" should pulse Body.Horn.IsActive=true for
+        // "mislock" should pulse Vehicle.Body.Horn.IsActive=true for
         // MISLOCK_HONK_MS then back to false.  No flash, no chime —
         // the audio is the entire cue.
         let (bus, arb) = setup().await;
@@ -848,7 +848,10 @@ mod tests {
         // mislock honk — suppress the chime so the user doesn't get a
         // "lock confirmed" cue followed immediately by "denied."
         let bus = setup_with_chirp_and_protect(true, true).await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         drain().await;
         bus.inject(FEEDBACK_REQUEST, SignalValue::String("lock".into()));
         drain().await;
@@ -866,7 +869,10 @@ mod tests {
         // US cal: slam_lock_protect=false → no inversion will happen,
         // chime should play normally even with a door open.
         let bus = setup_with_chirp_and_protect(true, false).await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         drain().await;
         bus.inject(FEEDBACK_REQUEST, SignalValue::String("lock".into()));
         drain().await;

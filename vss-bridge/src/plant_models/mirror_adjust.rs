@@ -52,12 +52,12 @@ use tokio::time::{sleep, Instant};
 use crate::ipc_message::SignalValue;
 use crate::signal_bus::SignalBus;
 
-const ADJUST_CMD_LEFT: &str = "Body.Mirror.Left.AdjustCmd";
-const ADJUST_CMD_RIGHT: &str = "Body.Mirror.Right.AdjustCmd";
-const TILT_LEFT: &str = "Body.Mirror.Left.Tilt";
-const YAW_LEFT: &str = "Body.Mirror.Left.Yaw";
-const TILT_RIGHT: &str = "Body.Mirror.Right.Tilt";
-const YAW_RIGHT: &str = "Body.Mirror.Right.Yaw";
+const ADJUST_CMD_LEFT: &str = "Vehicle.Controller.Body.Mirror.Left.AdjustCmd";
+const ADJUST_CMD_RIGHT: &str = "Vehicle.Controller.Body.Mirror.Right.AdjustCmd";
+const TILT_LEFT: &str = "Vehicle.Body.Mirrors.Left.Tilt";
+const YAW_LEFT: &str = "Vehicle.Body.Mirrors.Left.Yaw";
+const TILT_RIGHT: &str = "Vehicle.Body.Mirrors.Right.Tilt";
+const YAW_RIGHT: &str = "Vehicle.Body.Mirrors.Right.Yaw";
 
 /// Default movement rate — full -100..+100 sweep in 4 s.
 pub const RATE_PERCENT_PER_SEC: f32 = 50.0;

@@ -51,10 +51,10 @@ use crate::ipc_message::SignalValue;
 use crate::nvm::{MirrorFoldState, NvmStore};
 use crate::signal_bus::SignalBus;
 
-const FOLD_CMD_LEFT: &str = "Body.Mirror.Left.FoldCmd";
-const FOLD_CMD_RIGHT: &str = "Body.Mirror.Right.FoldCmd";
-const IS_FOLDED_LEFT: &str = "Body.Mirror.Left.IsFolded";
-const IS_FOLDED_RIGHT: &str = "Body.Mirror.Right.IsFolded";
+const FOLD_CMD_LEFT: &str = "Vehicle.Controller.Body.Mirror.Left.FoldCmd";
+const FOLD_CMD_RIGHT: &str = "Vehicle.Controller.Body.Mirror.Right.FoldCmd";
+const IS_FOLDED_LEFT: &str = "Vehicle.Body.Mirrors.Left.IsFolded";
+const IS_FOLDED_RIGHT: &str = "Vehicle.Body.Mirrors.Right.IsFolded";
 
 /// Time the motor takes to swing the mirror.  Real motors are 0.7–1.5 s
 /// depending on temperature; 1 s is a representative midpoint.

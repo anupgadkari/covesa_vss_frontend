@@ -4,17 +4,17 @@
 //!
 //! When all three conditions are true simultaneously:
 //! 1. Ignition is `OFF` or `ACC` (feature is **armed**).
-//! 2. The driver door (`Body.Doors.Row1.Left.IsOpen`) transitions closed → ajar
+//! 2. The driver door (`Vehicle.Cabin.Door.Row1.Left.IsOpen`) transitions closed → ajar
 //!    (rising edge only — a closing door does not trigger).
-//! 3. Ambient illuminance (`Body.Lights.AmbientLightSensor.Illuminance`) is below
+//! 3. Ambient illuminance (`Vehicle.Controller.Body.Lights.AmbientLightSensor.Illuminance`) is below
 //!    `lux_threshold` at the moment of the door-open event (dark outside).
 //!
 //! # Active period
 //!
 //! While active the feature holds HIGH-priority claims on:
-//! - `Body.Lights.Beam.Low.IsOn`
-//! - `Body.Lights.Parking.IsOn`
-//! - `Body.Lights.LicensePlate.IsOn`
+//! - `Vehicle.Body.Lights.Beam.Low.IsOn`
+//! - `Vehicle.Body.Lights.Parking.IsOn`
+//! - `Vehicle.Body.Lights.LicensePlate.IsOn`
 //!
 //! Claims are submitted via the `LowBeam` domain arbiter so ManualLighting's
 //! simultaneous MEDIUM-priority releases cannot extinguish them.
@@ -43,13 +43,13 @@ use crate::signal_bus::{SignalBus, VssPath};
 // ── Signal constants ───────────────────────────────────────────────────────
 
 const POWER_STATE: &str = "Vehicle.LowVoltageSystemState";
-const ILLUMINANCE: &str = "Body.Lights.AmbientLightSensor.Illuminance";
+const ILLUMINANCE: &str = "Vehicle.Controller.Body.Lights.AmbientLightSensor.Illuminance";
 /// Driver door (LHD — Row1.Left). RHD variants would use Row1.Right.
-const DRIVER_DOOR: &str = "Body.Doors.Row1.Left.IsOpen";
+const DRIVER_DOOR: &str = "Vehicle.Cabin.Door.Row1.Left.IsOpen";
 
-const LOW_BEAM_OUT: VssPath = "Body.Lights.Beam.Low.IsOn";
-const PARKING_OUT: VssPath = "Body.Lights.Parking.IsOn";
-const LICENSE_PLATE_OUT: VssPath = "Body.Lights.LicensePlate.IsOn";
+const LOW_BEAM_OUT: VssPath = "Vehicle.Body.Lights.Beam.Low.IsOn";
+const PARKING_OUT: VssPath = "Vehicle.Body.Lights.Parking.IsOn";
+const LICENSE_PLATE_OUT: VssPath = "Vehicle.Body.Lights.LicensePlate.IsOn";
 
 /// Signals claimed by FMH at HIGH priority while the timer is active.
 const FMH_SIGNALS: &[VssPath] = &[LOW_BEAM_OUT, PARKING_OUT, LICENSE_PLATE_OUT];

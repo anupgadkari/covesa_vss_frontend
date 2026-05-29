@@ -39,60 +39,60 @@ use crate::signal_bus::SignalBus;
 //                                    2=Row2.Left, 3=Row2.Right) ──────────────
 
 pub const INSIDE_HANDLE_SIGNALS: [&str; 4] = [
-    "Body.Doors.Row1.Left.Handle.Inside.IsPulled",
-    "Body.Doors.Row1.Right.Handle.Inside.IsPulled",
-    "Body.Doors.Row2.Left.Handle.Inside.IsPulled",
-    "Body.Doors.Row2.Right.Handle.Inside.IsPulled",
+    "Vehicle.Cabin.Door.Row1.Left.Handle.Inside.IsPulled",
+    "Vehicle.Cabin.Door.Row1.Right.Handle.Inside.IsPulled",
+    "Vehicle.Cabin.Door.Row2.Left.Handle.Inside.IsPulled",
+    "Vehicle.Cabin.Door.Row2.Right.Handle.Inside.IsPulled",
 ];
 
 pub const OUTSIDE_HANDLE_SIGNALS: [&str; 4] = [
-    "Body.Doors.Row1.Left.Handle.Outside.IsPulled",
-    "Body.Doors.Row1.Right.Handle.Outside.IsPulled",
-    "Body.Doors.Row2.Left.Handle.Outside.IsPulled",
-    "Body.Doors.Row2.Right.Handle.Outside.IsPulled",
+    "Vehicle.Cabin.Door.Row1.Left.Handle.Outside.IsPulled",
+    "Vehicle.Cabin.Door.Row1.Right.Handle.Outside.IsPulled",
+    "Vehicle.Cabin.Door.Row2.Left.Handle.Outside.IsPulled",
+    "Vehicle.Cabin.Door.Row2.Right.Handle.Outside.IsPulled",
 ];
 
 pub const SOLDIER_SIGNALS: [&str; 4] = [
-    "Body.Doors.Row1.Left.Soldier.IsUnlocked",
-    "Body.Doors.Row1.Right.Soldier.IsUnlocked",
-    "Body.Doors.Row2.Left.Soldier.IsUnlocked",
-    "Body.Doors.Row2.Right.Soldier.IsUnlocked",
+    "Vehicle.Cabin.Door.Row1.Left.Soldier.IsUnlocked",
+    "Vehicle.Cabin.Door.Row1.Right.Soldier.IsUnlocked",
+    "Vehicle.Cabin.Door.Row2.Left.Soldier.IsUnlocked",
+    "Vehicle.Cabin.Door.Row2.Right.Soldier.IsUnlocked",
 ];
 
 pub const CLOSE_CMD_SIGNALS: [&str; 4] = [
-    "Body.Doors.Row1.Left.CloseCmd",
-    "Body.Doors.Row1.Right.CloseCmd",
-    "Body.Doors.Row2.Left.CloseCmd",
-    "Body.Doors.Row2.Right.CloseCmd",
+    "Vehicle.Cabin.Door.Row1.Left.CloseCmd",
+    "Vehicle.Cabin.Door.Row1.Right.CloseCmd",
+    "Vehicle.Cabin.Door.Row2.Left.CloseCmd",
+    "Vehicle.Cabin.Door.Row2.Right.CloseCmd",
 ];
 
 pub const LATCH_SIGNALS: [&str; 4] = [
-    "Body.Doors.Row1.Left.Latch.IsLatched",
-    "Body.Doors.Row1.Right.Latch.IsLatched",
-    "Body.Doors.Row2.Left.Latch.IsLatched",
-    "Body.Doors.Row2.Right.Latch.IsLatched",
+    "Vehicle.Cabin.Door.Row1.Left.Latch.IsLatched",
+    "Vehicle.Cabin.Door.Row1.Right.Latch.IsLatched",
+    "Vehicle.Cabin.Door.Row2.Left.Latch.IsLatched",
+    "Vehicle.Cabin.Door.Row2.Right.Latch.IsLatched",
 ];
 
 /// Read-back of IsLocked / IsDoubleLocked (published by DoorLockPlantModel).
 const IS_LOCKED_SIGNALS: [&str; 4] = [
-    "Body.Doors.Row1.Left.IsLocked",
-    "Body.Doors.Row1.Right.IsLocked",
-    "Body.Doors.Row2.Left.IsLocked",
-    "Body.Doors.Row2.Right.IsLocked",
+    "Vehicle.Cabin.Door.Row1.Left.IsLocked",
+    "Vehicle.Cabin.Door.Row1.Right.IsLocked",
+    "Vehicle.Cabin.Door.Row2.Left.IsLocked",
+    "Vehicle.Cabin.Door.Row2.Right.IsLocked",
 ];
 
 const IS_DOUBLE_LOCKED_SIGNALS: [&str; 4] = [
-    "Body.Doors.Row1.Left.IsDoubleLocked",
-    "Body.Doors.Row1.Right.IsDoubleLocked",
-    "Body.Doors.Row2.Left.IsDoubleLocked",
-    "Body.Doors.Row2.Right.IsDoubleLocked",
+    "Vehicle.Cabin.Door.Row1.Left.IsDoubleLocked",
+    "Vehicle.Cabin.Door.Row1.Right.IsDoubleLocked",
+    "Vehicle.Cabin.Door.Row2.Left.IsDoubleLocked",
+    "Vehicle.Cabin.Door.Row2.Right.IsDoubleLocked",
 ];
 
 const AJAR_SIGNALS: [&str; 4] = [
-    "Body.Doors.Row1.Left.IsOpen",
-    "Body.Doors.Row1.Right.IsOpen",
-    "Body.Doors.Row2.Left.IsOpen",
-    "Body.Doors.Row2.Right.IsOpen",
+    "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+    "Vehicle.Cabin.Door.Row1.Right.IsOpen",
+    "Vehicle.Cabin.Door.Row2.Left.IsOpen",
+    "Vehicle.Cabin.Door.Row2.Right.IsOpen",
 ];
 
 /// Per-door child-lock state (output of the `PowerChildLock` feature).
@@ -103,8 +103,8 @@ const AJAR_SIGNALS: [&str; 4] = [
 const CHILD_LOCK_SIGNALS: [Option<&str>; 4] = [
     None,
     None,
-    Some("Body.Doors.Row2.Left.IsChildLockActive"),
-    Some("Body.Doors.Row2.Right.IsChildLockActive"),
+    Some("Vehicle.Cabin.Door.Row2.Left.IsChildLockActive"),
+    Some("Vehicle.Cabin.Door.Row2.Right.IsChildLockActive"),
 ];
 
 /// Short labels used in tracing.

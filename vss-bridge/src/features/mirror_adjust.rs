@@ -3,10 +3,10 @@
 //!
 //! # Inputs
 //!
-//! - **`Body.Switches.Mirror.Select`** — string enum: `'NONE','LEFT','RIGHT'`.
+//! - **`Vehicle.Controller.Body.Switches.Mirror.Select`** — string enum: `'NONE','LEFT','RIGHT'`.
 //!   Picks which mirror responds to subsequent Direction commands.
 //!   `NONE` means no mirror is being adjusted.
-//! - **`Body.Switches.Mirror.Direction`** — string enum:
+//! - **`Vehicle.Controller.Body.Switches.Mirror.Direction`** — string enum:
 //!   `'NONE','UP','DOWN','LEFT','RIGHT'`.  Stateful — held non-NONE
 //!   while the user is pressing the joystick.
 //!
@@ -37,10 +37,10 @@ use crate::signal_bus::{SignalBus, VssPath};
 #[allow(dead_code)]
 const FEATURE_ID: FeatureId = FeatureId::MirrorAdjust;
 
-const SWITCH_SELECT: VssPath = "Body.Switches.Mirror.Select";
-const SWITCH_DIRECTION: VssPath = "Body.Switches.Mirror.Direction";
-const CMD_LEFT: VssPath = "Body.Mirror.Left.AdjustCmd";
-const CMD_RIGHT: VssPath = "Body.Mirror.Right.AdjustCmd";
+const SWITCH_SELECT: VssPath = "Vehicle.Controller.Body.Switches.Mirror.Select";
+const SWITCH_DIRECTION: VssPath = "Vehicle.Controller.Body.Switches.Mirror.Direction";
+const CMD_LEFT: VssPath = "Vehicle.Controller.Body.Mirror.Left.AdjustCmd";
+const CMD_RIGHT: VssPath = "Vehicle.Controller.Body.Mirror.Right.AdjustCmd";
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Side {

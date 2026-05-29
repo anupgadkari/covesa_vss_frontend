@@ -4,17 +4,17 @@
 //!
 //! ```text
 //!  RKE feature (double TRUNK_RELEASE press)
-//!      │  Body.Trunk.OpenCmd
+//!      │  Vehicle.Controller.Body.Trunk.Rear.OpenCmd
 //!      ▼
 //!  TrunkPlantModel          ← this module
-//!      │  publishes Body.Trunk.IsOpen
+//!      │  publishes Vehicle.Body.Trunk.Rear.IsOpen
 //!      ▼
 //!  SignalBus → WsBridge → HMI
 //! ```
 //!
 //! The trunk is independent of the cabin door lock domain — opening the
 //! trunk does not affect door lock state.  Closing is manual (or via HMI
-//! `Body.Trunk.CloseCmd`).
+//! `Vehicle.Controller.Body.Trunk.Rear.CloseCmd`).
 //!
 //! # NVM persistence (optional)
 //!
@@ -34,9 +34,9 @@ use crate::ipc_message::SignalValue;
 use crate::nvm::{NvmStore, TrunkState};
 use crate::signal_bus::SignalBus;
 
-const OPEN_CMD: &str = "Body.Trunk.OpenCmd";
-const CLOSE_CMD: &str = "Body.Trunk.CloseCmd";
-const IS_OPEN: &str = "Body.Trunk.IsOpen";
+const OPEN_CMD: &str = "Vehicle.Controller.Body.Trunk.Rear.OpenCmd";
+const CLOSE_CMD: &str = "Vehicle.Controller.Body.Trunk.Rear.CloseCmd";
+const IS_OPEN: &str = "Vehicle.Body.Trunk.Rear.IsOpen";
 
 pub struct TrunkPlantModel<B: SignalBus> {
     bus: Arc<B>,
@@ -84,7 +84,7 @@ impl<B: SignalBus + Send + Sync + 'static> TrunkPlantModel<B> {
         let mut close_rx = self.bus.subscribe(CLOSE_CMD).await;
 
         // Publish boot state.  This satisfies the bridge's ESSENTIAL_BOOT
-        // gate for `Body.Trunk.IsOpen` so a fresh HMI client sees the
+        // gate for `Vehicle.Body.Trunk.Rear.IsOpen` so a fresh HMI client sees the
         // right value (factory default OR NVM-persisted) without flash.
         let _ = self
             .bus

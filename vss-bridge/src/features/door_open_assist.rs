@@ -38,16 +38,16 @@ use crate::signal_bus::{SignalBus, VssPath};
 
 const FEATURE_ID: FeatureId = FeatureId::DoorOpenAssist;
 
-const PUDDLE_LEFT: VssPath = "Body.Lights.Puddle.Left.IsOn";
-const PUDDLE_RIGHT: VssPath = "Body.Lights.Puddle.Right.IsOn";
+const PUDDLE_LEFT: VssPath = "Vehicle.Controller.Body.Lights.Puddle.Left.IsOn";
+const PUDDLE_RIGHT: VssPath = "Vehicle.Controller.Body.Lights.Puddle.Right.IsOn";
 
-const LUX_SIGNAL: VssPath = "Body.Lights.AmbientLightSensor.Illuminance";
+const LUX_SIGNAL: VssPath = "Vehicle.Controller.Body.Lights.AmbientLightSensor.Illuminance";
 
 const DOOR_OPEN_SIGNALS: [VssPath; 4] = [
-    "Body.Doors.Row1.Left.IsOpen",
-    "Body.Doors.Row1.Right.IsOpen",
-    "Body.Doors.Row2.Left.IsOpen",
-    "Body.Doors.Row2.Right.IsOpen",
+    "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+    "Vehicle.Cabin.Door.Row1.Right.IsOpen",
+    "Vehicle.Cabin.Door.Row2.Left.IsOpen",
+    "Vehicle.Cabin.Door.Row2.Right.IsOpen",
 ];
 
 pub struct DoorOpenAssist<B: SignalBus> {
@@ -199,7 +199,10 @@ mod tests {
 
         bus.inject(LUX_SIGNAL, SignalValue::Uint16(10)); // dark
         settle().await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         settle().await;
 
         assert_eq!(bus.latest_value(PUDDLE_LEFT), Some(SignalValue::Bool(true)));
@@ -215,7 +218,10 @@ mod tests {
 
         bus.inject(LUX_SIGNAL, SignalValue::Uint16(50_000)); // bright
         settle().await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         settle().await;
 
         assert_eq!(bus.latest_value(PUDDLE_LEFT), None);
@@ -227,12 +233,18 @@ mod tests {
 
         bus.inject(LUX_SIGNAL, SignalValue::Uint16(10));
         settle().await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         settle().await;
         assert_eq!(bus.latest_value(PUDDLE_LEFT), Some(SignalValue::Bool(true)));
 
         // Door closes.
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(false));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(false),
+        );
         settle().await;
         assert_eq!(
             bus.latest_value(PUDDLE_LEFT),
@@ -247,18 +259,30 @@ mod tests {
 
         bus.inject(LUX_SIGNAL, SignalValue::Uint16(10));
         settle().await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         settle().await;
-        bus.inject("Body.Doors.Row1.Right.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Right.IsOpen",
+            SignalValue::Bool(true),
+        );
         settle().await;
 
         // First door closes — second still open, should stay claimed.
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(false));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(false),
+        );
         settle().await;
         assert_eq!(bus.latest_value(PUDDLE_LEFT), Some(SignalValue::Bool(true)));
 
         // Second door closes — now release.
-        bus.inject("Body.Doors.Row1.Right.IsOpen", SignalValue::Bool(false));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Right.IsOpen",
+            SignalValue::Bool(false),
+        );
         settle().await;
         assert_eq!(
             bus.latest_value(PUDDLE_LEFT),
@@ -272,7 +296,10 @@ mod tests {
 
         bus.inject(LUX_SIGNAL, SignalValue::Uint16(10));
         settle().await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         settle().await;
         assert_eq!(bus.latest_value(PUDDLE_LEFT), Some(SignalValue::Bool(true)));
 

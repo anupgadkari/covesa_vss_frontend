@@ -7,6 +7,7 @@ pub mod adapters;
 pub mod arbiter;
 pub mod config;
 pub mod features;
+pub mod hmi_alias;
 pub mod ipc_message;
 pub mod kuksa_sync;
 pub mod nvm;

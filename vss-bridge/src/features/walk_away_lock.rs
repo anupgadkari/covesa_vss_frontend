@@ -69,15 +69,15 @@ use crate::signal_bus::SignalBus;
 // partial-information world a real PEPS feature does — it can only
 // react to what the antennas actually saw, not to HMI ground truth.
 const FOB_ZONE_SIGNALS: [&str; 4] = [
-    "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
-    "Body.PEPS.Plant.KeyFob.2.LastObservedZone",
-    "Body.PEPS.Plant.KeyFob.3.LastObservedZone",
-    "Body.PEPS.Plant.KeyFob.4.LastObservedZone",
+    "Vehicle.Simulation.KeyFob.1.LastObservedZone",
+    "Vehicle.Simulation.KeyFob.2.LastObservedZone",
+    "Vehicle.Simulation.KeyFob.3.LastObservedZone",
+    "Vehicle.Simulation.KeyFob.4.LastObservedZone",
 ];
 
 const PHONE_ZONE_SIGNALS: [&str; 2] = [
-    "Body.PEPS.Plant.BlePhone.1.LastObservedZone",
-    "Body.PEPS.Plant.BlePhone.2.LastObservedZone",
+    "Vehicle.Simulation.BlePhone.1.LastObservedZone",
+    "Vehicle.Simulation.BlePhone.2.LastObservedZone",
 ];
 
 const NUM_FOBS: usize = 4;
@@ -88,17 +88,17 @@ const NUM_DEVICES: usize = NUM_FOBS + NUM_PHONES;
 /// is closed — a door still open means the driver is mid-activity
 /// (loading bags, kid getting out, etc.), not actually walking away.
 const DOOR_OPEN_SIGNALS: [&str; 4] = [
-    "Body.Doors.Row1.Left.IsOpen",
-    "Body.Doors.Row1.Right.IsOpen",
-    "Body.Doors.Row2.Left.IsOpen",
-    "Body.Doors.Row2.Right.IsOpen",
+    "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+    "Vehicle.Cabin.Door.Row1.Right.IsOpen",
+    "Vehicle.Cabin.Door.Row2.Left.IsOpen",
+    "Vehicle.Cabin.Door.Row2.Right.IsOpen",
 ];
 
 /// Trunk + hood openings.  Same rationale as the door gate: trunk
 /// open = loading; hood open = mechanic / pre-trip inspection.
 /// Neither is "I'm done with the car, lock it behind me."
-const TRUNK_IS_OPEN: &str = "Body.Trunk.IsOpen";
-const HOOD_IS_OPEN: &str = "Body.Hood.IsOpen";
+const TRUNK_IS_OPEN: &str = "Vehicle.Body.Trunk.Rear.IsOpen";
+const HOOD_IS_OPEN: &str = "Vehicle.Body.Hood.IsOpen";
 
 /// True if a zone string value represents "in approach zone or closer".
 fn zone_is_in_approach(val: &SignalValue) -> bool {
@@ -404,8 +404,10 @@ mod tests {
 
         let h = bus.history();
         assert!(
-            h.iter().any(|(s, v)| *s == "Body.Doors.CentralLock.Command"
-                && *v == SignalValue::String("lock_all".into())),
+            h.iter().any(
+                |(s, v)| *s == "Vehicle.Controller.Body.Doors.CentralLock.Command"
+                    && *v == SignalValue::String("lock_all".into())
+            ),
             "expected lock_all command, history: {:?}",
             h
         );
@@ -440,7 +442,7 @@ mod tests {
         let h = bus.history();
         assert!(
             !h.iter()
-                .any(|(s, _)| *s == "Body.Doors.CentralLock.Command"),
+                .any(|(s, _)| *s == "Vehicle.Controller.Body.Doors.CentralLock.Command"),
             "should NOT lock while fob 2 still in approach, history: {:?}",
             h
         );
@@ -463,8 +465,10 @@ mod tests {
 
         let h = bus.history();
         assert!(
-            h.iter().any(|(s, v)| *s == "Body.Doors.CentralLock.Command"
-                && *v == SignalValue::String("lock_all".into())),
+            h.iter().any(
+                |(s, v)| *s == "Vehicle.Controller.Body.Doors.CentralLock.Command"
+                    && *v == SignalValue::String("lock_all".into())
+            ),
             "only armed device leaving should trigger lock, history: {:?}",
             h
         );
@@ -502,7 +506,7 @@ mod tests {
         // its cache; the next poll publishes LastObservedZone=Approach;
         // walk-away arms.
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.PlacedZone",
+            "Vehicle.Simulation.KeyFob.1.PlacedZone",
             SignalValue::String("Approach".into()),
         );
         sleep(Duration::from_millis(80)).await; // let a couple of polls run
@@ -513,7 +517,7 @@ mod tests {
         // LastObservedZone=OutOfRange.  Walk-away sees the transition
         // and fires.
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.PlacedZone",
+            "Vehicle.Simulation.KeyFob.1.PlacedZone",
             SignalValue::String("OutOfRange".into()),
         );
         // Allow time for: the next approach poll to publish OutOfRange,
@@ -522,8 +526,10 @@ mod tests {
 
         let h = bus.history();
         assert!(
-            h.iter().any(|(s, v)| *s == "Body.Doors.CentralLock.Command"
-                && *v == SignalValue::String("lock_all".into())),
+            h.iter().any(
+                |(s, v)| *s == "Vehicle.Controller.Body.Doors.CentralLock.Command"
+                    && *v == SignalValue::String("lock_all".into())
+            ),
             "expected lock_all command from end-to-end arbiter→walk-away chain, history: {:?}",
             h
         );
@@ -541,9 +547,12 @@ mod tests {
         // Mark the cabin fob as paired so the Authenticated scan
         // returns it, and place it in Cabin via PlacedZone (the
         // arbiter's ground truth).
-        bus.inject("Body.PEPS.Plant.KeyFob.1.Paired", SignalValue::Bool(true));
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.PlacedZone",
+            "Vehicle.Simulation.KeyFob.1.Paired",
+            SignalValue::Bool(true),
+        );
+        bus.inject(
+            "Vehicle.Simulation.KeyFob.1.PlacedZone",
             SignalValue::String("Cabin".into()),
         );
 
@@ -560,8 +569,10 @@ mod tests {
 
         let h = bus.history();
         assert!(
-            !h.iter().any(|(s, v)| *s == "Body.Doors.CentralLock.Command"
-                && *v == SignalValue::String("lock_all".into())),
+            !h.iter().any(
+                |(s, v)| *s == "Vehicle.Controller.Body.Doors.CentralLock.Command"
+                    && *v == SignalValue::String("lock_all".into())
+            ),
             "interior paired key must block WAL; history: {:?}",
             h
         );
@@ -574,9 +585,12 @@ mod tests {
         // you left a key inside."
         let (bus, _h) = setup().await;
 
-        bus.inject("Body.PEPS.Plant.KeyFob.1.Paired", SignalValue::Bool(true));
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.PlacedZone",
+            "Vehicle.Simulation.KeyFob.1.Paired",
+            SignalValue::Bool(true),
+        );
+        bus.inject(
+            "Vehicle.Simulation.KeyFob.1.PlacedZone",
             SignalValue::String("Cabin".into()),
         );
 
@@ -608,9 +622,12 @@ mod tests {
         // zero paired keys and the lock proceeds.
         let (bus, _h) = setup().await;
 
-        bus.inject("Body.PEPS.Plant.KeyFob.1.Paired", SignalValue::Bool(false));
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.PlacedZone",
+            "Vehicle.Simulation.KeyFob.1.Paired",
+            SignalValue::Bool(false),
+        );
+        bus.inject(
+            "Vehicle.Simulation.KeyFob.1.PlacedZone",
             SignalValue::String("Cabin".into()),
         );
 
@@ -626,8 +643,10 @@ mod tests {
 
         let h = bus.history();
         assert!(
-            h.iter().any(|(s, v)| *s == "Body.Doors.CentralLock.Command"
-                && *v == SignalValue::String("lock_all".into())),
+            h.iter().any(
+                |(s, v)| *s == "Vehicle.Controller.Body.Doors.CentralLock.Command"
+                    && *v == SignalValue::String("lock_all".into())
+            ),
             "unpaired interior fob should not block WAL; history: {:?}",
             h
         );
@@ -652,7 +671,8 @@ mod tests {
 
     fn lock_all_dispatched(bus: &MockBus) -> bool {
         bus.history().iter().any(|(s, v)| {
-            *s == "Body.Doors.CentralLock.Command" && *v == SignalValue::String("lock_all".into())
+            *s == "Vehicle.Controller.Body.Doors.CentralLock.Command"
+                && *v == SignalValue::String("lock_all".into())
         })
     }
 
@@ -660,7 +680,10 @@ mod tests {
     async fn open_cabin_door_blocks_lock() {
         let (bus, _h) = setup().await;
         // Driver door still open at the moment the fob leaves approach.
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         tokio::task::yield_now().await;
 
         walk_in_and_out(&bus, 0).await;
@@ -706,7 +729,10 @@ mod tests {
         //   5. WAL fires this time.
         let (bus, _h) = setup().await;
 
-        bus.inject("Body.Doors.Row1.Right.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Right.IsOpen",
+            SignalValue::Bool(true),
+        );
         walk_in_and_out(&bus, 0).await;
         assert!(
             !lock_all_dispatched(&bus),
@@ -714,7 +740,10 @@ mod tests {
         );
 
         // Door closes; fob does another in/out cycle.
-        bus.inject("Body.Doors.Row1.Right.IsOpen", SignalValue::Bool(false));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Right.IsOpen",
+            SignalValue::Bool(false),
+        );
         bus.clear_history();
         walk_in_and_out(&bus, 0).await;
 
@@ -738,7 +767,10 @@ mod tests {
         tokio::task::yield_now().await;
 
         // Mid-walkaway: a rear door opens.
-        bus.inject("Body.Doors.Row2.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row2.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         tokio::task::yield_now().await;
         bus.clear_history();
 
@@ -772,7 +804,7 @@ mod tests {
         let h = bus.history();
         assert!(
             !h.iter()
-                .any(|(s, _)| *s == "Body.Doors.CentralLock.Command"),
+                .any(|(s, _)| *s == "Vehicle.Controller.Body.Doors.CentralLock.Command"),
             "device never in approach should NOT trigger lock, history: {:?}",
             h
         );

@@ -7,8 +7,8 @@
 //!
 //! # Behaviour
 //!
-//! On a rising edge of `Body.Trunk.ExteriorButton.IsPressed`, branch
-//! on the cached `Cabin.LockStatus` and `Cabin.ValetMode.IsActive`:
+//! On a rising edge of `Vehicle.Controller.Body.Trunk.Rear.ExteriorButton.IsPressed`, branch
+//! on the cached `Vehicle.Controller.Cabin.LockStatus` and `Vehicle.Controller.Cabin.ValetMode.IsActive`:
 //!
 //! | Cabin lock state                | Valet | Action                                              |
 //! |---------------------------------|:-----:|-----------------------------------------------------|
@@ -32,8 +32,8 @@
 //!
 //! # Lock-state independence
 //!
-//! Trunk-only open never publishes `Cabin.LockStatus` or
-//! `Cabin.LockStatus.LastRequestor`.  AutoRelock's external-source
+//! Trunk-only open never publishes `Vehicle.Controller.Cabin.LockStatus` or
+//! `Vehicle.Controller.Cabin.LockStatus.LastRequestor`.  AutoRelock's external-source
 //! filter never fires on a trunk press, and the cabin lock indicator
 //! stays consistent across a "pop-trunk-while-locked" sequence.
 //!
@@ -60,9 +60,9 @@ use crate::signal_bus::{SignalBus, VssPath};
 
 const FEATURE_ID: FeatureId = FeatureId::ExteriorTrunkButton;
 
-const BUTTON: VssPath = "Body.Trunk.ExteriorButton.IsPressed";
-const LOCK_STATUS: VssPath = "Cabin.LockStatus";
-const VALET_MODE: VssPath = "Cabin.ValetMode.IsActive";
+const BUTTON: VssPath = "Vehicle.Controller.Body.Trunk.Rear.ExteriorButton.IsPressed";
+const LOCK_STATUS: VssPath = "Vehicle.Controller.Cabin.LockStatus";
+const VALET_MODE: VssPath = "Vehicle.Controller.Cabin.ValetMode.IsActive";
 
 pub struct ExteriorTrunkButton<B: SignalBus> {
     bus: Arc<B>,
@@ -182,7 +182,7 @@ impl<B: SignalBus + Send + Sync + 'static> ExteriorTrunkButton<B> {
         self.pulse_trunk_open().await;
     }
 
-    /// Pulse `Body.Trunk.OpenCmd` through the trunk arbiter as a
+    /// Pulse `Vehicle.Controller.Body.Trunk.Rear.OpenCmd` through the trunk arbiter as a
     /// momentary edge: request true, then immediately release so the
     /// arbiter publishes true → false and a subsequent press can
     /// re-fire.  Also fires the `trunk_unlock` lock-feedback flash so
@@ -252,9 +252,9 @@ mod tests {
     }
 
     fn trunk_was_pulsed(bus: &MockBus) -> bool {
-        bus.history()
-            .into_iter()
-            .any(|(s, v)| s == "Body.Trunk.OpenCmd" && v == SignalValue::Bool(true))
+        bus.history().into_iter().any(|(s, v)| {
+            s == "Vehicle.Controller.Body.Trunk.Rear.OpenCmd" && v == SignalValue::Bool(true)
+        })
     }
 
     fn lock_status_was_published(bus: &MockBus) -> bool {
@@ -263,10 +263,10 @@ mod tests {
 
     fn place_fob_at_trunk(bus: &MockBus, slot: u8) {
         let path = match slot {
-            1 => "Body.PEPS.Plant.KeyFob.1.PlacedZone",
-            2 => "Body.PEPS.Plant.KeyFob.2.PlacedZone",
-            3 => "Body.PEPS.Plant.KeyFob.3.PlacedZone",
-            4 => "Body.PEPS.Plant.KeyFob.4.PlacedZone",
+            1 => "Vehicle.Simulation.KeyFob.1.PlacedZone",
+            2 => "Vehicle.Simulation.KeyFob.2.PlacedZone",
+            3 => "Vehicle.Simulation.KeyFob.3.PlacedZone",
+            4 => "Vehicle.Simulation.KeyFob.4.PlacedZone",
             _ => panic!("unknown slot"),
         };
         bus.inject(path, SignalValue::String("Trunk".into()));
@@ -286,11 +286,11 @@ mod tests {
 
         assert!(
             trunk_was_pulsed(&bus),
-            "unlocked + valet off: press must pulse Body.Trunk.OpenCmd=true"
+            "unlocked + valet off: press must pulse Vehicle.Controller.Body.Trunk.Rear.OpenCmd=true"
         );
         assert!(
             !lock_status_was_published(&bus),
-            "trunk-only open must not mutate Cabin.LockStatus"
+            "trunk-only open must not mutate Vehicle.Controller.Cabin.LockStatus"
         );
     }
 
@@ -356,7 +356,7 @@ mod tests {
         );
         assert!(
             !lock_status_was_published(&bus),
-            "locked auth path must not mutate Cabin.LockStatus"
+            "locked auth path must not mutate Vehicle.Controller.Cabin.LockStatus"
         );
     }
 
@@ -383,7 +383,7 @@ mod tests {
         let bus = setup().await;
         bus.inject(LOCK_STATUS, SignalValue::String("LOCKED".into()));
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.PlacedZone",
+            "Vehicle.Simulation.KeyFob.1.PlacedZone",
             SignalValue::String("LeftFront".into()),
         );
         settle().await;
@@ -417,7 +417,10 @@ mod tests {
         // arbiter's authenticated scan.
         let bus = setup().await;
         bus.inject(LOCK_STATUS, SignalValue::String("LOCKED".into()));
-        bus.inject("Body.PEPS.Plant.KeyFob.1.Paired", SignalValue::Bool(false));
+        bus.inject(
+            "Vehicle.Simulation.KeyFob.1.Paired",
+            SignalValue::Bool(false),
+        );
         place_fob_at_trunk(&bus, 1);
         settle().await;
         bus.clear_history();

@@ -26,7 +26,7 @@
 //!
 //! # Outputs
 //!
-//! - `Body.PEPS.LostKeyWarning` (Bool).  Set `true` when the scan
+//! - `Vehicle.Controller.Body.PEPS.LostKeyWarning` (Bool).  Set `true` when the scan
 //!   completes with zero paired keys found anywhere on the vehicle.
 //!   Cleared back to `false` on either:
 //!   * the next scan finding at least one key, or
@@ -57,14 +57,14 @@ use crate::ipc_message::SignalValue;
 use crate::signal_bus::{SignalBus, VssPath};
 
 const DOOR_OPEN_SIGNALS: [VssPath; 4] = [
-    "Body.Doors.Row1.Left.IsOpen",
-    "Body.Doors.Row1.Right.IsOpen",
-    "Body.Doors.Row2.Left.IsOpen",
-    "Body.Doors.Row2.Right.IsOpen",
+    "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+    "Vehicle.Cabin.Door.Row1.Right.IsOpen",
+    "Vehicle.Cabin.Door.Row2.Left.IsOpen",
+    "Vehicle.Cabin.Door.Row2.Right.IsOpen",
 ];
 
 const IGNITION_STATE: VssPath = "Vehicle.LowVoltageSystemState";
-const LOST_KEY_WARNING: VssPath = "Body.PEPS.LostKeyWarning";
+const LOST_KEY_WARNING: VssPath = "Vehicle.Controller.Body.PEPS.LostKeyWarning";
 
 /// True when the ignition is live (engine running or cranking).
 fn ignition_is_live(s: &str) -> bool {
@@ -223,8 +223,8 @@ mod tests {
 
     fn place(bus: &MockBus, slot: u8, zone: &str) {
         let path = match slot {
-            1 => "Body.PEPS.Plant.KeyFob.1.PlacedZone",
-            2 => "Body.PEPS.Plant.KeyFob.2.PlacedZone",
+            1 => "Vehicle.Simulation.KeyFob.1.PlacedZone",
+            2 => "Vehicle.Simulation.KeyFob.2.PlacedZone",
             _ => panic!("unknown slot"),
         };
         bus.inject(path, SignalValue::String(zone.into()));

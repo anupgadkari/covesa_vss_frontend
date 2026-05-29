@@ -2,13 +2,13 @@
 //!
 //! ```text
 //!  HMI dash hood-release lever            HMI top-view click on hood
-//!      │  Body.Switches.Hood.Release.IsPulled │ Body.Hood.OpenCmd
-//!      │  (rising-edge pulses)                │ Body.Hood.CloseCmd
+//!      │  Vehicle.Controller.Body.Switches.Hood.Release.IsPulled │ Vehicle.Controller.Body.Hood.OpenCmd
+//!      │  (rising-edge pulses)                │ Vehicle.Controller.Body.Hood.CloseCmd
 //!      ▼                                      ▼
 //!  HoodPlantModel          ← this module
 //!      │  publishes:
-//!      │    Body.Hood.LatchState  ("LATCHED" | "HALF_LATCHED" | "OPEN")
-//!      │    Body.Hood.IsOpen      (true iff LatchState == "OPEN")
+//!      │    Vehicle.Controller.Body.Hood.LatchState  ("LATCHED" | "HALF_LATCHED" | "OPEN")
+//!      │    Vehicle.Body.Hood.IsOpen      (true iff LatchState == "OPEN")
 //!      ▼
 //!  SignalBus → WsBridge → HMI
 //! ```
@@ -32,7 +32,7 @@
 //!
 //! # `IsOpen` companion signal
 //!
-//! `Body.Hood.IsOpen` is published as `true` iff `LatchState == OPEN`.
+//! `Vehicle.Body.Hood.IsOpen` is published as `true` iff `LatchState == OPEN`.
 //! Other features (alarm, dome-on-open, etc.) can ignore the
 //! tri-state and just consume the bool.
 //!
@@ -53,11 +53,11 @@ use crate::ipc_message::SignalValue;
 use crate::nvm::{HoodState, NvmStore};
 use crate::signal_bus::SignalBus;
 
-const OPEN_CMD: &str = "Body.Hood.OpenCmd";
-const CLOSE_CMD: &str = "Body.Hood.CloseCmd";
-const RELEASE_PULL: &str = "Body.Switches.Hood.Release.IsPulled";
-const IS_OPEN: &str = "Body.Hood.IsOpen";
-const LATCH_STATE: &str = "Body.Hood.LatchState";
+const OPEN_CMD: &str = "Vehicle.Controller.Body.Hood.OpenCmd";
+const CLOSE_CMD: &str = "Vehicle.Controller.Body.Hood.CloseCmd";
+const RELEASE_PULL: &str = "Vehicle.Controller.Body.Switches.Hood.Release.IsPulled";
+const IS_OPEN: &str = "Vehicle.Body.Hood.IsOpen";
+const LATCH_STATE: &str = "Vehicle.Controller.Body.Hood.LatchState";
 
 /// Window between the two release-lever pulls required to advance
 /// from `LATCHED` to `HALF_LATCHED`.

@@ -1,5 +1,5 @@
 //! VehicleStartingControl — owns `Vehicle.LowVoltageSystemState` and
-//! `Vehicle.Starting.ImmobilizerStatus`.  Implements both authentication
+//! `Vehicle.Controller.Starting.ImmobilizerStatus`.  Implements both authentication
 //! flavours via the `key_source_cfg` line-cal switch:
 //!
 //! - [`KeySource::Peps`] — push-button start.  On a `StartStop.IsPressed`
@@ -28,15 +28,15 @@
 //!
 //! - `Vehicle.LowVoltageSystemState` (String enum: `OFF | ACC | ON |
 //!   START`).  This feature is the sole writer.  Boot value: `OFF`.
-//! - `Vehicle.Starting.ImmobilizerStatus` (String enum: `LOCKED |
+//! - `Vehicle.Controller.Starting.ImmobilizerStatus` (String enum: `LOCKED |
 //!   AUTHENTICATING | AUTHENTICATED | FAILED`).  Sole writer.  Boot
 //!   value: `LOCKED`.
 //!
 //! # Subscriptions
 //!
-//! - `Body.Switches.StartStop.IsPressed` (Bool, PEPS only)
-//! - `Body.Switches.IgnitionCylinder.Position` (String, KeyCylinder only)
-//! - `Chassis.Brake.IsApplied` (Bool)
+//! - `Vehicle.Controller.Body.Switches.StartStop.IsPressed` (Bool, PEPS only)
+//! - `Vehicle.Controller.Body.Switches.IgnitionCylinder.Position` (String, KeyCylinder only)
+//! - `Vehicle.Controller.Chassis.Brake.IsApplied` (Bool)
 //!
 //! # Out of scope (deferred)
 //!
@@ -59,26 +59,28 @@ use crate::signal_bus::{SignalBus, VssPath};
 
 // ── Signal constants ───────────────────────────────────────────────────────
 
-const START_STOP_IN: VssPath = "Body.Switches.StartStop.IsPressed";
-const CYLINDER_IN: VssPath = "Body.Switches.IgnitionCylinder.Position";
-const BRAKE_IN: VssPath = "Chassis.Brake.IsApplied";
+const START_STOP_IN: VssPath = "Vehicle.Controller.Body.Switches.StartStop.IsPressed";
+const CYLINDER_IN: VssPath = "Vehicle.Controller.Body.Switches.IgnitionCylinder.Position";
+const BRAKE_IN: VssPath = "Vehicle.Controller.Chassis.Brake.IsApplied";
 const CURRENT_GEAR_IN: VssPath = "Powertrain.Transmission.CurrentGear";
 /// NFC auth bypass — published by `NfcEntry` on a start-button NFC
 /// tap.  Stays `true` for a short window; while it's true, a PEPS
 /// start-button press skips the normal `Cabin` Authenticated scan
 /// and treats the immobilizer as already satisfied.
-const NFC_AUTH_BYPASS_IN: VssPath = "Body.PEPS.NfcAuthBypass";
+const NFC_AUTH_BYPASS_IN: VssPath = "Vehicle.Controller.Body.PEPS.NfcAuthBypass";
 
 const POWER_STATE_OUT: VssPath = "Vehicle.LowVoltageSystemState";
-const IMMOBILIZER_OUT: VssPath = "Vehicle.Starting.ImmobilizerStatus";
-const REMOVAL_INHIBITED_OUT: VssPath = "Body.Switches.IgnitionCylinder.RemovalInhibited";
+const IMMOBILIZER_OUT: VssPath = "Vehicle.Controller.Starting.ImmobilizerStatus";
+const REMOVAL_INHIBITED_OUT: VssPath =
+    "Vehicle.Controller.Body.Switches.IgnitionCylinder.RemovalInhibited";
 /// Start/Stop button backlight PWM duty cycle, 0..=100.  Modelled
 /// as the ECU's PWM control output: the body controller would
 /// drive an actual LED via a hardware PWM at this duty cycle.  On
 /// the simulator bus we publish the duty cycle directly at ~10 Hz
 /// so the LED plant can integrate it.  OEM extension — VSS 4.0 has
 /// no standard signal for the start-button backlight.
-const STARTSTOP_BACKLIGHT_DUTY_OUT: VssPath = "Body.Switches.StartStop.BacklightDutyCycle";
+const STARTSTOP_BACKLIGHT_DUTY_OUT: VssPath =
+    "Vehicle.Controller.Body.Switches.StartStop.BacklightDutyCycle";
 
 /// PWM tick rate.  ~10 Hz is smooth enough for a 2.5 s breathing
 /// cycle (25 frames / pulse), low enough that the bus chatter
@@ -269,7 +271,7 @@ impl<B: SignalBus + Send + Sync + 'static> VehicleStartingControl<B> {
         let mut cylinder_session_authed = false;
         // Track previous start-stop value so we only act on rising edges.
         let mut prev_start_stop = false;
-        // NFC auth bypass — true while `Body.PEPS.NfcAuthBypass` is
+        // NFC auth bypass — true while `Vehicle.Controller.Body.PEPS.NfcAuthBypass` is
         // currently `true`.  Set by an NfcEntry start-button tap and
         // auto-cleared by NfcEntry itself after its window expires.
         // VSC just mirrors the published value.
@@ -392,7 +394,7 @@ impl<B: SignalBus + Send + Sync + 'static> VehicleStartingControl<B> {
 
     /// PEPS rising-edge press handler.  Two auth sources:
     ///
-    /// 1. **NFC bypass** — if `Body.PEPS.NfcAuthBypass` is currently
+    /// 1. **NFC bypass** — if `Vehicle.Controller.Body.PEPS.NfcAuthBypass` is currently
     ///    `true` (set by `NfcEntry` on a start-button NFC tap),
     ///    treat the press as already authenticated and skip the
     ///    cabin LF scan.  This is what makes NFC-tap-to-start work
@@ -736,10 +738,10 @@ mod tests {
     fn place_fob_in_cabin(bus: &MockBus, slot: u8) {
         bus.inject(
             match slot {
-                1 => "Body.PEPS.Plant.KeyFob.1.PlacedZone",
-                2 => "Body.PEPS.Plant.KeyFob.2.PlacedZone",
-                3 => "Body.PEPS.Plant.KeyFob.3.PlacedZone",
-                4 => "Body.PEPS.Plant.KeyFob.4.PlacedZone",
+                1 => "Vehicle.Simulation.KeyFob.1.PlacedZone",
+                2 => "Vehicle.Simulation.KeyFob.2.PlacedZone",
+                3 => "Vehicle.Simulation.KeyFob.3.PlacedZone",
+                4 => "Vehicle.Simulation.KeyFob.4.PlacedZone",
                 _ => panic!("unknown slot"),
             },
             SignalValue::String("Cabin".into()),
@@ -748,10 +750,10 @@ mod tests {
     fn place_fob_in_cylinder(bus: &MockBus, slot: u8) {
         bus.inject(
             match slot {
-                1 => "Body.PEPS.Plant.KeyFob.1.PlacedZone",
-                2 => "Body.PEPS.Plant.KeyFob.2.PlacedZone",
-                3 => "Body.PEPS.Plant.KeyFob.3.PlacedZone",
-                4 => "Body.PEPS.Plant.KeyFob.4.PlacedZone",
+                1 => "Vehicle.Simulation.KeyFob.1.PlacedZone",
+                2 => "Vehicle.Simulation.KeyFob.2.PlacedZone",
+                3 => "Vehicle.Simulation.KeyFob.3.PlacedZone",
+                4 => "Vehicle.Simulation.KeyFob.4.PlacedZone",
                 _ => panic!("unknown slot"),
             },
             SignalValue::String("KeyCylinder".into()),
@@ -795,7 +797,7 @@ mod tests {
         settle().await;
 
         let observed = bus.history().iter().any(|(s, v)| {
-            *s == "Body.PEPS.Plant.KeyFob.1.LastObservedZone"
+            *s == "Vehicle.Simulation.KeyFob.1.LastObservedZone"
                 && *v == SignalValue::String("Cabin".into())
         });
         assert!(
@@ -917,12 +919,15 @@ mod tests {
 
     #[tokio::test]
     async fn peps_press_with_nfc_bypass_active_authenticates_without_cabin_key() {
-        // NfcEntry has just published Body.PEPS.NfcAuthBypass = true
+        // NfcEntry has just published Vehicle.Controller.Body.PEPS.NfcAuthBypass = true
         // (start-button NFC tap).  A subsequent PEPS press must skip
         // the cabin scan and authenticate directly.  No fob is in
         // cabin here — without the bypass, this press would fail.
         let bus = setup(cfg_peps()).await;
-        bus.inject("Body.PEPS.NfcAuthBypass", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Controller.Body.PEPS.NfcAuthBypass",
+            SignalValue::Bool(true),
+        );
         settle().await;
         bus.inject(START_STOP_IN, SignalValue::Bool(true));
         settle().await;
@@ -935,8 +940,14 @@ mod tests {
         // Bypass was set, then cleared.  Press now must run the
         // normal cabin scan, find nothing, and fail.
         let bus = setup(cfg_peps()).await;
-        bus.inject("Body.PEPS.NfcAuthBypass", SignalValue::Bool(true));
-        bus.inject("Body.PEPS.NfcAuthBypass", SignalValue::Bool(false));
+        bus.inject(
+            "Vehicle.Controller.Body.PEPS.NfcAuthBypass",
+            SignalValue::Bool(true),
+        );
+        bus.inject(
+            "Vehicle.Controller.Body.PEPS.NfcAuthBypass",
+            SignalValue::Bool(false),
+        );
         settle().await;
         bus.inject(START_STOP_IN, SignalValue::Bool(true));
         settle().await;
@@ -953,7 +964,9 @@ mod tests {
         // The plant simulates the LED's perceived intensity from
         // this signal; here we just assert what VSC publishes.
         let bus = setup(cfg_peps()).await;
-        let duty = || match bus.latest_value("Body.Switches.StartStop.BacklightDutyCycle") {
+        let duty = || match bus
+            .latest_value("Vehicle.Controller.Body.Switches.StartStop.BacklightDutyCycle")
+        {
             Some(SignalValue::Uint8(v)) => v,
             _ => 255,
         };
@@ -1043,7 +1056,10 @@ mod tests {
         // its Paired flag is false.  Authenticated scans must filter
         // it out so the immobilizer goes FAILED and power stays OFF.
         let bus = setup(cfg_peps()).await;
-        bus.inject("Body.PEPS.Plant.KeyFob.1.Paired", SignalValue::Bool(false));
+        bus.inject(
+            "Vehicle.Simulation.KeyFob.1.Paired",
+            SignalValue::Bool(false),
+        );
         place_fob_in_cabin(&bus, 1);
         settle().await;
         bus.inject(START_STOP_IN, SignalValue::Bool(true));
@@ -1125,7 +1141,7 @@ mod tests {
         // Remove fob, then rotate to ON.  Session flag should still
         // accept the rotation because we already authenticated.
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.PlacedZone",
+            "Vehicle.Simulation.KeyFob.1.PlacedZone",
             SignalValue::String("OutOfRange".into()),
         );
         bus.inject(CYLINDER_IN, SignalValue::String("ON".into()));
@@ -1174,7 +1190,7 @@ mod tests {
         // Remove the key — session was already established, OFF→ON
         // must still work.
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.PlacedZone",
+            "Vehicle.Simulation.KeyFob.1.PlacedZone",
             SignalValue::String("OutOfRange".into()),
         );
         bus.inject(CYLINDER_IN, SignalValue::String("ON".into()));
@@ -1201,7 +1217,7 @@ mod tests {
         settle().await;
         // Verify inhibit was published.
         assert_eq!(
-            bus.latest_value("Body.Switches.IgnitionCylinder.RemovalInhibited"),
+            bus.latest_value("Vehicle.Controller.Body.Switches.IgnitionCylinder.RemovalInhibited"),
             Some(SignalValue::Bool(true))
         );
         // Try to rotate to LOCK.
@@ -1239,7 +1255,7 @@ mod tests {
         );
         settle().await;
         assert_eq!(
-            bus.latest_value("Body.Switches.IgnitionCylinder.RemovalInhibited"),
+            bus.latest_value("Vehicle.Controller.Body.Switches.IgnitionCylinder.RemovalInhibited"),
             Some(SignalValue::Bool(false))
         );
         // Now LOCK is accepted.
@@ -1260,7 +1276,7 @@ mod tests {
         );
         settle().await;
         assert_eq!(
-            bus.latest_value("Body.Switches.IgnitionCylinder.RemovalInhibited"),
+            bus.latest_value("Vehicle.Controller.Body.Switches.IgnitionCylinder.RemovalInhibited"),
             Some(SignalValue::Bool(false))
         );
     }
@@ -1279,7 +1295,7 @@ mod tests {
         assert_eq!(latest_immo(&bus).as_deref(), Some("LOCKED"));
         // Remove fob; rotation back to ACC should now fail.
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.PlacedZone",
+            "Vehicle.Simulation.KeyFob.1.PlacedZone",
             SignalValue::String("OutOfRange".into()),
         );
         bus.inject(CYLINDER_IN, SignalValue::String("ACC".into()));

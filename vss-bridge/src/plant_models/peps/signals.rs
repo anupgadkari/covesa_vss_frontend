@@ -16,12 +16,12 @@ use crate::signal_bus::VssPath;
 // they experience the same partial-information world a real PEPS
 // feature does.  The legacy `.Zone` signal has been retired (item
 // #14 follow-up).
-pub const KEYFOB_1_PLACED_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.1.PlacedZone";
-pub const KEYFOB_2_PLACED_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.2.PlacedZone";
-pub const KEYFOB_3_PLACED_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.3.PlacedZone";
-pub const KEYFOB_4_PLACED_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.4.PlacedZone";
-pub const KEYFOB_5_PLACED_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.5.PlacedZone";
-pub const KEYFOB_6_PLACED_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.6.PlacedZone";
+pub const KEYFOB_1_PLACED_ZONE: VssPath = "Vehicle.Simulation.KeyFob.1.PlacedZone";
+pub const KEYFOB_2_PLACED_ZONE: VssPath = "Vehicle.Simulation.KeyFob.2.PlacedZone";
+pub const KEYFOB_3_PLACED_ZONE: VssPath = "Vehicle.Simulation.KeyFob.3.PlacedZone";
+pub const KEYFOB_4_PLACED_ZONE: VssPath = "Vehicle.Simulation.KeyFob.4.PlacedZone";
+pub const KEYFOB_5_PLACED_ZONE: VssPath = "Vehicle.Simulation.KeyFob.5.PlacedZone";
+pub const KEYFOB_6_PLACED_ZONE: VssPath = "Vehicle.Simulation.KeyFob.6.PlacedZone";
 
 pub const KEYFOB_PLACED_ZONES: [VssPath; 6] = [
     KEYFOB_1_PLACED_ZONE,
@@ -33,12 +33,12 @@ pub const KEYFOB_PLACED_ZONES: [VssPath; 6] = [
 ];
 
 // ── Key Fob LastObservedZone (output: KeySearchArbiter publishes) ─────
-pub const KEYFOB_1_LAST_OBSERVED_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.1.LastObservedZone";
-pub const KEYFOB_2_LAST_OBSERVED_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.2.LastObservedZone";
-pub const KEYFOB_3_LAST_OBSERVED_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.3.LastObservedZone";
-pub const KEYFOB_4_LAST_OBSERVED_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.4.LastObservedZone";
-pub const KEYFOB_5_LAST_OBSERVED_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.5.LastObservedZone";
-pub const KEYFOB_6_LAST_OBSERVED_ZONE: VssPath = "Body.PEPS.Plant.KeyFob.6.LastObservedZone";
+pub const KEYFOB_1_LAST_OBSERVED_ZONE: VssPath = "Vehicle.Simulation.KeyFob.1.LastObservedZone";
+pub const KEYFOB_2_LAST_OBSERVED_ZONE: VssPath = "Vehicle.Simulation.KeyFob.2.LastObservedZone";
+pub const KEYFOB_3_LAST_OBSERVED_ZONE: VssPath = "Vehicle.Simulation.KeyFob.3.LastObservedZone";
+pub const KEYFOB_4_LAST_OBSERVED_ZONE: VssPath = "Vehicle.Simulation.KeyFob.4.LastObservedZone";
+pub const KEYFOB_5_LAST_OBSERVED_ZONE: VssPath = "Vehicle.Simulation.KeyFob.5.LastObservedZone";
+pub const KEYFOB_6_LAST_OBSERVED_ZONE: VssPath = "Vehicle.Simulation.KeyFob.6.LastObservedZone";
 
 pub const KEYFOB_LAST_OBSERVED_ZONES: [VssPath; 6] = [
     KEYFOB_1_LAST_OBSERVED_ZONE,
@@ -50,10 +50,10 @@ pub const KEYFOB_LAST_OBSERVED_ZONES: [VssPath; 6] = [
 ];
 
 // ── Key Fob Button Press (input: set by HMI / test) ───────────────────
-pub const KEYFOB_1_BUTTON: VssPath = "Body.PEPS.Plant.KeyFob.1.ButtonPress";
-pub const KEYFOB_2_BUTTON: VssPath = "Body.PEPS.Plant.KeyFob.2.ButtonPress";
-pub const KEYFOB_3_BUTTON: VssPath = "Body.PEPS.Plant.KeyFob.3.ButtonPress";
-pub const KEYFOB_4_BUTTON: VssPath = "Body.PEPS.Plant.KeyFob.4.ButtonPress";
+pub const KEYFOB_1_BUTTON: VssPath = "Vehicle.Simulation.KeyFob.1.ButtonPress";
+pub const KEYFOB_2_BUTTON: VssPath = "Vehicle.Simulation.KeyFob.2.ButtonPress";
+pub const KEYFOB_3_BUTTON: VssPath = "Vehicle.Simulation.KeyFob.3.ButtonPress";
+pub const KEYFOB_4_BUTTON: VssPath = "Vehicle.Simulation.KeyFob.4.ButtonPress";
 
 /// Button press signals for paired fobs only (1..4). Unpaired fobs (5-6) have no buttons.
 pub const KEYFOB_BUTTONS: [VssPath; 4] = [
@@ -64,12 +64,12 @@ pub const KEYFOB_BUTTONS: [VssPath; 4] = [
 ];
 
 // ── Key Fob Pairing (config: set at init) ──────────────────────────────
-pub const KEYFOB_1_PAIRED: VssPath = "Body.PEPS.Plant.KeyFob.1.Paired";
-pub const KEYFOB_2_PAIRED: VssPath = "Body.PEPS.Plant.KeyFob.2.Paired";
-pub const KEYFOB_3_PAIRED: VssPath = "Body.PEPS.Plant.KeyFob.3.Paired";
-pub const KEYFOB_4_PAIRED: VssPath = "Body.PEPS.Plant.KeyFob.4.Paired";
-pub const KEYFOB_5_PAIRED: VssPath = "Body.PEPS.Plant.KeyFob.5.Paired";
-pub const KEYFOB_6_PAIRED: VssPath = "Body.PEPS.Plant.KeyFob.6.Paired";
+pub const KEYFOB_1_PAIRED: VssPath = "Vehicle.Simulation.KeyFob.1.Paired";
+pub const KEYFOB_2_PAIRED: VssPath = "Vehicle.Simulation.KeyFob.2.Paired";
+pub const KEYFOB_3_PAIRED: VssPath = "Vehicle.Simulation.KeyFob.3.Paired";
+pub const KEYFOB_4_PAIRED: VssPath = "Vehicle.Simulation.KeyFob.4.Paired";
+pub const KEYFOB_5_PAIRED: VssPath = "Vehicle.Simulation.KeyFob.5.Paired";
+pub const KEYFOB_6_PAIRED: VssPath = "Vehicle.Simulation.KeyFob.6.Paired";
 
 pub const KEYFOB_PAIRED: [VssPath; 6] = [
     KEYFOB_1_PAIRED,
@@ -81,12 +81,12 @@ pub const KEYFOB_PAIRED: [VssPath; 6] = [
 ];
 
 // ── Key Fob Challenge Response (output: published by plant model) ──────
-pub const KEYFOB_1_CHALLENGE_RESP: VssPath = "Body.PEPS.Plant.KeyFob.1.ChallengeResponse";
-pub const KEYFOB_2_CHALLENGE_RESP: VssPath = "Body.PEPS.Plant.KeyFob.2.ChallengeResponse";
-pub const KEYFOB_3_CHALLENGE_RESP: VssPath = "Body.PEPS.Plant.KeyFob.3.ChallengeResponse";
-pub const KEYFOB_4_CHALLENGE_RESP: VssPath = "Body.PEPS.Plant.KeyFob.4.ChallengeResponse";
-pub const KEYFOB_5_CHALLENGE_RESP: VssPath = "Body.PEPS.Plant.KeyFob.5.ChallengeResponse";
-pub const KEYFOB_6_CHALLENGE_RESP: VssPath = "Body.PEPS.Plant.KeyFob.6.ChallengeResponse";
+pub const KEYFOB_1_CHALLENGE_RESP: VssPath = "Vehicle.Simulation.KeyFob.1.ChallengeResponse";
+pub const KEYFOB_2_CHALLENGE_RESP: VssPath = "Vehicle.Simulation.KeyFob.2.ChallengeResponse";
+pub const KEYFOB_3_CHALLENGE_RESP: VssPath = "Vehicle.Simulation.KeyFob.3.ChallengeResponse";
+pub const KEYFOB_4_CHALLENGE_RESP: VssPath = "Vehicle.Simulation.KeyFob.4.ChallengeResponse";
+pub const KEYFOB_5_CHALLENGE_RESP: VssPath = "Vehicle.Simulation.KeyFob.5.ChallengeResponse";
+pub const KEYFOB_6_CHALLENGE_RESP: VssPath = "Vehicle.Simulation.KeyFob.6.ChallengeResponse";
 
 pub const KEYFOB_CHALLENGE_RESPS: [VssPath; 6] = [
     KEYFOB_1_CHALLENGE_RESP,
@@ -98,12 +98,12 @@ pub const KEYFOB_CHALLENGE_RESPS: [VssPath; 6] = [
 ];
 
 // ── Key Fob RSSI Response (output: published by plant model) ───────────
-pub const KEYFOB_1_RSSI: VssPath = "Body.PEPS.Plant.KeyFob.1.RssiResponse";
-pub const KEYFOB_2_RSSI: VssPath = "Body.PEPS.Plant.KeyFob.2.RssiResponse";
-pub const KEYFOB_3_RSSI: VssPath = "Body.PEPS.Plant.KeyFob.3.RssiResponse";
-pub const KEYFOB_4_RSSI: VssPath = "Body.PEPS.Plant.KeyFob.4.RssiResponse";
-pub const KEYFOB_5_RSSI: VssPath = "Body.PEPS.Plant.KeyFob.5.RssiResponse";
-pub const KEYFOB_6_RSSI: VssPath = "Body.PEPS.Plant.KeyFob.6.RssiResponse";
+pub const KEYFOB_1_RSSI: VssPath = "Vehicle.Simulation.KeyFob.1.RssiResponse";
+pub const KEYFOB_2_RSSI: VssPath = "Vehicle.Simulation.KeyFob.2.RssiResponse";
+pub const KEYFOB_3_RSSI: VssPath = "Vehicle.Simulation.KeyFob.3.RssiResponse";
+pub const KEYFOB_4_RSSI: VssPath = "Vehicle.Simulation.KeyFob.4.RssiResponse";
+pub const KEYFOB_5_RSSI: VssPath = "Vehicle.Simulation.KeyFob.5.RssiResponse";
+pub const KEYFOB_6_RSSI: VssPath = "Vehicle.Simulation.KeyFob.6.RssiResponse";
 
 pub const KEYFOB_RSSIS: [VssPath; 6] = [
     KEYFOB_1_RSSI,
@@ -115,10 +115,10 @@ pub const KEYFOB_RSSIS: [VssPath; 6] = [
 ];
 
 // ── Key Fob RF Message (output: rolling code + action, published by plant) ──
-pub const KEYFOB_1_RF_MSG: VssPath = "Body.PEPS.Plant.KeyFob.1.RfMessage";
-pub const KEYFOB_2_RF_MSG: VssPath = "Body.PEPS.Plant.KeyFob.2.RfMessage";
-pub const KEYFOB_3_RF_MSG: VssPath = "Body.PEPS.Plant.KeyFob.3.RfMessage";
-pub const KEYFOB_4_RF_MSG: VssPath = "Body.PEPS.Plant.KeyFob.4.RfMessage";
+pub const KEYFOB_1_RF_MSG: VssPath = "Vehicle.Simulation.KeyFob.1.RfMessage";
+pub const KEYFOB_2_RF_MSG: VssPath = "Vehicle.Simulation.KeyFob.2.RfMessage";
+pub const KEYFOB_3_RF_MSG: VssPath = "Vehicle.Simulation.KeyFob.3.RfMessage";
+pub const KEYFOB_4_RF_MSG: VssPath = "Vehicle.Simulation.KeyFob.4.RfMessage";
 
 pub const KEYFOB_RF_MSGS: [VssPath; 4] = [
     KEYFOB_1_RF_MSG,
@@ -129,44 +129,44 @@ pub const KEYFOB_RF_MSGS: [VssPath; 4] = [
 
 // ── BLE Phone PlacedZone (input: HMI drag-and-drop target) ────────────
 // Legacy `.Zone` retired — see KEYFOB_PLACED_ZONES above.
-pub const PHONE_1_PLACED_ZONE: VssPath = "Body.PEPS.Plant.BlePhone.1.PlacedZone";
-pub const PHONE_2_PLACED_ZONE: VssPath = "Body.PEPS.Plant.BlePhone.2.PlacedZone";
+pub const PHONE_1_PLACED_ZONE: VssPath = "Vehicle.Simulation.BlePhone.1.PlacedZone";
+pub const PHONE_2_PLACED_ZONE: VssPath = "Vehicle.Simulation.BlePhone.2.PlacedZone";
 
 pub const PHONE_PLACED_ZONES: [VssPath; 2] = [PHONE_1_PLACED_ZONE, PHONE_2_PLACED_ZONE];
 
 // ── BLE Phone LastObservedZone (output: arbiter publishes) ────────────
-pub const PHONE_1_LAST_OBSERVED_ZONE: VssPath = "Body.PEPS.Plant.BlePhone.1.LastObservedZone";
-pub const PHONE_2_LAST_OBSERVED_ZONE: VssPath = "Body.PEPS.Plant.BlePhone.2.LastObservedZone";
+pub const PHONE_1_LAST_OBSERVED_ZONE: VssPath = "Vehicle.Simulation.BlePhone.1.LastObservedZone";
+pub const PHONE_2_LAST_OBSERVED_ZONE: VssPath = "Vehicle.Simulation.BlePhone.2.LastObservedZone";
 
 pub const PHONE_LAST_OBSERVED_ZONES: [VssPath; 2] =
     [PHONE_1_LAST_OBSERVED_ZONE, PHONE_2_LAST_OBSERVED_ZONE];
 
 // ── BLE Phone Challenge Response (output: published by plant model) ────
-pub const PHONE_1_CHALLENGE_RESP: VssPath = "Body.PEPS.Plant.BlePhone.1.ChallengeResponse";
-pub const PHONE_2_CHALLENGE_RESP: VssPath = "Body.PEPS.Plant.BlePhone.2.ChallengeResponse";
+pub const PHONE_1_CHALLENGE_RESP: VssPath = "Vehicle.Simulation.BlePhone.1.ChallengeResponse";
+pub const PHONE_2_CHALLENGE_RESP: VssPath = "Vehicle.Simulation.BlePhone.2.ChallengeResponse";
 
 pub const PHONE_CHALLENGE_RESPS: [VssPath; 2] = [PHONE_1_CHALLENGE_RESP, PHONE_2_CHALLENGE_RESP];
 
 // ── BLE Phone RSSI Response (output: published by plant model) ─────────
-pub const PHONE_1_RSSI: VssPath = "Body.PEPS.Plant.BlePhone.1.RssiResponse";
-pub const PHONE_2_RSSI: VssPath = "Body.PEPS.Plant.BlePhone.2.RssiResponse";
+pub const PHONE_1_RSSI: VssPath = "Vehicle.Simulation.BlePhone.1.RssiResponse";
+pub const PHONE_2_RSSI: VssPath = "Vehicle.Simulation.BlePhone.2.RssiResponse";
 
 pub const PHONE_RSSIS: [VssPath; 2] = [PHONE_1_RSSI, PHONE_2_RSSI];
 
 // ── NFC Card Position (input: set by HMI / test) ──────────────────────
-pub const NFC_1_POSITION: VssPath = "Body.PEPS.Plant.NfcCard.1.Position";
-pub const NFC_2_POSITION: VssPath = "Body.PEPS.Plant.NfcCard.2.Position";
+pub const NFC_1_POSITION: VssPath = "Vehicle.Simulation.NfcCard.1.Position";
+pub const NFC_2_POSITION: VssPath = "Vehicle.Simulation.NfcCard.2.Position";
 
 pub const NFC_POSITIONS: [VssPath; 2] = [NFC_1_POSITION, NFC_2_POSITION];
 
 // ── NFC Card Challenge Response (output: published by plant model) ─────
-pub const NFC_1_CHALLENGE_RESP: VssPath = "Body.PEPS.Plant.NfcCard.1.ChallengeResponse";
-pub const NFC_2_CHALLENGE_RESP: VssPath = "Body.PEPS.Plant.NfcCard.2.ChallengeResponse";
+pub const NFC_1_CHALLENGE_RESP: VssPath = "Vehicle.Simulation.NfcCard.1.ChallengeResponse";
+pub const NFC_2_CHALLENGE_RESP: VssPath = "Vehicle.Simulation.NfcCard.2.ChallengeResponse";
 
 pub const NFC_CHALLENGE_RESPS: [VssPath; 2] = [NFC_1_CHALLENGE_RESP, NFC_2_CHALLENGE_RESP];
 
 // ── Vehicle-side challenge signals (input: feature logic sends challenges) ──
-pub const PEPS_LF_CHALLENGE: VssPath = "Body.PEPS.LfChallenge";
-pub const PEPS_BLE_CHALLENGE: VssPath = "Body.PEPS.BleChallenge";
-pub const PEPS_NFC_CHALLENGE: VssPath = "Body.PEPS.NfcChallenge";
-pub const PEPS_APPROACH_POLL: VssPath = "Body.PEPS.ApproachPoll";
+pub const PEPS_LF_CHALLENGE: VssPath = "Vehicle.Controller.Body.PEPS.LfChallenge";
+pub const PEPS_BLE_CHALLENGE: VssPath = "Vehicle.Controller.Body.PEPS.BleChallenge";
+pub const PEPS_NFC_CHALLENGE: VssPath = "Vehicle.Controller.Body.PEPS.NfcChallenge";
+pub const PEPS_APPROACH_POLL: VssPath = "Vehicle.Controller.Body.PEPS.ApproachPoll";

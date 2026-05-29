@@ -1,12 +1,12 @@
 //! Brake and Reverse Lamps — pedal-driven stop lights and gear-driven backup lights.
 //!
-//! # Brake lights (`Body.Lights.Brake.IsActive`)
+//! # Brake lights (`Vehicle.Body.Lights.Brake.IsActive`)
 //!
-//! Activated whenever `Chassis.Brake.PedalPosition` (Uint8, 0–100 %) is greater
+//! Activated whenever `Vehicle.Chassis.Brake.PedalPosition` (Uint8, 0–100 %) is greater
 //! than zero.  No ignition gate — brake lights are a safety output and operate
 //! in any power state.
 //!
-//! # Reverse lights (`Body.Lights.Backup.IsActive`)
+//! # Reverse lights (`Vehicle.Body.Lights.Backup.IsOn`)
 //!
 //! Activated when `Powertrain.Transmission.CurrentGear` (Int16) is negative
 //! **and** ignition is `ON` or `START`.  Reverse lights are suppressed on
@@ -23,10 +23,10 @@ use crate::signal_bus::SignalBus;
 // ── Signal constants ───────────────────────────────────────────────────────
 
 const POWER_STATE: &str = "Vehicle.LowVoltageSystemState";
-const BRAKE_PEDAL: &str = "Chassis.Brake.PedalPosition";
+const BRAKE_PEDAL: &str = "Vehicle.Chassis.Brake.PedalPosition";
 const GEAR: &str = "Powertrain.Transmission.CurrentGear";
-const BRAKE_OUT: &str = "Body.Lights.Brake.IsActive";
-const REVERSE_OUT: &str = "Body.Lights.Backup.IsActive";
+const BRAKE_OUT: &str = "Vehicle.Body.Lights.Brake.IsActive";
+const REVERSE_OUT: &str = "Vehicle.Body.Lights.Backup.IsOn";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 

@@ -13,9 +13,9 @@
 //!
 //! # Trigger
 //!
-//! On every `Cabin.LockStatus.EventNum` bump (the arbiter's "this
-//! lock event is fully published" wakeup, with `Cabin.LockStatus` and
-//! `Cabin.LockStatus.LastRequestor` guaranteed coherent), evaluate:
+//! On every `Vehicle.Controller.Cabin.LockStatus.EventNum` bump (the arbiter's "this
+//! lock event is fully published" wakeup, with `Vehicle.Controller.Cabin.LockStatus` and
+//! `Vehicle.Controller.Cabin.LockStatus.LastRequestor` guaranteed coherent), evaluate:
 //!
 //! 1. Vehicle is on a PEPS line (`key_source_cfg == Peps`).
 //!    Cylinder-key vehicles physically can't lock with the key in
@@ -24,7 +24,7 @@
 //! 2. Ignition is OFF (`Vehicle.LowVoltageSystemState ∈ {OFF, LOCK}`).
 //!    ACC / ON / START mean somebody is at the wheel — Smart Unlock
 //!    must not contradict an active driver.
-//! 3. `Cabin.LockStatus` ∈ {`LOCKED`, `DOUBLE_LOCKED`} — only a fresh
+//! 3. `Vehicle.Controller.Cabin.LockStatus` ∈ {`LOCKED`, `DOUBLE_LOCKED`} — only a fresh
 //!    lock event matters.
 //! 4. `LastRequestor` ∈ {`PhoneApp`, `SlamLock`} — these are the only
 //!    lock paths that don't come with built-in proof of a paired-key
@@ -76,9 +76,9 @@ use crate::ipc_message::{FeatureId, SignalValue};
 use crate::plant_models::peps::zone::Zone;
 use crate::signal_bus::{SignalBus, VssPath};
 
-const LOCK_STATUS: VssPath = "Cabin.LockStatus";
-const LAST_REQUESTOR: VssPath = "Cabin.LockStatus.LastRequestor";
-const LOCK_EVENT_NUM: VssPath = "Cabin.LockStatus.EventNum";
+const LOCK_STATUS: VssPath = "Vehicle.Controller.Cabin.LockStatus";
+const LAST_REQUESTOR: VssPath = "Vehicle.Controller.Cabin.LockStatus.LastRequestor";
+const LOCK_EVENT_NUM: VssPath = "Vehicle.Controller.Cabin.LockStatus.EventNum";
 const IGNITION_STATE: VssPath = "Vehicle.LowVoltageSystemState";
 
 /// `LastRequestor` strings that should trigger Smart Unlock.
@@ -367,17 +367,17 @@ mod tests {
 
     fn place(bus: &MockBus, slot: u8, zone: Zone) {
         let path = match slot {
-            1 => "Body.PEPS.Plant.KeyFob.1.PlacedZone",
-            2 => "Body.PEPS.Plant.KeyFob.2.PlacedZone",
-            3 => "Body.PEPS.Plant.KeyFob.3.PlacedZone",
+            1 => "Vehicle.Simulation.KeyFob.1.PlacedZone",
+            2 => "Vehicle.Simulation.KeyFob.2.PlacedZone",
+            3 => "Vehicle.Simulation.KeyFob.3.PlacedZone",
             _ => panic!("unknown slot"),
         };
         bus.inject(path, SignalValue::String(zone.as_str().into()));
         // The arbiter's `Authenticated` path filters out unpaired fobs.
         let paired_path = match slot {
-            1 => "Body.PEPS.Plant.KeyFob.1.Paired",
-            2 => "Body.PEPS.Plant.KeyFob.2.Paired",
-            3 => "Body.PEPS.Plant.KeyFob.3.Paired",
+            1 => "Vehicle.Simulation.KeyFob.1.Paired",
+            2 => "Vehicle.Simulation.KeyFob.2.Paired",
+            3 => "Vehicle.Simulation.KeyFob.3.Paired",
             _ => unreachable!(),
         };
         bus.inject(paired_path, SignalValue::Bool(true));

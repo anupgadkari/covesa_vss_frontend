@@ -20,7 +20,7 @@ Feature: Keyfob Passive Entry / Passive Start (KeyfobPeps)
   #   5. M7 validates RF response (crypto challenge-response)
   #   6. M7 drives lock motors directly via LLCE/LIN
   #   7. M7 wakes A53, pushes STATE_UPDATE for Body.Doors.*.IsLocked
-  #   8. A53 receives Body.PEPS.KeyPresent = TRUE (post-facto)
+  #   8. A53 receives Vehicle.Controller.Body.PEPS.KeyPresent = TRUE (post-facto)
   #
   # The A53 and this Rust feature are NOT in the critical path.
   # Steps 1–6 complete in < 80 ms. The A53 may still be booting
@@ -30,10 +30,10 @@ Feature: Keyfob Passive Entry / Passive Start (KeyfobPeps)
   # -------------------------------------------------------------------------
   # Requirements
   # -------------------------------------------------------------------------
-  # REQ-PEPS-001: When Body.PEPS.KeyPresent transitions to TRUE, the feature
+  # REQ-PEPS-001: When Vehicle.Controller.Body.PEPS.KeyPresent transitions to TRUE, the feature
   #               SHALL request UNLOCK via the DoorLock arbiter.
   #
-  # REQ-PEPS-002: When Body.PEPS.KeyPresent transitions to FALSE, the feature
+  # REQ-PEPS-002: When Vehicle.Controller.Body.PEPS.KeyPresent transitions to FALSE, the feature
   #               SHALL request LOCK via the DoorLock arbiter.
   #
   # REQ-PEPS-003: The KeyfobPeps feature on the A53 is NOT in the critical
@@ -52,7 +52,7 @@ Feature: Keyfob Passive Entry / Passive Start (KeyfobPeps)
   #               Locking SWC.
   #
   # REQ-PEPS-005: The KeyfobPeps feature SHALL subscribe to the synthetic
-  #               sensor signal Body.PEPS.KeyPresent, which is injected by
+  #               sensor signal Vehicle.Controller.Body.PEPS.KeyPresent, which is injected by
   #               the vss-bridge when the Safety Monitor reports a
   #               successful keyfob authentication.
   #
@@ -68,20 +68,20 @@ Feature: Keyfob Passive Entry / Passive Start (KeyfobPeps)
   # --- REQ-PEPS-001 ---
   Scenario: Key authenticated — unlock all doors
     Given all four doors are locked
-    When Body.PEPS.KeyPresent becomes TRUE
+    When Vehicle.Controller.Body.PEPS.KeyPresent becomes TRUE
     Then the KeyfobPeps feature requests UNLOCK via the DoorLock arbiter
 
   # --- REQ-PEPS-002 ---
   Scenario: Key departed — lock all doors
     Given all four doors are unlocked
-    And Body.PEPS.KeyPresent is TRUE
-    When Body.PEPS.KeyPresent becomes FALSE
+    And Vehicle.Controller.Body.PEPS.KeyPresent is TRUE
+    When Vehicle.Controller.Body.PEPS.KeyPresent becomes FALSE
     Then the KeyfobPeps feature requests LOCK via the DoorLock arbiter
 
   # --- REQ-PEPS-004 ---
   Scenario: KeyfobPeps tracked separately from KeyfobRke
     Given all four doors are locked
-    When Body.PEPS.KeyPresent becomes TRUE (keyfob proximity)
+    When Vehicle.Controller.Body.PEPS.KeyPresent becomes TRUE (keyfob proximity)
     Then the DoorLock arbiter records requestor = KeyfobPeps
     And the NVM diagnostic entry shows KeyfobPeps as the requestor
     And this is distinct from a KeyfobRke (manual button) request
@@ -99,12 +99,12 @@ Feature: Keyfob Passive Entry / Passive Start (KeyfobPeps)
     And the M7 validates the crypto challenge-response
     And the M7 drives the lock actuators directly via LLCE/LIN (< 80 ms total)
     And the M7 wakes the A53 and pushes STATE_UPDATE for Body.Doors.*.IsLocked
-    And only then does Body.PEPS.KeyPresent become TRUE on the A53
+    And only then does Vehicle.Controller.Body.PEPS.KeyPresent become TRUE on the A53
 
   # --- REQ-PEPS-001 ---
   Scenario: Partial door state — some doors already unlocked
     Given Row1.Left and Row1.Right are unlocked
     And Row2.Left and Row2.Right are locked
-    When Body.PEPS.KeyPresent becomes TRUE
+    When Vehicle.Controller.Body.PEPS.KeyPresent becomes TRUE
     Then the KeyfobPeps feature requests UNLOCK via the DoorLock arbiter
     And the Locking SWC drives all four motors regardless of current state

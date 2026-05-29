@@ -467,10 +467,10 @@ impl DoorConfig {
         self.present_doors()
             .iter()
             .map(|d| match *d {
-                "Row1.Left" => "Body.Doors.Row1.Left.IsLocked",
-                "Row1.Right" => "Body.Doors.Row1.Right.IsLocked",
-                "Row2.Left" => "Body.Doors.Row2.Left.IsLocked",
-                "Row2.Right" => "Body.Doors.Row2.Right.IsLocked",
+                "Row1.Left" => "Vehicle.Cabin.Door.Row1.Left.IsLocked",
+                "Row1.Right" => "Vehicle.Cabin.Door.Row1.Right.IsLocked",
+                "Row2.Left" => "Vehicle.Cabin.Door.Row2.Left.IsLocked",
+                "Row2.Right" => "Vehicle.Cabin.Door.Row2.Right.IsLocked",
                 _ => unreachable!(),
             })
             .collect()
@@ -481,10 +481,10 @@ impl DoorConfig {
         self.present_doors()
             .iter()
             .map(|d| match *d {
-                "Row1.Left" => "Body.Doors.Row1.Left.IsOpen",
-                "Row1.Right" => "Body.Doors.Row1.Right.IsOpen",
-                "Row2.Left" => "Body.Doors.Row2.Left.IsOpen",
-                "Row2.Right" => "Body.Doors.Row2.Right.IsOpen",
+                "Row1.Left" => "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+                "Row1.Right" => "Vehicle.Cabin.Door.Row1.Right.IsOpen",
+                "Row2.Left" => "Vehicle.Cabin.Door.Row2.Left.IsOpen",
+                "Row2.Right" => "Vehicle.Cabin.Door.Row2.Right.IsOpen",
                 _ => unreachable!(),
             })
             .collect()
@@ -499,10 +499,10 @@ impl DoorConfig {
         self.present_doors()
             .iter()
             .map(|d| match *d {
-                "Row1.Left" => "Body.Doors.Row1.Left.IsRemoved",
-                "Row1.Right" => "Body.Doors.Row1.Right.IsRemoved",
-                "Row2.Left" => "Body.Doors.Row2.Left.IsRemoved",
-                "Row2.Right" => "Body.Doors.Row2.Right.IsRemoved",
+                "Row1.Left" => "Vehicle.Cabin.Door.Row1.Left.IsRemoved",
+                "Row1.Right" => "Vehicle.Cabin.Door.Row1.Right.IsRemoved",
+                "Row2.Left" => "Vehicle.Cabin.Door.Row2.Left.IsRemoved",
+                "Row2.Right" => "Vehicle.Cabin.Door.Row2.Right.IsRemoved",
                 _ => unreachable!(),
             })
             .collect()
@@ -1050,8 +1050,8 @@ mod tests {
         assert_eq!(
             vc.doors.lock_signals(),
             vec![
-                "Body.Doors.Row1.Left.IsLocked",
-                "Body.Doors.Row1.Right.IsLocked",
+                "Vehicle.Cabin.Door.Row1.Left.IsLocked",
+                "Vehicle.Cabin.Door.Row1.Right.IsLocked",
             ]
         );
     }
@@ -1073,7 +1073,7 @@ mod tests {
         assert_eq!(vc.doors.removed_signals().len(), 4);
         assert_eq!(
             vc.doors.removed_signals()[0],
-            "Body.Doors.Row1.Left.IsRemoved"
+            "Vehicle.Cabin.Door.Row1.Left.IsRemoved"
         );
     }
 

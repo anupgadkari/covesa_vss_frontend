@@ -1,6 +1,6 @@
 //! Delayed-accessory power feature.
 //!
-//! Publishes a single latched bool `Body.Power.DelayedAccessory.IsActive`
+//! Publishes a single latched bool `Vehicle.Controller.Body.Power.DelayedAccessory.IsActive`
 //! that accessory consumers (power windows, sunroof, radio, …) can
 //! subscribe to as a gate.  Behaviour:
 //!
@@ -39,12 +39,12 @@ use crate::ipc_message::SignalValue;
 use crate::signal_bus::{SignalBus, VssPath};
 
 const POWER_STATE: VssPath = "Vehicle.LowVoltageSystemState";
-const DAP_OUT: VssPath = "Body.Power.DelayedAccessory.IsActive";
+const DAP_OUT: VssPath = "Vehicle.Controller.Body.Power.DelayedAccessory.IsActive";
 const DOOR_OPEN_SIGNALS: [VssPath; 4] = [
-    "Body.Doors.Row1.Left.IsOpen",
-    "Body.Doors.Row1.Right.IsOpen",
-    "Body.Doors.Row2.Left.IsOpen",
-    "Body.Doors.Row2.Right.IsOpen",
+    "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+    "Vehicle.Cabin.Door.Row1.Right.IsOpen",
+    "Vehicle.Cabin.Door.Row2.Left.IsOpen",
+    "Vehicle.Cabin.Door.Row2.Right.IsOpen",
 ];
 
 /// Default DAP countdown when ignition transitions off.  Short by

@@ -1,7 +1,7 @@
 //! Dome-switch — the classic 3-position interior dome-light switch.
 //!
 //! Inputs:
-//! - `Cabin.Lights.Dome.SwitchPosition` — String enum:
+//! - `Vehicle.Controller.Cabin.Light.Dome.SwitchPosition` — String enum:
 //!   * `"OFF"`  → lamp forced off
 //!   * `"DOOR"` → lamp on iff any cabin door is open
 //!   * `"ON"`   → lamp forced on
@@ -9,7 +9,7 @@
 //!   only consulted in the `DOOR` position.
 //!
 //! Output (via the **Courtesy** arbiter, Priority::Low):
-//! - `Cabin.Lights.IsDomeOn` — bool.
+//! - `Vehicle.Cabin.Light.IsDomeOn` — bool.
 //!
 //! # Why Low priority?
 //!
@@ -37,14 +37,14 @@ use crate::signal_bus::{SignalBus, VssPath};
 
 const FEATURE_ID: FeatureId = FeatureId::DomeSwitch;
 
-const SWITCH: VssPath = "Cabin.Lights.Dome.SwitchPosition";
-const DOME: VssPath = "Cabin.Lights.IsDomeOn";
+const SWITCH: VssPath = "Vehicle.Controller.Cabin.Light.Dome.SwitchPosition";
+const DOME: VssPath = "Vehicle.Cabin.Light.IsDomeOn";
 
 const DOOR_OPEN_SIGNALS: [VssPath; 4] = [
-    "Body.Doors.Row1.Left.IsOpen",
-    "Body.Doors.Row1.Right.IsOpen",
-    "Body.Doors.Row2.Left.IsOpen",
-    "Body.Doors.Row2.Right.IsOpen",
+    "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+    "Vehicle.Cabin.Door.Row1.Right.IsOpen",
+    "Vehicle.Cabin.Door.Row2.Left.IsOpen",
+    "Vehicle.Cabin.Door.Row2.Right.IsOpen",
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -221,11 +221,17 @@ mod tests {
         settle().await;
         assert_eq!(dome(&bus), Some(false), "no doors open → lamp off");
 
-        bus.inject("Body.Doors.Row2.Right.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row2.Right.IsOpen",
+            SignalValue::Bool(true),
+        );
         settle().await;
         assert_eq!(dome(&bus), Some(true), "any door open → lamp on");
 
-        bus.inject("Body.Doors.Row2.Right.IsOpen", SignalValue::Bool(false));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row2.Right.IsOpen",
+            SignalValue::Bool(false),
+        );
         settle().await;
         assert_eq!(dome(&bus), Some(false), "all doors closed → lamp off");
     }
@@ -233,7 +239,10 @@ mod tests {
     #[tokio::test]
     async fn off_overrides_open_door() {
         let bus = setup().await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         bus.inject(SWITCH, SignalValue::String("OFF".into()));
         settle().await;
         assert_eq!(dome(&bus), Some(false), "OFF must dominate door state");
@@ -252,11 +261,17 @@ mod tests {
     async fn redundant_door_edges_are_idempotent() {
         let bus = setup().await;
         bus.inject(SWITCH, SignalValue::String("DOOR".into()));
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         settle().await;
         bus.clear_history();
         // Same value again — must not republish.
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         settle().await;
         let republishes = bus.history().iter().filter(|(s, _)| *s == DOME).count();
         assert_eq!(republishes, 0, "idempotent on redundant door edges");

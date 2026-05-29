@@ -2,7 +2,7 @@
 //! the driver moves the turn signal stalk.
 //!
 //! Subscribes to:
-//!   - Body.Switches.TurnIndicator.Direction (overlay sensor — stalk)
+//!   - Vehicle.Controller.Body.Switches.TurnIndicator.Direction (overlay sensor — stalk)
 //!     Values: "OFF", "LEFT", "RIGHT"
 //!   - Vehicle.LowVoltageSystemState (ignition / power mode)
 //!     Turn signals only operate when ignition is ON or START.
@@ -10,8 +10,8 @@
 //!     (feedback from BlinkRelay, used to count comfort-blink flashes)
 //!
 //! Outputs (via Lighting arbiter):
-//!   - Body.Lights.DirectionIndicator.Left.IsSignaling  @ MEDIUM (2)
-//!   - Body.Lights.DirectionIndicator.Right.IsSignaling @ MEDIUM (2)
+//!   - Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling  @ MEDIUM (2)
+//!   - Vehicle.Body.Lights.DirectionIndicator.Right.IsSignaling @ MEDIUM (2)
 //!
 //! ## Auto lane change (comfort blink / tip-to-signal)
 //!
@@ -57,18 +57,20 @@ use crate::ipc_message::{FeatureId, Priority, SignalValue};
 use crate::signal_bus::{SignalBus, VssPath};
 
 /// Physical turn signal stalk input (overlay signal).
-const TURN_STALK: VssPath = "Body.Switches.TurnIndicator.Direction";
+const TURN_STALK: VssPath = "Vehicle.Controller.Body.Switches.TurnIndicator.Direction";
 
-/// Power state signal — standard VSS v4.0.
+/// Power state signal — standard VSS v6.0.
 const POWER_STATE: VssPath = "Vehicle.LowVoltageSystemState";
 
 /// Actuator outputs — direction indicators.
-const LEFT_INDICATOR: VssPath = "Body.Lights.DirectionIndicator.Left.IsSignaling";
-const RIGHT_INDICATOR: VssPath = "Body.Lights.DirectionIndicator.Right.IsSignaling";
+const LEFT_INDICATOR: VssPath = "Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling";
+const RIGHT_INDICATOR: VssPath = "Vehicle.Body.Lights.DirectionIndicator.Right.IsSignaling";
 
 /// Lamp feedback signals from BlinkRelay — used to count flashes.
-const LEFT_LAMP_FRONT: VssPath = "Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn";
-const RIGHT_LAMP_FRONT: VssPath = "Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn";
+const LEFT_LAMP_FRONT: VssPath =
+    "Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn";
+const RIGHT_LAMP_FRONT: VssPath =
+    "Vehicle.Controller.Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn";
 
 /// Returns true when ignition is ON or START (turn signals allowed).
 fn is_ignition_on(val: &SignalValue) -> bool {
@@ -705,7 +707,10 @@ mod tests {
         settle().await;
 
         bus.clear_history();
-        bus.inject("Body.Switches.Hazard.IsEngaged", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Controller.Body.Switches.Hazard.IsEngaged",
+            SignalValue::Bool(true),
+        );
         settle().await;
 
         let history = bus.history();

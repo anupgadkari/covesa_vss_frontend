@@ -6,13 +6,13 @@
 //! inputs:
 //!
 //!   * Low-beam headlamps on (today: the only input we model)
-//!   * Ambient light sensor (`Body.Lights.AmbientLightSensor.Illuminance`)
+//!   * Ambient light sensor (`Vehicle.Controller.Body.Lights.AmbientLightSensor.Illuminance`)
 //!     dropping below a dusk threshold
 //!   * GPS time + location-based sunset/sunrise table
 //!   * Forward camera / rain sensor detecting a tunnel or heavy overcast
 //!
 //! This plant model captures that decision and publishes the result on
-//! the standard COVESA VSS v4.0 signal
+//! the standard COVESA VSS v6.0 signal
 //! `Vehicle.Cabin.Infotainment.HMI.DayNightMode` (String enum:
 //! `"DAY"` or `"NIGHT"`).  Today it watches only the low-beam state and
 //! mirrors it — beams ON ⇒ NIGHT, beams OFF ⇒ DAY.  The plant model is
@@ -39,7 +39,7 @@ use futures::StreamExt;
 use crate::ipc_message::SignalValue;
 use crate::signal_bus::{SignalBus, VssPath};
 
-const LOW_BEAM: VssPath = "Body.Lights.Beam.Low.IsOn";
+const LOW_BEAM: VssPath = "Vehicle.Body.Lights.Beam.Low.IsOn";
 const DAY_NIGHT_MODE: VssPath = "Vehicle.Cabin.Infotainment.HMI.DayNightMode";
 
 const DAY: &str = "DAY";

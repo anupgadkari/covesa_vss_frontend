@@ -13,7 +13,7 @@
 //! 3. The lights stay on until any of:
 //!    - The hold timer expires (`dealer.farewell_hold_secs`,
 //!      default 20 s).
-//!    - The vehicle is locked (`Cabin.LockStatus` enters `LOCKED` or
+//!    - The vehicle is locked (`Vehicle.Controller.Cabin.LockStatus` enters `LOCKED` or
 //!      `DOUBLE_LOCKED`).  The driver is gone; secure the cabin.
 //!    - The ignition comes back ON (driver got back in / never
 //!      really left).
@@ -26,9 +26,9 @@
 //! sharing the *arbiters* is the right level of reuse.
 //!
 //! # Outputs claimed at MEDIUM priority
-//! - `Body.Lights.Puddle.Left.IsOn`
-//! - `Body.Lights.Puddle.Right.IsOn`
-//! - `Cabin.Lights.IsDomeOn`
+//! - `Vehicle.Controller.Body.Lights.Puddle.Left.IsOn`
+//! - `Vehicle.Controller.Body.Lights.Puddle.Right.IsOn`
+//! - `Vehicle.Cabin.Light.IsDomeOn`
 //!
 //! Mirror-folded puddle suppression still applies via the puddle
 //! arbiter's `PhysicalGate` — Farewell doesn't need to know.
@@ -55,18 +55,18 @@ use crate::signal_bus::{SignalBus, VssPath};
 
 const FEATURE_ID: FeatureId = FeatureId::Farewell;
 
-const PUDDLE_LEFT: VssPath = "Body.Lights.Puddle.Left.IsOn";
-const PUDDLE_RIGHT: VssPath = "Body.Lights.Puddle.Right.IsOn";
-const DOME: VssPath = "Cabin.Lights.IsDomeOn";
+const PUDDLE_LEFT: VssPath = "Vehicle.Controller.Body.Lights.Puddle.Left.IsOn";
+const PUDDLE_RIGHT: VssPath = "Vehicle.Controller.Body.Lights.Puddle.Right.IsOn";
+const DOME: VssPath = "Vehicle.Cabin.Light.IsDomeOn";
 
 const POWER_STATE: VssPath = "Vehicle.LowVoltageSystemState";
-const LOCK_STATUS: VssPath = "Cabin.LockStatus";
+const LOCK_STATUS: VssPath = "Vehicle.Controller.Cabin.LockStatus";
 
 const DOOR_OPEN_SIGNALS: [VssPath; 4] = [
-    "Body.Doors.Row1.Left.IsOpen",
-    "Body.Doors.Row1.Right.IsOpen",
-    "Body.Doors.Row2.Left.IsOpen",
-    "Body.Doors.Row2.Right.IsOpen",
+    "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+    "Vehicle.Cabin.Door.Row1.Right.IsOpen",
+    "Vehicle.Cabin.Door.Row2.Left.IsOpen",
+    "Vehicle.Cabin.Door.Row2.Right.IsOpen",
 ];
 
 /// How long after ignition OFF Farewell stays "watching for door
@@ -327,7 +327,10 @@ mod tests {
         settle().await;
 
         // Driver opens door.
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         settle().await;
 
         assert_eq!(bus.latest_value(PUDDLE_LEFT), Some(SignalValue::Bool(true)));
@@ -347,7 +350,10 @@ mod tests {
         settle().await;
 
         // Door opens with ignition still on — no Farewell trigger.
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         settle().await;
         assert_eq!(
             bus.latest_value(PUDDLE_LEFT),
@@ -370,7 +376,10 @@ mod tests {
         settle().await;
 
         // Door open after window — too late.
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         settle().await;
 
         assert_eq!(
@@ -388,7 +397,10 @@ mod tests {
         settle().await;
         bus.inject(POWER_STATE, SignalValue::String("OFF".into()));
         settle().await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         settle().await;
         assert_eq!(bus.latest_value(PUDDLE_LEFT), Some(SignalValue::Bool(true)));
 
@@ -411,7 +423,10 @@ mod tests {
         settle().await;
         bus.inject(POWER_STATE, SignalValue::String("OFF".into()));
         settle().await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         settle().await;
         assert_eq!(bus.latest_value(PUDDLE_LEFT), Some(SignalValue::Bool(true)));
 
@@ -433,7 +448,10 @@ mod tests {
         settle().await;
         bus.inject(POWER_STATE, SignalValue::String("OFF".into()));
         settle().await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         settle().await;
         assert_eq!(bus.latest_value(PUDDLE_LEFT), Some(SignalValue::Bool(true)));
 

@@ -146,10 +146,10 @@ mod tests {
     #[tokio::test]
     async fn publish_records_history() {
         let bus = MockBus::new();
-        bus.publish("Body.Lights.Beam.Low.IsOn", SignalValue::Bool(true))
+        bus.publish("Vehicle.Body.Lights.Beam.Low.IsOn", SignalValue::Bool(true))
             .await
             .unwrap();
-        bus.publish("Body.Horn.IsActive", SignalValue::Bool(false))
+        bus.publish("Vehicle.Body.Horn.IsActive", SignalValue::Bool(false))
             .await
             .unwrap();
 
@@ -157,20 +157,23 @@ mod tests {
         assert_eq!(hist.len(), 2);
         assert_eq!(
             hist[0],
-            ("Body.Lights.Beam.Low.IsOn", SignalValue::Bool(true))
+            ("Vehicle.Body.Lights.Beam.Low.IsOn", SignalValue::Bool(true))
         );
-        assert_eq!(hist[1], ("Body.Horn.IsActive", SignalValue::Bool(false)));
+        assert_eq!(
+            hist[1],
+            ("Vehicle.Body.Horn.IsActive", SignalValue::Bool(false))
+        );
     }
 
     #[tokio::test]
     async fn subscribe_receives_injected_values() {
         let bus = Arc::new(MockBus::new());
-        let mut stream = bus.subscribe("Body.Lights.Beam.Low.IsOn").await;
+        let mut stream = bus.subscribe("Vehicle.Body.Lights.Beam.Low.IsOn").await;
 
         let bus2 = Arc::clone(&bus);
         tokio::spawn(async move {
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-            bus2.inject("Body.Lights.Beam.Low.IsOn", SignalValue::Bool(true));
+            bus2.inject("Vehicle.Body.Lights.Beam.Low.IsOn", SignalValue::Bool(true));
         });
 
         let val = tokio::time::timeout(std::time::Duration::from_millis(100), stream.next())
@@ -186,7 +189,7 @@ mod tests {
         let bus = MockBus::new();
         let result = bus
             .publish_await_ack(
-                "Body.Doors.Row1.Left.IsLocked",
+                "Vehicle.Cabin.Door.Row1.Left.IsLocked",
                 SignalValue::Bool(true),
                 100,
             )
@@ -201,10 +204,10 @@ mod tests {
     #[tokio::test]
     async fn subscribe_does_not_cross_signals() {
         let bus = Arc::new(MockBus::new());
-        let mut stream_a = bus.subscribe("Body.Lights.Beam.Low.IsOn").await;
+        let mut stream_a = bus.subscribe("Vehicle.Body.Lights.Beam.Low.IsOn").await;
 
         // Inject to a different signal
-        bus.inject("Body.Horn.IsActive", SignalValue::Bool(true));
+        bus.inject("Vehicle.Body.Horn.IsActive", SignalValue::Bool(true));
 
         // stream_a should not receive anything
         let result =
@@ -215,7 +218,7 @@ mod tests {
     #[tokio::test]
     async fn clear_history_works() {
         let bus = MockBus::new();
-        bus.publish("Body.Horn.IsActive", SignalValue::Bool(true))
+        bus.publish("Vehicle.Body.Horn.IsActive", SignalValue::Bool(true))
             .await
             .unwrap();
         assert_eq!(bus.history().len(), 1);

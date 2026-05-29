@@ -433,34 +433,34 @@ pub fn lighting_arbiter<B: SignalBus>(
         // Direction indicators — 3-way contention
         AllowEntry {
             feature_id: FeatureId::Hazard,
-            signal: "Body.Lights.DirectionIndicator.Left.IsSignaling",
+            signal: "Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling",
             priority: Priority::High,
         },
         AllowEntry {
             feature_id: FeatureId::Hazard,
-            signal: "Body.Lights.DirectionIndicator.Right.IsSignaling",
+            signal: "Vehicle.Body.Lights.DirectionIndicator.Right.IsSignaling",
             priority: Priority::High,
         },
         AllowEntry {
             feature_id: FeatureId::TurnIndicator,
-            signal: "Body.Lights.DirectionIndicator.Left.IsSignaling",
+            signal: "Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling",
             priority: Priority::Medium,
         },
         AllowEntry {
             feature_id: FeatureId::TurnIndicator,
-            signal: "Body.Lights.DirectionIndicator.Right.IsSignaling",
+            signal: "Vehicle.Body.Lights.DirectionIndicator.Right.IsSignaling",
             priority: Priority::Medium,
         },
         // LockFeedback uses HIGH to overlay its brief lock/unlock pattern
         // on top of active hazard or turn signaling, then self-releases.
         AllowEntry {
             feature_id: FeatureId::LockFeedback,
-            signal: "Body.Lights.DirectionIndicator.Left.IsSignaling",
+            signal: "Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling",
             priority: Priority::High,
         },
         AllowEntry {
             feature_id: FeatureId::LockFeedback,
-            signal: "Body.Lights.DirectionIndicator.Right.IsSignaling",
+            signal: "Vehicle.Body.Lights.DirectionIndicator.Right.IsSignaling",
             priority: Priority::High,
         },
         // PanicAlarm — synchronized blink of both indicators while alarm
@@ -469,12 +469,12 @@ pub fn lighting_arbiter<B: SignalBus>(
         // pending hazard claim resumes.
         AllowEntry {
             feature_id: FeatureId::PanicAlarm,
-            signal: "Body.Lights.DirectionIndicator.Left.IsSignaling",
+            signal: "Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling",
             priority: Priority::High,
         },
         AllowEntry {
             feature_id: FeatureId::PanicAlarm,
-            signal: "Body.Lights.DirectionIndicator.Right.IsSignaling",
+            signal: "Vehicle.Body.Lights.DirectionIndicator.Right.IsSignaling",
             priority: Priority::High,
         },
         // PerimeterAlarm — same blink pattern, triggered by an
@@ -486,36 +486,36 @@ pub fn lighting_arbiter<B: SignalBus>(
         // i.e. the user is not present).
         AllowEntry {
             feature_id: FeatureId::PerimeterAlarm,
-            signal: "Body.Lights.DirectionIndicator.Left.IsSignaling",
+            signal: "Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling",
             priority: Priority::High,
         },
         AllowEntry {
             feature_id: FeatureId::PerimeterAlarm,
-            signal: "Body.Lights.DirectionIndicator.Right.IsSignaling",
+            signal: "Vehicle.Body.Lights.DirectionIndicator.Right.IsSignaling",
             priority: Priority::High,
         },
         // Hazard master signal
         AllowEntry {
             feature_id: FeatureId::Hazard,
-            signal: "Body.Lights.Hazard.IsSignaling",
+            signal: "Vehicle.Body.Lights.Hazard.IsSignaling",
             priority: Priority::High,
         },
         // Low beam
         AllowEntry {
             feature_id: FeatureId::LowBeam,
-            signal: "Body.Lights.Beam.Low.IsOn",
+            signal: "Vehicle.Body.Lights.Beam.Low.IsOn",
             priority: Priority::Medium,
         },
         // High beam
         AllowEntry {
             feature_id: FeatureId::HighBeam,
-            signal: "Body.Lights.Beam.High.IsOn",
+            signal: "Vehicle.Body.Lights.Beam.High.IsOn",
             priority: Priority::Medium,
         },
         // DRL
         AllowEntry {
             feature_id: FeatureId::Drl,
-            signal: "Body.Lights.Running.IsOn",
+            signal: "Vehicle.Body.Lights.Running.IsOn",
             priority: Priority::Medium,
         },
     ];
@@ -535,44 +535,44 @@ pub fn low_beam_arbiter<B: SignalBus>(
         // ManualLighting — switch-driven outputs at medium priority.
         AllowEntry {
             feature_id: FeatureId::LowBeam,
-            signal: "Body.Lights.Beam.Low.IsOn",
+            signal: "Vehicle.Body.Lights.Beam.Low.IsOn",
             priority: Priority::Medium,
         },
         AllowEntry {
             feature_id: FeatureId::LowBeam,
-            signal: "Body.Lights.Parking.IsOn",
+            signal: "Vehicle.Body.Lights.Parking.IsOn",
             priority: Priority::Medium,
         },
         AllowEntry {
             feature_id: FeatureId::LowBeam,
-            signal: "Body.Lights.LicensePlate.IsOn",
+            signal: "Vehicle.Body.Lights.LicensePlate.IsOn",
             priority: Priority::Medium,
         },
         AllowEntry {
             feature_id: FeatureId::HighBeam,
-            signal: "Body.Lights.Beam.High.IsOn",
+            signal: "Vehicle.Body.Lights.Beam.High.IsOn",
             priority: Priority::Medium,
         },
         AllowEntry {
             feature_id: FeatureId::Drl,
-            signal: "Body.Lights.Running.IsOn",
+            signal: "Vehicle.Body.Lights.Running.IsOn",
             priority: Priority::Medium,
         },
         // FollowMeHome — high priority so FMH wins even if ManualLighting
         // has a residual claim (e.g. driver switches to BEAM with ignition off).
         AllowEntry {
             feature_id: FeatureId::FollowMeHome,
-            signal: "Body.Lights.Beam.Low.IsOn",
+            signal: "Vehicle.Body.Lights.Beam.Low.IsOn",
             priority: Priority::High,
         },
         AllowEntry {
             feature_id: FeatureId::FollowMeHome,
-            signal: "Body.Lights.Parking.IsOn",
+            signal: "Vehicle.Body.Lights.Parking.IsOn",
             priority: Priority::High,
         },
         AllowEntry {
             feature_id: FeatureId::FollowMeHome,
-            signal: "Body.Lights.LicensePlate.IsOn",
+            signal: "Vehicle.Body.Lights.LicensePlate.IsOn",
             priority: Priority::High,
         },
         // AutoHighBeam — ADAS camera suppresses high beam at high priority.
@@ -580,7 +580,7 @@ pub fn low_beam_arbiter<B: SignalBus>(
         // ensuring oncoming vehicles are not blinded regardless of stalk position.
         AllowEntry {
             feature_id: FeatureId::AutoHighBeam,
-            signal: "Body.Lights.Beam.High.IsOn",
+            signal: "Vehicle.Body.Lights.Beam.High.IsOn",
             priority: Priority::High,
         },
     ];
@@ -679,7 +679,7 @@ impl DoorLockArbiter {
         Self::new_with_nvm(allow_list, bus, None)
     }
 
-    /// Like `new`, but with an `NvmStore` for persisting `Cabin.LockStatus`
+    /// Like `new`, but with an `NvmStore` for persisting `Vehicle.Controller.Cabin.LockStatus`
     /// across power cycles.  Use this in production wiring; tests can use
     /// `new` to get a transient arbiter.
     pub fn new_with_nvm<B: SignalBus>(
@@ -737,7 +737,7 @@ async fn door_lock_loop<B: SignalBus>(
     let mut pending: Option<DoorLockRequest> = None;
     let mut crash_lockout_until: Option<tokio::time::Instant> = None;
 
-    // Boot-time republish of persisted `Cabin.LockStatus`.  Subscribers
+    // Boot-time republish of persisted `Vehicle.Controller.Cabin.LockStatus`.  Subscribers
     // (MirrorFold AUTO, future security features) need to see this on
     // boot; a fresh broadcast subscription would otherwise wait for
     // the next command before getting any value.
@@ -758,7 +758,7 @@ async fn door_lock_loop<B: SignalBus>(
         "UNLOCKED".into()
     };
 
-    // Monotonic counter for `Cabin.LockStatus.EventNum`.  The value
+    // Monotonic counter for `Vehicle.Controller.Cabin.LockStatus.EventNum`.  The value
     // `0` is reserved as the "publisher reset" sentinel — published
     // exactly once at boot, never again.  Real events count `1, 2, …,
     // u16::MAX, 1, 2, …` (wrap skips `0`) so subscribers can rely on
@@ -883,7 +883,7 @@ async fn door_lock_loop<B: SignalBus>(
 /// The `DoorLockPlantModel` (M7 actuator simulator) subscribes to this signal
 /// and handles all per-door state updates — `IsLocked`, `IsDoubleLocked`,
 /// `Soldier.IsUnlocked` — from here.
-pub const CENTRAL_LOCK_CMD: VssPath = "Body.Doors.CentralLock.Command";
+pub const CENTRAL_LOCK_CMD: VssPath = "Vehicle.Controller.Body.Doors.CentralLock.Command";
 
 /// Signal published by external-origin features to request a visual lock/unlock
 /// confirmation flash on both direction indicators.
@@ -895,27 +895,27 @@ pub const CENTRAL_LOCK_CMD: VssPath = "Body.Doors.CentralLock.Command";
 /// - `"lock"` — one flash unit (100 ms OFF lead-in + 900 ms ON)
 /// - `"unlock"` — two flash units with a 300 ms gap
 /// - `"trunk_unlock"` — two flash units + arms trunk-close lock feedback
-pub const FEEDBACK_REQUEST: VssPath = "Body.Doors.CentralLock.FeedbackRequest";
+pub const FEEDBACK_REQUEST: VssPath = "Vehicle.Controller.Body.Doors.CentralLock.FeedbackRequest";
 
 /// Dispatch a lock command to the SignalBus as a single high-level token.
 /// Vehicle-level central lock status — published by the door-lock
 /// arbiter on every accepted command.  Many features subscribe.
-pub const CABIN_LOCK_STATUS: VssPath = "Cabin.LockStatus";
+pub const CABIN_LOCK_STATUS: VssPath = "Vehicle.Controller.Cabin.LockStatus";
 
 /// Companion signal: identity of the feature that requested the most
 /// recent accepted central-lock command.  String form of `FeatureId`
 /// (e.g. "KeyfobRke", "PassiveEntry").  Published in lockstep with
 /// every `EVENT_NUM` bump so subscribers can filter on requestor.
-pub const CABIN_LOCK_LAST_REQUESTOR: VssPath = "Cabin.LockStatus.LastRequestor";
+pub const CABIN_LOCK_LAST_REQUESTOR: VssPath = "Vehicle.Controller.Cabin.LockStatus.LastRequestor";
 
 /// Companion signal: monotonic counter incremented on every accepted
 /// central-lock command (wraps at u16::MAX).  Subscribers use the
 /// *change* in this value as the "a new lock command happened"
-/// trigger, even when the resolved `Cabin.LockStatus` enum value is
+/// trigger, even when the resolved `Vehicle.Controller.Cabin.LockStatus` enum value is
 /// unchanged.
-pub const CABIN_LOCK_EVENT_NUM: VssPath = "Cabin.LockStatus.EventNum";
+pub const CABIN_LOCK_EVENT_NUM: VssPath = "Vehicle.Controller.Cabin.LockStatus.EventNum";
 
-/// Map a `LockCommand` to its `Cabin.LockStatus` enum value.
+/// Map a `LockCommand` to its `Vehicle.Controller.Cabin.LockStatus` enum value.
 fn lock_status_for(cmd: LockCommand) -> &'static str {
     match cmd {
         LockCommand::UnlockAll => "UNLOCKED",
@@ -1054,7 +1054,7 @@ fn door_lock_allow_list() -> Vec<DoorLockAllowEntry> {
 }
 
 /// Create the DoorLock arbiter with all authorized lock requestors —
-/// transient (no NVM).  For tests / scenarios where `Cabin.LockStatus`
+/// transient (no NVM).  For tests / scenarios where `Vehicle.Controller.Cabin.LockStatus`
 /// persistence is not required.
 pub fn door_lock_arbiter<B: SignalBus>(
     bus: Arc<B>,
@@ -1066,7 +1066,7 @@ pub fn door_lock_arbiter<B: SignalBus>(
     DoorLockArbiter::new(door_lock_allow_list(), bus)
 }
 
-/// Production variant of `door_lock_arbiter` — persists `Cabin.LockStatus`
+/// Production variant of `door_lock_arbiter` — persists `Vehicle.Controller.Cabin.LockStatus`
 /// across power cycles via the supplied `NvmStore`.
 pub fn door_lock_arbiter_with_nvm<B: SignalBus>(
     bus: Arc<B>,
@@ -1099,17 +1099,17 @@ pub fn horn_arbiter<B: SignalBus>(
     let allow_list = vec![
         AllowEntry {
             feature_id: FeatureId::PanicAlarm,
-            signal: "Body.Horn.IsActive",
+            signal: "Vehicle.Body.Horn.IsActive",
             priority: Priority::High,
         },
         AllowEntry {
             feature_id: FeatureId::PerimeterAlarm,
-            signal: "Body.Horn.IsActive",
+            signal: "Vehicle.Body.Horn.IsActive",
             priority: Priority::High,
         },
         AllowEntry {
             feature_id: FeatureId::ManualHorn,
-            signal: "Body.Horn.IsActive",
+            signal: "Vehicle.Body.Horn.IsActive",
             priority: Priority::Medium,
         },
     ];
@@ -1147,12 +1147,12 @@ pub fn courtesy_arbiter<B: SignalBus>(
     let allow_list = vec![
         AllowEntry {
             feature_id: FeatureId::Welcome,
-            signal: "Cabin.Lights.IsDomeOn",
+            signal: "Vehicle.Cabin.Light.IsDomeOn",
             priority: Priority::Medium,
         },
         AllowEntry {
             feature_id: FeatureId::Farewell,
-            signal: "Cabin.Lights.IsDomeOn",
+            signal: "Vehicle.Cabin.Light.IsDomeOn",
             priority: Priority::Medium,
         },
         // PerimeterAlarm pulses the dome at HIGH while the alarm is
@@ -1160,7 +1160,7 @@ pub fn courtesy_arbiter<B: SignalBus>(
         // the next-highest pending claim resumes.
         AllowEntry {
             feature_id: FeatureId::PerimeterAlarm,
-            signal: "Cabin.Lights.IsDomeOn",
+            signal: "Vehicle.Cabin.Light.IsDomeOn",
             priority: Priority::High,
         },
         // DomeSwitch owns the default ("user intent") claim at LOW so
@@ -1170,7 +1170,7 @@ pub fn courtesy_arbiter<B: SignalBus>(
         // switch + any-door-open inputs.
         AllowEntry {
             feature_id: FeatureId::DomeSwitch,
-            signal: "Cabin.Lights.IsDomeOn",
+            signal: "Vehicle.Cabin.Light.IsDomeOn",
             priority: Priority::Low,
         },
     ];
@@ -1202,32 +1202,32 @@ pub fn puddle_arbiter<B: SignalBus>(
     let allow_list = vec![
         AllowEntry {
             feature_id: FeatureId::Welcome,
-            signal: "Body.Lights.Puddle.Left.IsOn",
+            signal: "Vehicle.Controller.Body.Lights.Puddle.Left.IsOn",
             priority: Priority::Medium,
         },
         AllowEntry {
             feature_id: FeatureId::Welcome,
-            signal: "Body.Lights.Puddle.Right.IsOn",
+            signal: "Vehicle.Controller.Body.Lights.Puddle.Right.IsOn",
             priority: Priority::Medium,
         },
         AllowEntry {
             feature_id: FeatureId::Farewell,
-            signal: "Body.Lights.Puddle.Left.IsOn",
+            signal: "Vehicle.Controller.Body.Lights.Puddle.Left.IsOn",
             priority: Priority::Medium,
         },
         AllowEntry {
             feature_id: FeatureId::Farewell,
-            signal: "Body.Lights.Puddle.Right.IsOn",
+            signal: "Vehicle.Controller.Body.Lights.Puddle.Right.IsOn",
             priority: Priority::Medium,
         },
         AllowEntry {
             feature_id: FeatureId::DoorOpenAssist,
-            signal: "Body.Lights.Puddle.Left.IsOn",
+            signal: "Vehicle.Controller.Body.Lights.Puddle.Left.IsOn",
             priority: Priority::Low,
         },
         AllowEntry {
             feature_id: FeatureId::DoorOpenAssist,
-            signal: "Body.Lights.Puddle.Right.IsOn",
+            signal: "Vehicle.Controller.Body.Lights.Puddle.Right.IsOn",
             priority: Priority::Low,
         },
         // PerimeterAlarm — visible attention-grabbing pulse on the
@@ -1235,12 +1235,12 @@ pub fn puddle_arbiter<B: SignalBus>(
         // HIGH pre-empts Welcome / Farewell / DoorOpenAssist.
         AllowEntry {
             feature_id: FeatureId::PerimeterAlarm,
-            signal: "Body.Lights.Puddle.Left.IsOn",
+            signal: "Vehicle.Controller.Body.Lights.Puddle.Left.IsOn",
             priority: Priority::High,
         },
         AllowEntry {
             feature_id: FeatureId::PerimeterAlarm,
-            signal: "Body.Lights.Puddle.Right.IsOn",
+            signal: "Vehicle.Controller.Body.Lights.Puddle.Right.IsOn",
             priority: Priority::High,
         },
     ];
@@ -1254,13 +1254,13 @@ pub fn puddle_arbiter<B: SignalBus>(
     // automatically.
     let gates = vec![
         PhysicalGate {
-            target: "Body.Lights.Puddle.Left.IsOn",
-            gate_signal: "Body.Mirror.Left.IsFolded",
+            target: "Vehicle.Controller.Body.Lights.Puddle.Left.IsOn",
+            gate_signal: "Vehicle.Body.Mirrors.Left.IsFolded",
             suppress_when: SignalValue::Bool(true),
         },
         PhysicalGate {
-            target: "Body.Lights.Puddle.Right.IsOn",
-            gate_signal: "Body.Mirror.Right.IsFolded",
+            target: "Vehicle.Controller.Body.Lights.Puddle.Right.IsOn",
+            gate_signal: "Vehicle.Body.Mirrors.Right.IsFolded",
             suppress_when: SignalValue::Bool(true),
         },
     ];
@@ -1271,12 +1271,12 @@ pub fn puddle_arbiter<B: SignalBus>(
 /// Trunk-open command signal — neutral on pop vs power-open so future
 /// power-liftgate plant models can replace the simple pop-latch
 /// `TrunkPlantModel` without any feature-side rename.
-pub const TRUNK_OPEN_CMD: VssPath = "Body.Trunk.OpenCmd";
+pub const TRUNK_OPEN_CMD: VssPath = "Vehicle.Controller.Body.Trunk.Rear.OpenCmd";
 
 /// Create the Trunk domain arbiter.
 ///
 /// All trunk-open writers route through here so a single
-/// `Cabin.ValetMode.IsActive` gate suppresses every path uniformly:
+/// `Vehicle.Controller.Cabin.ValetMode.IsActive` gate suppresses every path uniformly:
 /// RKE TrunkRelease, ExteriorTrunkButton (both unlocked-direct and
 /// PassiveEntry-authenticated paths), future phone-app trunk-open,
 /// future hands-free liftgate kick-sensor.  Cabin doors are unaffected
@@ -1284,7 +1284,7 @@ pub const TRUNK_OPEN_CMD: VssPath = "Body.Trunk.OpenCmd";
 ///
 /// Priority is uniform `Medium` because there is no contention between
 /// these features today; they are alternative trigger sources for the
-/// same momentary `Body.Trunk.OpenCmd` edge.  The `PhysicalGate` is
+/// same momentary `Vehicle.Controller.Body.Trunk.Rear.OpenCmd` edge.  The `PhysicalGate` is
 /// what does the policy work.
 pub fn trunk_arbiter<B: SignalBus>(
     bus: Arc<B>,
@@ -1312,15 +1312,15 @@ pub fn trunk_arbiter<B: SignalBus>(
         },
     ];
 
-    // Valet-mode gate: when `Cabin.ValetMode.IsActive` is true, force
-    // `Body.Trunk.OpenCmd` to false regardless of which feature is
+    // Valet-mode gate: when `Vehicle.Controller.Cabin.ValetMode.IsActive` is true, force
+    // `Vehicle.Controller.Body.Trunk.Rear.OpenCmd` to false regardless of which feature is
     // claiming.  Same `PhysicalGate` pattern as the puddle arbiter's
     // mirror-fold suppression — the gate models a *policy* constraint
     // (valet should not access the trunk) at the actuator boundary so
     // every trunk-open writer inherits it for free.
     let gates = vec![PhysicalGate {
         target: TRUNK_OPEN_CMD,
-        gate_signal: "Cabin.ValetMode.IsActive",
+        gate_signal: "Vehicle.Controller.Cabin.ValetMode.IsActive",
         suppress_when: SignalValue::Bool(true),
     }];
 
@@ -1353,10 +1353,10 @@ pub fn window_arbiter<B: SignalBus>(
     bus: Arc<B>,
 ) -> (DomainArbiter, impl std::future::Future<Output = ()>) {
     const MOTOR_SIGNALS: [&str; 4] = [
-        "Body.Doors.Row1.Left.Window.MotorDirection",
-        "Body.Doors.Row1.Right.Window.MotorDirection",
-        "Body.Doors.Row2.Left.Window.MotorDirection",
-        "Body.Doors.Row2.Right.Window.MotorDirection",
+        "Vehicle.Cabin.Door.Row1.Left.Window.MotorDirection",
+        "Vehicle.Cabin.Door.Row1.Right.Window.MotorDirection",
+        "Vehicle.Cabin.Door.Row2.Left.Window.MotorDirection",
+        "Vehicle.Cabin.Door.Row2.Right.Window.MotorDirection",
     ];
 
     let mut allow_list = Vec::with_capacity(4);
@@ -1421,7 +1421,7 @@ mod tests {
         // Turn (medium) requests left indicator ON
         arbiter
             .request(ActuatorRequest {
-                signal: "Body.Lights.DirectionIndicator.Left.IsSignaling",
+                signal: "Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling",
                 value: SignalValue::Bool(true),
                 priority: Priority::Medium,
                 feature_id: FeatureId::TurnIndicator,
@@ -1433,7 +1433,7 @@ mod tests {
         // Hazard (high) requests left indicator OFF — should win
         arbiter
             .request(ActuatorRequest {
-                signal: "Body.Lights.DirectionIndicator.Left.IsSignaling",
+                signal: "Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling",
                 value: SignalValue::Bool(false),
                 priority: Priority::High,
                 feature_id: FeatureId::Hazard,
@@ -1448,14 +1448,14 @@ mod tests {
         assert_eq!(
             history[0],
             (
-                "Body.Lights.DirectionIndicator.Left.IsSignaling",
+                "Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling",
                 SignalValue::Bool(true)
             )
         );
         assert_eq!(
             history[1],
             (
-                "Body.Lights.DirectionIndicator.Left.IsSignaling",
+                "Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling",
                 SignalValue::Bool(false)
             )
         );
@@ -1468,7 +1468,7 @@ mod tests {
         // Hazard (high) claims left indicator
         arbiter
             .request(ActuatorRequest {
-                signal: "Body.Lights.DirectionIndicator.Left.IsSignaling",
+                signal: "Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling",
                 value: SignalValue::Bool(true),
                 priority: Priority::High,
                 feature_id: FeatureId::Hazard,
@@ -1480,7 +1480,7 @@ mod tests {
         // Turn (medium) tries the same signal — should be suppressed
         arbiter
             .request(ActuatorRequest {
-                signal: "Body.Lights.DirectionIndicator.Left.IsSignaling",
+                signal: "Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling",
                 value: SignalValue::Bool(false),
                 priority: Priority::Medium,
                 feature_id: FeatureId::TurnIndicator,
@@ -1495,7 +1495,7 @@ mod tests {
         assert_eq!(
             history[0],
             (
-                "Body.Lights.DirectionIndicator.Left.IsSignaling",
+                "Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling",
                 SignalValue::Bool(true)
             )
         );
@@ -1508,7 +1508,7 @@ mod tests {
         // Hazard (high) claims left indicator ON
         arbiter
             .request(ActuatorRequest {
-                signal: "Body.Lights.DirectionIndicator.Left.IsSignaling",
+                signal: "Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling",
                 value: SignalValue::Bool(true),
                 priority: Priority::High,
                 feature_id: FeatureId::Hazard,
@@ -1520,7 +1520,7 @@ mod tests {
         // LockFeedback (high, overlay) takes over — should publish (equal priority wins)
         arbiter
             .request(ActuatorRequest {
-                signal: "Body.Lights.DirectionIndicator.Left.IsSignaling",
+                signal: "Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling",
                 value: SignalValue::Bool(false),
                 priority: Priority::High,
                 feature_id: FeatureId::LockFeedback,
@@ -1543,7 +1543,7 @@ mod tests {
         // LowBeam claims low beam
         arbiter
             .request(ActuatorRequest {
-                signal: "Body.Lights.Beam.Low.IsOn",
+                signal: "Vehicle.Body.Lights.Beam.Low.IsOn",
                 value: SignalValue::Bool(true),
                 priority: Priority::Medium,
                 feature_id: FeatureId::LowBeam,
@@ -1555,7 +1555,7 @@ mod tests {
         // HighBeam claims high beam — independent signal, both should publish
         arbiter
             .request(ActuatorRequest {
-                signal: "Body.Lights.Beam.High.IsOn",
+                signal: "Vehicle.Body.Lights.Beam.High.IsOn",
                 value: SignalValue::Bool(true),
                 priority: Priority::Medium,
                 feature_id: FeatureId::HighBeam,
@@ -1568,11 +1568,14 @@ mod tests {
         assert_eq!(history.len(), 2);
         assert_eq!(
             history[0],
-            ("Body.Lights.Beam.Low.IsOn", SignalValue::Bool(true))
+            ("Vehicle.Body.Lights.Beam.Low.IsOn", SignalValue::Bool(true))
         );
         assert_eq!(
             history[1],
-            ("Body.Lights.Beam.High.IsOn", SignalValue::Bool(true))
+            (
+                "Vehicle.Body.Lights.Beam.High.IsOn",
+                SignalValue::Bool(true)
+            )
         );
     }
 
@@ -1583,7 +1586,7 @@ mod tests {
         // Turn (medium) requests left ON
         arbiter
             .request(ActuatorRequest {
-                signal: "Body.Lights.DirectionIndicator.Left.IsSignaling",
+                signal: "Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling",
                 value: SignalValue::Bool(true),
                 priority: Priority::Medium,
                 feature_id: FeatureId::TurnIndicator,
@@ -1595,7 +1598,7 @@ mod tests {
         // Turn (medium) requests left OFF — same priority, should replace
         arbiter
             .request(ActuatorRequest {
-                signal: "Body.Lights.DirectionIndicator.Left.IsSignaling",
+                signal: "Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling",
                 value: SignalValue::Bool(false),
                 priority: Priority::Medium,
                 feature_id: FeatureId::TurnIndicator,
@@ -1616,7 +1619,7 @@ mod tests {
         // AutoLock tries to control a lighting signal — not allowed
         arbiter
             .request(ActuatorRequest {
-                signal: "Body.Lights.Beam.Low.IsOn",
+                signal: "Vehicle.Body.Lights.Beam.Low.IsOn",
                 value: SignalValue::Bool(true),
                 priority: Priority::Medium,
                 feature_id: FeatureId::AutoLock,
@@ -1636,7 +1639,7 @@ mod tests {
         // TurnIndicator tries to claim HIGH priority — table says MEDIUM
         arbiter
             .request(ActuatorRequest {
-                signal: "Body.Lights.DirectionIndicator.Left.IsSignaling",
+                signal: "Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling",
                 value: SignalValue::Bool(true),
                 priority: Priority::High,
                 feature_id: FeatureId::TurnIndicator,
@@ -1658,7 +1661,7 @@ mod tests {
     #[tokio::test]
     async fn release_lets_lower_priority_resume() {
         let (arbiter, bus) = setup_lighting().await;
-        let sig = "Body.Lights.DirectionIndicator.Right.IsSignaling";
+        let sig = "Vehicle.Body.Lights.DirectionIndicator.Right.IsSignaling";
 
         // Turn (medium) claims right indicator ON.
         arbiter
@@ -1712,7 +1715,7 @@ mod tests {
     #[tokio::test]
     async fn release_republishes_lower_priority_distinct_value() {
         let (arbiter, bus) = setup_lighting().await;
-        let sig = "Body.Lights.DirectionIndicator.Left.IsSignaling";
+        let sig = "Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling";
 
         // Turn claims MEDIUM OFF (explicit claim of false).
         arbiter
@@ -1754,7 +1757,7 @@ mod tests {
     #[tokio::test]
     async fn release_without_any_claims_publishes_default_off() {
         let (arbiter, bus) = setup_lighting().await;
-        let sig = "Body.Lights.DirectionIndicator.Left.IsSignaling";
+        let sig = "Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling";
 
         // Hazard claims ON.
         arbiter
@@ -1782,7 +1785,7 @@ mod tests {
     #[tokio::test]
     async fn release_of_nonexistent_claim_is_noop() {
         let (arbiter, bus) = setup_lighting().await;
-        let sig = "Body.Lights.DirectionIndicator.Left.IsSignaling";
+        let sig = "Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling";
 
         // Feature releases a signal it never claimed — should do nothing.
         arbiter.release(sig, FeatureId::Hazard).await.unwrap();
@@ -1852,7 +1855,7 @@ mod tests {
 
         // Only the first command (PEPS unlock) should be dispatched.
         // Filter to CENTRAL_LOCK_CMD only — the arbiter also publishes
-        // Cabin.LockStatus on each accepted command, which we don't
+        // Vehicle.Controller.Cabin.LockStatus on each accepted command, which we don't
         // care about here.
         let cmd_history = |bus: &MockBus| -> Vec<(VssPath, SignalValue)> {
             bus.history()
@@ -2065,12 +2068,15 @@ mod tests {
         let (arbiter, bus) = setup_puddle().await;
 
         // Mirror is folded BEFORE Welcome claims.
-        bus.inject("Body.Mirror.Left.IsFolded", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Body.Mirrors.Left.IsFolded",
+            SignalValue::Bool(true),
+        );
         yield_settle().await;
 
         arbiter
             .request(ActuatorRequest {
-                signal: "Body.Lights.Puddle.Left.IsOn",
+                signal: "Vehicle.Controller.Body.Lights.Puddle.Left.IsOn",
                 value: SignalValue::Bool(true),
                 priority: Priority::Medium,
                 feature_id: FeatureId::Welcome,
@@ -2081,7 +2087,7 @@ mod tests {
 
         // Claim resolved against the closed gate → published as off.
         assert_eq!(
-            bus.latest_value("Body.Lights.Puddle.Left.IsOn"),
+            bus.latest_value("Vehicle.Controller.Body.Lights.Puddle.Left.IsOn"),
             Some(SignalValue::Bool(false)),
             "gate closed at claim time → arbiter must publish off"
         );
@@ -2092,11 +2098,14 @@ mod tests {
         let (arbiter, bus) = setup_puddle().await;
 
         // Mirror starts unfolded; Welcome claims; puddle goes ON.
-        bus.inject("Body.Mirror.Right.IsFolded", SignalValue::Bool(false));
+        bus.inject(
+            "Vehicle.Body.Mirrors.Right.IsFolded",
+            SignalValue::Bool(false),
+        );
         yield_settle().await;
         arbiter
             .request(ActuatorRequest {
-                signal: "Body.Lights.Puddle.Right.IsOn",
+                signal: "Vehicle.Controller.Body.Lights.Puddle.Right.IsOn",
                 value: SignalValue::Bool(true),
                 priority: Priority::Medium,
                 feature_id: FeatureId::Welcome,
@@ -2105,15 +2114,18 @@ mod tests {
             .unwrap();
         yield_settle().await;
         assert_eq!(
-            bus.latest_value("Body.Lights.Puddle.Right.IsOn"),
+            bus.latest_value("Vehicle.Controller.Body.Lights.Puddle.Right.IsOn"),
             Some(SignalValue::Bool(true))
         );
 
         // Mirror folds → arbiter forces off without any feature action.
-        bus.inject("Body.Mirror.Right.IsFolded", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Body.Mirrors.Right.IsFolded",
+            SignalValue::Bool(true),
+        );
         yield_settle().await;
         assert_eq!(
-            bus.latest_value("Body.Lights.Puddle.Right.IsOn"),
+            bus.latest_value("Vehicle.Controller.Body.Lights.Puddle.Right.IsOn"),
             Some(SignalValue::Bool(false)),
             "gate closing mid-claim must publish off"
         );
@@ -2124,11 +2136,14 @@ mod tests {
         let (arbiter, bus) = setup_puddle().await;
 
         // Pre-fold the mirror, then claim — claim is suppressed.
-        bus.inject("Body.Mirror.Left.IsFolded", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Body.Mirrors.Left.IsFolded",
+            SignalValue::Bool(true),
+        );
         yield_settle().await;
         arbiter
             .request(ActuatorRequest {
-                signal: "Body.Lights.Puddle.Left.IsOn",
+                signal: "Vehicle.Controller.Body.Lights.Puddle.Left.IsOn",
                 value: SignalValue::Bool(true),
                 priority: Priority::Medium,
                 feature_id: FeatureId::Welcome,
@@ -2138,10 +2153,13 @@ mod tests {
         yield_settle().await;
 
         // Unfold the mirror — the existing claim should now win.
-        bus.inject("Body.Mirror.Left.IsFolded", SignalValue::Bool(false));
+        bus.inject(
+            "Vehicle.Body.Mirrors.Left.IsFolded",
+            SignalValue::Bool(false),
+        );
         yield_settle().await;
         assert_eq!(
-            bus.latest_value("Body.Lights.Puddle.Left.IsOn"),
+            bus.latest_value("Vehicle.Controller.Body.Lights.Puddle.Left.IsOn"),
             Some(SignalValue::Bool(true)),
             "gate opening must let the active claim through"
         );
@@ -2152,13 +2170,16 @@ mod tests {
         let (arbiter, bus) = setup_puddle().await;
 
         // Fold ONLY the left mirror.
-        bus.inject("Body.Mirror.Left.IsFolded", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Body.Mirrors.Left.IsFolded",
+            SignalValue::Bool(true),
+        );
         yield_settle().await;
 
         // Claim BOTH puddles.
         for sig in [
-            "Body.Lights.Puddle.Left.IsOn",
-            "Body.Lights.Puddle.Right.IsOn",
+            "Vehicle.Controller.Body.Lights.Puddle.Left.IsOn",
+            "Vehicle.Controller.Body.Lights.Puddle.Right.IsOn",
         ] {
             arbiter
                 .request(ActuatorRequest {
@@ -2173,12 +2194,12 @@ mod tests {
         yield_settle().await;
 
         assert_eq!(
-            bus.latest_value("Body.Lights.Puddle.Left.IsOn"),
+            bus.latest_value("Vehicle.Controller.Body.Lights.Puddle.Left.IsOn"),
             Some(SignalValue::Bool(false)),
             "left puddle suppressed by left-mirror gate"
         );
         assert_eq!(
-            bus.latest_value("Body.Lights.Puddle.Right.IsOn"),
+            bus.latest_value("Vehicle.Controller.Body.Lights.Puddle.Right.IsOn"),
             Some(SignalValue::Bool(true)),
             "right puddle unaffected by left-mirror gate"
         );
@@ -2196,7 +2217,7 @@ mod tests {
         (arbiter, bus)
     }
 
-    /// Helper: pulse `Body.Trunk.OpenCmd` via the trunk arbiter as a
+    /// Helper: pulse `Vehicle.Controller.Body.Trunk.Rear.OpenCmd` via the trunk arbiter as a
     /// momentary edge — request true, then release so the next press
     /// can fire again.
     async fn pulse_trunk_open(arbiter: &DomainArbiter, feature_id: FeatureId) {
@@ -2238,12 +2259,15 @@ mod tests {
         let (arbiter, bus) = setup_trunk().await;
 
         // Activate valet BEFORE the press.
-        bus.inject("Cabin.ValetMode.IsActive", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Controller.Cabin.ValetMode.IsActive",
+            SignalValue::Bool(true),
+        );
         yield_settle().await;
 
         pulse_trunk_open(&arbiter, FeatureId::ExteriorTrunkButton).await;
 
-        // Gate forces false; no true ever reaches Body.Trunk.OpenCmd.
+        // Gate forces false; no true ever reaches Vehicle.Controller.Body.Trunk.Rear.OpenCmd.
         let trues = bus
             .history()
             .iter()
@@ -2259,7 +2283,10 @@ mod tests {
     async fn trunk_arbiter_valet_blocks_rke_path() {
         let (arbiter, bus) = setup_trunk().await;
 
-        bus.inject("Cabin.ValetMode.IsActive", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Controller.Cabin.ValetMode.IsActive",
+            SignalValue::Bool(true),
+        );
         yield_settle().await;
 
         // RKE TrunkRelease routed through the same arbiter — the gate
@@ -2279,24 +2306,27 @@ mod tests {
 
     #[tokio::test]
     async fn trunk_arbiter_valet_does_not_close_already_open_trunk() {
-        // The gate is on `Body.Trunk.OpenCmd`, not `Body.Trunk.IsOpen`.
+        // The gate is on `Vehicle.Controller.Body.Trunk.Rear.OpenCmd`, not `Vehicle.Body.Trunk.Rear.IsOpen`.
         // Activating valet while the trunk is open must NOT publish a
         // close command — IsOpen lives in the plant model and we never
         // want to slam the lid shut.
         let (_arbiter, bus) = setup_trunk().await;
 
         // Pretend the trunk is already open (plant-model state).
-        bus.inject("Body.Trunk.IsOpen", SignalValue::Bool(true));
+        bus.inject("Vehicle.Body.Trunk.Rear.IsOpen", SignalValue::Bool(true));
         yield_settle().await;
 
         // Activate valet.
-        bus.inject("Cabin.ValetMode.IsActive", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Controller.Cabin.ValetMode.IsActive",
+            SignalValue::Bool(true),
+        );
         yield_settle().await;
 
-        // Body.Trunk.IsOpen unchanged; the arbiter has no business
-        // touching it — it only governs `Body.Trunk.OpenCmd`.
+        // Vehicle.Body.Trunk.Rear.IsOpen unchanged; the arbiter has no business
+        // touching it — it only governs `Vehicle.Controller.Body.Trunk.Rear.OpenCmd`.
         assert_eq!(
-            bus.latest_value("Body.Trunk.IsOpen"),
+            bus.latest_value("Vehicle.Body.Trunk.Rear.IsOpen"),
             Some(SignalValue::Bool(true)),
             "valet activation must not close an already-open trunk"
         );
@@ -2307,7 +2337,10 @@ mod tests {
         let (arbiter, bus) = setup_trunk().await;
 
         // Valet on → press blocked.
-        bus.inject("Cabin.ValetMode.IsActive", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Controller.Cabin.ValetMode.IsActive",
+            SignalValue::Bool(true),
+        );
         yield_settle().await;
         pulse_trunk_open(&arbiter, FeatureId::ExteriorTrunkButton).await;
         let trues_blocked = bus
@@ -2318,7 +2351,10 @@ mod tests {
         assert_eq!(trues_blocked, 0);
 
         // Valet off → next press passes through.
-        bus.inject("Cabin.ValetMode.IsActive", SignalValue::Bool(false));
+        bus.inject(
+            "Vehicle.Controller.Cabin.ValetMode.IsActive",
+            SignalValue::Bool(false),
+        );
         yield_settle().await;
         pulse_trunk_open(&arbiter, FeatureId::ExteriorTrunkButton).await;
         let trues_after = bus

@@ -21,7 +21,7 @@
 //!
 //! # Single writer
 //!
-//! Sole writer of `Body.Switches.StartStop.BacklightIntensity`.
+//! Sole writer of `Vehicle.Controller.Body.Switches.StartStop.BacklightIntensity`.
 
 use std::sync::Arc;
 
@@ -30,8 +30,8 @@ use futures::StreamExt;
 use crate::ipc_message::SignalValue;
 use crate::signal_bus::{SignalBus, VssPath};
 
-const DUTY_IN: VssPath = "Body.Switches.StartStop.BacklightDutyCycle";
-const INTENSITY_OUT: VssPath = "Body.Switches.StartStop.BacklightIntensity";
+const DUTY_IN: VssPath = "Vehicle.Controller.Body.Switches.StartStop.BacklightDutyCycle";
+const INTENSITY_OUT: VssPath = "Vehicle.Controller.Body.Switches.StartStop.BacklightIntensity";
 
 pub struct StartStopLedPlant<B: SignalBus> {
     bus: Arc<B>,

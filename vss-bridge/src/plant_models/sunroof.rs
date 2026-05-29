@@ -4,14 +4,14 @@
 //!
 //! ```text
 //!  HMI sunroof open/close hold buttons
-//!      │  Body.Sunroof.MoveCmd          ("OPEN" | "CLOSE" | "STOP")
-//!      │  Body.Sunroof.Shade.MoveCmd    (same enum)
+//!      │  Vehicle.Controller.Sunroof.MoveCmd          ("OPEN" | "CLOSE" | "STOP")
+//!      │  Vehicle.Controller.Sunroof.Shade.MoveCmd    (same enum)
 //!      ▼
 //!  SunroofPlantModel       ← this module
 //!      │  integrates Position at TRAVEL_RATE_PCT_PER_SEC,
 //!      │  clamps to [0, 100], publishes:
-//!      │    Body.Sunroof.Position
-//!      │    Body.Sunroof.Shade.Position
+//!      │    Vehicle.Cabin.Sunroof.Position
+//!      │    Vehicle.Cabin.Sunroof.Shade.Position
 //!      ▼
 //!  SignalBus → WsBridge → HMI
 //! ```
@@ -50,10 +50,10 @@ use crate::ipc_message::SignalValue;
 use crate::nvm::{NvmStore, SunroofState};
 use crate::signal_bus::SignalBus;
 
-const ROOF_CMD: &str = "Body.Sunroof.MoveCmd";
-const SHADE_CMD: &str = "Body.Sunroof.Shade.MoveCmd";
-const ROOF_POS: &str = "Body.Sunroof.Position";
-const SHADE_POS: &str = "Body.Sunroof.Shade.Position";
+const ROOF_CMD: &str = "Vehicle.Controller.Sunroof.MoveCmd";
+const SHADE_CMD: &str = "Vehicle.Controller.Sunroof.Shade.MoveCmd";
+const ROOF_POS: &str = "Vehicle.Cabin.Sunroof.Position";
+const SHADE_POS: &str = "Vehicle.Cabin.Sunroof.Shade.Position";
 
 /// Motor speed.  20 % / s = 5 seconds full travel, typical for an
 /// OEM moonroof.
