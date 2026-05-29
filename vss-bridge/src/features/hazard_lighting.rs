@@ -2,11 +2,11 @@
 //! driver engages the physical hazard switch.
 //!
 //! Subscribes to:
-//!   - Body.Switches.Hazard.IsEngaged (overlay sensor — physical switch)
+//!   - Vehicle.Controller.Body.Switches.Hazard.IsEngaged (overlay sensor — physical switch)
 //!
 //! Outputs (via Lighting arbiter):
-//!   - Body.Lights.DirectionIndicator.Left.IsSignaling  @ HIGH (3)
-//!   - Body.Lights.DirectionIndicator.Right.IsSignaling @ HIGH (3)
+//!   - Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling  @ HIGH (3)
+//!   - Vehicle.Body.Lights.DirectionIndicator.Right.IsSignaling @ HIGH (3)
 //!
 //! This feature does NOT control blink timing. The 1–2 Hz UN R48-
 //! compliant cadence is the responsibility of the LED driver IC or
@@ -26,11 +26,11 @@ use crate::ipc_message::{FeatureId, Priority, SignalValue};
 use crate::signal_bus::{SignalBus, VssPath};
 
 /// Physical hazard switch input (overlay signal).
-const HAZARD_SWITCH: VssPath = "Body.Switches.Hazard.IsEngaged";
+const HAZARD_SWITCH: VssPath = "Vehicle.Controller.Body.Switches.Hazard.IsEngaged";
 
 /// Actuator outputs — both direction indicators.
-const LEFT_INDICATOR: VssPath = "Body.Lights.DirectionIndicator.Left.IsSignaling";
-const RIGHT_INDICATOR: VssPath = "Body.Lights.DirectionIndicator.Right.IsSignaling";
+const LEFT_INDICATOR: VssPath = "Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling";
+const RIGHT_INDICATOR: VssPath = "Vehicle.Body.Lights.DirectionIndicator.Right.IsSignaling";
 
 pub struct HazardLighting<B: SignalBus> {
     arbiter: Arc<DomainArbiter>,

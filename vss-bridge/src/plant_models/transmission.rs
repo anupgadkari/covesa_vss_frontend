@@ -14,7 +14,7 @@
 //! Every modern automatic-transmission car gates shifts out of `P`
 //! (Park) on two driver-present conditions:
 //!
-//!   1. The brake pedal must be applied (`Chassis.Brake.IsApplied`).
+//!   1. The brake pedal must be applied (`Vehicle.Controller.Chassis.Brake.IsApplied`).
 //!   2. The ignition must be live — `Vehicle.LowVoltageSystemState`
 //!      ∈ {`ACC`, `ON`, `START`}.  `OFF` doesn't power the
 //!      shift-lock solenoid.
@@ -54,7 +54,7 @@ use crate::signal_bus::{SignalBus, VssPath};
 
 const SELECTED: VssPath = "Powertrain.Transmission.SelectedGear";
 const CURRENT: VssPath = "Powertrain.Transmission.CurrentGear";
-const BRAKE_IN: VssPath = "Chassis.Brake.IsApplied";
+const BRAKE_IN: VssPath = "Vehicle.Controller.Chassis.Brake.IsApplied";
 const IGN_IN: VssPath = "Vehicle.LowVoltageSystemState";
 const SHIFT_LOCK_OUT: VssPath = "Powertrain.Transmission.ShiftLockEngaged";
 

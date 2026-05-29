@@ -83,7 +83,7 @@ Feature: Speed-Based Auto Lock
   # --- REQ-ALK-004 ---
   Scenario: KeyfobPeps unlock replaces auto lock in queue
     Given all four doors are locked by auto lock
-    When Body.PEPS.KeyPresent becomes TRUE
+    When Vehicle.Controller.Body.PEPS.KeyPresent becomes TRUE
     Then the KeyfobPeps UNLOCK replaces AutoLock's pending LOCK in the DoorLock arbiter
     And all four doors are requested unlocked
 

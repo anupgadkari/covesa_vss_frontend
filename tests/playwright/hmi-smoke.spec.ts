@@ -72,7 +72,7 @@ test.describe('HMI Smoke Tests', () => {
     await page.waitForTimeout(2000);
 
     // Engage hazard via control WS
-    await sendSensor(controlWs, 'Body.Switches.Hazard.IsEngaged', true);
+    await sendSensor(controlWs, 'Vehicle.Controller.Body.Switches.Hazard.IsEngaged', true);
 
     // Wait for the lamps to start blinking — within 1s we should see
     // at least one amber circle (background-color change).
@@ -89,9 +89,9 @@ test.describe('HMI Smoke Tests', () => {
     await page.waitForTimeout(2000);
 
     // Engage then disengage
-    await sendSensor(controlWs, 'Body.Switches.Hazard.IsEngaged', true);
+    await sendSensor(controlWs, 'Vehicle.Controller.Body.Switches.Hazard.IsEngaged', true);
     await page.waitForTimeout(1000);
-    await sendSensor(controlWs, 'Body.Switches.Hazard.IsEngaged', false);
+    await sendSensor(controlWs, 'Vehicle.Controller.Body.Switches.Hazard.IsEngaged', false);
     await page.waitForTimeout(1000);
 
     // Both sides should show "idle"
@@ -105,13 +105,13 @@ test.describe('HMI Smoke Tests', () => {
 
     // Set ignition ON + stalk LEFT via control WS
     await sendSensor(controlWs, 'Vehicle.LowVoltageSystemState', 'ON');
-    await sendSensor(controlWs, 'Body.Switches.TurnIndicator.Direction', 'LEFT');
+    await sendSensor(controlWs, 'Vehicle.Controller.Body.Switches.TurnIndicator.Direction', 'LEFT');
     await page.waitForTimeout(500);
 
     // Inject a front lamp defect
     await sendSensor(
       controlWs,
-      'Body.Lights.DirectionIndicator.Left.Lamp.Front.IsDefect',
+      'Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Front.IsDefect',
       true,
     );
     await page.waitForTimeout(500);

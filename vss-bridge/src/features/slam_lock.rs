@@ -71,18 +71,19 @@ const INVERSION_DELAY_MS: u64 = 500;
 
 const FEATURE_ID: FeatureId = FeatureId::SlamLock;
 
-const LEFT_LOCK_BUTTON: VssPath = "Body.Switches.DoorTrim.Row1.Left.LockButton";
-const RIGHT_LOCK_BUTTON: VssPath = "Body.Switches.DoorTrim.Row1.Right.LockButton";
+const LEFT_LOCK_BUTTON: VssPath = "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.LockButton";
+const RIGHT_LOCK_BUTTON: VssPath =
+    "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Right.LockButton";
 
-const LOCK_STATUS: VssPath = "Cabin.LockStatus";
-const LAST_REQUESTOR: VssPath = "Cabin.LockStatus.LastRequestor";
-const LOCK_EVENT_NUM: VssPath = "Cabin.LockStatus.EventNum";
+const LOCK_STATUS: VssPath = "Vehicle.Controller.Cabin.LockStatus";
+const LAST_REQUESTOR: VssPath = "Vehicle.Controller.Cabin.LockStatus.LastRequestor";
+const LOCK_EVENT_NUM: VssPath = "Vehicle.Controller.Cabin.LockStatus.EventNum";
 
 const DOOR_OPEN_SIGNALS: [VssPath; 4] = [
-    "Body.Doors.Row1.Left.IsOpen",
-    "Body.Doors.Row1.Right.IsOpen",
-    "Body.Doors.Row2.Left.IsOpen",
-    "Body.Doors.Row2.Right.IsOpen",
+    "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+    "Vehicle.Cabin.Door.Row1.Right.IsOpen",
+    "Vehicle.Cabin.Door.Row2.Left.IsOpen",
+    "Vehicle.Cabin.Door.Row2.Right.IsOpen",
 ];
 
 /// Requestors that, when they emit a LOCK event with a door open under
@@ -294,7 +295,7 @@ impl<B: SignalBus + Send + Sync + 'static> SlamLock<B> {
         );
 
         // Fire the mislock honk via LockFeedback's "mislock" kind.
-        // Was previously a direct publish to Body.Horn.IsActive here
+        // Was previously a direct publish to Vehicle.Body.Horn.IsActive here
         // with a "single writer for this short window" caveat; now
         // centralised in LockFeedback so SmartUnlock and WAL can
         // emit the same cue when they prevent a lockout.
@@ -398,7 +399,7 @@ mod tests {
     /// Asserts the latest lock command on the bus matches `expected`.
     fn assert_last_lock_cmd(bus: &Arc<MockBus>, expected: &str) {
         assert_eq!(
-            bus.latest_value("Body.Doors.CentralLock.Command"),
+            bus.latest_value("Vehicle.Controller.Body.Doors.CentralLock.Command"),
             Some(SignalValue::String(expected.into())),
             "expected last lock command to be {}",
             expected
@@ -409,7 +410,10 @@ mod tests {
     async fn lhd_driver_side_two_stage_unlocks_driver_only() {
         // EU + LHD + driver-side trim + two-stage on → UnlockDriver.
         let bus = setup(vl_eu(), true, false).await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         for _ in 0..8 {
             tokio::task::yield_now().await;
         }
@@ -418,7 +422,7 @@ mod tests {
 
         assert_last_lock_cmd(&bus, "unlock_driver");
         assert_eq!(
-            bus.latest_value("Cabin.LockStatus.LastRequestor"),
+            bus.latest_value("Vehicle.Controller.Cabin.LockStatus.LastRequestor"),
             Some(SignalValue::String("SlamLock".into()))
         );
     }
@@ -426,7 +430,10 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn lhd_driver_side_two_stage_off_unlocks_all() {
         let bus = setup(vl_eu(), false, false).await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         for _ in 0..8 {
             tokio::task::yield_now().await;
         }
@@ -441,7 +448,10 @@ mod tests {
         // Passenger-side bypass — UnlockAll regardless of two-stage.
         for two_stage in [true, false] {
             let bus = setup(vl_eu(), two_stage, false).await;
-            bus.inject("Body.Doors.Row1.Right.IsOpen", SignalValue::Bool(true));
+            bus.inject(
+                "Vehicle.Cabin.Door.Row1.Right.IsOpen",
+                SignalValue::Bool(true),
+            );
             for _ in 0..8 {
                 tokio::task::yield_now().await;
             }
@@ -457,7 +467,10 @@ mod tests {
         // RHD: Row1.Right is driver → respects two-stage; Row1.Left is
         // passenger → always UnlockAll.
         let bus = setup(vl_eu(), true, true).await;
-        bus.inject("Body.Doors.Row1.Right.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Right.IsOpen",
+            SignalValue::Bool(true),
+        );
         for _ in 0..8 {
             tokio::task::yield_now().await;
         }
@@ -467,7 +480,10 @@ mod tests {
 
         // New bus for the passenger-side check.
         let bus = setup(vl_eu(), true, true).await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         for _ in 0..8 {
             tokio::task::yield_now().await;
         }
@@ -484,7 +500,7 @@ mod tests {
         settle().await;
 
         assert_eq!(
-            bus.latest_value("Body.Doors.CentralLock.Command"),
+            bus.latest_value("Vehicle.Controller.Body.Doors.CentralLock.Command"),
             None,
             "all doors closed: SlamLock must not dispatch any unlock"
         );
@@ -495,7 +511,10 @@ mod tests {
         // US line: SlamLock feature must not fire even with door open
         // (DoorTrimButton handles US slam-lock with the SlamLock requestor).
         let bus = setup(vl_us(), true, false).await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         for _ in 0..8 {
             tokio::task::yield_now().await;
         }
@@ -503,7 +522,7 @@ mod tests {
         settle().await;
 
         assert_eq!(
-            bus.latest_value("Body.Doors.CentralLock.Command"),
+            bus.latest_value("Vehicle.Controller.Body.Doors.CentralLock.Command"),
             None,
             "US cal: SlamLock feature must be inert; DoorTrimButton handles US slam-lock"
         );
@@ -512,7 +531,10 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn release_edge_is_a_noop() {
         let bus = setup(vl_eu(), true, false).await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         for _ in 0..8 {
             tokio::task::yield_now().await;
         }
@@ -520,13 +542,19 @@ mod tests {
         bus.inject(LEFT_LOCK_BUTTON, SignalValue::Bool(false));
         settle().await;
 
-        assert_eq!(bus.latest_value("Body.Doors.CentralLock.Command"), None);
+        assert_eq!(
+            bus.latest_value("Vehicle.Controller.Body.Doors.CentralLock.Command"),
+            None
+        );
     }
 
     #[tokio::test(start_paused = true)]
     async fn feedback_request_is_unlock() {
         let bus = setup(vl_eu(), true, false).await;
-        bus.inject("Body.Doors.Row1.Right.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Right.IsOpen",
+            SignalValue::Bool(true),
+        );
         for _ in 0..8 {
             tokio::task::yield_now().await;
         }
@@ -571,7 +599,10 @@ mod tests {
         // logic for RKE.  EU cal + door open + KeyfobRke lock event →
         // SlamLock dispatches UnlockAll.
         let bus = setup(vl_eu(), true, false).await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         for _ in 0..8 {
             tokio::task::yield_now().await;
         }
@@ -580,7 +611,7 @@ mod tests {
 
         assert_last_lock_cmd(&bus, "unlock_all");
         assert_eq!(
-            bus.latest_value("Cabin.LockStatus.LastRequestor"),
+            bus.latest_value("Vehicle.Controller.Cabin.LockStatus.LastRequestor"),
             Some(SignalValue::String("SlamLock".into())),
             "the inversion's requestor is SlamLock"
         );
@@ -597,7 +628,7 @@ mod tests {
         // tuple onto the bus; SlamLock must NOT dispatch its own
         // unlock_all.
         assert_eq!(
-            bus.latest_value("Body.Doors.CentralLock.Command"),
+            bus.latest_value("Vehicle.Controller.Body.Doors.CentralLock.Command"),
             None,
             "RKE lock with all doors closed: SlamLock must stay quiet"
         );
@@ -609,7 +640,10 @@ mod tests {
         // door open lands, cabin pre-arms via KeyfobRke (handled by
         // PerimeterAlarm), and nothing in SlamLock fires.
         let bus = setup(vl_us(), true, false).await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         for _ in 0..8 {
             tokio::task::yield_now().await;
         }
@@ -617,7 +651,7 @@ mod tests {
         settle().await;
 
         assert_eq!(
-            bus.latest_value("Body.Doors.CentralLock.Command"),
+            bus.latest_value("Vehicle.Controller.Body.Doors.CentralLock.Command"),
             None,
             "US cal: external-lock inversion path must not fire"
         );
@@ -626,7 +660,10 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn keyfob_peps_lock_with_door_open_inverts() {
         let bus = setup(vl_eu(), true, false).await;
-        bus.inject("Body.Doors.Row1.Right.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Right.IsOpen",
+            SignalValue::Bool(true),
+        );
         for _ in 0..8 {
             tokio::task::yield_now().await;
         }
@@ -640,7 +677,10 @@ mod tests {
         // Exterior keypad has its own keys-in-vehicle gate, but if
         // a door is also open the SlamLock inversion still fires under EU.
         let bus = setup(vl_eu(), true, false).await;
-        bus.inject("Body.Doors.Row2.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row2.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         for _ in 0..8 {
             tokio::task::yield_now().await;
         }
@@ -657,14 +697,17 @@ mod tests {
         // forgot to close the door."  Excluded from
         // EXTERNAL_LOCK_INVERSION_REQUESTORS.
         let bus = setup(vl_eu(), true, false).await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         for _ in 0..8 {
             tokio::task::yield_now().await;
         }
         inject_lock_event(&bus, "AutoRelock", 1).await;
         settle().await;
         assert_eq!(
-            bus.latest_value("Body.Doors.CentralLock.Command"),
+            bus.latest_value("Vehicle.Controller.Body.Doors.CentralLock.Command"),
             None,
             "AutoRelock must not trigger the external-lock inversion"
         );
@@ -677,7 +720,10 @@ mod tests {
         // SlamLock publishes the intent — the actual horn pulse is
         // covered by lock_feedback's own tests.
         let bus = setup(vl_eu(), true, false).await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         for _ in 0..8 {
             tokio::task::yield_now().await;
         }
@@ -700,7 +746,10 @@ mod tests {
         // No inversion → no mislock feedback.  Verifies the honk is
         // gated on the inversion firing, not on the lock event itself.
         let bus = setup(vl_us(), true, false).await; // US cal: external-lock inversion is a no-op
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         for _ in 0..8 {
             tokio::task::yield_now().await;
         }
@@ -723,14 +772,17 @@ mod tests {
         // armable anyway, but defensive — a LOCKED+SlamLock event
         // from somewhere else must still be ignored.)
         let bus = setup(vl_eu(), true, false).await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         for _ in 0..8 {
             tokio::task::yield_now().await;
         }
         inject_lock_event(&bus, "SlamLock", 1).await;
         settle().await;
         assert_eq!(
-            bus.latest_value("Body.Doors.CentralLock.Command"),
+            bus.latest_value("Vehicle.Controller.Body.Doors.CentralLock.Command"),
             None,
             "SlamLock must not re-invert a SlamLock-tagged event"
         );

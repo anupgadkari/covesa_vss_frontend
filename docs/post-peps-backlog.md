@@ -35,7 +35,7 @@ item is independently shippable as its own sub-branch / PR.
 | 19 | Kuksa.val databroker integration (replace MockBus on the SignalBus seam) | L | 📋 Program-level |
 | 20 | Feature-completeness + interconnection audit (requirements + Gherkin + tests) | M | 📋 Program-level |
 | 21 | Run the test suite on a virtualised target (QEMU / Renode / Avocado) | L | 📋 Program-level |
-| 22 | Refresh to the latest COVESA VSS release (currently pinned at v4.0) | XL | 🔄 In progress — sub-PR 1 done; see [vss-v6.0-migration.md](./vss-v6.0-migration.md) |
+| 22 | Refresh to the latest COVESA VSS release (v4.0 → v6.0) | XL | 🔄 In progress — sub-PRs 1-3,5-7 done (rename complete); sub-PR 4 (DriverSide) + 8 (new signals) remain; see [vss-v6.0-migration.md](./vss-v6.0-migration.md) |
 
 Suggested next order: **13 → 16 → 14 → 15 → 17**.  Reasoning:
 **13** is a localised migration that exercises the arbiter end-to-end

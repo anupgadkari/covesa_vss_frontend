@@ -4,7 +4,7 @@
 //! # Trigger
 //!
 //! Any door's `IsOpen` transitions FALSE→TRUE while
-//! `Cabin.LockStatus` is `LOCKED` or `DOUBLE_LOCKED` AND the cabin
+//! `Vehicle.Controller.Cabin.LockStatus` is `LOCKED` or `DOUBLE_LOCKED` AND the cabin
 //! has been continuously locked for at least `PRE_ARM_DURATION_SECS`
 //! (20 s).  The 20 s pre-arm window absorbs the common case of "lock
 //! the car, then realise you forgot something" — re-opening a door
@@ -15,7 +15,7 @@
 //! # Three phases on a single 1 Hz pulse train (400 ms ON, 600 ms OFF):
 //!
 //! 1. **First 12 s — Chime warning.**  Soft interior chime only
-//!    (`Body.Chime.IsActive`).  No horn, no flashing.  Gives a
+//!    (`Vehicle.Controller.Body.Chime.IsActive`).  No horn, no flashing.  Gives a
 //!    legitimate driver who entered with a mechanical-blade key (low
 //!    fob battery) a chance to authenticate before a full alarm
 //!    fires.  If they unlock with a valid fob/phone or hit panic in
@@ -30,12 +30,12 @@
 //!
 //! # Disarm conditions (any one ends the alarm immediately)
 //!
-//! 1. **Auth-validated unlock** — `Cabin.LockStatus.LastRequestor`
+//! 1. **Auth-validated unlock** — `Vehicle.Controller.Cabin.LockStatus.LastRequestor`
 //!    transitions to one of the external auth sources (RKE,
-//!    PassiveEntry, PEPS, phone, NFC) AND `Cabin.LockStatus` is
+//!    PassiveEntry, PEPS, phone, NFC) AND `Vehicle.Controller.Cabin.LockStatus` is
 //!    `UNLOCKED` or `DRIVER_UNLOCKED`.  Models "the user came back
 //!    and proved they own the vehicle."
-//! 2. **Panic button press** — `Body.Switches.Panic.IsEngaged`
+//! 2. **Panic button press** — `Vehicle.Controller.Body.Switches.Panic.IsEngaged`
 //!    transitions to `true` from any source (paired fob, HMI test,
 //!    telematics).  Same pattern PanicAlarm uses, treats the user
 //!    grabbing the panic button as a "stop everything" override.
@@ -62,7 +62,7 @@
 //!
 //! # Status flag
 //!
-//! `Vehicle.Body.Alarm.IsActive` (already published by PanicAlarm)
+//! `Vehicle.Controller.Alarm.IsActive` (already published by PanicAlarm)
 //! is also asserted by this feature for the duration of the
 //! alarm.  Telematics / HMI consumers see a single "alarm active"
 //! bool regardless of source.
@@ -83,16 +83,16 @@ use crate::signal_bus::{SignalBus, VssPath};
 const FEATURE_ID: FeatureId = FeatureId::PerimeterAlarm;
 
 const DOOR_OPEN_SIGNALS: [VssPath; 4] = [
-    "Body.Doors.Row1.Left.IsOpen",
-    "Body.Doors.Row1.Right.IsOpen",
-    "Body.Doors.Row2.Left.IsOpen",
-    "Body.Doors.Row2.Right.IsOpen",
+    "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+    "Vehicle.Cabin.Door.Row1.Right.IsOpen",
+    "Vehicle.Cabin.Door.Row2.Left.IsOpen",
+    "Vehicle.Cabin.Door.Row2.Right.IsOpen",
 ];
 
-const LOCK_STATUS: VssPath = "Cabin.LockStatus";
-const LAST_REQUESTOR: VssPath = "Cabin.LockStatus.LastRequestor";
-const PANIC_SWITCH: VssPath = "Body.Switches.Panic.IsEngaged";
-const ALARM_STATUS: VssPath = "Vehicle.Body.Alarm.IsActive";
+const LOCK_STATUS: VssPath = "Vehicle.Controller.Cabin.LockStatus";
+const LAST_REQUESTOR: VssPath = "Vehicle.Controller.Cabin.LockStatus.LastRequestor";
+const PANIC_SWITCH: VssPath = "Vehicle.Controller.Body.Switches.Panic.IsEngaged";
+const ALARM_STATUS: VssPath = "Vehicle.Controller.Alarm.IsActive";
 /// Authoritative perimeter-alarm state, published by this feature on
 /// every transition so the HMI / telematics display a single string
 /// enum rather than computing state from secondary signals (lock
@@ -101,16 +101,16 @@ const ALARM_STATUS: VssPath = "Vehicle.Body.Alarm.IsActive";
 ///   * "PRE_ARMED"  — cabin just locked; 20 s grace window in flight.
 ///   * "ARMED"      — cabin locked, pre-arm window elapsed; watching.
 ///   * "ACTIVATED"  — chime / full-alarm / lights-only sequence running.
-const ALARM_STATE: VssPath = "Vehicle.Body.Alarm.State";
+const ALARM_STATE: VssPath = "Vehicle.Controller.Alarm.State";
 const POWER_STATE: VssPath = "Vehicle.LowVoltageSystemState";
 
-const LEFT_INDICATOR: VssPath = "Body.Lights.DirectionIndicator.Left.IsSignaling";
-const RIGHT_INDICATOR: VssPath = "Body.Lights.DirectionIndicator.Right.IsSignaling";
-const HORN: VssPath = "Body.Horn.IsActive";
-const CHIME: VssPath = "Body.Chime.IsActive";
-const DOME: VssPath = "Cabin.Lights.IsDomeOn";
-const PUDDLE_LEFT: VssPath = "Body.Lights.Puddle.Left.IsOn";
-const PUDDLE_RIGHT: VssPath = "Body.Lights.Puddle.Right.IsOn";
+const LEFT_INDICATOR: VssPath = "Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling";
+const RIGHT_INDICATOR: VssPath = "Vehicle.Body.Lights.DirectionIndicator.Right.IsSignaling";
+const HORN: VssPath = "Vehicle.Body.Horn.IsActive";
+const CHIME: VssPath = "Vehicle.Controller.Body.Chime.IsActive";
+const DOME: VssPath = "Vehicle.Cabin.Light.IsDomeOn";
+const PUDDLE_LEFT: VssPath = "Vehicle.Controller.Body.Lights.Puddle.Left.IsOn";
+const PUDDLE_RIGHT: VssPath = "Vehicle.Controller.Body.Lights.Puddle.Right.IsOn";
 
 /// Pre-arm grace period after the cabin first becomes locked (s).
 /// Lock → close door → the alarm watches but is not yet armed.  A
@@ -188,13 +188,13 @@ const EXTERNAL_LOCK_REQUESTORS: &[&str] = &[
 ];
 
 /// Cached EventNum signal path.  The arbiter publishes
-/// `Cabin.LockStatus` then `Cabin.LockStatus.LastRequestor` then
-/// `Cabin.LockStatus.EventNum` on every accepted lock command — by
+/// `Vehicle.Controller.Cabin.LockStatus` then `Vehicle.Controller.Cabin.LockStatus.LastRequestor` then
+/// `Vehicle.Controller.Cabin.LockStatus.EventNum` on every accepted lock command — by
 /// the time we receive an EventNum bump we are guaranteed to have
 /// the matching status + requestor cached, which gives us a clean
 /// "the entire lock event is now visible" wakeup.  Drives the
 /// `DISARMED → PRE_ARMED` transition.
-const LOCK_EVENT_NUM: VssPath = "Cabin.LockStatus.EventNum";
+const LOCK_EVENT_NUM: VssPath = "Vehicle.Controller.Cabin.LockStatus.EventNum";
 
 const UNLOCKED_STATES: &[&str] = &["UNLOCKED", "DRIVER_UNLOCKED"];
 
@@ -206,7 +206,7 @@ fn is_armable_lock_state(status: &str) -> bool {
 
 /// Authoritative perimeter-alarm states.  Maintained as the single
 /// source of truth by `run()`; the HMI displays whatever it sees on
-/// `Vehicle.Body.Alarm.State` rather than reconstructing the state
+/// `Vehicle.Controller.Alarm.State` rather than reconstructing the state
 /// from secondary signals.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AlarmState {
@@ -305,7 +305,7 @@ impl<B: SignalBus + Send + Sync + 'static> PerimeterAlarm<B> {
         let (alarm_done_tx, mut alarm_done_rx) = mpsc::unbounded_channel::<()>();
 
         // Authoritative FSM state.  ALL transitions go through
-        // `transition_to` below; the published `Vehicle.Body.Alarm.State`
+        // `transition_to` below; the published `Vehicle.Controller.Alarm.State`
         // and `current_state` are kept in sync there.
         let mut current_state = AlarmState::Disarmed;
         let _ = self
@@ -506,7 +506,7 @@ impl<B: SignalBus + Send + Sync + 'static> PerimeterAlarm<B> {
     }
 
     /// Single point of state mutation — keeps the cached `current_state`
-    /// and the published `Vehicle.Body.Alarm.State` signal in lockstep.
+    /// and the published `Vehicle.Controller.Alarm.State` signal in lockstep.
     /// Idempotent: redundant calls (same state) are a no-op so the bus
     /// history stays clean.
     async fn transition_to(&self, current: &mut AlarmState, new_state: AlarmState) {
@@ -584,7 +584,7 @@ impl<B: SignalBus + Send + Sync + 'static> PerimeterAlarm<B> {
 /// Runs the pulsed alarm sequence until the parent task aborts us.
 /// Three phases:
 ///
-/// 1. **Chime warning** (0..12 s) — pulses `Body.Chime.IsActive` only.
+/// 1. **Chime warning** (0..12 s) — pulses `Vehicle.Controller.Body.Chime.IsActive` only.
 ///    Light/horn outputs stay quiet so a legitimate driver who entered
 ///    with a mechanical-blade key can authenticate without an
 ///    embarrassing exterior light show.
@@ -769,7 +769,7 @@ mod tests {
     /// Mirrors the order in which `door_lock_arbiter` emits a lock
     /// event onto the bus: status → requestor → event_num, all three
     /// from the same logical command.  Tests must use this helper
-    /// rather than poking `Cabin.LockStatus` directly — only the
+    /// rather than poking `Vehicle.Controller.Cabin.LockStatus` directly — only the
     /// EventNum bump triggers a `DISARMED → PRE_ARMED` transition,
     /// and only when the requestor is in `EXTERNAL_LOCK_REQUESTORS`.
     /// `event_num_seq` is bumped by the caller so each event is unique.
@@ -835,7 +835,10 @@ mod tests {
         // are treated as armed-alarm trips.
         settle(21_000).await;
 
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         settle(1).await;
 
         // Chime phase fires CHIME, but NOT horn / indicators / puddle /
@@ -881,7 +884,10 @@ mod tests {
         // Skip past the 20 s pre-arm window so subsequent door-opens
         // are treated as armed-alarm trips.
         settle(21_000).await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         settle(50).await;
         // Mid-chime — chime is pulsing, horn / lights not yet active.
         settle(5_000).await;
@@ -910,7 +916,10 @@ mod tests {
         // Skip past the 20 s pre-arm window so subsequent door-opens
         // are treated as armed-alarm trips.
         settle(21_000).await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         settle(2_000).await;
         assert_eq!(bus.latest_value(HORN), None);
 
@@ -930,7 +939,10 @@ mod tests {
         bus.inject(LOCK_STATUS, SignalValue::String("UNLOCKED".into()));
         settle(1).await;
 
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         settle(50).await;
 
         // ALARM_STATUS was never published (no claim was ever made on
@@ -954,7 +966,10 @@ mod tests {
         let bus = setup().await;
         inject_lock(&bus, "DOUBLE_LOCKED", "KeyfobRke", 1).await;
         settle(21_000).await;
-        bus.inject("Body.Doors.Row2.Right.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row2.Right.IsOpen",
+            SignalValue::Bool(true),
+        );
         // Advance past the 12 s chime phase so ALARM_STATUS gets
         // asserted true.
         settle(13_000).await;
@@ -971,7 +986,10 @@ mod tests {
         // Skip past the 20 s pre-arm window so subsequent door-opens
         // are treated as armed-alarm trips.
         settle(21_000).await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         // Skip past the chime so we are in the full alarm phase
         // (horn + lights pulsing, ALARM_STATUS=true).
         settle(13_000).await;
@@ -1001,7 +1019,10 @@ mod tests {
         // Skip past the 20 s pre-arm window so subsequent door-opens
         // are treated as armed-alarm trips.
         settle(21_000).await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         settle(13_000).await;
         assert_eq!(
             bus.latest_value(ALARM_STATUS),
@@ -1025,7 +1046,10 @@ mod tests {
         // Skip past the 20 s pre-arm window so subsequent door-opens
         // are treated as armed-alarm trips.
         settle(21_000).await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         // Past the chime — full alarm is now active.
         settle(13_000).await;
         assert_eq!(
@@ -1049,7 +1073,10 @@ mod tests {
         // Skip past the 20 s pre-arm window so subsequent door-opens
         // are treated as armed-alarm trips.
         settle(21_000).await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         settle(50).await;
 
         // Chime runs 0..12 s, horn 12..42 s.  Advance to ~43 s — horn
@@ -1074,7 +1101,10 @@ mod tests {
         // Skip past the 20 s pre-arm window so subsequent door-opens
         // are treated as armed-alarm trips.
         settle(21_000).await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         settle(13_000).await;
         assert_eq!(
             bus.latest_value(ALARM_STATUS),
@@ -1103,9 +1133,15 @@ mod tests {
         // Skip past the 20 s pre-arm window so subsequent door-opens
         // are treated as armed-alarm trips.
         settle(21_000).await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         settle(50).await;
-        bus.inject("Body.Doors.Row1.Right.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Right.IsOpen",
+            SignalValue::Bool(true),
+        );
         // Past the chime so ALARM_STATUS is asserted.
         settle(13_000).await;
         // Still one alarm active — no panic about re-arm.
@@ -1124,7 +1160,10 @@ mod tests {
         let bus = setup().await;
         inject_lock(&bus, "LOCKED", "KeyfobRke", 1).await;
         settle(5_000).await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         settle(50).await;
 
         assert!(
@@ -1148,7 +1187,10 @@ mod tests {
         let bus = setup().await;
         inject_lock(&bus, "LOCKED", "KeyfobRke", 1).await;
         settle(20_001).await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         settle(50).await;
 
         assert_eq!(bus.latest_value(CHIME), Some(SignalValue::Bool(true)));
@@ -1255,7 +1297,10 @@ mod tests {
         let bus = setup().await;
         inject_lock(&bus, "LOCKED", "KeyfobRke", 1).await;
         settle(21_000).await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         settle(2_000).await;
         // Mid-chime — chime is pulsing, horn / lights not yet active.
         assert_eq!(bus.latest_value(HORN), None);
@@ -1278,7 +1323,10 @@ mod tests {
         let bus = setup().await;
         inject_lock(&bus, "LOCKED", "KeyfobRke", 1).await;
         settle(21_000).await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         // Past the chime → full alarm phase running.
         settle(13_000).await;
         assert_eq!(
@@ -1303,7 +1351,10 @@ mod tests {
         let bus = setup().await;
         inject_lock(&bus, "LOCKED", "KeyfobRke", 1).await;
         settle(21_000).await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         settle(2_000).await;
 
         bus.inject(POWER_STATE, SignalValue::String("ACC".into()));
@@ -1341,7 +1392,10 @@ mod tests {
         settle(5_000).await;
         inject_lock(&bus, "LOCKED", "KeyfobRke", 3).await;
         settle(6_000).await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         settle(50).await;
 
         assert!(
@@ -1352,7 +1406,7 @@ mod tests {
         );
     }
 
-    // ── Vehicle.Body.Alarm.State authoritative state-machine tests ──────
+    // ── Vehicle.Controller.Alarm.State authoritative state-machine tests ──────
 
     #[tokio::test(start_paused = true)]
     async fn state_machine_walks_disarmed_prearmed_armed_activated() {
@@ -1380,7 +1434,10 @@ mod tests {
             Some(SignalValue::String("ARMED".into()))
         );
 
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         settle(50).await;
         assert_eq!(
             bus.latest_value(ALARM_STATE),
@@ -1395,7 +1452,10 @@ mod tests {
         let bus = setup().await;
         inject_lock(&bus, "LOCKED", "KeyfobRke", 1).await;
         settle(21_000).await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         settle(2_000).await;
         assert_eq!(
             bus.latest_value(ALARM_STATE),
@@ -1561,7 +1621,10 @@ mod tests {
         // then hits trim LOCK.  US cal → DoorTrimButton dispatches as
         // SlamLock.  Bus delivers (LOCKED, SlamLock, 3).
         settle(2_000).await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         inject_lock(&bus, "LOCKED", "SlamLock", 3).await;
         settle(50).await;
 
@@ -1607,7 +1670,10 @@ mod tests {
         // Mid-chime: door open, trim LOCK pressed.  EU two-event
         // sequence on the bus.
         settle(2_000).await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         inject_lock(&bus, "LOCKED", "DoorTrimButton", 3).await;
         inject_lock(&bus, "UNLOCKED", "SlamLock", 4).await;
         settle(50).await;
@@ -1651,7 +1717,10 @@ mod tests {
         let bus = setup().await;
         inject_lock(&bus, "LOCKED", "KeyfobRke", 1).await;
         settle(21_000).await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         settle(13_000).await;
         // Past chime → ACTIVATED.
         assert_eq!(

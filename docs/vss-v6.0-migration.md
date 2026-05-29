@@ -320,41 +320,46 @@ target re-prefixed, and two new categories (`controller-extension`,
 Output: updated `vss-v6.0-path-mapping.csv` with zero remaining
 `fallback` rows and the three-namespace split applied.  Doc-only.
 
-### Sub-PR 3 — Path-canonicalisation layer in `SignalBus`
+### Sub-PRs 3 + 5 + 6 + 7 — Big-bang rename *(done — collapsed)*
 
-Add a thin canonicalisation layer so `bus.publish(legacy_path,
-…)` and `bus.publish(canonical_path, …)` resolve to the same
-broadcast channel for the alias window.  Implementation: a
-static table loaded at startup, indexed by both directions; the
-bus does the lookup on every publish / subscribe.  Tests verify
-the round-trip on every CSV row.
+These four were planned as separate alias-window steps, but the
+codebase is a **monorepo with no out-of-process consumers** —
+features, plant models, tests, Gherkin, and the HMI all live in
+the same repo and move together.  There is nothing to keep alive
+during an alias window, so the aliased-rename machinery (a
+canonicalisation layer in `SignalBus`, sub-PR 3) was unnecessary.
 
-### Sub-PR 4 — Adopt `DriverSide` / `PassengerSide` in feature code
+Instead, a single mechanical rename applied every CSV mapping
+across the whole codebase at once:
 
-The big one.  Refactor every feature that today reasons about
-`Left` / `Right` to use `DriverSide` / `PassengerSide`.  Delete
-the `dealer.driver_door_side` cal.  The plant-model layer
-internally maps `DriverSide` → physical Row1.Left or Row1.Right
-based on a single build-time / boot-time vehicle orientation
-constant.  ~6–10 features touched.
+- 257 path renames (8 were already canonical no-ops).
+- 3,084 substitutions across 83 files (Rust `src` + `tests`,
+  Gherkin `.feature`, HMI `.html`, the playwright spec).
+- Applied via a single-pass regex (longest-first alternation,
+  path-boundary guards) to avoid partial-match corruption.
+- Two e2e step-definition regexes used escaped-dot path literals
+  (`Body\.Switches\.…`) that the literal-dot matcher missed; fixed
+  by hand.
+- `Left` / `Right` naming **preserved** — the `DriverSide` /
+  `PassengerSide` adoption (sub-PR 4) is deferred as a separate
+  architectural change.
+- "VSS v4.0" doc comments rotated to "VSS v6.0".
 
-### Sub-PR 5 — Migrate canonical paths in `signal_ids.rs` + features
+Result: clean build, 686 lib + 8 ws_integration + 35 e2e
+scenarios green (1 pre-existing WIP skip in `hazard.feature`),
+clippy + fmt clean.  No alias layer; legacy paths are simply
+gone.
 
-Convert every `canonical-*` row's old path to the new one in
-feature code.  Bus still serves both via the alias layer.  Tests
-on the new paths land in this PR.
+### Sub-PR 4 — Adopt `DriverSide` / `PassengerSide` in feature code *(deferred)*
 
-### Sub-PR 6 — Migrate project-namespace paths
-
-Convert every `project-namespace*` row.  Same pattern.  Largest
-volume change by line count, but mechanical.
-
-### Sub-PR 7 — Remove alias layer, retire legacy paths
-
-After every internal consumer has moved, drop the alias layer
-from `SignalBus`, delete old path arms from `signal_ids.rs`,
-fail-fast if any caller still uses a legacy path.  HMI manifest
-regenerated.
+The remaining architectural change.  Refactor every feature that
+today reasons about `Left` / `Right` to use `DriverSide` /
+`PassengerSide`.  Delete the `dealer.driver_door_side` cal.  The
+plant-model layer internally maps `DriverSide` → physical
+Row1.Left or Row1.Right based on a single build-time / boot-time
+vehicle orientation constant.  ~6–10 features touched.  Kept
+separate because it changes feature *logic*, not just path
+strings.
 
 ### Sub-PR 8 — Adopt new VSS v6.0 signals worth exposing
 

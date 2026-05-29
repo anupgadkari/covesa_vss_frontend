@@ -11,9 +11,9 @@
 //! "I see you walking up; here's some light to find your door."
 //!
 //! Outputs claimed at MEDIUM priority via the courtesy arbiter:
-//! - `Body.Lights.Puddle.Left.IsOn`
-//! - `Body.Lights.Puddle.Right.IsOn`
-//! - `Cabin.Lights.IsDomeOn`
+//! - `Vehicle.Controller.Body.Lights.Puddle.Left.IsOn`
+//! - `Vehicle.Controller.Body.Lights.Puddle.Right.IsOn`
+//! - `Vehicle.Cabin.Light.IsDomeOn`
 //!
 //! # Release conditions
 //!
@@ -57,9 +57,9 @@ use crate::signal_bus::{SignalBus, VssPath};
 
 const FEATURE_ID: FeatureId = FeatureId::Welcome;
 
-const PUDDLE_LEFT: VssPath = "Body.Lights.Puddle.Left.IsOn";
-const PUDDLE_RIGHT: VssPath = "Body.Lights.Puddle.Right.IsOn";
-const DOME: VssPath = "Cabin.Lights.IsDomeOn";
+const PUDDLE_LEFT: VssPath = "Vehicle.Controller.Body.Lights.Puddle.Left.IsOn";
+const PUDDLE_RIGHT: VssPath = "Vehicle.Controller.Body.Lights.Puddle.Right.IsOn";
+const DOME: VssPath = "Vehicle.Cabin.Light.IsDomeOn";
 
 const POWER_STATE: VssPath = "Vehicle.LowVoltageSystemState";
 
@@ -78,10 +78,10 @@ const POWER_STATE: VssPath = "Vehicle.LowVoltageSystemState";
 // coverage just as it did before, but driven by what the antennas
 // actually saw rather than HMI ground truth.
 const PAIRED_ZONE_SIGNALS: [VssPath; 6] = [
-    "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
-    "Body.PEPS.Plant.KeyFob.2.LastObservedZone",
-    "Body.PEPS.Plant.KeyFob.3.LastObservedZone",
-    "Body.PEPS.Plant.KeyFob.4.LastObservedZone",
+    "Vehicle.Simulation.PEPS.Plant.KeyFob.1.LastObservedZone",
+    "Vehicle.Simulation.PEPS.Plant.KeyFob.2.LastObservedZone",
+    "Vehicle.Simulation.PEPS.Plant.KeyFob.3.LastObservedZone",
+    "Vehicle.Simulation.PEPS.Plant.KeyFob.4.LastObservedZone",
     peps_signals::PHONE_1_LAST_OBSERVED_ZONE,
     peps_signals::PHONE_2_LAST_OBSERVED_ZONE,
 ];
@@ -91,10 +91,10 @@ const PAIRED_ZONE_SIGNALS: [VssPath; 6] = [
 /// opened externally).  No point illuminating the puddle while the
 /// door is already open — the cabin lights take over.
 const DOOR_OPEN_SIGNALS: [VssPath; 4] = [
-    "Body.Doors.Row1.Left.IsOpen",
-    "Body.Doors.Row1.Right.IsOpen",
-    "Body.Doors.Row2.Left.IsOpen",
-    "Body.Doors.Row2.Right.IsOpen",
+    "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+    "Vehicle.Cabin.Door.Row1.Right.IsOpen",
+    "Vehicle.Cabin.Door.Row2.Left.IsOpen",
+    "Vehicle.Cabin.Door.Row2.Right.IsOpen",
 ];
 
 /// Default hold duration for the welcome courtesy lights.  30 s is
@@ -362,7 +362,7 @@ mod tests {
         let (bus, _h) = setup_with_hold(Duration::from_secs(30)).await;
 
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
+            "Vehicle.Simulation.PEPS.Plant.KeyFob.1.LastObservedZone",
             SignalValue::String("Approach".into()),
         );
         settle().await;
@@ -384,7 +384,7 @@ mod tests {
     async fn lights_release_after_hold() {
         let (bus, _h) = setup_with_hold(Duration::from_millis(100)).await;
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
+            "Vehicle.Simulation.PEPS.Plant.KeyFob.1.LastObservedZone",
             SignalValue::String("Approach".into()),
         );
         settle().await;
@@ -405,7 +405,7 @@ mod tests {
     async fn ignition_on_releases_lights_early() {
         let (bus, _h) = setup_with_hold(Duration::from_secs(30)).await;
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
+            "Vehicle.Simulation.PEPS.Plant.KeyFob.1.LastObservedZone",
             SignalValue::String("Approach".into()),
         );
         settle().await;
@@ -429,7 +429,7 @@ mod tests {
 
         // Device 1 enters at t=0.
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
+            "Vehicle.Simulation.PEPS.Plant.KeyFob.1.LastObservedZone",
             SignalValue::String("Approach".into()),
         );
         settle().await;
@@ -438,7 +438,7 @@ mod tests {
         advance(Duration::from_millis(50)).await;
         settle().await;
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.2.LastObservedZone",
+            "Vehicle.Simulation.PEPS.Plant.KeyFob.2.LastObservedZone",
             SignalValue::String("Approach".into()),
         );
         settle().await;
@@ -463,14 +463,14 @@ mod tests {
     async fn all_devices_leaving_lf_releases_lights() {
         let (bus, _h) = setup_with_hold(Duration::from_secs(30)).await;
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
+            "Vehicle.Simulation.PEPS.Plant.KeyFob.1.LastObservedZone",
             SignalValue::String("Approach".into()),
         );
         settle().await;
         assert_eq!(bus.latest_value(PUDDLE_LEFT), Some(SignalValue::Bool(true)));
 
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
+            "Vehicle.Simulation.PEPS.Plant.KeyFob.1.LastObservedZone",
             SignalValue::String("OutOfRange".into()),
         );
         settle().await;
@@ -488,7 +488,7 @@ mod tests {
     async fn rf_range_only_does_not_arm_welcome() {
         let (bus, _h) = setup_with_hold(Duration::from_secs(30)).await;
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
+            "Vehicle.Simulation.PEPS.Plant.KeyFob.1.LastObservedZone",
             SignalValue::String("RfRange".into()),
         );
         settle().await;
@@ -505,14 +505,17 @@ mod tests {
     async fn door_open_releases_lights_early() {
         let (bus, _h) = setup_with_hold(Duration::from_secs(30)).await;
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
+            "Vehicle.Simulation.PEPS.Plant.KeyFob.1.LastObservedZone",
             SignalValue::String("Approach".into()),
         );
         settle().await;
         assert_eq!(bus.latest_value(PUDDLE_LEFT), Some(SignalValue::Bool(true)));
 
         // Driver opens the door (via PassiveEntry, kick handle, etc.).
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         settle().await;
 
         assert_eq!(
@@ -527,14 +530,17 @@ mod tests {
     async fn rear_door_open_also_releases_lights() {
         let (bus, _h) = setup_with_hold(Duration::from_secs(30)).await;
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
+            "Vehicle.Simulation.PEPS.Plant.KeyFob.1.LastObservedZone",
             SignalValue::String("Approach".into()),
         );
         settle().await;
         assert_eq!(bus.latest_value(PUDDLE_LEFT), Some(SignalValue::Bool(true)));
 
         // Passenger rear door opens.
-        bus.inject("Body.Doors.Row2.Right.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row2.Right.IsOpen",
+            SignalValue::Bool(true),
+        );
         settle().await;
 
         assert_eq!(
@@ -551,7 +557,10 @@ mod tests {
         let (bus, _h) = setup_with_hold(Duration::from_secs(30)).await;
 
         bus.clear_history();
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         settle().await;
 
         // No claims and no releases on the courtesy / puddle arbiters

@@ -8,7 +8,7 @@ use futures::stream::BoxStream;
 
 use crate::ipc_message::SignalValue;
 
-/// A VSS signal path, e.g. `"Body.Lights.Beam.Low.IsOn"`.
+/// A VSS signal path, e.g. `"Vehicle.Body.Lights.Beam.Low.IsOn"`.
 pub type VssPath = &'static str;
 
 /// Result of a publish-and-await-ack operation.

@@ -8,8 +8,8 @@ Feature: Keypad Lock
   # Implementation model
   # -------------------------------------------------------------------------
   # Monitors two capacitive pad signals (Row 1 only — no Row 2 pads):
-  #   Body.Doors.Row1.Left.Handle.Outside.LockPad.IsPressed
-  #   Body.Doors.Row1.Right.Handle.Outside.LockPad.IsPressed
+  #   Vehicle.Cabin.Door.Row1.Left.Handle.Outside.LockPad.IsPressed
+  #   Vehicle.Cabin.Door.Row1.Right.Handle.Outside.LockPad.IsPressed
   #
   # Debounce = 500 ms hold-to-fire (fires at 500 ms, not on release).
   # A release before 500 ms cancels the pending lock.

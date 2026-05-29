@@ -3,12 +3,12 @@
 //!
 //! ```text
 //!  HMI / sim-panel rocker
-//!      │  Body.Switches.Sunroof.Detent
+//!      │  Vehicle.Controller.Body.Switches.Sunroof.Detent
 //!      │     NEUTRAL / OPEN_HOLD / OPEN_AUTO / CLOSE_HOLD / CLOSE_AUTO
 //!      ▼
 //!  SunroofControl feature              ← this module
-//!      │  Body.Sunroof.MoveCmd        (OPEN / CLOSE / STOP)
-//!      │  Body.Sunroof.Shade.MoveCmd  (OPEN / CLOSE / STOP)
+//!      │  Vehicle.Controller.Sunroof.MoveCmd        (OPEN / CLOSE / STOP)
+//!      │  Vehicle.Controller.Sunroof.Shade.MoveCmd  (OPEN / CLOSE / STOP)
 //!      ▼
 //!  SunroofPlantModel — integrates positions over time
 //! ```
@@ -46,8 +46,8 @@
 //!
 //! # Single writer
 //!
-//! Sole *intended* writer of `Body.Sunroof.MoveCmd` /
-//! `Body.Sunroof.Shade.MoveCmd` in the cockpit flow.  The legacy
+//! Sole *intended* writer of `Vehicle.Controller.Sunroof.MoveCmd` /
+//! `Vehicle.Controller.Sunroof.Shade.MoveCmd` in the cockpit flow.  The legacy
 //! sim-panel `SunroofMotorRow` writes the same signals directly for
 //! engineering use; race is acceptable for that surface.
 
@@ -59,11 +59,11 @@ use tokio::select;
 use crate::ipc_message::SignalValue;
 use crate::signal_bus::{SignalBus, VssPath};
 
-const DETENT: VssPath = "Body.Switches.Sunroof.Detent";
-const ROOF_CMD: VssPath = "Body.Sunroof.MoveCmd";
-const SHADE_CMD: VssPath = "Body.Sunroof.Shade.MoveCmd";
-const ROOF_POS: VssPath = "Body.Sunroof.Position";
-const SHADE_POS: VssPath = "Body.Sunroof.Shade.Position";
+const DETENT: VssPath = "Vehicle.Controller.Body.Switches.Sunroof.Detent";
+const ROOF_CMD: VssPath = "Vehicle.Controller.Sunroof.MoveCmd";
+const SHADE_CMD: VssPath = "Vehicle.Controller.Sunroof.Shade.MoveCmd";
+const ROOF_POS: VssPath = "Vehicle.Cabin.Sunroof.Position";
+const SHADE_POS: VssPath = "Vehicle.Cabin.Sunroof.Shade.Position";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Detent {

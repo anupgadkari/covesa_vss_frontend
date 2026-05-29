@@ -164,15 +164,15 @@ pub enum FeatureId {
     /// alarm or trigger a tampering chime.
     SlamLock = 0x22,
     /// 3-position interior dome-light switch (OFF / DOOR / ON).
-    /// Owns the default claim on `Cabin.Lights.IsDomeOn` at LOW
+    /// Owns the default claim on `Vehicle.Cabin.Light.IsDomeOn` at LOW
     /// priority — Welcome / Farewell (MEDIUM) and PerimeterAlarm
     /// (HIGH) preempt cleanly via the courtesy arbiter.
     DomeSwitch = 0x23,
     /// Master "power child lock" latching feature.  Consumes the
     /// driver-master momentary push
-    /// `Body.Switches.PowerChildLock.IsPressed` and toggles, on each
+    /// `Vehicle.Controller.Body.Switches.PowerChildLock.IsPressed` and toggles, on each
     /// press edge, the latched master output
-    /// `Body.PowerChildLock.MasterStatus` plus the per-rear-door
+    /// `Vehicle.Controller.Body.PowerChildLock.MasterStatus` plus the per-rear-door
     /// fan-out signals `Body.Doors.Row2.{Left,Right}.IsChildLockActive`.
     /// When `IsChildLockActive` is true the door-handle plant ignores
     /// inside pulls and the `PowerWindowLocal` feature suppresses
@@ -181,7 +181,7 @@ pub enum FeatureId {
     /// IS the commanded state.
     PowerChildLock = 0x24,
     /// Delayed-accessory power.  Publishes a single latched output
-    /// `Body.Power.DelayedAccessory.IsActive` that gates accessory
+    /// `Vehicle.Controller.Body.Power.DelayedAccessory.IsActive` that gates accessory
     /// features (PowerWindow today; sunroof + radio in the future).
     /// Active when `Vehicle.LowVoltageSystemState` is ON / START, or
     /// when it has transitioned to OFF / ACC / LOCK within the last
@@ -200,15 +200,15 @@ pub enum FeatureId {
     /// the single resolved motor direction per window.
     PowerWindow = 0x25,
     /// Sunroof + shade coordinated control.  Consumes the
-    /// overhead-console rocker detent (`Body.Switches.Sunroof.Detent`),
+    /// overhead-console rocker detent (`Vehicle.Controller.Body.Switches.Sunroof.Detent`),
     /// resolves the sequencing rule (shade opens before roof when
     /// opening; roof closes before shade when closing), and writes
-    /// `Body.Sunroof.MoveCmd` + `Body.Sunroof.Shade.MoveCmd` so the
+    /// `Vehicle.Controller.Sunroof.MoveCmd` + `Vehicle.Controller.Sunroof.Shade.MoveCmd` so the
     /// existing SunroofPlantModel stays unchanged.
     SunroofControl = 0x27,
     /// Smart Unlock — re-unlocks a PEPS vehicle that was locked from
     /// outside while a paired key is still in the cabin.  Triggered
-    /// on every external `Cabin.LockStatus` lock event with ignition
+    /// on every external `Vehicle.Controller.Cabin.LockStatus` lock event with ignition
     /// quiescent.  See `features::smart_unlock`.
     SmartUnlock = 0x2B,
     // ---- Future window-arbiter participants (allow-list reserved) ----
@@ -226,7 +226,7 @@ pub enum FeatureId {
 
 impl std::fmt::Display for FeatureId {
     /// Stable, wire-format-safe string representation of a `FeatureId`.
-    /// Used to publish `Cabin.LockStatus.LastRequestor` so subscribers
+    /// Used to publish `Vehicle.Controller.Cabin.LockStatus.LastRequestor` so subscribers
     /// (AutoRelock today) can filter on requestor identity by string
     /// match without coupling to the enum's u8 layout.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

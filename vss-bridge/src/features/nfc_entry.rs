@@ -36,7 +36,7 @@
 //!
 //! # Short-circuit on already-unlocked
 //!
-//! If `Cabin.LockStatus` already reads `UNLOCKED`, a tap is a no-op
+//! If `Vehicle.Controller.Cabin.LockStatus` already reads `UNLOCKED`, a tap is a no-op
 //! (the user pulled the handle twice, or the car was already open).
 //! `DRIVER_UNLOCKED` still escalates — a deliberate tap on the
 //! B-pillar reader is a clear "open everything" intent.
@@ -47,11 +47,11 @@
 //! (phone) represent an NFC tap on the start-button NFC pad.  On a
 //! rising edge there, NfcEntry:
 //!
-//! 1. Publishes `Body.PEPS.NfcAuthBypass = true` (auto-cleared
+//! 1. Publishes `Vehicle.Controller.Body.PEPS.NfcAuthBypass = true` (auto-cleared
 //!    after `NFC_BYPASS_WINDOW`).  VehicleStartingControl reads
 //!    this as proof the user authenticated via NFC and skips its
 //!    normal cabin Authenticated scan.
-//! 2. Publishes a momentary `Body.Switches.StartStop.IsPressed`
+//! 2. Publishes a momentary `Vehicle.Controller.Body.Switches.StartStop.IsPressed`
 //!    rising-then-falling edge so VSC's PEPS press handler fires.
 //!
 //! Net effect: an NFC tap on the start-button pad is equivalent to
@@ -69,9 +69,9 @@ use crate::arbiter::{DoorLockArbiter, DoorLockRequest, LockCommand, FEEDBACK_REQ
 use crate::ipc_message::{FeatureId, SignalValue};
 use crate::signal_bus::{SignalBus, VssPath};
 
-const LOCK_STATUS: VssPath = "Cabin.LockStatus";
-const START_STOP: VssPath = "Body.Switches.StartStop.IsPressed";
-const NFC_AUTH_BYPASS: VssPath = "Body.PEPS.NfcAuthBypass";
+const LOCK_STATUS: VssPath = "Vehicle.Controller.Cabin.LockStatus";
+const START_STOP: VssPath = "Vehicle.Controller.Body.Switches.StartStop.IsPressed";
+const NFC_AUTH_BYPASS: VssPath = "Vehicle.Controller.Body.PEPS.NfcAuthBypass";
 
 /// How long the NFC bypass stays valid after a tap.  Long enough
 /// for VSC to consume the StartStop press we publish right after,
@@ -87,8 +87,8 @@ const START_PRESS_HOLD: Duration = Duration::from_millis(50);
 
 /// Per-NFC-card slot paths.  Two cards in the simulator HMI.
 const NFC_CARD_SIGNALS: [VssPath; 2] = [
-    "Body.PEPS.Plant.NfcCard.1.Position",
-    "Body.PEPS.Plant.NfcCard.2.Position",
+    "Vehicle.Simulation.PEPS.Plant.NfcCard.1.Position",
+    "Vehicle.Simulation.PEPS.Plant.NfcCard.2.Position",
 ];
 
 /// Per-BLE-phone NFC tap paths.  Two phones in the simulator HMI.
@@ -97,8 +97,8 @@ const NFC_CARD_SIGNALS: [VssPath; 2] = [
 /// (handled here via `.NfcTap`).  Distinct signals so BLE proximity
 /// and NFC tap don't conflate.
 const BLE_PHONE_SIGNALS: [VssPath; 2] = [
-    "Body.PEPS.Plant.BlePhone.1.NfcTap",
-    "Body.PEPS.Plant.BlePhone.2.NfcTap",
+    "Vehicle.Simulation.PEPS.Plant.BlePhone.1.NfcTap",
+    "Vehicle.Simulation.PEPS.Plant.BlePhone.2.NfcTap",
 ];
 
 pub struct NfcEntry<B: SignalBus> {
@@ -332,7 +332,7 @@ mod tests {
 
     fn unlock_was_dispatched(bus: &MockBus) -> bool {
         bus.history().into_iter().any(|(s, v)| {
-            s == "Body.Doors.CentralLock.Command" && {
+            s == "Vehicle.Controller.Body.Doors.CentralLock.Command" && {
                 matches!(v, SignalValue::String(ref c)
                     if c == "unlock_all" || c == "unlock_driver")
             }
@@ -341,7 +341,7 @@ mod tests {
 
     fn feedback_was_published(bus: &MockBus) -> bool {
         bus.history().into_iter().any(|(s, v)| {
-            s == "Body.Doors.CentralLock.FeedbackRequest"
+            s == "Vehicle.Controller.Body.Doors.CentralLock.FeedbackRequest"
                 && matches!(v, SignalValue::String(r) if r == "unlock")
         })
     }
@@ -356,7 +356,7 @@ mod tests {
         bus.clear_history();
 
         bus.inject(
-            "Body.PEPS.Plant.NfcCard.1.Position",
+            "Vehicle.Simulation.PEPS.Plant.NfcCard.1.Position",
             SignalValue::String("DriverHandle".into()),
         );
         settle().await;
@@ -377,7 +377,7 @@ mod tests {
         bus.clear_history();
 
         bus.inject(
-            "Body.PEPS.Plant.NfcCard.1.Position",
+            "Vehicle.Simulation.PEPS.Plant.NfcCard.1.Position",
             SignalValue::String("PushButton".into()),
         );
         settle().await;
@@ -387,16 +387,17 @@ mod tests {
 
     /// Helper: did the bus see the auth bypass go true?
     fn bypass_was_published(bus: &MockBus) -> bool {
-        bus.history()
-            .into_iter()
-            .any(|(s, v)| s == "Body.PEPS.NfcAuthBypass" && v == SignalValue::Bool(true))
+        bus.history().into_iter().any(|(s, v)| {
+            s == "Vehicle.Controller.Body.PEPS.NfcAuthBypass" && v == SignalValue::Bool(true)
+        })
     }
 
     /// Helper: did the bus see a momentary StartStop rising edge?
     fn start_press_was_fired(bus: &MockBus) -> bool {
-        bus.history()
-            .into_iter()
-            .any(|(s, v)| s == "Body.Switches.StartStop.IsPressed" && v == SignalValue::Bool(true))
+        bus.history().into_iter().any(|(s, v)| {
+            s == "Vehicle.Controller.Body.Switches.StartStop.IsPressed"
+                && v == SignalValue::Bool(true)
+        })
     }
 
     #[tokio::test]
@@ -407,7 +408,7 @@ mod tests {
         bus.clear_history();
 
         bus.inject(
-            "Body.PEPS.Plant.NfcCard.1.Position",
+            "Vehicle.Simulation.PEPS.Plant.NfcCard.1.Position",
             SignalValue::String("PushButton".into()),
         );
         settle().await;
@@ -432,7 +433,7 @@ mod tests {
         bus.clear_history();
 
         bus.inject(
-            "Body.PEPS.Plant.BlePhone.1.NfcTap",
+            "Vehicle.Simulation.PEPS.Plant.BlePhone.1.NfcTap",
             SignalValue::String("PushButton".into()),
         );
         settle().await;
@@ -449,7 +450,7 @@ mod tests {
         let bus = setup().await;
         bus.inject(LOCK_STATUS, SignalValue::String("LOCKED".into()));
         bus.inject(
-            "Body.PEPS.Plant.NfcCard.1.Position",
+            "Vehicle.Simulation.PEPS.Plant.NfcCard.1.Position",
             SignalValue::String("DriverHandle".into()),
         );
         settle().await;
@@ -457,7 +458,7 @@ mod tests {
 
         // Same position republished — must NOT trigger another unlock.
         bus.inject(
-            "Body.PEPS.Plant.NfcCard.1.Position",
+            "Vehicle.Simulation.PEPS.Plant.NfcCard.1.Position",
             SignalValue::String("DriverHandle".into()),
         );
         settle().await;
@@ -470,20 +471,20 @@ mod tests {
         let bus = setup().await;
         bus.inject(LOCK_STATUS, SignalValue::String("LOCKED".into()));
         bus.inject(
-            "Body.PEPS.Plant.NfcCard.1.Position",
+            "Vehicle.Simulation.PEPS.Plant.NfcCard.1.Position",
             SignalValue::String("DriverHandle".into()),
         );
         settle().await;
         // Remove the card and put it back.
         bus.inject(
-            "Body.PEPS.Plant.NfcCard.1.Position",
+            "Vehicle.Simulation.PEPS.Plant.NfcCard.1.Position",
             SignalValue::String("NotPresent".into()),
         );
         bus.inject(LOCK_STATUS, SignalValue::String("LOCKED".into()));
         settle().await;
         bus.clear_history();
         bus.inject(
-            "Body.PEPS.Plant.NfcCard.1.Position",
+            "Vehicle.Simulation.PEPS.Plant.NfcCard.1.Position",
             SignalValue::String("DriverHandle".into()),
         );
         settle().await;
@@ -499,7 +500,7 @@ mod tests {
         bus.clear_history();
 
         bus.inject(
-            "Body.PEPS.Plant.NfcCard.1.Position",
+            "Vehicle.Simulation.PEPS.Plant.NfcCard.1.Position",
             SignalValue::String("DriverHandle".into()),
         );
         settle().await;
@@ -516,7 +517,7 @@ mod tests {
         bus.clear_history();
 
         bus.inject(
-            "Body.PEPS.Plant.NfcCard.1.Position",
+            "Vehicle.Simulation.PEPS.Plant.NfcCard.1.Position",
             SignalValue::String("DriverHandle".into()),
         );
         settle().await;
@@ -532,7 +533,7 @@ mod tests {
         bus.clear_history();
 
         bus.inject(
-            "Body.PEPS.Plant.NfcCard.2.Position",
+            "Vehicle.Simulation.PEPS.Plant.NfcCard.2.Position",
             SignalValue::String("DriverHandle".into()),
         );
         settle().await;
@@ -550,7 +551,7 @@ mod tests {
         bus.clear_history();
 
         bus.inject(
-            "Body.PEPS.Plant.BlePhone.1.NfcTap",
+            "Vehicle.Simulation.PEPS.Plant.BlePhone.1.NfcTap",
             SignalValue::String("DriverHandle".into()),
         );
         settle().await;
@@ -567,7 +568,7 @@ mod tests {
         bus.clear_history();
 
         bus.inject(
-            "Body.PEPS.Plant.BlePhone.1.NfcTap",
+            "Vehicle.Simulation.PEPS.Plant.BlePhone.1.NfcTap",
             SignalValue::String("PushButton".into()),
         );
         settle().await;
@@ -587,14 +588,14 @@ mod tests {
         bus.clear_history();
 
         bus.inject(
-            "Body.PEPS.Plant.BlePhone.1.PlacedZone",
+            "Vehicle.Simulation.PEPS.Plant.BlePhone.1.PlacedZone",
             SignalValue::String("LeftFront".into()),
         );
         settle().await;
         assert!(!unlock_was_dispatched(&bus));
 
         bus.inject(
-            "Body.PEPS.Plant.BlePhone.1.PlacedZone",
+            "Vehicle.Simulation.PEPS.Plant.BlePhone.1.PlacedZone",
             SignalValue::String("Cabin".into()),
         );
         settle().await;
@@ -609,7 +610,7 @@ mod tests {
         bus.clear_history();
 
         bus.inject(
-            "Body.PEPS.Plant.BlePhone.1.NfcTap",
+            "Vehicle.Simulation.PEPS.Plant.BlePhone.1.NfcTap",
             SignalValue::String("DriverHandle".into()),
         );
         settle().await;
@@ -622,14 +623,14 @@ mod tests {
         let bus = setup().await;
         bus.inject(LOCK_STATUS, SignalValue::String("LOCKED".into()));
         bus.inject(
-            "Body.PEPS.Plant.BlePhone.1.NfcTap",
+            "Vehicle.Simulation.PEPS.Plant.BlePhone.1.NfcTap",
             SignalValue::String("DriverHandle".into()),
         );
         settle().await;
         bus.clear_history();
 
         bus.inject(
-            "Body.PEPS.Plant.BlePhone.1.NfcTap",
+            "Vehicle.Simulation.PEPS.Plant.BlePhone.1.NfcTap",
             SignalValue::String("DriverHandle".into()),
         );
         settle().await;

@@ -3,10 +3,10 @@
 //! # Logic
 //!
 //! Both lamps follow the same simple rule:
-//! - **Front fog** (`Body.Lights.Fog.Front.IsOn`): ON when
-//!   `Body.Switches.Fog.Front.IsEngaged` is `true` **and** ignition is `ON` or `START`.
-//! - **Rear fog** (`Body.Lights.Fog.Rear.IsOn`): ON when
-//!   `Body.Switches.Fog.Rear.IsEngaged` is `true` **and** ignition is `ON` or `START`.
+//! - **Front fog** (`Vehicle.Body.Lights.Fog.Front.IsOn`): ON when
+//!   `Vehicle.Controller.Body.Switches.Fog.Front.IsEngaged` is `true` **and** ignition is `ON` or `START`.
+//! - **Rear fog** (`Vehicle.Body.Lights.Fog.Rear.IsOn`): ON when
+//!   `Vehicle.Controller.Body.Switches.Fog.Rear.IsEngaged` is `true` **and** ignition is `ON` or `START`.
 //!
 //! # Ignition gate
 //!
@@ -30,10 +30,10 @@ use crate::signal_bus::SignalBus;
 // ── Signal constants ───────────────────────────────────────────────────────
 
 const POWER_STATE: &str = "Vehicle.LowVoltageSystemState";
-const FRONT_SWITCH: &str = "Body.Switches.Fog.Front.IsEngaged";
-const REAR_SWITCH: &str = "Body.Switches.Fog.Rear.IsEngaged";
-const FRONT_OUT: &str = "Body.Lights.Fog.Front.IsOn";
-const REAR_OUT: &str = "Body.Lights.Fog.Rear.IsOn";
+const FRONT_SWITCH: &str = "Vehicle.Controller.Body.Switches.Fog.Front.IsEngaged";
+const REAR_SWITCH: &str = "Vehicle.Controller.Body.Switches.Fog.Rear.IsEngaged";
+const FRONT_OUT: &str = "Vehicle.Body.Lights.Fog.Front.IsOn";
+const REAR_OUT: &str = "Vehicle.Body.Lights.Fog.Rear.IsOn";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 

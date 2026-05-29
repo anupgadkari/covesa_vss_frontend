@@ -17,7 +17,7 @@
 //!  PassiveEntry feature             ← this module
 //!      │  1. Identifies the door's proximity zone
 //!      │  2. Picks paired devices currently in that zone
-//!      │  3. Publishes Body.PEPS.LfChallenge (16-byte nonce)
+//!      │  3. Publishes Vehicle.Controller.Body.PEPS.LfChallenge (16-byte nonce)
 //!      ▼
 //!  PepsPlantModel (per device, staggered by 10ms × slot)
 //!      │  Publishes Body.PEPS.Plant.KeyFob.N.ChallengeResponse
@@ -142,7 +142,7 @@ struct Door {
 /// because it would require re-wiring the door modules.
 const DOORS: [Door; 4] = [
     Door {
-        handle_signal: "Body.Doors.Row1.Left.Handle.Outside.IsPulled",
+        handle_signal: "Vehicle.Cabin.Door.Row1.Left.Handle.Outside.IsPulled",
         proximity_zone: Zone::LeftFront,
         door_ref: DoorRef {
             row: 1,
@@ -151,7 +151,7 @@ const DOORS: [Door; 4] = [
         name: "Row1.Left",
     },
     Door {
-        handle_signal: "Body.Doors.Row1.Right.Handle.Outside.IsPulled",
+        handle_signal: "Vehicle.Cabin.Door.Row1.Right.Handle.Outside.IsPulled",
         proximity_zone: Zone::RightFront,
         door_ref: DoorRef {
             row: 1,
@@ -160,7 +160,7 @@ const DOORS: [Door; 4] = [
         name: "Row1.Right",
     },
     Door {
-        handle_signal: "Body.Doors.Row2.Left.Handle.Outside.IsPulled",
+        handle_signal: "Vehicle.Cabin.Door.Row2.Left.Handle.Outside.IsPulled",
         // Rear handle authenticates against the LF antenna on its own
         // physical side.  Earlier revisions had both rear doors map
         // to `RightFront` — a pre-existing carry-over from before the
@@ -176,7 +176,7 @@ const DOORS: [Door; 4] = [
         name: "Row2.Left",
     },
     Door {
-        handle_signal: "Body.Doors.Row2.Right.Handle.Outside.IsPulled",
+        handle_signal: "Vehicle.Cabin.Door.Row2.Right.Handle.Outside.IsPulled",
         proximity_zone: Zone::RightFront,
         door_ref: DoorRef {
             row: 2,
@@ -194,7 +194,7 @@ fn is_rear_door(door: &Door) -> bool {
 
 /// Returns true if this handle pull should kick off a key search
 /// (LF challenge + verify + arbiter dispatch).  False means the
-/// `Cabin.LockStatus` indicates the door is already accessible —
+/// `Vehicle.Controller.Cabin.LockStatus` indicates the door is already accessible —
 /// PassiveEntry stays silent and the mechanical pull is handled by
 /// `DoorHandlePlantModel` (which simply opens the door).
 ///
@@ -208,10 +208,10 @@ fn is_rear_door(door: &Door) -> bool {
 /// | UNLOCKED         | skip        | skip        |
 ///
 /// Key design choice: this is gated on the vehicle-level
-/// `Cabin.LockStatus`, not per-door `IsLocked`.  A thief inside the
+/// `Vehicle.Controller.Cabin.LockStatus`, not per-door `IsLocked`.  A thief inside the
 /// cabin can pop a sill-pin (soldier knob) and unlock a single
 /// door without authentication, which would update `IsLocked`
-/// locally but cannot update `Cabin.LockStatus` (the door-lock
+/// locally but cannot update `Vehicle.Controller.Cabin.LockStatus` (the door-lock
 /// arbiter only publishes that on accepted external commands).
 /// Using cabin-level state keeps the gate immune to that bypass.
 fn auth_needed_for_door(door: &Door, lock_status: &str, cfg: &PlatformConfig) -> bool {
@@ -306,7 +306,7 @@ struct PendingStageTwo {
 /// Cabin lock-state signal — used to short-circuit handle-pull auth
 /// when the requested door is already unlocked.  See the
 /// `auth_needed_for_door` matrix.
-const LOCK_STATUS: VssPath = "Cabin.LockStatus";
+const LOCK_STATUS: VssPath = "Vehicle.Controller.Cabin.LockStatus";
 
 /// Passive-entry feature.
 pub struct PassiveEntry<B: SignalBus> {
@@ -438,7 +438,7 @@ impl<B: SignalBus + Send + Sync + 'static> PassiveEntry<B> {
                 // Cabin-state gate — auth (key search) is only needed
                 // when the cabin is in a state where this specific
                 // door is still locked.  Soldier-knob unlocks don't
-                // promote `Cabin.LockStatus` so a thief popping a sill
+                // promote `Vehicle.Controller.Cabin.LockStatus` so a thief popping a sill
                 // pin from inside cannot slip past this check.
                 //
                 //   • UNLOCKED         — every door already unlocked,
@@ -904,12 +904,18 @@ mod tests {
         }
         // Initial sentinel publishes so each door's IsLocked is observable
         // for assertions.
-        bus.publish("Body.Doors.Row1.Left.IsLocked", SignalValue::Bool(true))
-            .await
-            .unwrap();
-        bus.publish("Body.Doors.Row1.Right.IsLocked", SignalValue::Bool(true))
-            .await
-            .unwrap();
+        bus.publish(
+            "Vehicle.Cabin.Door.Row1.Left.IsLocked",
+            SignalValue::Bool(true),
+        )
+        .await
+        .unwrap();
+        bus.publish(
+            "Vehicle.Cabin.Door.Row1.Right.IsLocked",
+            SignalValue::Bool(true),
+        )
+        .await
+        .unwrap();
         bus
     }
 
@@ -962,12 +968,18 @@ mod tests {
         for _ in 0..32 {
             tokio::task::yield_now().await;
         }
-        bus.publish("Body.Doors.Row1.Left.IsLocked", SignalValue::Bool(true))
-            .await
-            .unwrap();
-        bus.publish("Body.Doors.Row1.Right.IsLocked", SignalValue::Bool(true))
-            .await
-            .unwrap();
+        bus.publish(
+            "Vehicle.Cabin.Door.Row1.Left.IsLocked",
+            SignalValue::Bool(true),
+        )
+        .await
+        .unwrap();
+        bus.publish(
+            "Vehicle.Cabin.Door.Row1.Right.IsLocked",
+            SignalValue::Bool(true),
+        )
+        .await
+        .unwrap();
         bus
     }
 
@@ -1000,7 +1012,7 @@ mod tests {
 
     fn last_command(bus: &MockBus) -> Option<String> {
         bus.history().into_iter().rev().find_map(|(s, v)| {
-            if s == "Body.Doors.CentralLock.Command" {
+            if s == "Vehicle.Controller.Body.Doors.CentralLock.Command" {
                 if let SignalValue::String(cmd) = v {
                     return Some(cmd);
                 }
@@ -1030,7 +1042,7 @@ mod tests {
 
         // Pull driver door handle.
         bus.inject(
-            "Body.Doors.Row1.Left.Handle.Outside.IsPulled",
+            "Vehicle.Cabin.Door.Row1.Left.Handle.Outside.IsPulled",
             SignalValue::Bool(true),
         );
         drain().await;
@@ -1062,7 +1074,7 @@ mod tests {
         bus.clear_history();
 
         bus.inject(
-            "Body.Doors.Row1.Left.Handle.Outside.IsPulled",
+            "Vehicle.Cabin.Door.Row1.Left.Handle.Outside.IsPulled",
             SignalValue::Bool(true),
         );
         drain().await;
@@ -1081,7 +1093,7 @@ mod tests {
         bus.clear_history();
 
         bus.inject(
-            "Body.Doors.Row1.Left.Handle.Outside.IsPulled",
+            "Vehicle.Cabin.Door.Row1.Left.Handle.Outside.IsPulled",
             SignalValue::Bool(true),
         );
         drain().await;
@@ -1117,7 +1129,7 @@ mod tests {
         bus.clear_history();
 
         bus.inject(
-            "Body.Doors.Row1.Left.Handle.Outside.IsPulled",
+            "Vehicle.Cabin.Door.Row1.Left.Handle.Outside.IsPulled",
             SignalValue::Bool(true),
         );
         drain().await;
@@ -1130,7 +1142,7 @@ mod tests {
     }
 
     /// 4. After stage-1 unlocks the driver door, a second pull on the
-    /// SAME (driver) handle is now silently skipped — `Cabin.LockStatus`
+    /// SAME (driver) handle is now silently skipped — `Vehicle.Controller.Cabin.LockStatus`
     /// is `DRIVER_UNLOCKED`, the driver door is the only one unlocked,
     /// the user already has access.  No regression to `UnlockDriver`.
     /// To reach `UnlockAll`, the user pulls a passenger or rear handle
@@ -1152,7 +1164,7 @@ mod tests {
 
         // Stage 1: driver pull while cabin is LOCKED → UnlockDriver.
         bus.inject(
-            "Body.Doors.Row1.Left.Handle.Outside.IsPulled",
+            "Vehicle.Cabin.Door.Row1.Left.Handle.Outside.IsPulled",
             SignalValue::Bool(true),
         );
         drain().await;
@@ -1161,13 +1173,13 @@ mod tests {
         // Cabin is now DRIVER_UNLOCKED.  Release + pull again on the
         // driver handle — gate kicks in, no further command dispatched.
         bus.inject(
-            "Body.Doors.Row1.Left.Handle.Outside.IsPulled",
+            "Vehicle.Cabin.Door.Row1.Left.Handle.Outside.IsPulled",
             SignalValue::Bool(false),
         );
         drain().await;
         bus.clear_history();
         bus.inject(
-            "Body.Doors.Row1.Left.Handle.Outside.IsPulled",
+            "Vehicle.Cabin.Door.Row1.Left.Handle.Outside.IsPulled",
             SignalValue::Bool(true),
         );
         drain().await;
@@ -1198,7 +1210,7 @@ mod tests {
 
         // Stage 1.
         bus.inject(
-            "Body.Doors.Row1.Left.Handle.Outside.IsPulled",
+            "Vehicle.Cabin.Door.Row1.Left.Handle.Outside.IsPulled",
             SignalValue::Bool(true),
         );
         drain().await;
@@ -1216,7 +1228,7 @@ mod tests {
         drain().await;
         bus.clear_history();
         bus.inject(
-            "Body.Doors.Row1.Right.Handle.Outside.IsPulled",
+            "Vehicle.Cabin.Door.Row1.Right.Handle.Outside.IsPulled",
             SignalValue::Bool(true),
         );
         drain().await;
@@ -1237,14 +1249,17 @@ mod tests {
             SignalValue::String("LeftFront".into()),
         );
         // Force cabin into UNLOCKED.
-        bus.publish("Cabin.LockStatus", SignalValue::String("UNLOCKED".into()))
-            .await
-            .unwrap();
+        bus.publish(
+            "Vehicle.Controller.Cabin.LockStatus",
+            SignalValue::String("UNLOCKED".into()),
+        )
+        .await
+        .unwrap();
         drain().await;
         bus.clear_history();
 
         bus.inject(
-            "Body.Doors.Row1.Left.Handle.Outside.IsPulled",
+            "Vehicle.Cabin.Door.Row1.Left.Handle.Outside.IsPulled",
             SignalValue::Bool(true),
         );
         drain().await;
@@ -1292,7 +1307,7 @@ mod tests {
         bus.clear_history();
 
         bus.inject(
-            "Body.Doors.Row1.Right.Handle.Outside.IsPulled",
+            "Vehicle.Cabin.Door.Row1.Right.Handle.Outside.IsPulled",
             SignalValue::Bool(true),
         );
         drain().await;
@@ -1321,8 +1336,8 @@ mod tests {
         bus.clear_history();
 
         for handle in [
-            "Body.Doors.Row2.Left.Handle.Outside.IsPulled",
-            "Body.Doors.Row2.Right.Handle.Outside.IsPulled",
+            "Vehicle.Cabin.Door.Row2.Left.Handle.Outside.IsPulled",
+            "Vehicle.Cabin.Door.Row2.Right.Handle.Outside.IsPulled",
         ] {
             bus.inject(handle, SignalValue::Bool(true));
         }
@@ -1397,13 +1412,13 @@ mod tests {
         bus2.clear_history();
 
         bus2.inject(
-            "Body.Doors.Row2.Right.Handle.Outside.IsPulled",
+            "Vehicle.Cabin.Door.Row2.Right.Handle.Outside.IsPulled",
             SignalValue::Bool(true),
         );
         drain().await;
 
         let cmd = bus2.history().into_iter().rev().find_map(|(s, v)| {
-            if s == "Body.Doors.CentralLock.Command" {
+            if s == "Vehicle.Controller.Body.Doors.CentralLock.Command" {
                 if let SignalValue::String(c) = v {
                     return Some(c);
                 }
@@ -1440,7 +1455,7 @@ mod tests {
         bus.clear_history();
 
         bus.inject(
-            "Body.Doors.Row1.Right.Handle.Outside.IsPulled",
+            "Vehicle.Cabin.Door.Row1.Right.Handle.Outside.IsPulled",
             SignalValue::Bool(true),
         );
         drain().await;
@@ -1469,7 +1484,7 @@ mod tests {
 
         // Stage 1.
         bus.inject(
-            "Body.Doors.Row1.Right.Handle.Outside.IsPulled",
+            "Vehicle.Cabin.Door.Row1.Right.Handle.Outside.IsPulled",
             SignalValue::Bool(true),
         );
         drain().await;
@@ -1477,13 +1492,13 @@ mod tests {
 
         // Release + re-pull on the driver (Row1.Right) handle.
         bus.inject(
-            "Body.Doors.Row1.Right.Handle.Outside.IsPulled",
+            "Vehicle.Cabin.Door.Row1.Right.Handle.Outside.IsPulled",
             SignalValue::Bool(false),
         );
         drain().await;
         bus.clear_history();
         bus.inject(
-            "Body.Doors.Row1.Right.Handle.Outside.IsPulled",
+            "Vehicle.Cabin.Door.Row1.Right.Handle.Outside.IsPulled",
             SignalValue::Bool(true),
         );
         drain().await;
@@ -1513,7 +1528,7 @@ mod tests {
         bus.clear_history();
 
         bus.inject(
-            "Body.Doors.Row1.Left.Handle.Outside.IsPulled",
+            "Vehicle.Cabin.Door.Row1.Left.Handle.Outside.IsPulled",
             SignalValue::Bool(true),
         );
         drain().await;
@@ -1545,7 +1560,7 @@ mod tests {
         bus.clear_history();
 
         bus.inject(
-            "Body.Doors.Row1.Left.Handle.Outside.IsPulled",
+            "Vehicle.Cabin.Door.Row1.Left.Handle.Outside.IsPulled",
             SignalValue::Bool(true),
         );
         drain().await;
@@ -1573,7 +1588,7 @@ mod tests {
         bus.clear_history();
 
         bus.inject(
-            "Body.Doors.Row1.Left.Handle.Outside.IsPulled",
+            "Vehicle.Cabin.Door.Row1.Left.Handle.Outside.IsPulled",
             SignalValue::Bool(true),
         );
         drain().await;

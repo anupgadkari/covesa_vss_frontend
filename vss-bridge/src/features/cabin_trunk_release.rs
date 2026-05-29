@@ -4,8 +4,8 @@
 //!
 //! # Behaviour
 //!
-//! On a rising edge of `Body.Switches.Trunk.Release.IsPressed`,
-//! pulse `Body.Trunk.OpenCmd` through the **trunk arbiter**.  No
+//! On a rising edge of `Vehicle.Controller.Body.Switches.Trunk.Release.IsPressed`,
+//! pulse `Vehicle.Controller.Body.Trunk.Rear.OpenCmd` through the **trunk arbiter**.  No
 //! lock-state or auth gate — the user is already inside the cabin,
 //! which is the trust boundary.  Valet mode is enforced at the
 //! arbiter's `ValetGate` `PhysicalGate`, the same chokepoint that
@@ -13,7 +13,7 @@
 //!
 //! # Why route through the arbiter?
 //!
-//! Direct-publishing `Body.Trunk.OpenCmd` would bypass the valet
+//! Direct-publishing `Vehicle.Controller.Body.Trunk.Rear.OpenCmd` would bypass the valet
 //! gate — a stolen-fob valet attack could bridge through the
 //! infotainment to fake a press.  Going through the arbiter gives
 //! us valet suppression for free and keeps the trunk-open writers
@@ -33,7 +33,7 @@ use crate::ipc_message::{FeatureId, Priority, SignalValue};
 use crate::signal_bus::{SignalBus, VssPath};
 
 const FEATURE_ID: FeatureId = FeatureId::CabinTrunkRelease;
-const SWITCH: VssPath = "Body.Switches.Trunk.Release.IsPressed";
+const SWITCH: VssPath = "Vehicle.Controller.Body.Switches.Trunk.Release.IsPressed";
 
 pub struct CabinTrunkRelease<B: SignalBus> {
     bus: Arc<B>,
@@ -107,9 +107,9 @@ mod tests {
     }
 
     fn trunk_was_pulsed(bus: &MockBus) -> bool {
-        bus.history()
-            .into_iter()
-            .any(|(s, v)| s == "Body.Trunk.OpenCmd" && v == SignalValue::Bool(true))
+        bus.history().into_iter().any(|(s, v)| {
+            s == "Vehicle.Controller.Body.Trunk.Rear.OpenCmd" && v == SignalValue::Bool(true)
+        })
     }
 
     #[tokio::test]
@@ -134,7 +134,10 @@ mod tests {
         // feature still issues the request; the gate forces the
         // publish to false → plant model sees no rising edge.
         let bus = setup().await;
-        bus.inject("Cabin.ValetMode.IsActive", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Controller.Cabin.ValetMode.IsActive",
+            SignalValue::Bool(true),
+        );
         settle().await;
         bus.clear_history();
 
@@ -162,7 +165,7 @@ mod tests {
         settle().await;
 
         let fired_flash = bus.history().into_iter().any(|(s, v)| {
-            s == "Body.Doors.CentralLock.FeedbackRequest"
+            s == "Vehicle.Controller.Body.Doors.CentralLock.FeedbackRequest"
                 && v == SignalValue::String("trunk_unlock".into())
         });
         assert!(
@@ -177,7 +180,10 @@ mod tests {
         // works regardless of cabin lock state.  Verifying we don't
         // mistakenly add a lock-state gate later.
         let bus = setup().await;
-        bus.inject("Cabin.LockStatus", SignalValue::String("LOCKED".into()));
+        bus.inject(
+            "Vehicle.Controller.Cabin.LockStatus",
+            SignalValue::String("LOCKED".into()),
+        );
         settle().await;
         bus.clear_history();
 

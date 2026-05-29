@@ -17,8 +17,8 @@
 //! - Adaptive approach-poll loop: 700 ms cadence when no key is in
 //!   approach, 10 s cadence when one is detected, suspended while
 //!   the ignition is in `ACC`/`ON`/`START`.  Publishes
-//!   `Body.PEPS.ApproachState` (bool), `Body.PEPS.ApproachKeys`
-//!   (count), `Body.PEPS.ApproachPollInterval` (current cadence ms).
+//!   `Vehicle.Controller.Body.PEPS.ApproachState` (bool), `Vehicle.Controller.Body.PEPS.ApproachKeys`
+//!   (count), `Vehicle.Controller.Body.PEPS.ApproachPollInterval` (current cadence ms).
 //!   Cadences are overridable via `with_cadence` for tests.
 //!
 //! # What is NOT yet in place
@@ -162,9 +162,9 @@ pub const APPROACH_POLL_SLOW: Duration = Duration::from_secs(10);
 const IGNITION_STATE_SIGNAL: VssPath = "Vehicle.LowVoltageSystemState";
 
 /// VSS paths the arbiter writes from the poll loop.
-const APPROACH_STATE_OUT: VssPath = "Body.PEPS.ApproachState";
-const APPROACH_KEYS_OUT: VssPath = "Body.PEPS.ApproachKeys";
-const APPROACH_POLL_INTERVAL_OUT: VssPath = "Body.PEPS.ApproachPollInterval";
+const APPROACH_STATE_OUT: VssPath = "Vehicle.Controller.Body.PEPS.ApproachState";
+const APPROACH_KEYS_OUT: VssPath = "Vehicle.Controller.Body.PEPS.ApproachKeys";
+const APPROACH_POLL_INTERVAL_OUT: VssPath = "Vehicle.Controller.Body.PEPS.ApproachPollInterval";
 
 /// Simulated latency per antenna set + mode.
 const fn latency(antennas: &AntennaSet, mode: SearchMode) -> Duration {
@@ -704,13 +704,13 @@ fn rssi_for_zone(z: Zone) -> i8 {
 /// same partial-information world a real PEPS feature does.
 fn fob_placed_zone_signal(slot: KeySlot) -> VssPath {
     match slot {
-        0 => "Body.PEPS.Plant.KeyFob.1.PlacedZone",
-        1 => "Body.PEPS.Plant.KeyFob.2.PlacedZone",
-        2 => "Body.PEPS.Plant.KeyFob.3.PlacedZone",
-        3 => "Body.PEPS.Plant.KeyFob.4.PlacedZone",
-        4 => "Body.PEPS.Plant.BlePhone.1.PlacedZone",
-        5 => "Body.PEPS.Plant.BlePhone.2.PlacedZone",
-        _ => "Body.PEPS.Plant.KeyFob.1.PlacedZone", // defensive; never hit at runtime
+        0 => "Vehicle.Simulation.PEPS.Plant.KeyFob.1.PlacedZone",
+        1 => "Vehicle.Simulation.PEPS.Plant.KeyFob.2.PlacedZone",
+        2 => "Vehicle.Simulation.PEPS.Plant.KeyFob.3.PlacedZone",
+        3 => "Vehicle.Simulation.PEPS.Plant.KeyFob.4.PlacedZone",
+        4 => "Vehicle.Simulation.PEPS.Plant.BlePhone.1.PlacedZone",
+        5 => "Vehicle.Simulation.PEPS.Plant.BlePhone.2.PlacedZone",
+        _ => "Vehicle.Simulation.PEPS.Plant.KeyFob.1.PlacedZone", // defensive; never hit at runtime
     }
 }
 
@@ -719,13 +719,13 @@ fn fob_placed_zone_signal(slot: KeySlot) -> VssPath {
 /// to instead of the legacy `.Zone` mirror.
 fn fob_last_observed_zone_signal(slot: KeySlot) -> VssPath {
     match slot {
-        0 => "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
-        1 => "Body.PEPS.Plant.KeyFob.2.LastObservedZone",
-        2 => "Body.PEPS.Plant.KeyFob.3.LastObservedZone",
-        3 => "Body.PEPS.Plant.KeyFob.4.LastObservedZone",
-        4 => "Body.PEPS.Plant.BlePhone.1.LastObservedZone",
-        5 => "Body.PEPS.Plant.BlePhone.2.LastObservedZone",
-        _ => "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
+        0 => "Vehicle.Simulation.PEPS.Plant.KeyFob.1.LastObservedZone",
+        1 => "Vehicle.Simulation.PEPS.Plant.KeyFob.2.LastObservedZone",
+        2 => "Vehicle.Simulation.PEPS.Plant.KeyFob.3.LastObservedZone",
+        3 => "Vehicle.Simulation.PEPS.Plant.KeyFob.4.LastObservedZone",
+        4 => "Vehicle.Simulation.PEPS.Plant.BlePhone.1.LastObservedZone",
+        5 => "Vehicle.Simulation.PEPS.Plant.BlePhone.2.LastObservedZone",
+        _ => "Vehicle.Simulation.PEPS.Plant.KeyFob.1.LastObservedZone",
     }
 }
 
@@ -737,17 +737,17 @@ fn fob_last_observed_zone_signal(slot: KeySlot) -> VssPath {
 /// `true` keeps phones in the authenticated cohort by default.
 fn fob_paired_signal(slot: KeySlot) -> VssPath {
     match slot {
-        0 => "Body.PEPS.Plant.KeyFob.1.Paired",
-        1 => "Body.PEPS.Plant.KeyFob.2.Paired",
-        2 => "Body.PEPS.Plant.KeyFob.3.Paired",
-        3 => "Body.PEPS.Plant.KeyFob.4.Paired",
+        0 => "Vehicle.Simulation.PEPS.Plant.KeyFob.1.Paired",
+        1 => "Vehicle.Simulation.PEPS.Plant.KeyFob.2.Paired",
+        2 => "Vehicle.Simulation.PEPS.Plant.KeyFob.3.Paired",
+        3 => "Vehicle.Simulation.PEPS.Plant.KeyFob.4.Paired",
         // Phones: no .Paired signal in the simulator today — point at
         // a fob path that we never write `false` to so the subscription
         // is harmless.  Filter defaults to "paired" when no value
         // arrives, so phones remain eligible for Authenticated scans.
-        4 => "Body.PEPS.Plant.KeyFob.1.Paired",
-        5 => "Body.PEPS.Plant.KeyFob.1.Paired",
-        _ => "Body.PEPS.Plant.KeyFob.1.Paired",
+        4 => "Vehicle.Simulation.PEPS.Plant.KeyFob.1.Paired",
+        5 => "Vehicle.Simulation.PEPS.Plant.KeyFob.1.Paired",
+        _ => "Vehicle.Simulation.PEPS.Plant.KeyFob.1.Paired",
     }
 }
 

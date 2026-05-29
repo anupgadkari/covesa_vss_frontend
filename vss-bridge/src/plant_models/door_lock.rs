@@ -12,7 +12,7 @@
 //!      │  DoorLockArbiter request
 //!      ▼
 //!  DoorLockArbiter
-//!      │  publishes Body.Doors.CentralLock.Command (String)
+//!      │  publishes Vehicle.Controller.Body.Doors.CentralLock.Command (String)
 //!      │  values: "unlock_driver" | "unlock_all" | "lock_all" | "lock_double"
 //!      ▼
 //!  DoorLockPlantModel          ← this module
@@ -24,10 +24,10 @@
 //! # Signals consumed (from arbiter)
 //! | Signal | Value | Meaning |
 //! |--------|-------|---------|
-//! | `Body.Doors.CentralLock.Command` | `"unlock_driver"` | Unlock driver door only (stage 1) |
-//! | `Body.Doors.CentralLock.Command` | `"unlock_all"`    | Unlock all doors |
-//! | `Body.Doors.CentralLock.Command` | `"lock_all"`      | Lock all doors |
-//! | `Body.Doors.CentralLock.Command` | `"lock_double"`   | Superlock all doors |
+//! | `Vehicle.Controller.Body.Doors.CentralLock.Command` | `"unlock_driver"` | Unlock driver door only (stage 1) |
+//! | `Vehicle.Controller.Body.Doors.CentralLock.Command` | `"unlock_all"`    | Unlock all doors |
+//! | `Vehicle.Controller.Body.Doors.CentralLock.Command` | `"lock_all"`      | Lock all doors |
+//! | `Vehicle.Controller.Body.Doors.CentralLock.Command` | `"lock_double"`   | Superlock all doors |
 //!
 //! # Signals published (confirmed state)
 //! | Signal | Value | Meaning |
@@ -48,27 +48,27 @@ use crate::signal_bus::SignalBus;
 
 /// VSS signal paths for confirmed door lock state (published by this plant model).
 const DOOR_LOCKED_SIGNALS: [&str; 4] = [
-    "Body.Doors.Row1.Left.IsLocked",
-    "Body.Doors.Row1.Right.IsLocked",
-    "Body.Doors.Row2.Left.IsLocked",
-    "Body.Doors.Row2.Right.IsLocked",
+    "Vehicle.Cabin.Door.Row1.Left.IsLocked",
+    "Vehicle.Cabin.Door.Row1.Right.IsLocked",
+    "Vehicle.Cabin.Door.Row2.Left.IsLocked",
+    "Vehicle.Cabin.Door.Row2.Right.IsLocked",
 ];
 
 /// VSS signal paths for the interior soldier knob (mirrors central lock state).
 /// When the actuator locks/unlocks, the knob moves with it.
 const DOOR_SOLDIER_SIGNALS: [&str; 4] = [
-    "Body.Doors.Row1.Left.Soldier.IsUnlocked",
-    "Body.Doors.Row1.Right.Soldier.IsUnlocked",
-    "Body.Doors.Row2.Left.Soldier.IsUnlocked",
-    "Body.Doors.Row2.Right.Soldier.IsUnlocked",
+    "Vehicle.Cabin.Door.Row1.Left.Soldier.IsUnlocked",
+    "Vehicle.Cabin.Door.Row1.Right.Soldier.IsUnlocked",
+    "Vehicle.Cabin.Door.Row2.Left.Soldier.IsUnlocked",
+    "Vehicle.Cabin.Door.Row2.Right.Soldier.IsUnlocked",
 ];
 
 /// VSS signal paths for confirmed double-lock state.
 const DOOR_DOUBLE_LOCKED_SIGNALS: [&str; 4] = [
-    "Body.Doors.Row1.Left.IsDoubleLocked",
-    "Body.Doors.Row1.Right.IsDoubleLocked",
-    "Body.Doors.Row2.Left.IsDoubleLocked",
-    "Body.Doors.Row2.Right.IsDoubleLocked",
+    "Vehicle.Cabin.Door.Row1.Left.IsDoubleLocked",
+    "Vehicle.Cabin.Door.Row1.Right.IsDoubleLocked",
+    "Vehicle.Cabin.Door.Row2.Left.IsDoubleLocked",
+    "Vehicle.Cabin.Door.Row2.Right.IsDoubleLocked",
 ];
 
 /// Door index constants (matches signal array ordering above).
@@ -808,9 +808,12 @@ mod tests {
 
         // Simulate HMI user flipping Row1.Left.IsLocked to false
         // (and soldier to IsUnlocked=true) — bypassing the arbiter.
-        bus.inject("Body.Doors.Row1.Left.IsLocked", SignalValue::Bool(false));
         bus.inject(
-            "Body.Doors.Row1.Left.Soldier.IsUnlocked",
+            "Vehicle.Cabin.Door.Row1.Left.IsLocked",
+            SignalValue::Bool(false),
+        );
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.Soldier.IsUnlocked",
             SignalValue::Bool(true),
         );
         tokio::task::yield_now().await;
@@ -828,17 +831,18 @@ mod tests {
 
         let history = bus.history();
         assert!(
-            history.iter().any(
-                |(p, v)| *p == "Body.Doors.Row1.Left.IsLocked" && *v == SignalValue::Bool(true)
-            ),
+            history
+                .iter()
+                .any(|(p, v)| *p == "Vehicle.Cabin.Door.Row1.Left.IsLocked"
+                    && *v == SignalValue::Bool(true)),
             "LOCK command must re-publish IsLocked=true after HMI override; history: {:?}",
             history
         );
         assert!(
-            history
-                .iter()
-                .any(|(p, v)| *p == "Body.Doors.Row1.Left.Soldier.IsUnlocked"
-                    && *v == SignalValue::Bool(false)),
+            history.iter().any(
+                |(p, v)| *p == "Vehicle.Cabin.Door.Row1.Left.Soldier.IsUnlocked"
+                    && *v == SignalValue::Bool(false)
+            ),
             "LOCK command must reset Soldier.IsUnlocked=false after HMI override; history: {:?}",
             history
         );

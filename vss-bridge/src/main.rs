@@ -412,7 +412,7 @@ async fn boot_simulation_stack(
 
     // DomeSwitch — 3-position interior dome-light switch (OFF / DOOR /
     // ON).  Owns the Low-priority default claim on
-    // Cabin.Lights.IsDomeOn; Welcome / Farewell / PerimeterAlarm
+    // Vehicle.Cabin.Light.IsDomeOn; Welcome / Farewell / PerimeterAlarm
     // pre-empt cleanly via the courtesy arbiter.
     set.spawn(DomeSwitch::new(Arc::clone(&bus), Arc::clone(&courtesy_arb)).run());
 
@@ -549,7 +549,7 @@ async fn boot_simulation_stack(
     // Item #14d — Lost-Paired-Key scan.  On the all-doors-closed
     // edge while ignition is live (ON / START), run a Presence
     // sweep across all on-vehicle zones.  If zero paired keys are
-    // found, publish Body.PEPS.LostKeyWarning=true so the cluster
+    // found, publish Vehicle.Controller.Body.PEPS.LostKeyWarning=true so the cluster
     // can pop up a "KEY NOT IN VEHICLE" alert.  Cleared when a key
     // reappears in a subsequent cycle or when ignition goes OFF.
     set.spawn(LostPkScan::new(Arc::clone(&bus), key_search_handle.clone()).run());
@@ -573,17 +573,17 @@ async fn boot_simulation_stack(
 
     // ── Plant Models ────────────────────────────────────────────────
     set.spawn(BlinkRelay::new(Arc::clone(&bus)).run());
-    // Chime piezo: subscribes to Body.Chime.IsActive (intent), publishes
-    // Body.Chime.IsSounding (actuator state).  HMI watches IsSounding
+    // Chime piezo: subscribes to Vehicle.Controller.Body.Chime.IsActive (intent), publishes
+    // Vehicle.Controller.Body.Chime.IsSounding (actuator state).  HMI watches IsSounding
     // for the ripple visualisation.
     set.spawn(ChimePlantModel::new(Arc::clone(&bus)).run());
-    // Day/Night HMI mode: subscribes to Body.Lights.Beam.Low.IsOn,
-    // publishes Vehicle.Cabin.Infotainment.HMI.DayNightMode (VSS v4.0).
+    // Day/Night HMI mode: subscribes to Vehicle.Body.Lights.Beam.Low.IsOn,
+    // publishes Vehicle.Cabin.Infotainment.HMI.DayNightMode (VSS v6.0).
     // Drives the cockpit view's night-backlit rendering style.  Future
     // extensions: ambient light sensor, GPS sunset, tunnel detection.
     set.spawn(DayNightModePlant::new(Arc::clone(&bus)).run());
-    // Brake plant: derives Chassis.Brake.IsApplied (bool) from
-    // Chassis.Brake.PedalPosition (Uint8 %) with hysteresis.
+    // Brake plant: derives Vehicle.Controller.Chassis.Brake.IsApplied (bool) from
+    // Vehicle.Chassis.Brake.PedalPosition (Uint8 %) with hysteresis.
     // Consumed by the upcoming VehicleStartingControl feature.
     set.spawn(BrakePlant::new(Arc::clone(&bus)).run());
     set.spawn(
@@ -628,12 +628,21 @@ async fn boot_simulation_stack(
     // ── Initial signal state ────────────────────────────────────────
     // `Vehicle.LowVoltageSystemState` is seeded by `VehicleStartingControl`
     // (sole writer); no top-level publish here.
-    bus.publish("Body.Switches.Panic.IsEngaged", SignalValue::Bool(false))
-        .await?;
-    bus.publish("Vehicle.Body.Alarm.IsActive", SignalValue::Bool(false))
-        .await?;
-    bus.publish("Body.Doors.AutoRelock.IsArmed", SignalValue::Bool(false))
-        .await?;
+    bus.publish(
+        "Vehicle.Controller.Body.Switches.Panic.IsEngaged",
+        SignalValue::Bool(false),
+    )
+    .await?;
+    bus.publish(
+        "Vehicle.Controller.Alarm.IsActive",
+        SignalValue::Bool(false),
+    )
+    .await?;
+    bus.publish(
+        "Vehicle.Controller.Body.Doors.AutoRelock.IsArmed",
+        SignalValue::Bool(false),
+    )
+    .await?;
 
     // ── kuksa.val sync (best-effort, retries forever) ───────────────
     let kuksa_endpoint =

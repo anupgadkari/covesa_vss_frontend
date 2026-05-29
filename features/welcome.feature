@@ -10,9 +10,9 @@ Feature: Welcome (PEPS approach courtesy lighting)
   # REQ-WEL-001: When any paired key fob or BLE phone transitions from a
   #              "no LF" zone (OutOfRange, RfRange) into ANY LF coverage
   #              zone (Approach + the proximity zones), the feature SHALL
-  #              claim Body.Lights.Puddle.Left.IsOn,
-  #              Body.Lights.Puddle.Right.IsOn, and
-  #              Cabin.Lights.IsDomeOn = TRUE via the courtesy arbiter
+  #              claim Vehicle.Controller.Body.Lights.Puddle.Left.IsOn,
+  #              Vehicle.Controller.Body.Lights.Puddle.Right.IsOn, and
+  #              Vehicle.Cabin.Light.IsDomeOn = TRUE via the courtesy arbiter
   #              at MEDIUM priority.
   #
   # REQ-WEL-002: The hold duration SHALL default to 30 s; configurable
@@ -48,30 +48,30 @@ Feature: Welcome (PEPS approach courtesy lighting)
   Scenario: Fob entering Approach arms courtesy lights
     Given paired fob 1 is in OutOfRange
     When paired fob 1 moves to Approach
-    Then Body.Lights.Puddle.Left.IsOn becomes TRUE
-    And Body.Lights.Puddle.Right.IsOn becomes TRUE
-    And Cabin.Lights.IsDomeOn becomes TRUE
+    Then Vehicle.Controller.Body.Lights.Puddle.Left.IsOn becomes TRUE
+    And Vehicle.Controller.Body.Lights.Puddle.Right.IsOn becomes TRUE
+    And Vehicle.Cabin.Light.IsDomeOn becomes TRUE
 
   # --- REQ-WEL-002 ---
   Scenario: Lights release after the hold expires
     Given paired fob 1 is in Approach
-    And Body.Lights.Puddle.Left.IsOn is TRUE
+    And Vehicle.Controller.Body.Lights.Puddle.Left.IsOn is TRUE
     When the welcome hold elapses
-    Then Body.Lights.Puddle.Left.IsOn becomes FALSE
+    Then Vehicle.Controller.Body.Lights.Puddle.Left.IsOn becomes FALSE
 
   # --- REQ-WEL-003 ---
   Scenario: Ignition ON releases courtesy lights early
     Given paired fob 1 is in Approach
-    And Body.Lights.Puddle.Left.IsOn is TRUE
+    And Vehicle.Controller.Body.Lights.Puddle.Left.IsOn is TRUE
     When Vehicle.LowVoltageSystemState transitions to "ON"
-    Then Body.Lights.Puddle.Left.IsOn becomes FALSE
+    Then Vehicle.Controller.Body.Lights.Puddle.Left.IsOn becomes FALSE
 
   # --- REQ-WEL-004 ---
   Scenario: All devices leaving LF release courtesy lights
     Given paired fob 1 is in Approach
-    And Body.Lights.Puddle.Left.IsOn is TRUE
+    And Vehicle.Controller.Body.Lights.Puddle.Left.IsOn is TRUE
     When paired fob 1 moves to OutOfRange
-    Then Body.Lights.Puddle.Left.IsOn becomes FALSE
+    Then Vehicle.Controller.Body.Lights.Puddle.Left.IsOn becomes FALSE
 
   # --- REQ-WEL-005 ---
   Scenario: A second device arriving mid-hold does NOT extend the deadline
@@ -85,4 +85,4 @@ Feature: Welcome (PEPS approach courtesy lighting)
   Scenario: Fob transitioning to RfRange (no LF) does not arm Welcome
     Given paired fob 1 is in OutOfRange
     When paired fob 1 moves to RfRange
-    Then Body.Lights.Puddle.Left.IsOn remains its initial value
+    Then Vehicle.Controller.Body.Lights.Puddle.Left.IsOn remains its initial value

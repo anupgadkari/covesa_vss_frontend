@@ -45,20 +45,20 @@ use crate::signal_bus::{SignalBus, VssPath};
 /// One row per window: (MotorDirection, Position).
 const WINDOWS: [(VssPath, VssPath); 4] = [
     (
-        "Body.Doors.Row1.Left.Window.MotorDirection",
-        "Body.Doors.Row1.Left.Window.Position",
+        "Vehicle.Cabin.Door.Row1.Left.Window.MotorDirection",
+        "Vehicle.Cabin.Door.Row1.Left.Window.Position",
     ),
     (
-        "Body.Doors.Row1.Right.Window.MotorDirection",
-        "Body.Doors.Row1.Right.Window.Position",
+        "Vehicle.Cabin.Door.Row1.Right.Window.MotorDirection",
+        "Vehicle.Cabin.Door.Row1.Right.Window.Position",
     ),
     (
-        "Body.Doors.Row2.Left.Window.MotorDirection",
-        "Body.Doors.Row2.Left.Window.Position",
+        "Vehicle.Cabin.Door.Row2.Left.Window.MotorDirection",
+        "Vehicle.Cabin.Door.Row2.Left.Window.Position",
     ),
     (
-        "Body.Doors.Row2.Right.Window.MotorDirection",
-        "Body.Doors.Row2.Right.Window.Position",
+        "Vehicle.Cabin.Door.Row2.Right.Window.MotorDirection",
+        "Vehicle.Cabin.Door.Row2.Right.Window.Position",
     ),
 ];
 

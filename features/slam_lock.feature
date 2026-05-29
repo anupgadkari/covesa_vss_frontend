@@ -112,7 +112,7 @@ Feature: Slam-lock & slam-lock-protect (interior trim Lock with door open)
   #              `slam_lock_intruder_chime_survives_*` regression tests.
   #
   # REQ-SLP-010: Every successful inversion under EU cal SHALL publish
-  #              `Body.Doors.CentralLock.FeedbackRequest = "unlock"` so
+  #              `Vehicle.Controller.Body.Doors.CentralLock.FeedbackRequest = "unlock"` so
   #              `LockFeedback` plays the standard 2-flash unlock
   #              pattern.
   # -------------------------------------------------------------------------
@@ -126,16 +126,16 @@ Feature: Slam-lock & slam-lock-protect (interior trim Lock with door open)
   Scenario: Trim lock with all doors closed dispatches as DoorTrimButton
     Given all four doors are closed
     When the driver presses the Row1.Left trim Lock button
-    Then Body.Doors.CentralLock.Command becomes "lock_all"
-    And Cabin.LockStatus.LastRequestor becomes "DoorTrimButton"
+    Then Vehicle.Controller.Body.Doors.CentralLock.Command becomes "lock_all"
+    And Vehicle.Controller.Cabin.LockStatus.LastRequestor becomes "DoorTrimButton"
 
   # --- REQ-SLP-003 ---
   Scenario: US — trim lock with door open dispatches as SlamLock
     Given vehicle_line.slam_lock_protect is FALSE
     And the Row1.Left door is open
     When the driver presses the Row1.Left trim Lock button
-    Then Body.Doors.CentralLock.Command becomes "lock_all"
-    And Cabin.LockStatus.LastRequestor becomes "SlamLock"
+    Then Vehicle.Controller.Body.Doors.CentralLock.Command becomes "lock_all"
+    And Vehicle.Controller.Cabin.LockStatus.LastRequestor becomes "SlamLock"
     # The user closes the door physically; cabin is already locked.
     # PerimeterAlarm sees SlamLock in EXTERNAL_LOCK_REQUESTORS and arms.
 
@@ -146,9 +146,9 @@ Feature: Slam-lock & slam-lock-protect (interior trim Lock with door open)
     And vehicle_line.driver_door_side is Left
     And the Row1.Left door is open
     When the driver presses the Row1.Left trim Lock button
-    Then Cabin.LockStatus.EventNum bumps with LockStatus = "LOCKED" and LastRequestor = "DoorTrimButton"
-    And Cabin.LockStatus.EventNum bumps again with LockStatus = "DRIVER_UNLOCKED" and LastRequestor = "SlamLock"
-    And Body.Doors.CentralLock.FeedbackRequest = "unlock" is published
+    Then Vehicle.Controller.Cabin.LockStatus.EventNum bumps with LockStatus = "LOCKED" and LastRequestor = "DoorTrimButton"
+    And Vehicle.Controller.Cabin.LockStatus.EventNum bumps again with LockStatus = "DRIVER_UNLOCKED" and LastRequestor = "SlamLock"
+    And Vehicle.Controller.Body.Doors.CentralLock.FeedbackRequest = "unlock" is published
 
   # --- REQ-SLP-006 ---
   Scenario: EU — driver-side trim lock + two-stage off inverts to UnlockAll
@@ -157,7 +157,7 @@ Feature: Slam-lock & slam-lock-protect (interior trim Lock with door open)
     And vehicle_line.driver_door_side is Left
     And the Row1.Left door is open
     When the driver presses the Row1.Left trim Lock button
-    Then Cabin.LockStatus.LastRequestor cycles "DoorTrimButton" → "SlamLock"
+    Then Vehicle.Controller.Cabin.LockStatus.LastRequestor cycles "DoorTrimButton" → "SlamLock"
     And the second event has LockStatus = "UNLOCKED"
 
   # --- REQ-SLP-007 ---
@@ -187,7 +187,7 @@ Feature: Slam-lock & slam-lock-protect (interior trim Lock with door open)
   Scenario: SlamLock cannot disarm a running alarm (US slam-lock path)
     Given the perimeter alarm is in the chime phase
     When a (LOCKED, SlamLock, EventNum=N) event is published on the bus
-    Then Vehicle.Body.Alarm.State remains "ACTIVATED"
+    Then Vehicle.Controller.Alarm.State remains "ACTIVATED"
     And the chime continues to escalate to the full alarm at 12 s
 
   # --- REQ-SLP-009 ---
@@ -195,7 +195,7 @@ Feature: Slam-lock & slam-lock-protect (interior trim Lock with door open)
     Given the perimeter alarm is in the chime phase
     When a (LOCKED, DoorTrimButton, EventNum=N) event is published
     And a (UNLOCKED, SlamLock, EventNum=N+1) event is published immediately after
-    Then Vehicle.Body.Alarm.State remains "ACTIVATED"
+    Then Vehicle.Controller.Alarm.State remains "ACTIVATED"
     And the chime continues to escalate to the full alarm at 12 s
 
   # --- REQ-SLP-010 ---
@@ -203,5 +203,5 @@ Feature: Slam-lock & slam-lock-protect (interior trim Lock with door open)
     Given vehicle_line.slam_lock_protect is TRUE
     And the Row1.Left door is open
     When the driver presses the Row1.Left trim Lock button
-    Then Body.Doors.CentralLock.FeedbackRequest = "unlock" is published
+    Then Vehicle.Controller.Body.Doors.CentralLock.FeedbackRequest = "unlock" is published
     And LockFeedback flashes the indicators twice

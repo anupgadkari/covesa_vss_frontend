@@ -166,41 +166,41 @@ const SOURCES: [Source; 2] = [Source::DriverMaster, Source::Local];
 const WINDOW_LABELS: [&str; NUM_WINDOWS] = ["Row1.Left", "Row1.Right", "Row2.Left", "Row2.Right"];
 
 const DRIVER_DETENTS: [VssPath; NUM_WINDOWS] = [
-    "Body.Switches.Window.DriverMaster.Row1.Left.Detent",
-    "Body.Switches.Window.DriverMaster.Row1.Right.Detent",
-    "Body.Switches.Window.DriverMaster.Row2.Left.Detent",
-    "Body.Switches.Window.DriverMaster.Row2.Right.Detent",
+    "Vehicle.Controller.Body.Switches.Window.DriverMaster.Row1.Left.Detent",
+    "Vehicle.Controller.Body.Switches.Window.DriverMaster.Row1.Right.Detent",
+    "Vehicle.Controller.Body.Switches.Window.DriverMaster.Row2.Left.Detent",
+    "Vehicle.Controller.Body.Switches.Window.DriverMaster.Row2.Right.Detent",
 ];
 const LOCAL_DETENTS: [VssPath; NUM_WINDOWS] = [
-    "Body.Switches.Window.Local.Row1.Left.Detent",
-    "Body.Switches.Window.Local.Row1.Right.Detent",
-    "Body.Switches.Window.Local.Row2.Left.Detent",
-    "Body.Switches.Window.Local.Row2.Right.Detent",
+    "Vehicle.Controller.Body.Switches.Window.Local.Row1.Left.Detent",
+    "Vehicle.Controller.Body.Switches.Window.Local.Row1.Right.Detent",
+    "Vehicle.Controller.Body.Switches.Window.Local.Row2.Left.Detent",
+    "Vehicle.Controller.Body.Switches.Window.Local.Row2.Right.Detent",
 ];
 const MOTOR_SIGNALS: [VssPath; NUM_WINDOWS] = [
-    "Body.Doors.Row1.Left.Window.MotorDirection",
-    "Body.Doors.Row1.Right.Window.MotorDirection",
-    "Body.Doors.Row2.Left.Window.MotorDirection",
-    "Body.Doors.Row2.Right.Window.MotorDirection",
+    "Vehicle.Cabin.Door.Row1.Left.Window.MotorDirection",
+    "Vehicle.Cabin.Door.Row1.Right.Window.MotorDirection",
+    "Vehicle.Cabin.Door.Row2.Left.Window.MotorDirection",
+    "Vehicle.Cabin.Door.Row2.Right.Window.MotorDirection",
 ];
 const POSITION_SIGNALS: [VssPath; NUM_WINDOWS] = [
-    "Body.Doors.Row1.Left.Window.Position",
-    "Body.Doors.Row1.Right.Window.Position",
-    "Body.Doors.Row2.Left.Window.Position",
-    "Body.Doors.Row2.Right.Window.Position",
+    "Vehicle.Cabin.Door.Row1.Left.Window.Position",
+    "Vehicle.Cabin.Door.Row1.Right.Window.Position",
+    "Vehicle.Cabin.Door.Row2.Left.Window.Position",
+    "Vehicle.Cabin.Door.Row2.Right.Window.Position",
 ];
 /// Row2 doors have a child-lock signal; Row1 entries are None.
 const CHILD_LOCK_SIGNALS: [Option<VssPath>; NUM_WINDOWS] = [
     None,
     None,
-    Some("Body.Doors.Row2.Left.IsChildLockActive"),
-    Some("Body.Doors.Row2.Right.IsChildLockActive"),
+    Some("Vehicle.Cabin.Door.Row2.Left.IsChildLockActive"),
+    Some("Vehicle.Cabin.Door.Row2.Right.IsChildLockActive"),
 ];
 
 /// Delayed-accessory power gate — when false, the feature treats every
 /// source as having no intent (motors STOPPED) and clears any latched
 /// per-source state.  The user must re-press once DAP returns.
-const DAP_SIGNAL: VssPath = "Body.Power.DelayedAccessory.IsActive";
+const DAP_SIGNAL: VssPath = "Vehicle.Controller.Body.Power.DelayedAccessory.IsActive";
 
 pub struct PowerWindow<B: SignalBus> {
     bus: Arc<B>,
@@ -617,7 +617,7 @@ mod tests {
         // something.  Seed it here; the dedicated DAP gating tests
         // toggle it explicitly.
         bus.inject(
-            "Body.Power.DelayedAccessory.IsActive",
+            "Vehicle.Controller.Body.Power.DelayedAccessory.IsActive",
             SignalValue::Bool(true),
         );
         settle().await;
@@ -770,7 +770,7 @@ mod tests {
         let bus = setup().await;
         // Engage child lock on Row2.Left.
         bus.inject(
-            "Body.Doors.Row2.Left.IsChildLockActive",
+            "Vehicle.Cabin.Door.Row2.Left.IsChildLockActive",
             SignalValue::Bool(true),
         );
         settle().await;
@@ -789,7 +789,7 @@ mod tests {
         let bus = setup().await;
         // DAP off.
         bus.inject(
-            "Body.Power.DelayedAccessory.IsActive",
+            "Vehicle.Controller.Body.Power.DelayedAccessory.IsActive",
             SignalValue::Bool(false),
         );
         settle().await;
@@ -813,13 +813,13 @@ mod tests {
         assert_eq!(motor(&bus, 0).as_deref(), Some("UP"));
         // DAP goes off — auto must NOT resume after DAP returns.
         bus.inject(
-            "Body.Power.DelayedAccessory.IsActive",
+            "Vehicle.Controller.Body.Power.DelayedAccessory.IsActive",
             SignalValue::Bool(false),
         );
         settle().await;
         assert_eq!(motor(&bus, 0).as_deref(), Some("STOPPED"));
         bus.inject(
-            "Body.Power.DelayedAccessory.IsActive",
+            "Vehicle.Controller.Body.Power.DelayedAccessory.IsActive",
             SignalValue::Bool(true),
         );
         settle().await;
@@ -831,13 +831,13 @@ mod tests {
     async fn dap_returns_then_new_press_works() {
         let bus = setup().await;
         bus.inject(
-            "Body.Power.DelayedAccessory.IsActive",
+            "Vehicle.Controller.Body.Power.DelayedAccessory.IsActive",
             SignalValue::Bool(false),
         );
         settle().await;
         // DAP comes back.
         bus.inject(
-            "Body.Power.DelayedAccessory.IsActive",
+            "Vehicle.Controller.Body.Power.DelayedAccessory.IsActive",
             SignalValue::Bool(true),
         );
         settle().await;

@@ -1,6 +1,6 @@
 //! Manual Lighting — low beam and high beam stalk control.
 //!
-//! # Light switch positions (`Body.Lights.LightSwitch`)
+//! # Light switch positions (`Vehicle.Body.Lights.LightSwitch`)
 //!
 //! | Value        | DRL                             | Parking lights                  | Low beam                        | License plate                   | High beam               |
 //! |--------------|---------------------------------|---------------------------------|---------------------------------|---------------------------------|-------------------------|
@@ -13,11 +13,11 @@
 //! # AUTO mode — ambient light threshold
 //!
 //! In `"AUTO"` mode the feature subscribes to
-//! `Body.Lights.AmbientLightSensor.Illuminance` (Uint16, lux).
+//! `Vehicle.Controller.Body.Lights.AmbientLightSensor.Illuminance` (Uint16, lux).
 //! Low beam activates when the reading falls below
 //! `auto_headlamp_lux_threshold` (calibrated in `VehicleLineCal`,
 //! default 200 lux — aligned with ECE R48 §6.1 dusk/dawn threshold).
-//! High beam follows `Body.Switches.HighBeam.IsEngaged` while low beam is on.
+//! High beam follows `Vehicle.Controller.Body.Switches.HighBeam.IsEngaged` while low beam is on.
 //!
 //! The ambient sensor starts at u16::MAX (full daylight) so that AUTO mode
 //! does not switch the headlamps on at cold boot before any sensor reading
@@ -25,7 +25,7 @@
 //!
 //! # High beam interlock
 //!
-//! `Body.Switches.HighBeam.IsEngaged` (Bool) — latched stalk toggle.
+//! `Vehicle.Controller.Body.Switches.HighBeam.IsEngaged` (Bool) — latched stalk toggle.
 //! High beam only activates when low beam is currently on.
 //!
 //! # Ignition gate
@@ -46,16 +46,16 @@ use crate::signal_bus::{SignalBus, VssPath};
 
 // ── Signal constants ───────────────────────────────────────────────────────
 
-const LIGHT_SWITCH: &str = "Body.Lights.LightSwitch";
-const HIGH_BEAM_SWITCH: &str = "Body.Switches.HighBeam.IsEngaged";
+const LIGHT_SWITCH: &str = "Vehicle.Body.Lights.LightSwitch";
+const HIGH_BEAM_SWITCH: &str = "Vehicle.Controller.Body.Switches.HighBeam.IsEngaged";
 const POWER_STATE: &str = "Vehicle.LowVoltageSystemState";
-const ILLUMINANCE: &str = "Body.Lights.AmbientLightSensor.Illuminance";
+const ILLUMINANCE: &str = "Vehicle.Controller.Body.Lights.AmbientLightSensor.Illuminance";
 
-const DRL_OUT: VssPath = "Body.Lights.Running.IsOn";
-const PARKING_OUT: VssPath = "Body.Lights.Parking.IsOn";
-const LOW_BEAM_OUT: VssPath = "Body.Lights.Beam.Low.IsOn";
-const HIGH_BEAM_OUT: VssPath = "Body.Lights.Beam.High.IsOn";
-const LICENSE_PLATE_OUT: VssPath = "Body.Lights.LicensePlate.IsOn";
+const DRL_OUT: VssPath = "Vehicle.Body.Lights.Running.IsOn";
+const PARKING_OUT: VssPath = "Vehicle.Body.Lights.Parking.IsOn";
+const LOW_BEAM_OUT: VssPath = "Vehicle.Body.Lights.Beam.Low.IsOn";
+const HIGH_BEAM_OUT: VssPath = "Vehicle.Body.Lights.Beam.High.IsOn";
+const LICENSE_PLATE_OUT: VssPath = "Vehicle.Body.Lights.LicensePlate.IsOn";
 
 // ── Switch position ────────────────────────────────────────────────────────
 

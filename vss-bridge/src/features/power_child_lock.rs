@@ -3,13 +3,13 @@
 //!
 //! ```text
 //!  HMI driver-master button
-//!      │  Body.Switches.PowerChildLock.IsPressed  (momentary)
+//!      │  Vehicle.Controller.Body.Switches.PowerChildLock.IsPressed  (momentary)
 //!      ▼
 //!  PowerChildLock feature              ← this module
 //!      │
-//!      ├─ Body.PowerChildLock.MasterStatus       (latched bool)
-//!      ├─ Body.Doors.Row2.Left.IsChildLockActive (per-door fan-out)
-//!      └─ Body.Doors.Row2.Right.IsChildLockActive
+//!      ├─ Vehicle.Controller.Body.PowerChildLock.MasterStatus       (latched bool)
+//!      ├─ Vehicle.Cabin.Door.Row2.Left.IsChildLockActive (per-door fan-out)
+//!      └─ Vehicle.Cabin.Door.Row2.Right.IsChildLockActive
 //! ```
 //!
 //! On each rising edge of the master push the feature toggles
@@ -44,11 +44,11 @@ use futures::StreamExt;
 use crate::ipc_message::SignalValue;
 use crate::signal_bus::{SignalBus, VssPath};
 
-const PRESS: VssPath = "Body.Switches.PowerChildLock.IsPressed";
-const MASTER: VssPath = "Body.PowerChildLock.MasterStatus";
+const PRESS: VssPath = "Vehicle.Controller.Body.Switches.PowerChildLock.IsPressed";
+const MASTER: VssPath = "Vehicle.Controller.Body.PowerChildLock.MasterStatus";
 const PER_DOOR: [VssPath; 2] = [
-    "Body.Doors.Row2.Left.IsChildLockActive",
-    "Body.Doors.Row2.Right.IsChildLockActive",
+    "Vehicle.Cabin.Door.Row2.Left.IsChildLockActive",
+    "Vehicle.Cabin.Door.Row2.Right.IsChildLockActive",
 ];
 
 pub struct PowerChildLock<B: SignalBus> {

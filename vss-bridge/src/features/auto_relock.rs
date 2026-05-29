@@ -4,7 +4,7 @@
 //! Subscribes to:
 //!   - Body.Doors.Row[1,2].{Left,Right}.IsLocked  (STATE_UPDATE)
 //!   - Body.Doors.Row[1,2].{Left,Right}.IsOpen     (STATE_UPDATE)
-//!   - Vehicle.Safety.CrashDetected                 (STATE_UPDATE)
+//!   - Vehicle.Controller.Safety.CrashDetected                 (STATE_UPDATE)
 //!   - Vehicle.LowVoltageSystemState                (STATE_UPDATE)
 //!
 //! Outputs:
@@ -34,31 +34,31 @@ use crate::signal_bus::{SignalBus, VssPath};
 const DEFAULT_RELOCK_TIMEOUT: Duration = Duration::from_secs(45);
 
 /// Crash detection signal from the Safety Monitor.
-const CRASH_SIGNAL: VssPath = "Vehicle.Safety.CrashDetected";
+const CRASH_SIGNAL: VssPath = "Vehicle.Controller.Safety.CrashDetected";
 
-/// Power state signal — standard VSS v4.0.
+/// Power state signal — standard VSS v6.0.
 const POWER_STATE_SIGNAL: VssPath = "Vehicle.LowVoltageSystemState";
 
 /// Status signal — TRUE while the relock timer is counting down.
-const STATUS_IS_ARMED: VssPath = "Body.Doors.AutoRelock.IsArmed";
+const STATUS_IS_ARMED: VssPath = "Vehicle.Controller.Body.Doors.AutoRelock.IsArmed";
 
 /// Status signal — published once on each arm to advertise the configured
 /// timeout (seconds) to the HMI / consumers.  Allows the HMI to render a
 /// matching client-side countdown without hardcoding the value.
-const STATUS_TIMEOUT_SECS: VssPath = "Body.Doors.AutoRelock.TimeoutSeconds";
+const STATUS_TIMEOUT_SECS: VssPath = "Vehicle.Controller.Body.Doors.AutoRelock.TimeoutSeconds";
 
 /// Vehicle-level lock status — published by the door-lock arbiter
 /// on every accepted command (status itself is deduplicated; companion
 /// signals always publish).  AutoRelock reads the latest value of
 /// this signal at every `EVENT_NUM` bump to decide whether to arm.
-const LOCK_STATUS: VssPath = "Cabin.LockStatus";
+const LOCK_STATUS: VssPath = "Vehicle.Controller.Cabin.LockStatus";
 
 /// Identity of the feature whose request the arbiter accepted on the
 /// most recent central-lock dispatch.  AutoRelock filters arming
 /// against the `EXTERNAL_UNLOCK_REQUESTORS` set so only physical-key
 /// / phone / fob unlocks trigger the relock timer; interior soldier
 /// knobs, AutoLock, and HMI diagnostic toggles don't arm.
-const LOCK_LAST_REQUESTOR: VssPath = "Cabin.LockStatus.LastRequestor";
+const LOCK_LAST_REQUESTOR: VssPath = "Vehicle.Controller.Cabin.LockStatus.LastRequestor";
 
 /// `LastRequestor` strings that should arm AutoRelock.  These are
 /// the physical-external unlock paths — the user is acting from
@@ -97,18 +97,18 @@ fn event_should_arm(status: Option<&str>, requestor: &str) -> bool {
 /// Default door lock signals (4-door sedan). Used when no DoorConfig
 /// is provided (backward compatibility / simple tests).
 const DEFAULT_LOCK_SIGNALS: &[VssPath] = &[
-    "Body.Doors.Row1.Left.IsLocked",
-    "Body.Doors.Row1.Right.IsLocked",
-    "Body.Doors.Row2.Left.IsLocked",
-    "Body.Doors.Row2.Right.IsLocked",
+    "Vehicle.Cabin.Door.Row1.Left.IsLocked",
+    "Vehicle.Cabin.Door.Row1.Right.IsLocked",
+    "Vehicle.Cabin.Door.Row2.Left.IsLocked",
+    "Vehicle.Cabin.Door.Row2.Right.IsLocked",
 ];
 
 /// Default door open signals (4-door sedan).
 const DEFAULT_OPEN_SIGNALS: &[VssPath] = &[
-    "Body.Doors.Row1.Left.IsOpen",
-    "Body.Doors.Row1.Right.IsOpen",
-    "Body.Doors.Row2.Left.IsOpen",
-    "Body.Doors.Row2.Right.IsOpen",
+    "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+    "Vehicle.Cabin.Door.Row1.Right.IsOpen",
+    "Vehicle.Cabin.Door.Row2.Left.IsOpen",
+    "Vehicle.Cabin.Door.Row2.Right.IsOpen",
 ];
 
 /// LowVoltageSystemState values that indicate "power off" (pre-cycle).
@@ -205,8 +205,8 @@ impl<B: SignalBus> AutoRelock<B> {
 
         // Arming triggers from the door-lock arbiter — published in
         // order on every accepted command:
-        //   1. `Cabin.LockStatus`            (current state enum)
-        //   2. `Cabin.LockStatus.LastRequestor` (FeatureId string)
+        //   1. `Vehicle.Controller.Cabin.LockStatus`            (current state enum)
+        //   2. `Vehicle.Controller.Cabin.LockStatus.LastRequestor` (FeatureId string)
         //
         // We track the latest value of each in a local cache and
         // arm on every `LastRequestor` tick — that signal is
@@ -387,7 +387,7 @@ impl<B: SignalBus> AutoRelock<B> {
                 if matches!(timer_result, TimerOutcome::Restart) {
                     // Re-publish TimeoutSeconds so any HMI countdown
                     // that reads the latest value sees a fresh tick.
-                    // The HMI also subscribes to `Cabin.LockStatus.EventNum`
+                    // The HMI also subscribes to `Vehicle.Controller.Cabin.LockStatus.EventNum`
                     // independently and re-stamps its visual timer on
                     // every qualifying unlock event — `IsArmed` stays
                     // `true` across restarts so this signal can stay
@@ -577,9 +577,12 @@ mod tests {
     async fn relock_after_timeout() {
         let (bus, _arb, _handle) = setup(Duration::from_millis(100)).await;
 
-        bus.inject("Cabin.LockStatus", SignalValue::String("UNLOCKED".into()));
         bus.inject(
-            "Cabin.LockStatus.LastRequestor",
+            "Vehicle.Controller.Cabin.LockStatus",
+            SignalValue::String("UNLOCKED".into()),
+        );
+        bus.inject(
+            "Vehicle.Controller.Cabin.LockStatus.LastRequestor",
             SignalValue::String("KeyfobRke".into()),
         );
         tokio::task::yield_now().await;
@@ -590,7 +593,7 @@ mod tests {
         let history = bus.history();
         assert!(
             history.iter().any(|(sig, val)| {
-                *sig == "Body.Doors.CentralLock.Command"
+                *sig == "Vehicle.Controller.Body.Doors.CentralLock.Command"
                     && *val == SignalValue::String("lock_all".into())
             }),
             "expected AutoRelock to dispatch LOCK, history: {:?}",
@@ -601,7 +604,7 @@ mod tests {
     /// Regression: a door open BEFORE the unlock event (e.g. user
     /// opens driver door, then RKE-unlocks while still standing
     /// outside) must NOT arm the timer at all.  The HMI banner /
-    /// countdown is gated on `Body.Doors.AutoRelock.IsArmed` — if
+    /// countdown is gated on `Vehicle.Controller.Body.Doors.AutoRelock.IsArmed` — if
     /// we armed and then suppressed at expiry, the user would see a
     /// fake 45 s countdown.  Cleaner: don't arm in the first place.
     #[tokio::test]
@@ -609,13 +612,19 @@ mod tests {
         let (bus, _arb, _handle) = setup(Duration::from_millis(200)).await;
 
         // Open the driver door FIRST, before any unlock event.
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         tokio::task::yield_now().await;
 
         // Now fire the qualifying unlock.  Per spec this must NOT arm.
-        bus.inject("Cabin.LockStatus", SignalValue::String("UNLOCKED".into()));
         bus.inject(
-            "Cabin.LockStatus.LastRequestor",
+            "Vehicle.Controller.Cabin.LockStatus",
+            SignalValue::String("UNLOCKED".into()),
+        );
+        bus.inject(
+            "Vehicle.Controller.Cabin.LockStatus.LastRequestor",
             SignalValue::String("KeyfobRke".into()),
         );
         tokio::task::yield_now().await;
@@ -627,7 +636,7 @@ mod tests {
         let history = bus.history();
         assert!(
             !history.iter().any(|(sig, val)| {
-                *sig == "Body.Doors.CentralLock.Command"
+                *sig == "Vehicle.Controller.Body.Doors.CentralLock.Command"
                     && *val == SignalValue::String("lock_all".into())
             }),
             "AutoRelock must NOT relock when a door was already open at arming, history: {:?}",
@@ -637,7 +646,8 @@ mod tests {
         // banner stays hidden.
         assert!(
             !history.iter().any(|(sig, val)| {
-                *sig == "Body.Doors.AutoRelock.IsArmed" && *val == SignalValue::Bool(true)
+                *sig == "Vehicle.Controller.Body.Doors.AutoRelock.IsArmed"
+                    && *val == SignalValue::Bool(true)
             }),
             "AutoRelock must not publish IsArmed=true while a door is already open"
         );
@@ -647,15 +657,21 @@ mod tests {
     async fn door_opened_cancels_relock() {
         let (bus, _arb, _handle) = setup(Duration::from_millis(200)).await;
 
-        bus.inject("Cabin.LockStatus", SignalValue::String("UNLOCKED".into()));
         bus.inject(
-            "Cabin.LockStatus.LastRequestor",
+            "Vehicle.Controller.Cabin.LockStatus",
+            SignalValue::String("UNLOCKED".into()),
+        );
+        bus.inject(
+            "Vehicle.Controller.Cabin.LockStatus.LastRequestor",
             SignalValue::String("KeyfobRke".into()),
         );
         tokio::task::yield_now().await;
 
         sleep(Duration::from_millis(50)).await;
-        bus.inject("Body.Doors.Row1.Left.IsOpen", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsOpen",
+            SignalValue::Bool(true),
+        );
         tokio::task::yield_now().await;
 
         sleep(Duration::from_millis(300)).await;
@@ -664,7 +680,7 @@ mod tests {
         let history = bus.history();
         assert!(
             !history.iter().any(|(sig, val)| {
-                *sig == "Body.Doors.CentralLock.Command"
+                *sig == "Vehicle.Controller.Body.Doors.CentralLock.Command"
                     && *val == SignalValue::String("lock_all".into())
             }),
             "AutoRelock should NOT have dispatched LOCK after door opened, history: {:?}",
@@ -676,15 +692,21 @@ mod tests {
     async fn external_relock_cancels_timer() {
         let (bus, _arb, _handle) = setup(Duration::from_millis(200)).await;
 
-        bus.inject("Cabin.LockStatus", SignalValue::String("UNLOCKED".into()));
         bus.inject(
-            "Cabin.LockStatus.LastRequestor",
+            "Vehicle.Controller.Cabin.LockStatus",
+            SignalValue::String("UNLOCKED".into()),
+        );
+        bus.inject(
+            "Vehicle.Controller.Cabin.LockStatus.LastRequestor",
             SignalValue::String("KeyfobRke".into()),
         );
         tokio::task::yield_now().await;
 
         sleep(Duration::from_millis(50)).await;
-        bus.inject("Body.Doors.Row1.Left.IsLocked", SignalValue::Bool(true));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsLocked",
+            SignalValue::Bool(true),
+        );
         tokio::task::yield_now().await;
 
         sleep(Duration::from_millis(300)).await;
@@ -694,7 +716,7 @@ mod tests {
         let lock_count = history
             .iter()
             .filter(|(sig, val)| {
-                *sig == "Body.Doors.CentralLock.Command"
+                *sig == "Vehicle.Controller.Body.Doors.CentralLock.Command"
                     && *val == SignalValue::String("lock_all".into())
             })
             .count();
@@ -709,9 +731,12 @@ mod tests {
         let (bus, _arb, handle) = setup(Duration::from_millis(500)).await;
 
         // Unlock → timer starts
-        bus.inject("Cabin.LockStatus", SignalValue::String("UNLOCKED".into()));
         bus.inject(
-            "Cabin.LockStatus.LastRequestor",
+            "Vehicle.Controller.Cabin.LockStatus",
+            SignalValue::String("UNLOCKED".into()),
+        );
+        bus.inject(
+            "Vehicle.Controller.Cabin.LockStatus.LastRequestor",
             SignalValue::String("KeyfobRke".into()),
         );
         tokio::task::yield_now().await;
@@ -729,7 +754,7 @@ mod tests {
         let history = bus.history();
         assert!(
             !history.iter().any(|(sig, val)| {
-                *sig == "Body.Doors.CentralLock.Command"
+                *sig == "Vehicle.Controller.Body.Doors.CentralLock.Command"
                     && *val == SignalValue::String("lock_all".into())
             }),
             "AutoRelock should NOT dispatch LOCK after crash, history: {:?}",
@@ -759,9 +784,12 @@ mod tests {
 
         // Now verify it works again: unlock → timeout → LOCK
         bus.clear_history();
-        bus.inject("Cabin.LockStatus", SignalValue::String("UNLOCKED".into()));
         bus.inject(
-            "Cabin.LockStatus.LastRequestor",
+            "Vehicle.Controller.Cabin.LockStatus",
+            SignalValue::String("UNLOCKED".into()),
+        );
+        bus.inject(
+            "Vehicle.Controller.Cabin.LockStatus.LastRequestor",
             SignalValue::String("KeyfobRke".into()),
         );
         tokio::task::yield_now().await;
@@ -772,7 +800,7 @@ mod tests {
         let history = bus.history();
         assert!(
             history.iter().any(|(sig, val)| {
-                *sig == "Body.Doors.CentralLock.Command"
+                *sig == "Vehicle.Controller.Body.Doors.CentralLock.Command"
                     && *val == SignalValue::String("lock_all".into())
             }),
             "AutoRelock should work again after power cycle, history: {:?}",
@@ -796,9 +824,12 @@ mod tests {
         );
 
         // Unlock during DISABLED — should be ignored
-        bus.inject("Cabin.LockStatus", SignalValue::String("UNLOCKED".into()));
         bus.inject(
-            "Cabin.LockStatus.LastRequestor",
+            "Vehicle.Controller.Cabin.LockStatus",
+            SignalValue::String("UNLOCKED".into()),
+        );
+        bus.inject(
+            "Vehicle.Controller.Cabin.LockStatus.LastRequestor",
             SignalValue::String("KeyfobRke".into()),
         );
         tokio::task::yield_now().await;
@@ -808,7 +839,7 @@ mod tests {
         let history = bus.history();
         assert!(
             !history.iter().any(|(sig, val)| {
-                *sig == "Body.Doors.CentralLock.Command"
+                *sig == "Vehicle.Controller.Body.Doors.CentralLock.Command"
                     && *val == SignalValue::String("lock_all".into())
             }),
             "disabled AutoRelock should NOT dispatch LOCK, history: {:?}",
@@ -845,9 +876,12 @@ mod tests {
         assert!(!handle.is_finished(), "AutoRelock should be re-enabled");
 
         bus.clear_history();
-        bus.inject("Cabin.LockStatus", SignalValue::String("UNLOCKED".into()));
         bus.inject(
-            "Cabin.LockStatus.LastRequestor",
+            "Vehicle.Controller.Cabin.LockStatus",
+            SignalValue::String("UNLOCKED".into()),
+        );
+        bus.inject(
+            "Vehicle.Controller.Cabin.LockStatus.LastRequestor",
             SignalValue::String("KeyfobRke".into()),
         );
         tokio::task::yield_now().await;
@@ -858,7 +892,7 @@ mod tests {
         let history = bus.history();
         assert!(
             history.iter().any(|(sig, val)| {
-                *sig == "Body.Doors.CentralLock.Command"
+                *sig == "Vehicle.Controller.Body.Doors.CentralLock.Command"
                     && *val == SignalValue::String("lock_all".into())
             }),
             "AutoRelock should work after OFF → ACC → ON cycle, history: {:?}",
@@ -877,7 +911,10 @@ mod tests {
 
         // Simulate a soldier-knob movement that toggles IsLocked
         // without publishing through the arbiter.
-        bus.inject("Body.Doors.Row1.Left.IsLocked", SignalValue::Bool(false));
+        bus.inject(
+            "Vehicle.Cabin.Door.Row1.Left.IsLocked",
+            SignalValue::Bool(false),
+        );
         tokio::task::yield_now().await;
 
         // Wait well past the timeout.
@@ -887,7 +924,7 @@ mod tests {
         let history = bus.history();
         assert!(
             !history.iter().any(|(sig, val)| {
-                *sig == "Body.Doors.CentralLock.Command"
+                *sig == "Vehicle.Controller.Body.Doors.CentralLock.Command"
                     && *val == SignalValue::String("lock_all".into())
             }),
             "AutoRelock must NOT relock when only IsLocked toggles \
@@ -902,9 +939,12 @@ mod tests {
     async fn passive_entry_unlock_arms_relock() {
         let (bus, _arbiter, _h) = setup(Duration::from_millis(100)).await;
 
-        bus.inject("Cabin.LockStatus", SignalValue::String("UNLOCKED".into()));
         bus.inject(
-            "Cabin.LockStatus.LastRequestor",
+            "Vehicle.Controller.Cabin.LockStatus",
+            SignalValue::String("UNLOCKED".into()),
+        );
+        bus.inject(
+            "Vehicle.Controller.Cabin.LockStatus.LastRequestor",
             SignalValue::String("PassiveEntry".into()),
         );
         sleep(Duration::from_millis(200)).await;
@@ -913,7 +953,7 @@ mod tests {
         let history = bus.history();
         assert!(
             history.iter().any(|(sig, val)| {
-                *sig == "Body.Doors.CentralLock.Command"
+                *sig == "Vehicle.Controller.Body.Doors.CentralLock.Command"
                     && *val == SignalValue::String("lock_all".into())
             }),
             "AutoRelock should fire after PEPS unlock + timeout; history: {:?}",
@@ -931,9 +971,12 @@ mod tests {
         let (bus, _arbiter, _h) = setup(Duration::from_millis(150)).await;
 
         // Press 1.
-        bus.inject("Cabin.LockStatus", SignalValue::String("UNLOCKED".into()));
         bus.inject(
-            "Cabin.LockStatus.LastRequestor",
+            "Vehicle.Controller.Cabin.LockStatus",
+            SignalValue::String("UNLOCKED".into()),
+        );
+        bus.inject(
+            "Vehicle.Controller.Cabin.LockStatus.LastRequestor",
             SignalValue::String("KeyfobRke".into()),
         );
 
@@ -944,9 +987,12 @@ mod tests {
 
         // Press 2 — same status, fresh requestor publish.  This
         // should restart the timer from 0.
-        bus.inject("Cabin.LockStatus", SignalValue::String("UNLOCKED".into()));
         bus.inject(
-            "Cabin.LockStatus.LastRequestor",
+            "Vehicle.Controller.Cabin.LockStatus",
+            SignalValue::String("UNLOCKED".into()),
+        );
+        bus.inject(
+            "Vehicle.Controller.Cabin.LockStatus.LastRequestor",
             SignalValue::String("KeyfobRke".into()),
         );
 
@@ -960,7 +1006,7 @@ mod tests {
         let mid_history = bus.history();
         assert!(
             !mid_history.iter().any(|(sig, val)| {
-                *sig == "Body.Doors.CentralLock.Command"
+                *sig == "Vehicle.Controller.Body.Doors.CentralLock.Command"
                     && *val == SignalValue::String("lock_all".into())
             }),
             "AutoRelock fired too early — second press must restart \
@@ -975,7 +1021,7 @@ mod tests {
         let final_history = bus.history();
         assert!(
             final_history.iter().any(|(sig, val)| {
-                *sig == "Body.Doors.CentralLock.Command"
+                *sig == "Vehicle.Controller.Body.Doors.CentralLock.Command"
                     && *val == SignalValue::String("lock_all".into())
             }),
             "AutoRelock should fire after the second press's timer \
@@ -998,10 +1044,10 @@ mod tests {
         // with IsLocked=true messages.  No requestor publish — this
         // is just background traffic AutoRelock should ignore.
         for sig in [
-            "Body.Doors.Row1.Left.IsLocked",
-            "Body.Doors.Row1.Right.IsLocked",
-            "Body.Doors.Row2.Left.IsLocked",
-            "Body.Doors.Row2.Right.IsLocked",
+            "Vehicle.Cabin.Door.Row1.Left.IsLocked",
+            "Vehicle.Cabin.Door.Row1.Right.IsLocked",
+            "Vehicle.Cabin.Door.Row2.Left.IsLocked",
+            "Vehicle.Cabin.Door.Row2.Right.IsLocked",
         ] {
             bus.inject(sig, SignalValue::Bool(true));
         }
@@ -1009,9 +1055,12 @@ mod tests {
         tokio::task::yield_now().await;
 
         // Step 2: now an external RKE unlock arms AutoRelock.
-        bus.inject("Cabin.LockStatus", SignalValue::String("UNLOCKED".into()));
         bus.inject(
-            "Cabin.LockStatus.LastRequestor",
+            "Vehicle.Controller.Cabin.LockStatus",
+            SignalValue::String("UNLOCKED".into()),
+        );
+        bus.inject(
+            "Vehicle.Controller.Cabin.LockStatus.LastRequestor",
             SignalValue::String("KeyfobRke".into()),
         );
 
@@ -1024,7 +1073,7 @@ mod tests {
         let history = bus.history();
         assert!(
             history.iter().any(|(sig, val)| {
-                *sig == "Body.Doors.CentralLock.Command"
+                *sig == "Vehicle.Controller.Body.Doors.CentralLock.Command"
                     && *val == SignalValue::String("lock_all".into())
             }),
             "Stale IsLocked=true must not cancel a fresh timer; history: {:?}",
@@ -1038,9 +1087,12 @@ mod tests {
     async fn door_trim_button_unlock_does_not_arm() {
         let (bus, _arbiter, _h) = setup(Duration::from_millis(100)).await;
 
-        bus.inject("Cabin.LockStatus", SignalValue::String("UNLOCKED".into()));
         bus.inject(
-            "Cabin.LockStatus.LastRequestor",
+            "Vehicle.Controller.Cabin.LockStatus",
+            SignalValue::String("UNLOCKED".into()),
+        );
+        bus.inject(
+            "Vehicle.Controller.Cabin.LockStatus.LastRequestor",
             SignalValue::String("DoorTrimButton".into()),
         );
         sleep(Duration::from_millis(200)).await;
@@ -1049,7 +1101,7 @@ mod tests {
         let history = bus.history();
         assert!(
             !history.iter().any(|(sig, val)| {
-                *sig == "Body.Doors.CentralLock.Command"
+                *sig == "Vehicle.Controller.Body.Doors.CentralLock.Command"
                     && *val == SignalValue::String("lock_all".into())
             }),
             "Interior trim-button unlock must NOT arm AutoRelock; history: {:?}",

@@ -14,8 +14,8 @@ Feature: Passive Entry (PEPS unlock-on-handle-pull)
   #      proximity zone (LeftFront for Row1.Left; RightFront for the
   #      other three).
   #   2. Generate a 16-byte nonce and publish it to BOTH
-  #      Body.PEPS.LfChallenge (fobs respond) and
-  #      Body.PEPS.BleChallenge (phones respond).
+  #      Vehicle.Controller.Body.PEPS.LfChallenge (fobs respond) and
+  #      Vehicle.Controller.Body.PEPS.BleChallenge (phones respond).
   #   3. Wait up to 150 ms for any candidate to publish a verifiable
   #      AES-128 response.  First match wins.
   #   4. Dispatch UnlockDriver (stage 1) or UnlockAll (stage 2) via the
@@ -26,7 +26,7 @@ Feature: Passive Entry (PEPS unlock-on-handle-pull)
   # -------------------------------------------------------------------------
   # Requirements
   # -------------------------------------------------------------------------
-  # REQ-PE-001: When Body.Doors.Row1.Left.Handle.Outside.IsPulled
+  # REQ-PE-001: When Vehicle.Cabin.Door.Row1.Left.Handle.Outside.IsPulled
   #             transitions FALSE → TRUE and at least one paired PEPS
   #             device is in the LeftFront zone, the feature SHALL
   #             dispatch a door-lock command (UnlockDriver in two-stage
@@ -59,7 +59,7 @@ Feature: Passive Entry (PEPS unlock-on-handle-pull)
   #             never receive a challenge.  No false-positive unlocks.
   #
   # REQ-PE-007: BLE phones in proximity zones SHALL be authenticated via
-  #             the BLE challenge channel (Body.PEPS.BleChallenge); the
+  #             the BLE challenge channel (Vehicle.Controller.Body.PEPS.BleChallenge); the
   #             feature publishes both LF and BLE challenges in
   #             parallel since it doesn't know which device type is
   #             present.
@@ -79,7 +79,7 @@ Feature: Passive Entry (PEPS unlock-on-handle-pull)
     Given paired fob 1 is in the LeftFront zone
     When the driver pulls the Row1.Left outside handle
     Then PassiveEntry dispatches UnlockDriver via the DoorLockArbiter
-    And Body.Doors.CentralLock.FeedbackRequest is "unlock"
+    And Vehicle.Controller.Body.Doors.CentralLock.FeedbackRequest is "unlock"
 
   # --- REQ-PE-003 ---
   Scenario: Handle pull with no paired device in any zone is a no-op
@@ -94,7 +94,7 @@ Feature: Passive Entry (PEPS unlock-on-handle-pull)
     Then PassiveEntry does NOT dispatch any lock command
 
   # --- REQ-PE-005: stage-2 escalation via the OTHER side handle ---
-  # Cabin-state gate (Cabin.LockStatus = DRIVER_UNLOCKED after stage-1)
+  # Cabin-state gate (Vehicle.Controller.Cabin.LockStatus = DRIVER_UNLOCKED after stage-1)
   # silently skips a repeat pull on the driver handle — the user
   # already has access through that door.  To unlock all, pull a
   # passenger or rear handle (both bypass two-stage and dispatch
@@ -128,7 +128,7 @@ Feature: Passive Entry (PEPS unlock-on-handle-pull)
     And dealer.two_stage_unlock is disabled
     When the driver pulls the Row1.Left outside handle
     Then PassiveEntry dispatches UnlockAll
-    And Body.Doors.CentralLock.FeedbackRequest is "unlock"
+    And Vehicle.Controller.Body.Doors.CentralLock.FeedbackRequest is "unlock"
 
   # --- REQ-PE-009: Passenger-side handle pull bypasses two-stage.  When
   #               the user is approaching from the passenger side and

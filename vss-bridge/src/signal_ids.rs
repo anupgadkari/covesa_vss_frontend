@@ -10,161 +10,185 @@ use crate::signal_bus::VssPath;
 /// Returns `None` for unknown paths.
 pub fn path_to_id(path: VssPath) -> Option<u32> {
     match path {
-        // Vehicle power state (powertrain-agnostic — standard VSS v4.0)
+        // Vehicle power state (powertrain-agnostic — standard VSS v6.0)
         "Vehicle.LowVoltageSystemState" => Some(0x0001_0001),
         "Vehicle.Powertrain.Type" => Some(0x0001_0002),
 
         // Lights
-        "Body.Lights.Beam.Low.IsOn" => Some(0x0002_0001),
-        "Body.Lights.Beam.High.IsOn" => Some(0x0002_0002),
-        "Body.Lights.Running.IsOn" => Some(0x0002_0003),
-        "Body.Lights.Parking.IsOn" => Some(0x0002_0004),
-        "Body.Lights.Fog.Front.IsOn" => Some(0x0002_0005),
-        "Body.Lights.Fog.Rear.IsOn" => Some(0x0002_0006),
-        "Body.Lights.Brake.IsActive" => Some(0x0002_0007),
-        "Body.Lights.Backup.IsActive" => Some(0x0002_0008),
-        "Body.Lights.LicensePlate.IsOn" => Some(0x0002_0009),
+        "Vehicle.Body.Lights.Beam.Low.IsOn" => Some(0x0002_0001),
+        "Vehicle.Body.Lights.Beam.High.IsOn" => Some(0x0002_0002),
+        "Vehicle.Body.Lights.Running.IsOn" => Some(0x0002_0003),
+        "Vehicle.Body.Lights.Parking.IsOn" => Some(0x0002_0004),
+        "Vehicle.Body.Lights.Fog.Front.IsOn" => Some(0x0002_0005),
+        "Vehicle.Body.Lights.Fog.Rear.IsOn" => Some(0x0002_0006),
+        "Vehicle.Body.Lights.Brake.IsActive" => Some(0x0002_0007),
+        "Vehicle.Body.Lights.Backup.IsOn" => Some(0x0002_0008),
+        "Vehicle.Body.Lights.LicensePlate.IsOn" => Some(0x0002_0009),
         // Exterior puddle lamps — under-mirror courtesy lamps that
         // illuminate the ground next to the front doors.  Driven by
         // Welcome / Farewell / PerimeterAlarm via the courtesy arbiter.
-        "Body.Lights.Puddle.Left.IsOn" => Some(0x0002_0019),
-        "Body.Lights.Puddle.Right.IsOn" => Some(0x0002_001A),
-        "Body.Lights.DirectionIndicator.Left.IsSignaling" => Some(0x0002_000A),
-        "Body.Lights.DirectionIndicator.Right.IsSignaling" => Some(0x0002_000B),
-        "Body.Lights.Hazard.IsSignaling" => Some(0x0002_000C),
+        "Vehicle.Controller.Body.Lights.Puddle.Left.IsOn" => Some(0x0002_0019),
+        "Vehicle.Controller.Body.Lights.Puddle.Right.IsOn" => Some(0x0002_001A),
+        "Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling" => Some(0x0002_000A),
+        "Vehicle.Body.Lights.DirectionIndicator.Right.IsSignaling" => Some(0x0002_000B),
+        "Vehicle.Body.Lights.Hazard.IsSignaling" => Some(0x0002_000C),
 
         // Direction indicator lamp state (plant model outputs).
         // Three physical lamps per side: Front, Side (mirror repeater), Rear.
-        "Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn" => Some(0x0002_000D),
-        "Body.Lights.DirectionIndicator.Left.Lamp.Side.IsOn" => Some(0x0002_000E),
-        "Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsOn" => Some(0x0002_000F),
-        "Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn" => Some(0x0002_0010),
-        "Body.Lights.DirectionIndicator.Right.Lamp.Side.IsOn" => Some(0x0002_0011),
-        "Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsOn" => Some(0x0002_0012),
-        "Body.Lights.DirectionIndicator.Left.Lamp.Front.IsDefect" => Some(0x0002_0013),
-        "Body.Lights.DirectionIndicator.Left.Lamp.Side.IsDefect" => Some(0x0002_0014),
-        "Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsDefect" => Some(0x0002_0015),
-        "Body.Lights.DirectionIndicator.Right.Lamp.Front.IsDefect" => Some(0x0002_0016),
-        "Body.Lights.DirectionIndicator.Right.Lamp.Side.IsDefect" => Some(0x0002_0017),
-        "Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsDefect" => Some(0x0002_0018),
+        "Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn" => {
+            Some(0x0002_000D)
+        }
+        "Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Side.IsOn" => {
+            Some(0x0002_000E)
+        }
+        "Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsOn" => {
+            Some(0x0002_000F)
+        }
+        "Vehicle.Controller.Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn" => {
+            Some(0x0002_0010)
+        }
+        "Vehicle.Controller.Body.Lights.DirectionIndicator.Right.Lamp.Side.IsOn" => {
+            Some(0x0002_0011)
+        }
+        "Vehicle.Controller.Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsOn" => {
+            Some(0x0002_0012)
+        }
+        "Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Front.IsDefect" => {
+            Some(0x0002_0013)
+        }
+        "Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Side.IsDefect" => {
+            Some(0x0002_0014)
+        }
+        "Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsDefect" => {
+            Some(0x0002_0015)
+        }
+        "Vehicle.Controller.Body.Lights.DirectionIndicator.Right.Lamp.Front.IsDefect" => {
+            Some(0x0002_0016)
+        }
+        "Vehicle.Controller.Body.Lights.DirectionIndicator.Right.Lamp.Side.IsDefect" => {
+            Some(0x0002_0017)
+        }
+        "Vehicle.Controller.Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsDefect" => {
+            Some(0x0002_0018)
+        }
 
         // Windshield
-        "Body.Windshield.Front.Wiping.Mode" => Some(0x0003_0001),
-        "Body.Windshield.Front.Wiping.Intensity" => Some(0x0003_0002),
-        "Body.Windshield.Front.Washing.IsActive" => Some(0x0003_0003),
-        "Body.Windshield.Rear.Wiping.Mode" => Some(0x0003_0004),
-        "Body.Windshield.Rear.Washing.IsActive" => Some(0x0003_0005),
+        "Vehicle.Body.Windshield.Front.Wiping.Mode" => Some(0x0003_0001),
+        "Vehicle.Body.Windshield.Front.Wiping.Intensity" => Some(0x0003_0002),
+        "Vehicle.Controller.Body.Windshield.Front.Washing.IsActive" => Some(0x0003_0003),
+        "Vehicle.Body.Windshield.Rear.Wiping.Mode" => Some(0x0003_0004),
+        "Vehicle.Controller.Body.Windshield.Rear.Washing.IsActive" => Some(0x0003_0005),
 
         // Mirrors
-        "Body.Mirror.Left.IsFolded" => Some(0x0004_0001),
-        "Body.Mirror.Left.IsHeatingOn" => Some(0x0004_0002),
-        "Body.Mirror.Left.Tilt" => Some(0x0004_0003),
-        "Body.Mirror.Left.Yaw" => Some(0x0004_0004),
-        "Body.Mirror.Right.IsFolded" => Some(0x0004_0005),
-        "Body.Mirror.Right.IsHeatingOn" => Some(0x0004_0006),
-        "Body.Mirror.Right.Tilt" => Some(0x0004_0007),
-        "Body.Mirror.Right.Yaw" => Some(0x0004_0008),
+        "Vehicle.Body.Mirrors.Left.IsFolded" => Some(0x0004_0001),
+        "Vehicle.Body.Mirrors.Left.IsHeatingOn" => Some(0x0004_0002),
+        "Vehicle.Body.Mirrors.Left.Tilt" => Some(0x0004_0003),
+        "Vehicle.Body.Mirrors.Left.Yaw" => Some(0x0004_0004),
+        "Vehicle.Body.Mirrors.Right.IsFolded" => Some(0x0004_0005),
+        "Vehicle.Body.Mirrors.Right.IsHeatingOn" => Some(0x0004_0006),
+        "Vehicle.Body.Mirrors.Right.Tilt" => Some(0x0004_0007),
+        "Vehicle.Body.Mirrors.Right.Yaw" => Some(0x0004_0008),
         // Mirror fold motor commands — issued by the MirrorFold feature
         // and consumed by the MirrorFoldPlantModel.  Bool: true=fold,
         // false=unfold.  Per-side because Option-A mismatch handling
         // commands only one side at a time.
-        "Body.Mirror.Left.FoldCmd" => Some(0x0004_0009),
-        "Body.Mirror.Right.FoldCmd" => Some(0x0004_000A),
+        "Vehicle.Controller.Body.Mirror.Left.FoldCmd" => Some(0x0004_0009),
+        "Vehicle.Controller.Body.Mirror.Right.FoldCmd" => Some(0x0004_000A),
         // Mirror adjust direction command — issued by MirrorAdjust
         // feature, consumed by MirrorAdjustPlantModel.  String enum:
         // 'NONE','UP','DOWN','LEFT','RIGHT'.  Per-side because Select
         // routes Direction to exactly one side at a time.
-        "Body.Mirror.Left.AdjustCmd" => Some(0x0004_000B),
-        "Body.Mirror.Right.AdjustCmd" => Some(0x0004_000C),
+        "Vehicle.Controller.Body.Mirror.Left.AdjustCmd" => Some(0x0004_000B),
+        "Vehicle.Controller.Body.Mirror.Right.AdjustCmd" => Some(0x0004_000C),
 
         // Doors Row1 Left
-        "Body.Doors.Row1.Left.IsOpen" => Some(0x0005_0001),
-        "Body.Doors.Row1.Left.IsLocked" => Some(0x0005_0002),
-        "Body.Doors.Row1.Left.LatchStatus" => Some(0x0005_0003),
-        "Body.Doors.Row1.Left.IsChildLockActive" => Some(0x0005_0004),
-        "Body.Doors.Row1.Left.Window.Position" => Some(0x0005_0005),
-        "Body.Doors.Row1.Left.IsDoubleLocked" => Some(0x0005_0006),
-        "Body.Doors.Row1.Left.Latch.IsLatched" => Some(0x0005_0007),
-        "Body.Doors.Row1.Left.Handle.Inside.IsPulled" => Some(0x0005_0008),
-        "Body.Doors.Row1.Left.Handle.Outside.IsPulled" => Some(0x0005_0009),
-        "Body.Doors.Row1.Left.Soldier.IsUnlocked" => Some(0x0005_000A),
-        "Body.Doors.Row1.Left.CloseCmd" => Some(0x0005_000B),
+        "Vehicle.Cabin.Door.Row1.Left.IsOpen" => Some(0x0005_0001),
+        "Vehicle.Cabin.Door.Row1.Left.IsLocked" => Some(0x0005_0002),
+        "Vehicle.Cabin.Door.Row1.Left.LatchStatus" => Some(0x0005_0003),
+        "Vehicle.Cabin.Door.Row1.Left.IsChildLockActive" => Some(0x0005_0004),
+        "Vehicle.Cabin.Door.Row1.Left.Window.Position" => Some(0x0005_0005),
+        "Vehicle.Cabin.Door.Row1.Left.IsDoubleLocked" => Some(0x0005_0006),
+        "Vehicle.Cabin.Door.Row1.Left.Latch.IsLatched" => Some(0x0005_0007),
+        "Vehicle.Cabin.Door.Row1.Left.Handle.Inside.IsPulled" => Some(0x0005_0008),
+        "Vehicle.Cabin.Door.Row1.Left.Handle.Outside.IsPulled" => Some(0x0005_0009),
+        "Vehicle.Cabin.Door.Row1.Left.Soldier.IsUnlocked" => Some(0x0005_000A),
+        "Vehicle.Cabin.Door.Row1.Left.CloseCmd" => Some(0x0005_000B),
 
         // Doors Row1 Right
-        "Body.Doors.Row1.Right.IsOpen" => Some(0x0005_0011),
-        "Body.Doors.Row1.Right.IsLocked" => Some(0x0005_0012),
-        "Body.Doors.Row1.Right.LatchStatus" => Some(0x0005_0013),
-        "Body.Doors.Row1.Right.IsChildLockActive" => Some(0x0005_0014),
-        "Body.Doors.Row1.Right.Window.Position" => Some(0x0005_0015),
-        "Body.Doors.Row1.Right.IsDoubleLocked" => Some(0x0005_0016),
-        "Body.Doors.Row1.Right.Latch.IsLatched" => Some(0x0005_0017),
-        "Body.Doors.Row1.Right.Handle.Inside.IsPulled" => Some(0x0005_0018),
-        "Body.Doors.Row1.Right.Handle.Outside.IsPulled" => Some(0x0005_0019),
-        "Body.Doors.Row1.Right.Soldier.IsUnlocked" => Some(0x0005_001A),
-        "Body.Doors.Row1.Right.CloseCmd" => Some(0x0005_001B),
+        "Vehicle.Cabin.Door.Row1.Right.IsOpen" => Some(0x0005_0011),
+        "Vehicle.Cabin.Door.Row1.Right.IsLocked" => Some(0x0005_0012),
+        "Vehicle.Cabin.Door.Row1.Right.LatchStatus" => Some(0x0005_0013),
+        "Vehicle.Cabin.Door.Row1.Right.IsChildLockActive" => Some(0x0005_0014),
+        "Vehicle.Cabin.Door.Row1.Right.Window.Position" => Some(0x0005_0015),
+        "Vehicle.Cabin.Door.Row1.Right.IsDoubleLocked" => Some(0x0005_0016),
+        "Vehicle.Cabin.Door.Row1.Right.Latch.IsLatched" => Some(0x0005_0017),
+        "Vehicle.Cabin.Door.Row1.Right.Handle.Inside.IsPulled" => Some(0x0005_0018),
+        "Vehicle.Cabin.Door.Row1.Right.Handle.Outside.IsPulled" => Some(0x0005_0019),
+        "Vehicle.Cabin.Door.Row1.Right.Soldier.IsUnlocked" => Some(0x0005_001A),
+        "Vehicle.Cabin.Door.Row1.Right.CloseCmd" => Some(0x0005_001B),
 
         // Doors Row2 Left
-        "Body.Doors.Row2.Left.IsOpen" => Some(0x0005_0021),
-        "Body.Doors.Row2.Left.IsLocked" => Some(0x0005_0022),
-        "Body.Doors.Row2.Left.LatchStatus" => Some(0x0005_0023),
-        "Body.Doors.Row2.Left.IsChildLockActive" => Some(0x0005_0024),
-        "Body.Doors.Row2.Left.Window.Position" => Some(0x0005_0025),
-        "Body.Doors.Row2.Left.IsDoubleLocked" => Some(0x0005_0026),
-        "Body.Doors.Row2.Left.Latch.IsLatched" => Some(0x0005_0027),
-        "Body.Doors.Row2.Left.Handle.Inside.IsPulled" => Some(0x0005_0028),
-        "Body.Doors.Row2.Left.Handle.Outside.IsPulled" => Some(0x0005_0029),
-        "Body.Doors.Row2.Left.Soldier.IsUnlocked" => Some(0x0005_002A),
-        "Body.Doors.Row2.Left.CloseCmd" => Some(0x0005_002B),
+        "Vehicle.Cabin.Door.Row2.Left.IsOpen" => Some(0x0005_0021),
+        "Vehicle.Cabin.Door.Row2.Left.IsLocked" => Some(0x0005_0022),
+        "Vehicle.Cabin.Door.Row2.Left.LatchStatus" => Some(0x0005_0023),
+        "Vehicle.Cabin.Door.Row2.Left.IsChildLockActive" => Some(0x0005_0024),
+        "Vehicle.Cabin.Door.Row2.Left.Window.Position" => Some(0x0005_0025),
+        "Vehicle.Cabin.Door.Row2.Left.IsDoubleLocked" => Some(0x0005_0026),
+        "Vehicle.Cabin.Door.Row2.Left.Latch.IsLatched" => Some(0x0005_0027),
+        "Vehicle.Cabin.Door.Row2.Left.Handle.Inside.IsPulled" => Some(0x0005_0028),
+        "Vehicle.Cabin.Door.Row2.Left.Handle.Outside.IsPulled" => Some(0x0005_0029),
+        "Vehicle.Cabin.Door.Row2.Left.Soldier.IsUnlocked" => Some(0x0005_002A),
+        "Vehicle.Cabin.Door.Row2.Left.CloseCmd" => Some(0x0005_002B),
 
         // Doors Row2 Right
-        "Body.Doors.Row2.Right.IsOpen" => Some(0x0005_0031),
-        "Body.Doors.Row2.Right.IsLocked" => Some(0x0005_0032),
-        "Body.Doors.Row2.Right.LatchStatus" => Some(0x0005_0033),
-        "Body.Doors.Row2.Right.IsChildLockActive" => Some(0x0005_0034),
-        "Body.Doors.Row2.Right.Window.Position" => Some(0x0005_0035),
-        "Body.Doors.Row2.Right.IsDoubleLocked" => Some(0x0005_0036),
-        "Body.Doors.Row2.Right.Latch.IsLatched" => Some(0x0005_0037),
-        "Body.Doors.Row2.Right.Handle.Inside.IsPulled" => Some(0x0005_0038),
-        "Body.Doors.Row2.Right.Handle.Outside.IsPulled" => Some(0x0005_0039),
-        "Body.Doors.Row2.Right.Soldier.IsUnlocked" => Some(0x0005_003A),
-        "Body.Doors.Row2.Right.CloseCmd" => Some(0x0005_003B),
+        "Vehicle.Cabin.Door.Row2.Right.IsOpen" => Some(0x0005_0031),
+        "Vehicle.Cabin.Door.Row2.Right.IsLocked" => Some(0x0005_0032),
+        "Vehicle.Cabin.Door.Row2.Right.LatchStatus" => Some(0x0005_0033),
+        "Vehicle.Cabin.Door.Row2.Right.IsChildLockActive" => Some(0x0005_0034),
+        "Vehicle.Cabin.Door.Row2.Right.Window.Position" => Some(0x0005_0035),
+        "Vehicle.Cabin.Door.Row2.Right.IsDoubleLocked" => Some(0x0005_0036),
+        "Vehicle.Cabin.Door.Row2.Right.Latch.IsLatched" => Some(0x0005_0037),
+        "Vehicle.Cabin.Door.Row2.Right.Handle.Inside.IsPulled" => Some(0x0005_0038),
+        "Vehicle.Cabin.Door.Row2.Right.Handle.Outside.IsPulled" => Some(0x0005_0039),
+        "Vehicle.Cabin.Door.Row2.Right.Soldier.IsUnlocked" => Some(0x0005_003A),
+        "Vehicle.Cabin.Door.Row2.Right.CloseCmd" => Some(0x0005_003B),
 
         // Body misc
-        "Body.Hood.IsOpen" => Some(0x0006_0001),
+        "Vehicle.Body.Hood.IsOpen" => Some(0x0006_0001),
         // Hood — HoodPlantModel runs a tri-state latch FSM
         // (LATCHED / HALF_LATCHED / OPEN), publishes both the
-        // tri-state on `Body.Hood.LatchState` and the convenience
-        // `Body.Hood.IsOpen` (true iff fully OPEN), persists the
+        // tri-state on `Vehicle.Controller.Body.Hood.LatchState` and the convenience
+        // `Vehicle.Body.Hood.IsOpen` (true iff fully OPEN), persists the
         // tri-state in NVM.  Inputs:
-        //   • Body.Switches.Hood.Release.IsPulled — dash release
+        //   • Vehicle.Controller.Body.Switches.Hood.Release.IsPulled — dash release
         //     lever momentary; double-pull within 3 s while LATCHED
         //     → HALF_LATCHED.
-        //   • Body.Hood.OpenCmd  — top-view click while HALF_LATCHED
+        //   • Vehicle.Controller.Body.Hood.OpenCmd  — top-view click while HALF_LATCHED
         //     → OPEN.
-        //   • Body.Hood.CloseCmd — top-view click while OPEN
+        //   • Vehicle.Controller.Body.Hood.CloseCmd — top-view click while OPEN
         //     → LATCHED.  Ignored from HALF_LATCHED (real hoods need
         //     a gravity drop from open to engage both pawls).
-        "Body.Hood.OpenCmd" => Some(0x0006_000B),
-        "Body.Hood.CloseCmd" => Some(0x0006_000C),
-        "Body.Hood.LatchState" => Some(0x0006_000D),
-        "Body.Trunk.IsOpen" => Some(0x0006_0002),
-        "Body.Trunk.IsLocked" => Some(0x0006_0003),
-        "Body.Horn.IsActive" => Some(0x0006_0004),
+        "Vehicle.Controller.Body.Hood.OpenCmd" => Some(0x0006_000B),
+        "Vehicle.Controller.Body.Hood.CloseCmd" => Some(0x0006_000C),
+        "Vehicle.Controller.Body.Hood.LatchState" => Some(0x0006_000D),
+        "Vehicle.Body.Trunk.Rear.IsOpen" => Some(0x0006_0002),
+        "Vehicle.Body.Trunk.Rear.IsLocked" => Some(0x0006_0003),
+        "Vehicle.Body.Horn.IsActive" => Some(0x0006_0004),
         // Interior chime — soft tone driven by feature business logic
         // for "imminent alarm" warning, door-ajar reminder, seatbelt
         // chime, etc.  Distinct from the main horn so users can tell
         // a 12 s pre-alarm warning chime apart from a full intrusion
         // alarm.  Single writer today (PerimeterAlarm); add an arbiter
         // when a second feature wants the same actuator.
-        "Body.Chime.IsActive" => Some(0x0006_000E),
+        "Vehicle.Controller.Body.Chime.IsActive" => Some(0x0006_000E),
         // ChimePlantModel output: physical buzzer state.  Mirrors
         // `IsActive` for now; the split lets us add onset/decay or
         // ducking later without touching feature code.
-        "Body.Chime.IsSounding" => Some(0x0006_000F),
-        "Body.Trunk.OpenCmd" => Some(0x0006_0007),
-        "Body.Trunk.CloseCmd" => Some(0x0006_0008),
-        "Body.FuelLid.IsOpen" => Some(0x0006_0005),
-        "Body.ChargeLid.IsOpen" => Some(0x0006_0006),
+        "Vehicle.Controller.Body.Chime.IsSounding" => Some(0x0006_000F),
+        "Vehicle.Controller.Body.Trunk.Rear.OpenCmd" => Some(0x0006_0007),
+        "Vehicle.Controller.Body.Trunk.Rear.CloseCmd" => Some(0x0006_0008),
+        "Vehicle.Controller.Body.FuelLid.IsOpen" => Some(0x0006_0005),
+        "Vehicle.Controller.Body.ChargeLid.IsOpen" => Some(0x0006_0006),
         // Exterior trunk-release button — capacitive press above the
         // license plate.  HMI-publishable momentary input; consumed by
         // the ExteriorTrunkButton feature.  Name is neutral on the
@@ -172,11 +196,11 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // plant model can subscribe to the same trigger without a
         // signal rename.  ID 0x0006_0009 is taken by the alarm signal,
         // so this slots at 0x0006_000A.
-        "Body.Trunk.ExteriorButton.IsPressed" => Some(0x0006_000A),
+        "Vehicle.Controller.Body.Trunk.Rear.ExteriorButton.IsPressed" => Some(0x0006_000A),
 
         // Sunroof
-        "Body.Sunroof.Position" => Some(0x0007_0001),
-        "Body.Sunroof.Shade.Position" => Some(0x0007_0002),
+        "Vehicle.Cabin.Sunroof.Position" => Some(0x0007_0001),
+        "Vehicle.Cabin.Sunroof.Shade.Position" => Some(0x0007_0002),
         // Sunroof command signals — string enum, allowed values:
         //   "OPEN"  — drive toward Position=100 (or Shade=100) at 20%/sec
         //   "CLOSE" — drive toward Position=0   (or Shade=0)   at 20%/sec
@@ -184,51 +208,51 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // Press-and-hold UX: HMI publishes "OPEN" on mousedown of the
         // open button and "STOP" on mouseup.  SunroofPlantModel
         // integrates Position over time and persists settled values.
-        "Body.Sunroof.MoveCmd" => Some(0x0007_0003),
-        "Body.Sunroof.Shade.MoveCmd" => Some(0x0007_0004),
+        "Vehicle.Controller.Sunroof.MoveCmd" => Some(0x0007_0003),
+        "Vehicle.Controller.Sunroof.Shade.MoveCmd" => Some(0x0007_0004),
 
         // Cabin Lights
-        "Cabin.Lights.IsDomeOn" => Some(0x0008_0001),
-        "Cabin.Lights.IsGloveBoxOn" => Some(0x0008_0002),
-        "Cabin.Lights.Ambient.Intensity" => Some(0x0008_0003),
-        "Cabin.Lights.Ambient.Color" => Some(0x0008_0004),
+        "Vehicle.Cabin.Light.IsDomeOn" => Some(0x0008_0001),
+        "Vehicle.Cabin.Light.IsGloveBoxOn" => Some(0x0008_0002),
+        "Vehicle.Controller.Cabin.Lights.Ambient.Intensity" => Some(0x0008_0003),
+        "Vehicle.Controller.Cabin.Lights.Ambient.Color" => Some(0x0008_0004),
         // 3-position interior dome-light switch (String enum:
         // "OFF" / "DOOR" / "ON").  Driven by the cockpit HMI;
         // consumed by the `DomeSwitch` feature which arbitrates
-        // `Cabin.Lights.IsDomeOn`.
-        "Cabin.Lights.Dome.SwitchPosition" => Some(0x0008_0005),
+        // `Vehicle.Cabin.Light.IsDomeOn`.
+        "Vehicle.Controller.Cabin.Light.Dome.SwitchPosition" => Some(0x0008_0005),
 
         // HVAC
-        "Cabin.HVAC.IsAirConditioningActive" => Some(0x0009_0001),
-        "Cabin.HVAC.IsRecirculationActive" => Some(0x0009_0002),
-        "Cabin.HVAC.IsFrontDefrosterActive" => Some(0x0009_0003),
-        "Cabin.HVAC.IsRearDefrosterActive" => Some(0x0009_0004),
-        "Cabin.HVAC.Station.Row1.Left.Temperature" => Some(0x0009_0010),
-        "Cabin.HVAC.Station.Row1.Left.FanSpeed" => Some(0x0009_0011),
-        "Cabin.HVAC.Station.Row1.Left.AirDistribution" => Some(0x0009_0012),
-        "Cabin.HVAC.Station.Row1.Right.Temperature" => Some(0x0009_0020),
-        "Cabin.HVAC.Station.Row1.Right.FanSpeed" => Some(0x0009_0021),
-        "Cabin.HVAC.Station.Row1.Right.AirDistribution" => Some(0x0009_0022),
+        "Vehicle.Cabin.HVAC.IsAirConditioningActive" => Some(0x0009_0001),
+        "Vehicle.Cabin.HVAC.IsRecirculationActive" => Some(0x0009_0002),
+        "Vehicle.Cabin.HVAC.IsFrontDefrosterActive" => Some(0x0009_0003),
+        "Vehicle.Cabin.HVAC.IsRearDefrosterActive" => Some(0x0009_0004),
+        "Vehicle.Cabin.HVAC.Station.Row1.Left.Temperature" => Some(0x0009_0010),
+        "Vehicle.Cabin.HVAC.Station.Row1.Left.FanSpeed" => Some(0x0009_0011),
+        "Vehicle.Cabin.HVAC.Station.Row1.Left.AirDistribution" => Some(0x0009_0012),
+        "Vehicle.Cabin.HVAC.Station.Row1.Right.Temperature" => Some(0x0009_0020),
+        "Vehicle.Cabin.HVAC.Station.Row1.Right.FanSpeed" => Some(0x0009_0021),
+        "Vehicle.Cabin.HVAC.Station.Row1.Right.AirDistribution" => Some(0x0009_0022),
 
         // Seats
-        "Cabin.Seat.Row1.Left.IsHeatingOn" => Some(0x000A_0001),
-        "Cabin.Seat.Row1.Left.IsVentilationOn" => Some(0x000A_0002),
-        "Cabin.Seat.Row1.Left.HeatingLevel" => Some(0x000A_0003),
-        "Cabin.Seat.Row1.Right.IsHeatingOn" => Some(0x000A_0011),
-        "Cabin.Seat.Row1.Right.IsVentilationOn" => Some(0x000A_0012),
-        "Cabin.Seat.Row1.Right.HeatingLevel" => Some(0x000A_0013),
+        "Vehicle.Controller.Cabin.Seat.Row1.Left.IsHeatingOn" => Some(0x000A_0001),
+        "Vehicle.Controller.Cabin.Seat.Row1.Left.IsVentilationOn" => Some(0x000A_0002),
+        "Vehicle.Cabin.Seat.Row1.Left.HeatingCooling" => Some(0x000A_0003),
+        "Vehicle.Controller.Cabin.Seat.Row1.Right.IsHeatingOn" => Some(0x000A_0011),
+        "Vehicle.Controller.Cabin.Seat.Row1.Right.IsVentilationOn" => Some(0x000A_0012),
+        "Vehicle.Cabin.Seat.Row1.Right.HeatingCooling" => Some(0x000A_0013),
 
         // PEPS synthetic signal
-        "Body.PEPS.KeyPresent" => Some(0x000B_0001),
+        "Vehicle.Controller.Body.PEPS.KeyPresent" => Some(0x000B_0001),
 
-        // Switch / stalk inputs (overlay — not in standard VSS v4.0)
-        "Body.Switches.Hazard.IsEngaged" => Some(0x000D_0001),
-        "Body.Switches.TurnIndicator.Direction" => Some(0x000D_0002),
-        "Body.Switches.HighBeam.IsEngaged" => Some(0x000D_0003),
-        "Chassis.ParkingBrake.IsEngaged" => Some(0x000D_0004),
-        "Body.Switches.Fog.Front.IsEngaged" => Some(0x000D_0005),
-        "Body.Switches.Fog.Rear.IsEngaged" => Some(0x000D_0006),
-        "Body.Switches.Panic.IsEngaged" => Some(0x000D_0007),
+        // Switch / stalk inputs (overlay — not in standard VSS v6.0)
+        "Vehicle.Controller.Body.Switches.Hazard.IsEngaged" => Some(0x000D_0001),
+        "Vehicle.Controller.Body.Switches.TurnIndicator.Direction" => Some(0x000D_0002),
+        "Vehicle.Controller.Body.Switches.HighBeam.IsEngaged" => Some(0x000D_0003),
+        "Vehicle.Chassis.ParkingBrake.IsEngaged" => Some(0x000D_0004),
+        "Vehicle.Controller.Body.Switches.Fog.Front.IsEngaged" => Some(0x000D_0005),
+        "Vehicle.Controller.Body.Switches.Fog.Rear.IsEngaged" => Some(0x000D_0006),
+        "Vehicle.Controller.Body.Switches.Panic.IsEngaged" => Some(0x000D_0007),
         // Mirror control switches (project extension — VSS does not
         // define mirror movement controls).
         // - Fold: bool, momentary (false→true edge = press).
@@ -236,43 +260,43 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         //   Allowed values: 'NONE','LEFT','RIGHT'.
         // - Direction: enum, joystick output. 'NONE' on release.
         //   Allowed values: 'NONE','UP','DOWN','LEFT','RIGHT'.
-        "Body.Switches.Mirror.Fold" => Some(0x000D_0010),
-        "Body.Switches.Mirror.Select" => Some(0x000D_0011),
-        "Body.Switches.Mirror.Direction" => Some(0x000D_0012),
+        "Vehicle.Controller.Body.Switches.Mirror.Fold" => Some(0x000D_0010),
+        "Vehicle.Controller.Body.Switches.Mirror.Select" => Some(0x000D_0011),
+        "Vehicle.Controller.Body.Switches.Mirror.Direction" => Some(0x000D_0012),
         // Hood release lever (under the dash) — momentary pull.  Two
         // pulls within 3 s while LATCHED → HALF_LATCHED via the
         // HoodPlantModel state machine.
-        "Body.Switches.Hood.Release.IsPulled" => Some(0x000D_0020),
+        "Vehicle.Controller.Body.Switches.Hood.Release.IsPulled" => Some(0x000D_0020),
         // Cabin trunk release switch — typical placement is a
         // push-button low on the dash or a pull handle in the
         // driver footwell.  Privileged interior control: no lock-
         // state or auth gate.  Valet mode is enforced at the trunk
         // arbiter's `ValetGate` (same chokepoint as RKE TrunkRelease
         // and the exterior button).
-        "Body.Switches.Trunk.Release.IsPressed" => Some(0x000D_0021),
+        "Vehicle.Controller.Body.Switches.Trunk.Release.IsPressed" => Some(0x000D_0021),
         // Steering-wheel horn pad — momentary press.  ManualHorn
-        // feature claims Body.Horn.IsActive at Medium priority while
+        // feature claims Vehicle.Body.Horn.IsActive at Medium priority while
         // pressed; releases on release.  PanicAlarm at High preempts
         // when the alarm is engaged.
-        "Body.Switches.Horn.IsPressed" => Some(0x000D_0022),
+        "Vehicle.Controller.Body.Switches.Horn.IsPressed" => Some(0x000D_0022),
 
-        // Anti-theft alarm status (project extension — not in standard VSS v4.0)
-        "Vehicle.Body.Alarm.IsActive" => Some(0x0006_0009),
+        // Anti-theft alarm status (project extension — not in standard VSS v6.0)
+        "Vehicle.Controller.Alarm.IsActive" => Some(0x0006_0009),
         // Authoritative perimeter-alarm state enum, single writer is
         // PerimeterAlarm.  Values: "DISARMED" | "PRE_ARMED" | "ARMED" |
         // "ACTIVATED".  HMI displays this directly instead of computing
         // state from secondary signals (kills the banner-restart race).
-        "Vehicle.Body.Alarm.State" => Some(0x0006_0010),
+        "Vehicle.Controller.Alarm.State" => Some(0x0006_0010),
 
         // AutoRelock status (project extension — set when the relock timer is armed)
-        "Body.Doors.AutoRelock.IsArmed" => Some(0x000A_0040),
-        "Body.Doors.AutoRelock.TimeoutSeconds" => Some(0x000A_0041),
+        "Vehicle.Controller.Body.Doors.AutoRelock.IsArmed" => Some(0x000A_0040),
+        "Vehicle.Controller.Body.Doors.AutoRelock.TimeoutSeconds" => Some(0x000A_0041),
 
         // Chassis / Powertrain (sensor inputs)
-        "Chassis.Brake.PedalPosition" => Some(0x000C_0001),
+        "Vehicle.Chassis.Brake.PedalPosition" => Some(0x000C_0001),
         "Powertrain.Transmission.CurrentGear" => Some(0x000C_0002),
         "Vehicle.Speed" => Some(0x000C_0003),
-        "Body.Lights.LightSwitch" => Some(0x000C_0004),
+        "Vehicle.Body.Lights.LightSwitch" => Some(0x000C_0004),
         // Driver's gear-selector position (intent).  Same VSS encoding
         // as CurrentGear: 126=P, -1=R, 0=N, 127=D, 128=S, 1..N=manual.
         // Consumed by `TransmissionPlant`, which publishes the actual
@@ -280,66 +304,66 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Powertrain.Transmission.SelectedGear" => Some(0x000C_0005),
 
         // Door lock inputs (overlay — DoorLockInputs.vspec)
-        "Body.Switches.DoorTrim.Row1.Left.LockButton" => Some(0x000E_0001),
-        "Body.Switches.DoorTrim.Row1.Right.LockButton" => Some(0x000E_0002),
-        "Body.Switches.DoorTrim.Row2.Left.LockButton" => Some(0x000E_0003),
-        "Body.Switches.DoorTrim.Row2.Right.LockButton" => Some(0x000E_0004),
+        "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.LockButton" => Some(0x000E_0001),
+        "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Right.LockButton" => Some(0x000E_0002),
+        "Vehicle.Controller.Body.Switches.DoorTrim.Row2.Left.LockButton" => Some(0x000E_0003),
+        "Vehicle.Controller.Body.Switches.DoorTrim.Row2.Right.LockButton" => Some(0x000E_0004),
         // Interior trim unlock buttons — Row 1 only (driver and front
         // passenger door panels).  No auth needed (egress safety); the
         // PerimeterAlarm feature watches these to escalate when an
         // unlock fires while the alarm is armed.
-        "Body.Switches.DoorTrim.Row1.Left.UnlockButton" => Some(0x000E_0005),
-        "Body.Switches.DoorTrim.Row1.Right.UnlockButton" => Some(0x000E_0006),
-        "Body.Switches.Keyfob.LockButton" => Some(0x000E_0010),
-        "Body.Connectivity.RemoteLock" => Some(0x000E_0020),
-        "Body.Connectivity.BleLock" => Some(0x000E_0021),
-        "Body.Connectivity.NfcCardPresent" => Some(0x000E_0030),
-        "Body.Connectivity.NfcPhonePresent" => Some(0x000E_0031),
+        "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.UnlockButton" => Some(0x000E_0005),
+        "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Right.UnlockButton" => Some(0x000E_0006),
+        "Vehicle.Controller.Body.Switches.Keyfob.LockButton" => Some(0x000E_0010),
+        "Vehicle.Simulation.Connectivity.RemoteLock" => Some(0x000E_0020),
+        "Vehicle.Simulation.Connectivity.BleLock" => Some(0x000E_0021),
+        "Vehicle.Simulation.Connectivity.NfcCardPresent" => Some(0x000E_0030),
+        "Vehicle.Simulation.Connectivity.NfcPhonePresent" => Some(0x000E_0031),
 
         // Door removed sensors (removable doors — Bronco, Wrangler)
-        "Body.Doors.Row1.Left.IsRemoved" => Some(0x000E_0040),
-        "Body.Doors.Row1.Right.IsRemoved" => Some(0x000E_0041),
-        "Body.Doors.Row2.Left.IsRemoved" => Some(0x000E_0042),
-        "Body.Doors.Row2.Right.IsRemoved" => Some(0x000E_0043),
+        "Vehicle.Cabin.Door.Row1.Left.IsRemoved" => Some(0x000E_0040),
+        "Vehicle.Cabin.Door.Row1.Right.IsRemoved" => Some(0x000E_0041),
+        "Vehicle.Cabin.Door.Row2.Left.IsRemoved" => Some(0x000E_0042),
+        "Vehicle.Cabin.Door.Row2.Right.IsRemoved" => Some(0x000E_0043),
 
         // Safety signals
-        "Vehicle.Safety.CrashDetected" => Some(0x000F_0001),
+        "Vehicle.Controller.Safety.CrashDetected" => Some(0x000F_0001),
 
         // PEPS plant model — `.Zone` (IDs 0x0010_0001..0x0010_0006)
         // retired in item #14 follow-up.  HMI writes `.PlacedZone`;
         // every feature consumer reads `.LastObservedZone` (see
         // KeySearchArbiter).
         // PEPS plant model — key fob button presses
-        "Body.PEPS.Plant.KeyFob.1.ButtonPress" => Some(0x0010_0011),
-        "Body.PEPS.Plant.KeyFob.2.ButtonPress" => Some(0x0010_0012),
-        "Body.PEPS.Plant.KeyFob.3.ButtonPress" => Some(0x0010_0013),
-        "Body.PEPS.Plant.KeyFob.4.ButtonPress" => Some(0x0010_0014),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.1.ButtonPress" => Some(0x0010_0011),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.2.ButtonPress" => Some(0x0010_0012),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.3.ButtonPress" => Some(0x0010_0013),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.4.ButtonPress" => Some(0x0010_0014),
         // PEPS plant model — key fob pairing
-        "Body.PEPS.Plant.KeyFob.1.Paired" => Some(0x0010_0021),
-        "Body.PEPS.Plant.KeyFob.2.Paired" => Some(0x0010_0022),
-        "Body.PEPS.Plant.KeyFob.3.Paired" => Some(0x0010_0023),
-        "Body.PEPS.Plant.KeyFob.4.Paired" => Some(0x0010_0024),
-        "Body.PEPS.Plant.KeyFob.5.Paired" => Some(0x0010_0025),
-        "Body.PEPS.Plant.KeyFob.6.Paired" => Some(0x0010_0026),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.1.Paired" => Some(0x0010_0021),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.2.Paired" => Some(0x0010_0022),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.3.Paired" => Some(0x0010_0023),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.4.Paired" => Some(0x0010_0024),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.5.Paired" => Some(0x0010_0025),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.6.Paired" => Some(0x0010_0026),
         // PEPS plant model — key fob challenge responses
-        "Body.PEPS.Plant.KeyFob.1.ChallengeResponse" => Some(0x0010_0031),
-        "Body.PEPS.Plant.KeyFob.2.ChallengeResponse" => Some(0x0010_0032),
-        "Body.PEPS.Plant.KeyFob.3.ChallengeResponse" => Some(0x0010_0033),
-        "Body.PEPS.Plant.KeyFob.4.ChallengeResponse" => Some(0x0010_0034),
-        "Body.PEPS.Plant.KeyFob.5.ChallengeResponse" => Some(0x0010_0035),
-        "Body.PEPS.Plant.KeyFob.6.ChallengeResponse" => Some(0x0010_0036),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.1.ChallengeResponse" => Some(0x0010_0031),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.2.ChallengeResponse" => Some(0x0010_0032),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.3.ChallengeResponse" => Some(0x0010_0033),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.4.ChallengeResponse" => Some(0x0010_0034),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.5.ChallengeResponse" => Some(0x0010_0035),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.6.ChallengeResponse" => Some(0x0010_0036),
         // PEPS plant model — key fob RSSI responses
-        "Body.PEPS.Plant.KeyFob.1.RssiResponse" => Some(0x0010_0041),
-        "Body.PEPS.Plant.KeyFob.2.RssiResponse" => Some(0x0010_0042),
-        "Body.PEPS.Plant.KeyFob.3.RssiResponse" => Some(0x0010_0043),
-        "Body.PEPS.Plant.KeyFob.4.RssiResponse" => Some(0x0010_0044),
-        "Body.PEPS.Plant.KeyFob.5.RssiResponse" => Some(0x0010_0045),
-        "Body.PEPS.Plant.KeyFob.6.RssiResponse" => Some(0x0010_0046),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.1.RssiResponse" => Some(0x0010_0041),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.2.RssiResponse" => Some(0x0010_0042),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.3.RssiResponse" => Some(0x0010_0043),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.4.RssiResponse" => Some(0x0010_0044),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.5.RssiResponse" => Some(0x0010_0045),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.6.RssiResponse" => Some(0x0010_0046),
         // PEPS plant model — key fob RF messages
-        "Body.PEPS.Plant.KeyFob.1.RfMessage" => Some(0x0010_0051),
-        "Body.PEPS.Plant.KeyFob.2.RfMessage" => Some(0x0010_0052),
-        "Body.PEPS.Plant.KeyFob.3.RfMessage" => Some(0x0010_0053),
-        "Body.PEPS.Plant.KeyFob.4.RfMessage" => Some(0x0010_0054),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.1.RfMessage" => Some(0x0010_0051),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.2.RfMessage" => Some(0x0010_0052),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.3.RfMessage" => Some(0x0010_0053),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.4.RfMessage" => Some(0x0010_0054),
         // PlacedZone — where the device physically is.  In production
         // the vehicle never knows this directly; this signal exists
         // only because the simulator user can drag chips around in
@@ -348,30 +372,30 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // periodic LF scans, surfaced as LastObservedZone.  The
         // legacy `.Zone` signal is now a transitional mirror of
         // `.PlacedZone` until all consumers migrate.
-        "Body.PEPS.Plant.KeyFob.1.PlacedZone" => Some(0x0010_0061),
-        "Body.PEPS.Plant.KeyFob.2.PlacedZone" => Some(0x0010_0062),
-        "Body.PEPS.Plant.KeyFob.3.PlacedZone" => Some(0x0010_0063),
-        "Body.PEPS.Plant.KeyFob.4.PlacedZone" => Some(0x0010_0064),
-        "Body.PEPS.Plant.KeyFob.5.PlacedZone" => Some(0x0010_0065),
-        "Body.PEPS.Plant.KeyFob.6.PlacedZone" => Some(0x0010_0066),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.1.PlacedZone" => Some(0x0010_0061),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.2.PlacedZone" => Some(0x0010_0062),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.3.PlacedZone" => Some(0x0010_0063),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.4.PlacedZone" => Some(0x0010_0064),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.5.PlacedZone" => Some(0x0010_0065),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.6.PlacedZone" => Some(0x0010_0066),
         // LastObservedZone — published by the KeySearchArbiter after
         // each scan.  This is what real PEPS features should consume
         // (and what the legacy `.Zone` mirror will eventually mean).
-        "Body.PEPS.Plant.KeyFob.1.LastObservedZone" => Some(0x0010_0071),
-        "Body.PEPS.Plant.KeyFob.2.LastObservedZone" => Some(0x0010_0072),
-        "Body.PEPS.Plant.KeyFob.3.LastObservedZone" => Some(0x0010_0073),
-        "Body.PEPS.Plant.KeyFob.4.LastObservedZone" => Some(0x0010_0074),
-        "Body.PEPS.Plant.KeyFob.5.LastObservedZone" => Some(0x0010_0075),
-        "Body.PEPS.Plant.KeyFob.6.LastObservedZone" => Some(0x0010_0076),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.1.LastObservedZone" => Some(0x0010_0071),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.2.LastObservedZone" => Some(0x0010_0072),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.3.LastObservedZone" => Some(0x0010_0073),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.4.LastObservedZone" => Some(0x0010_0074),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.5.LastObservedZone" => Some(0x0010_0075),
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.6.LastObservedZone" => Some(0x0010_0076),
         // PEPS plant model — BlePhone `.Zone` (IDs 0x0011_0001 /
         // 0x0011_0002) retired in item #14 follow-up — see KeyFob
         // note above.
         // PEPS plant model — BLE phone challenge responses
-        "Body.PEPS.Plant.BlePhone.1.ChallengeResponse" => Some(0x0011_0011),
-        "Body.PEPS.Plant.BlePhone.2.ChallengeResponse" => Some(0x0011_0012),
+        "Vehicle.Simulation.PEPS.Plant.BlePhone.1.ChallengeResponse" => Some(0x0011_0011),
+        "Vehicle.Simulation.PEPS.Plant.BlePhone.2.ChallengeResponse" => Some(0x0011_0012),
         // PEPS plant model — BLE phone RSSI responses
-        "Body.PEPS.Plant.BlePhone.1.RssiResponse" => Some(0x0011_0021),
-        "Body.PEPS.Plant.BlePhone.2.RssiResponse" => Some(0x0011_0022),
+        "Vehicle.Simulation.PEPS.Plant.BlePhone.1.RssiResponse" => Some(0x0011_0021),
+        "Vehicle.Simulation.PEPS.Plant.BlePhone.2.RssiResponse" => Some(0x0011_0022),
         // BLE phone NFC tap — String enum with the same `NfcPosition`
         // values as the dedicated NFC card path (`NotPresent`,
         // `DriverHandle`, `PushButton`).  Distinct from `.Zone` so the
@@ -380,86 +404,86 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // the explicit NFC tap event (NfcEntry on tap) as a separate
         // signal.  Real phones expose BLE and NFC as independent
         // radios; the simulator now mirrors that.
-        "Body.PEPS.Plant.BlePhone.1.NfcTap" => Some(0x0011_0031),
-        "Body.PEPS.Plant.BlePhone.2.NfcTap" => Some(0x0011_0032),
+        "Vehicle.Simulation.PEPS.Plant.BlePhone.1.NfcTap" => Some(0x0011_0031),
+        "Vehicle.Simulation.PEPS.Plant.BlePhone.2.NfcTap" => Some(0x0011_0032),
         // BLE phone PlacedZone / LastObservedZone — same model as the
         // KeyFob signals above.
-        "Body.PEPS.Plant.BlePhone.1.PlacedZone" => Some(0x0011_0041),
-        "Body.PEPS.Plant.BlePhone.2.PlacedZone" => Some(0x0011_0042),
-        "Body.PEPS.Plant.BlePhone.1.LastObservedZone" => Some(0x0011_0051),
-        "Body.PEPS.Plant.BlePhone.2.LastObservedZone" => Some(0x0011_0052),
+        "Vehicle.Simulation.PEPS.Plant.BlePhone.1.PlacedZone" => Some(0x0011_0041),
+        "Vehicle.Simulation.PEPS.Plant.BlePhone.2.PlacedZone" => Some(0x0011_0042),
+        "Vehicle.Simulation.PEPS.Plant.BlePhone.1.LastObservedZone" => Some(0x0011_0051),
+        "Vehicle.Simulation.PEPS.Plant.BlePhone.2.LastObservedZone" => Some(0x0011_0052),
         // PEPS plant model — NFC card positions
-        "Body.PEPS.Plant.NfcCard.1.Position" => Some(0x0012_0001),
-        "Body.PEPS.Plant.NfcCard.2.Position" => Some(0x0012_0002),
+        "Vehicle.Simulation.PEPS.Plant.NfcCard.1.Position" => Some(0x0012_0001),
+        "Vehicle.Simulation.PEPS.Plant.NfcCard.2.Position" => Some(0x0012_0002),
         // PEPS plant model — NFC card challenge responses
-        "Body.PEPS.Plant.NfcCard.1.ChallengeResponse" => Some(0x0012_0011),
-        "Body.PEPS.Plant.NfcCard.2.ChallengeResponse" => Some(0x0012_0012),
+        "Vehicle.Simulation.PEPS.Plant.NfcCard.1.ChallengeResponse" => Some(0x0012_0011),
+        "Vehicle.Simulation.PEPS.Plant.NfcCard.2.ChallengeResponse" => Some(0x0012_0012),
         // PEPS vehicle-side challenge/poll signals
-        "Body.PEPS.LfChallenge" => Some(0x0013_0001),
-        "Body.PEPS.BleChallenge" => Some(0x0013_0002),
-        "Body.PEPS.NfcChallenge" => Some(0x0013_0003),
-        "Body.PEPS.ApproachPoll" => Some(0x0013_0004),
+        "Vehicle.Controller.Body.PEPS.LfChallenge" => Some(0x0013_0001),
+        "Vehicle.Controller.Body.PEPS.BleChallenge" => Some(0x0013_0002),
+        "Vehicle.Controller.Body.PEPS.NfcChallenge" => Some(0x0013_0003),
+        "Vehicle.Controller.Body.PEPS.ApproachPoll" => Some(0x0013_0004),
 
         // Lock feedback request — published by external-origin features
         // (RKE, walk-away, keypad, auto-relock). LockFeedback subscribes.
         // Values: "lock" | "unlock" | "trunk_unlock"
-        "Body.Doors.CentralLock.FeedbackRequest" => Some(0x0014_0001),
+        "Vehicle.Controller.Body.Doors.CentralLock.FeedbackRequest" => Some(0x0014_0001),
 
         // Thumb-pad lock triggers — Row1 outside handle lock area (no Row2 pads).
-        "Body.Doors.Row1.Left.Handle.Outside.LockPad.IsPressed" => Some(0x0014_0002),
-        "Body.Doors.Row1.Right.Handle.Outside.LockPad.IsPressed" => Some(0x0014_0003),
+        "Vehicle.Cabin.Door.Row1.Left.Handle.Outside.LockPad.IsPressed" => Some(0x0014_0002),
+        "Vehicle.Cabin.Door.Row1.Right.Handle.Outside.LockPad.IsPressed" => Some(0x0014_0003),
         // Central lock command — published by arbiter; HMI diagnostic override also
         // uses this path to send lock_double / release_double directly to plant model.
-        "Body.Doors.CentralLock.Command" => Some(0x0014_0004),
+        "Vehicle.Controller.Body.Doors.CentralLock.Command" => Some(0x0014_0004),
         // Vehicle-level central lock status — published by the door-lock
         // arbiter on every accepted command and persisted in NVM.  Many
         // features subscribe (MirrorFold AUTO trigger today; future
         // walk-away-cancel, security-alarm-arm, etc.).  Soldier-knob
         // moves do NOT update this — it reflects the *commanded* state.
         // Allowed values: 'UNLOCKED','DRIVER_UNLOCKED','LOCKED','DOUBLE_LOCKED'.
-        "Cabin.LockStatus" => Some(0x0014_0005),
+        "Vehicle.Controller.Cabin.LockStatus" => Some(0x0014_0005),
         // Identity of the feature whose request the arbiter accepted on the
         // most recent central-lock dispatch.  String form of `FeatureId`
         // (e.g. "KeyfobRke", "PassiveEntry").  Lets downstream features
         // (AutoRelock today) gate behaviour on the source of an unlock
         // without coupling to per-source signals or having to be added
         // to a publisher's allow-list.
-        "Cabin.LockStatus.LastRequestor" => Some(0x0014_0006),
+        "Vehicle.Controller.Cabin.LockStatus.LastRequestor" => Some(0x0014_0006),
         // Monotonic counter incremented on every accepted central-lock
         // command (wraps at u16::MAX).  Subscribers use the *change* in
         // this value as the "a new lock command happened" trigger,
-        // even when the resolved `Cabin.LockStatus` enum value is
+        // even when the resolved `Vehicle.Controller.Cabin.LockStatus` enum value is
         // unchanged (e.g. UnlockAll dispatched twice when already
         // unlocked).  Lets AutoRelock restart its 45s timer on every
         // qualifying press, not just on state transitions.
-        "Cabin.LockStatus.EventNum" => Some(0x0014_0007),
+        "Vehicle.Controller.Cabin.LockStatus.EventNum" => Some(0x0014_0007),
 
         // Power child-lock momentary push (driver master panel) +
         // latched master output.  PowerChildLock feature observes the
         // press, toggles MasterStatus and fans it out to the per-door
         // Body.Doors.Row2.{Left,Right}.IsChildLockActive signals.
-        "Body.Switches.PowerChildLock.IsPressed" => Some(0x0014_0008),
-        "Body.PowerChildLock.MasterStatus" => Some(0x0014_0009),
+        "Vehicle.Controller.Body.Switches.PowerChildLock.IsPressed" => Some(0x0014_0008),
+        "Vehicle.Controller.Body.PowerChildLock.MasterStatus" => Some(0x0014_0009),
 
-        // Ambient light sensor (OEM custom — not in standard VSS v4.x).
+        // Ambient light sensor (OEM custom — not in standard VSS v6.0).
         // Used by ManualLighting AUTO mode to gate low-beam activation.
-        "Body.Lights.AmbientLightSensor.Illuminance" => Some(0x0015_0001),
+        "Vehicle.Controller.Body.Lights.AmbientLightSensor.Illuminance" => Some(0x0015_0001),
 
         // Valet mode (OEM custom — block 0x0017).  Published by the
         // infotainment HMI when the user enters Valet via the
         // touchscreen + secret code.  When true, the ExteriorTrunkButton
         // feature short-circuits (locked path skips even the LF
         // challenge) and the trunk_arbiter's ValetGate suppresses any
-        // Body.Trunk.OpenCmd from any source (RKE included).  Glove
+        // Vehicle.Controller.Body.Trunk.Rear.OpenCmd from any source (RKE included).  Glove
         // box and any future valet-gated actuators subscribe in the
         // same way.
-        "Cabin.ValetMode.IsActive" => Some(0x0017_0001),
+        "Vehicle.Controller.Cabin.ValetMode.IsActive" => Some(0x0017_0001),
 
         // ADAS camera signals (OEM custom — block 0x0016).
         // OncomingVehicleDetected: true when forward camera sees oncoming headlights.
-        "Vehicle.ADAS.HighBeam.OncomingVehicleDetected" => Some(0x0016_0001),
+        "Vehicle.Controller.ADAS.HighBeam.OncomingVehicleDetected" => Some(0x0016_0001),
 
-        // ── Standard COVESA VSS v4.0 paths (block 0x0018) ──────────────
+        // ── Standard COVESA VSS v6.0 paths (block 0x0018) ──────────────
         //
         // `Vehicle.Cabin.Infotainment.HMI.DayNightMode` — String enum
         // (`"DAY"` / `"NIGHT"`).  Published by the `DayNightMode` plant
@@ -488,28 +512,36 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // Driver-master pack: one Detent per window.  Always defined
         // for all 4 windows regardless of LHD/RHD — the master pack
         // sits on the driver's door card and covers every window.
-        "Body.Switches.Window.DriverMaster.Row1.Left.Detent" => Some(0x001A_0001),
-        "Body.Switches.Window.DriverMaster.Row1.Right.Detent" => Some(0x001A_0002),
-        "Body.Switches.Window.DriverMaster.Row2.Left.Detent" => Some(0x001A_0003),
-        "Body.Switches.Window.DriverMaster.Row2.Right.Detent" => Some(0x001A_0004),
+        "Vehicle.Controller.Body.Switches.Window.DriverMaster.Row1.Left.Detent" => {
+            Some(0x001A_0001)
+        }
+        "Vehicle.Controller.Body.Switches.Window.DriverMaster.Row1.Right.Detent" => {
+            Some(0x001A_0002)
+        }
+        "Vehicle.Controller.Body.Switches.Window.DriverMaster.Row2.Left.Detent" => {
+            Some(0x001A_0003)
+        }
+        "Vehicle.Controller.Body.Switches.Window.DriverMaster.Row2.Right.Detent" => {
+            Some(0x001A_0004)
+        }
         // Local per-door switches — defined symmetrically for all 4
         // doors.  The HMI only writes the side configured as
         // **passenger** for the driver's row (Local.Row1.{!driver}) so
         // there's no double-write from the driver's own door (which
         // is covered by DriverMaster).  Local.Row1.{driver-side}
         // stays defined so tests can inject it.
-        "Body.Switches.Window.Local.Row1.Left.Detent" => Some(0x001A_0011),
-        "Body.Switches.Window.Local.Row1.Right.Detent" => Some(0x001A_0012),
-        "Body.Switches.Window.Local.Row2.Left.Detent" => Some(0x001A_0013),
-        "Body.Switches.Window.Local.Row2.Right.Detent" => Some(0x001A_0014),
+        "Vehicle.Controller.Body.Switches.Window.Local.Row1.Left.Detent" => Some(0x001A_0011),
+        "Vehicle.Controller.Body.Switches.Window.Local.Row1.Right.Detent" => Some(0x001A_0012),
+        "Vehicle.Controller.Body.Switches.Window.Local.Row2.Left.Detent" => Some(0x001A_0013),
+        "Vehicle.Controller.Body.Switches.Window.Local.Row2.Right.Detent" => Some(0x001A_0014),
         // Window-motor commanded direction (String enum UP / DOWN /
         // STOPPED).  Published by the `window_arbiter` from the
         // winning claim; consumed by the per-window plant which
         // integrates the motor into Window.Position.
-        "Body.Doors.Row1.Left.Window.MotorDirection" => Some(0x001A_0021),
-        "Body.Doors.Row1.Right.Window.MotorDirection" => Some(0x001A_0022),
-        "Body.Doors.Row2.Left.Window.MotorDirection" => Some(0x001A_0023),
-        "Body.Doors.Row2.Right.Window.MotorDirection" => Some(0x001A_0024),
+        "Vehicle.Cabin.Door.Row1.Left.Window.MotorDirection" => Some(0x001A_0021),
+        "Vehicle.Cabin.Door.Row1.Right.Window.MotorDirection" => Some(0x001A_0022),
+        "Vehicle.Cabin.Door.Row2.Left.Window.MotorDirection" => Some(0x001A_0023),
+        "Vehicle.Cabin.Door.Row2.Right.Window.MotorDirection" => Some(0x001A_0024),
 
         // Sunroof rocker detent — String enum:
         //   NEUTRAL / OPEN_HOLD / OPEN_AUTO / CLOSE_HOLD / CLOSE_AUTO
@@ -517,12 +549,12 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // simulator-panel SunroofMotorRow) on every press / release.
         // Consumed by the `SunroofControl` feature which sequences
         // the two motors and handles auto-mode latching.
-        "Body.Switches.Sunroof.Detent" => Some(0x001B_0001),
+        "Vehicle.Controller.Body.Switches.Sunroof.Detent" => Some(0x001B_0001),
 
         // Delayed-accessory power latch.  Published by the
         // DelayedAccessory feature.  Gates PowerWindow today; other
         // accessory features can subscribe later.
-        "Body.Power.DelayedAccessory.IsActive" => Some(0x001C_0001),
+        "Vehicle.Controller.Body.Power.DelayedAccessory.IsActive" => Some(0x001C_0001),
 
         // KeySearch arbiter derived signals (block 0x001D).
         // Published by the arbiter's adaptive approach-poll loop.
@@ -532,32 +564,32 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // ApproachPollInterval: current cadence in ms (700 when no
         //   key, 10_000 when a key is detected, 0 while suspended
         //   on ACC/ON/START).
-        "Body.PEPS.ApproachState" => Some(0x001D_0001),
-        "Body.PEPS.ApproachKeys" => Some(0x001D_0002),
-        "Body.PEPS.ApproachPollInterval" => Some(0x001D_0003),
+        "Vehicle.Controller.Body.PEPS.ApproachState" => Some(0x001D_0001),
+        "Vehicle.Controller.Body.PEPS.ApproachKeys" => Some(0x001D_0002),
+        "Vehicle.Controller.Body.PEPS.ApproachPollInterval" => Some(0x001D_0003),
 
         // Vehicle starting / ignition (block 0x001E).
         //
-        // `Body.Switches.StartStop.IsPressed` — momentary push of the
+        // `Vehicle.Controller.Body.Switches.StartStop.IsPressed` — momentary push of the
         //   start/stop button.  Only meaningful when
         //   `VehicleLineCal::key_source_cfg == Peps`; on KeyCylinder
         //   builds the HMI omits the button entirely.
-        // `Body.Switches.IgnitionCylinder.Position` — String enum
+        // `Vehicle.Controller.Body.Switches.IgnitionCylinder.Position` — String enum
         //   ("LOCK" | "ACC" | "ON" | "START") published by the cockpit
         //   rotary cylinder.  Only used when `key_source_cfg ==
         //   KeyCylinder`.  Spring-loaded START detent returns to ON
         //   when released.
-        // `Chassis.Brake.IsApplied` — bool, derived by the brake plant
-        //   from `Chassis.Brake.PedalPosition` (threshold-debounced).
+        // `Vehicle.Controller.Chassis.Brake.IsApplied` — bool, derived by the brake plant
+        //   from `Vehicle.Chassis.Brake.PedalPosition` (threshold-debounced).
         //   VehicleStartingControl reads this to decide jump-to-RUN.
-        // `Vehicle.Starting.ImmobilizerStatus` — String enum
+        // `Vehicle.Controller.Starting.ImmobilizerStatus` — String enum
         //   ("LOCKED" | "AUTHENTICATING" | "AUTHENTICATED" | "FAILED")
         //   published by VehicleStartingControl based on the result of
         //   the immobilizer challenge issued via the KeySearchArbiter.
-        "Body.Switches.StartStop.IsPressed" => Some(0x001E_0001),
-        "Body.Switches.IgnitionCylinder.Position" => Some(0x001E_0002),
-        "Chassis.Brake.IsApplied" => Some(0x001E_0003),
-        "Vehicle.Starting.ImmobilizerStatus" => Some(0x001E_0004),
+        "Vehicle.Controller.Body.Switches.StartStop.IsPressed" => Some(0x001E_0001),
+        "Vehicle.Controller.Body.Switches.IgnitionCylinder.Position" => Some(0x001E_0002),
+        "Vehicle.Controller.Chassis.Brake.IsApplied" => Some(0x001E_0003),
+        "Vehicle.Controller.Starting.ImmobilizerStatus" => Some(0x001E_0004),
 
         // Brake / Transmission Shift Interlock (BTSI) + Key-in-Ignition
         // Inhibit derived flags.  Both bool, both bridge-published.
@@ -573,13 +605,13 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         //   OFF instead, matching real automotive key-in-ignition
         //   lockout behaviour.  Always false on PEPS builds.
         "Powertrain.Transmission.ShiftLockEngaged" => Some(0x001E_0005),
-        "Body.Switches.IgnitionCylinder.RemovalInhibited" => Some(0x001E_0006),
+        "Vehicle.Controller.Body.Switches.IgnitionCylinder.RemovalInhibited" => Some(0x001E_0006),
         // NFC auth bypass — set true by NfcEntry for ~3 s after any
         // NFC tap (driver-handle OR push-button).  Consumed by
         // VehicleStartingControl to short-circuit its normal cabin
         // Authenticated scan when the user proved auth via NFC.
         // Auto-clears to false after the window expires.
-        "Body.PEPS.NfcAuthBypass" => Some(0x001E_0007),
+        "Vehicle.Controller.Body.PEPS.NfcAuthBypass" => Some(0x001E_0007),
         // Start/Stop button backlight — modeled as a PWM control
         // signal published by the ECU (VehicleStartingControl) and
         // a derived perceived intensity simulated by the
@@ -595,8 +627,8 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         //   BacklightIntensity (Uint8 0..=100) — plant output.
         //     Today a passthrough; a future iteration can apply
         //     gamma / RC-filter / ambient compensation.
-        "Body.Switches.StartStop.BacklightDutyCycle" => Some(0x001E_0008),
-        "Body.Switches.StartStop.BacklightIntensity" => Some(0x001E_0009),
+        "Vehicle.Controller.Body.Switches.StartStop.BacklightDutyCycle" => Some(0x001E_0008),
+        "Vehicle.Controller.Body.Switches.StartStop.BacklightIntensity" => Some(0x001E_0009),
         // Published by the LostPkScan feature.  True while the
         // vehicle is in a live ignition state (ON / START) and the
         // most recent on-vehicle key search (fired on the
@@ -606,7 +638,7 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // that finds at least one key, or on ignition leaving
         // ON / START.  The HMI cluster can subscribe and display
         // a "KEY NOT IN VEHICLE" warning popup.  OEM extension.
-        "Body.PEPS.LostKeyWarning" => Some(0x001E_000A),
+        "Vehicle.Controller.Body.PEPS.LostKeyWarning" => Some(0x001E_000A),
 
         _ => None,
     }
@@ -625,307 +657,631 @@ pub fn id_to_path(id: u32) -> Option<VssPath> {
 pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Vehicle.LowVoltageSystemState", 0x0001_0001),
     ("Vehicle.Powertrain.Type", 0x0001_0002),
-    ("Body.Lights.Beam.Low.IsOn", 0x0002_0001),
-    ("Body.Lights.Beam.High.IsOn", 0x0002_0002),
-    ("Body.Lights.Running.IsOn", 0x0002_0003),
-    ("Body.Lights.Parking.IsOn", 0x0002_0004),
-    ("Body.Lights.Fog.Front.IsOn", 0x0002_0005),
-    ("Body.Lights.Fog.Rear.IsOn", 0x0002_0006),
-    ("Body.Lights.Brake.IsActive", 0x0002_0007),
-    ("Body.Lights.Backup.IsActive", 0x0002_0008),
-    ("Body.Lights.LicensePlate.IsOn", 0x0002_0009),
-    ("Body.Lights.Puddle.Left.IsOn", 0x0002_0019),
-    ("Body.Lights.Puddle.Right.IsOn", 0x0002_001A),
+    ("Vehicle.Body.Lights.Beam.Low.IsOn", 0x0002_0001),
+    ("Vehicle.Body.Lights.Beam.High.IsOn", 0x0002_0002),
+    ("Vehicle.Body.Lights.Running.IsOn", 0x0002_0003),
+    ("Vehicle.Body.Lights.Parking.IsOn", 0x0002_0004),
+    ("Vehicle.Body.Lights.Fog.Front.IsOn", 0x0002_0005),
+    ("Vehicle.Body.Lights.Fog.Rear.IsOn", 0x0002_0006),
+    ("Vehicle.Body.Lights.Brake.IsActive", 0x0002_0007),
+    ("Vehicle.Body.Lights.Backup.IsOn", 0x0002_0008),
+    ("Vehicle.Body.Lights.LicensePlate.IsOn", 0x0002_0009),
     (
-        "Body.Lights.DirectionIndicator.Left.IsSignaling",
+        "Vehicle.Controller.Body.Lights.Puddle.Left.IsOn",
+        0x0002_0019,
+    ),
+    (
+        "Vehicle.Controller.Body.Lights.Puddle.Right.IsOn",
+        0x0002_001A,
+    ),
+    (
+        "Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling",
         0x0002_000A,
     ),
     (
-        "Body.Lights.DirectionIndicator.Right.IsSignaling",
+        "Vehicle.Body.Lights.DirectionIndicator.Right.IsSignaling",
         0x0002_000B,
     ),
-    ("Body.Lights.Hazard.IsSignaling", 0x0002_000C),
+    ("Vehicle.Body.Lights.Hazard.IsSignaling", 0x0002_000C),
     (
-        "Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn",
+        "Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn",
         0x0002_000D,
     ),
     (
-        "Body.Lights.DirectionIndicator.Left.Lamp.Side.IsOn",
+        "Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Side.IsOn",
         0x0002_000E,
     ),
     (
-        "Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsOn",
+        "Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsOn",
         0x0002_000F,
     ),
     (
-        "Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn",
+        "Vehicle.Controller.Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn",
         0x0002_0010,
     ),
     (
-        "Body.Lights.DirectionIndicator.Right.Lamp.Side.IsOn",
+        "Vehicle.Controller.Body.Lights.DirectionIndicator.Right.Lamp.Side.IsOn",
         0x0002_0011,
     ),
     (
-        "Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsOn",
+        "Vehicle.Controller.Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsOn",
         0x0002_0012,
     ),
     (
-        "Body.Lights.DirectionIndicator.Left.Lamp.Front.IsDefect",
+        "Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Front.IsDefect",
         0x0002_0013,
     ),
     (
-        "Body.Lights.DirectionIndicator.Left.Lamp.Side.IsDefect",
+        "Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Side.IsDefect",
         0x0002_0014,
     ),
     (
-        "Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsDefect",
+        "Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsDefect",
         0x0002_0015,
     ),
     (
-        "Body.Lights.DirectionIndicator.Right.Lamp.Front.IsDefect",
+        "Vehicle.Controller.Body.Lights.DirectionIndicator.Right.Lamp.Front.IsDefect",
         0x0002_0016,
     ),
     (
-        "Body.Lights.DirectionIndicator.Right.Lamp.Side.IsDefect",
+        "Vehicle.Controller.Body.Lights.DirectionIndicator.Right.Lamp.Side.IsDefect",
         0x0002_0017,
     ),
     (
-        "Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsDefect",
+        "Vehicle.Controller.Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsDefect",
         0x0002_0018,
     ),
-    ("Body.Windshield.Front.Wiping.Mode", 0x0003_0001),
-    ("Body.Windshield.Front.Wiping.Intensity", 0x0003_0002),
-    ("Body.Windshield.Front.Washing.IsActive", 0x0003_0003),
-    ("Body.Windshield.Rear.Wiping.Mode", 0x0003_0004),
-    ("Body.Windshield.Rear.Washing.IsActive", 0x0003_0005),
-    ("Body.Mirror.Left.IsFolded", 0x0004_0001),
-    ("Body.Mirror.Left.IsHeatingOn", 0x0004_0002),
-    ("Body.Mirror.Left.Tilt", 0x0004_0003),
-    ("Body.Mirror.Left.Yaw", 0x0004_0004),
-    ("Body.Mirror.Right.IsFolded", 0x0004_0005),
-    ("Body.Mirror.Right.IsHeatingOn", 0x0004_0006),
-    ("Body.Mirror.Right.Tilt", 0x0004_0007),
-    ("Body.Mirror.Right.Yaw", 0x0004_0008),
-    ("Body.Mirror.Left.FoldCmd", 0x0004_0009),
-    ("Body.Mirror.Right.FoldCmd", 0x0004_000A),
-    ("Body.Mirror.Left.AdjustCmd", 0x0004_000B),
-    ("Body.Mirror.Right.AdjustCmd", 0x0004_000C),
-    ("Body.Doors.Row1.Left.IsOpen", 0x0005_0001),
-    ("Body.Doors.Row1.Left.IsLocked", 0x0005_0002),
-    ("Body.Doors.Row1.Left.LatchStatus", 0x0005_0003),
-    ("Body.Doors.Row1.Left.IsChildLockActive", 0x0005_0004),
-    ("Body.Doors.Row1.Left.Window.Position", 0x0005_0005),
-    ("Body.Doors.Row1.Left.IsDoubleLocked", 0x0005_0006),
-    ("Body.Doors.Row1.Left.Latch.IsLatched", 0x0005_0007),
-    ("Body.Doors.Row1.Left.Handle.Inside.IsPulled", 0x0005_0008),
-    ("Body.Doors.Row1.Left.Handle.Outside.IsPulled", 0x0005_0009),
-    ("Body.Doors.Row1.Left.Soldier.IsUnlocked", 0x0005_000A),
-    ("Body.Doors.Row1.Left.CloseCmd", 0x0005_000B),
-    ("Body.Doors.Row1.Right.IsOpen", 0x0005_0011),
-    ("Body.Doors.Row1.Right.IsLocked", 0x0005_0012),
-    ("Body.Doors.Row1.Right.LatchStatus", 0x0005_0013),
-    ("Body.Doors.Row1.Right.IsChildLockActive", 0x0005_0014),
-    ("Body.Doors.Row1.Right.Window.Position", 0x0005_0015),
-    ("Body.Doors.Row1.Right.IsDoubleLocked", 0x0005_0016),
-    ("Body.Doors.Row1.Right.Latch.IsLatched", 0x0005_0017),
-    ("Body.Doors.Row1.Right.Handle.Inside.IsPulled", 0x0005_0018),
-    ("Body.Doors.Row1.Right.Handle.Outside.IsPulled", 0x0005_0019),
-    ("Body.Doors.Row1.Right.Soldier.IsUnlocked", 0x0005_001A),
-    ("Body.Doors.Row1.Right.CloseCmd", 0x0005_001B),
-    ("Body.Doors.Row2.Left.IsOpen", 0x0005_0021),
-    ("Body.Doors.Row2.Left.IsLocked", 0x0005_0022),
-    ("Body.Doors.Row2.Left.LatchStatus", 0x0005_0023),
-    ("Body.Doors.Row2.Left.IsChildLockActive", 0x0005_0024),
-    ("Body.Doors.Row2.Left.Window.Position", 0x0005_0025),
-    ("Body.Doors.Row2.Left.IsDoubleLocked", 0x0005_0026),
-    ("Body.Doors.Row2.Left.Latch.IsLatched", 0x0005_0027),
-    ("Body.Doors.Row2.Left.Handle.Inside.IsPulled", 0x0005_0028),
-    ("Body.Doors.Row2.Left.Handle.Outside.IsPulled", 0x0005_0029),
-    ("Body.Doors.Row2.Left.Soldier.IsUnlocked", 0x0005_002A),
-    ("Body.Doors.Row2.Left.CloseCmd", 0x0005_002B),
-    ("Body.Doors.Row2.Right.IsOpen", 0x0005_0031),
-    ("Body.Doors.Row2.Right.IsLocked", 0x0005_0032),
-    ("Body.Doors.Row2.Right.LatchStatus", 0x0005_0033),
-    ("Body.Doors.Row2.Right.IsChildLockActive", 0x0005_0034),
-    ("Body.Doors.Row2.Right.Window.Position", 0x0005_0035),
-    ("Body.Doors.Row2.Right.IsDoubleLocked", 0x0005_0036),
-    ("Body.Doors.Row2.Right.Latch.IsLatched", 0x0005_0037),
-    ("Body.Doors.Row2.Right.Handle.Inside.IsPulled", 0x0005_0038),
-    ("Body.Doors.Row2.Right.Handle.Outside.IsPulled", 0x0005_0039),
-    ("Body.Doors.Row2.Right.Soldier.IsUnlocked", 0x0005_003A),
-    ("Body.Doors.Row2.Right.CloseCmd", 0x0005_003B),
-    ("Body.Hood.IsOpen", 0x0006_0001),
-    ("Body.Trunk.IsOpen", 0x0006_0002),
-    ("Body.Trunk.IsLocked", 0x0006_0003),
-    ("Body.Horn.IsActive", 0x0006_0004),
-    ("Body.Chime.IsActive", 0x0006_000E),
-    ("Body.Chime.IsSounding", 0x0006_000F),
-    ("Body.Trunk.OpenCmd", 0x0006_0007),
-    ("Body.Trunk.CloseCmd", 0x0006_0008),
-    ("Body.FuelLid.IsOpen", 0x0006_0005),
-    ("Body.ChargeLid.IsOpen", 0x0006_0006),
-    ("Vehicle.Body.Alarm.IsActive", 0x0006_0009),
-    ("Vehicle.Body.Alarm.State", 0x0006_0010),
-    ("Body.Trunk.ExteriorButton.IsPressed", 0x0006_000A),
-    ("Body.Hood.OpenCmd", 0x0006_000B),
-    ("Body.Hood.CloseCmd", 0x0006_000C),
-    ("Body.Hood.LatchState", 0x0006_000D),
-    ("Body.Doors.AutoRelock.IsArmed", 0x000A_0040),
-    ("Body.Doors.AutoRelock.TimeoutSeconds", 0x000A_0041),
-    ("Body.Sunroof.Position", 0x0007_0001),
-    ("Body.Sunroof.Shade.Position", 0x0007_0002),
-    ("Body.Sunroof.MoveCmd", 0x0007_0003),
-    ("Body.Sunroof.Shade.MoveCmd", 0x0007_0004),
-    ("Cabin.Lights.IsDomeOn", 0x0008_0001),
-    ("Cabin.Lights.IsGloveBoxOn", 0x0008_0002),
-    ("Cabin.Lights.Ambient.Intensity", 0x0008_0003),
-    ("Cabin.Lights.Ambient.Color", 0x0008_0004),
-    ("Cabin.Lights.Dome.SwitchPosition", 0x0008_0005),
-    ("Cabin.HVAC.IsAirConditioningActive", 0x0009_0001),
-    ("Cabin.HVAC.IsRecirculationActive", 0x0009_0002),
-    ("Cabin.HVAC.IsFrontDefrosterActive", 0x0009_0003),
-    ("Cabin.HVAC.IsRearDefrosterActive", 0x0009_0004),
-    ("Cabin.HVAC.Station.Row1.Left.Temperature", 0x0009_0010),
-    ("Cabin.HVAC.Station.Row1.Left.FanSpeed", 0x0009_0011),
-    ("Cabin.HVAC.Station.Row1.Left.AirDistribution", 0x0009_0012),
-    ("Cabin.HVAC.Station.Row1.Right.Temperature", 0x0009_0020),
-    ("Cabin.HVAC.Station.Row1.Right.FanSpeed", 0x0009_0021),
-    ("Cabin.HVAC.Station.Row1.Right.AirDistribution", 0x0009_0022),
-    ("Cabin.Seat.Row1.Left.IsHeatingOn", 0x000A_0001),
-    ("Cabin.Seat.Row1.Left.IsVentilationOn", 0x000A_0002),
-    ("Cabin.Seat.Row1.Left.HeatingLevel", 0x000A_0003),
-    ("Cabin.Seat.Row1.Right.IsHeatingOn", 0x000A_0011),
-    ("Cabin.Seat.Row1.Right.IsVentilationOn", 0x000A_0012),
-    ("Cabin.Seat.Row1.Right.HeatingLevel", 0x000A_0013),
-    ("Body.PEPS.KeyPresent", 0x000B_0001),
+    ("Vehicle.Body.Windshield.Front.Wiping.Mode", 0x0003_0001),
+    (
+        "Vehicle.Body.Windshield.Front.Wiping.Intensity",
+        0x0003_0002,
+    ),
+    (
+        "Vehicle.Controller.Body.Windshield.Front.Washing.IsActive",
+        0x0003_0003,
+    ),
+    ("Vehicle.Body.Windshield.Rear.Wiping.Mode", 0x0003_0004),
+    (
+        "Vehicle.Controller.Body.Windshield.Rear.Washing.IsActive",
+        0x0003_0005,
+    ),
+    ("Vehicle.Body.Mirrors.Left.IsFolded", 0x0004_0001),
+    ("Vehicle.Body.Mirrors.Left.IsHeatingOn", 0x0004_0002),
+    ("Vehicle.Body.Mirrors.Left.Tilt", 0x0004_0003),
+    ("Vehicle.Body.Mirrors.Left.Yaw", 0x0004_0004),
+    ("Vehicle.Body.Mirrors.Right.IsFolded", 0x0004_0005),
+    ("Vehicle.Body.Mirrors.Right.IsHeatingOn", 0x0004_0006),
+    ("Vehicle.Body.Mirrors.Right.Tilt", 0x0004_0007),
+    ("Vehicle.Body.Mirrors.Right.Yaw", 0x0004_0008),
+    ("Vehicle.Controller.Body.Mirror.Left.FoldCmd", 0x0004_0009),
+    ("Vehicle.Controller.Body.Mirror.Right.FoldCmd", 0x0004_000A),
+    ("Vehicle.Controller.Body.Mirror.Left.AdjustCmd", 0x0004_000B),
+    (
+        "Vehicle.Controller.Body.Mirror.Right.AdjustCmd",
+        0x0004_000C,
+    ),
+    ("Vehicle.Cabin.Door.Row1.Left.IsOpen", 0x0005_0001),
+    ("Vehicle.Cabin.Door.Row1.Left.IsLocked", 0x0005_0002),
+    ("Vehicle.Cabin.Door.Row1.Left.LatchStatus", 0x0005_0003),
+    (
+        "Vehicle.Cabin.Door.Row1.Left.IsChildLockActive",
+        0x0005_0004,
+    ),
+    ("Vehicle.Cabin.Door.Row1.Left.Window.Position", 0x0005_0005),
+    ("Vehicle.Cabin.Door.Row1.Left.IsDoubleLocked", 0x0005_0006),
+    ("Vehicle.Cabin.Door.Row1.Left.Latch.IsLatched", 0x0005_0007),
+    (
+        "Vehicle.Cabin.Door.Row1.Left.Handle.Inside.IsPulled",
+        0x0005_0008,
+    ),
+    (
+        "Vehicle.Cabin.Door.Row1.Left.Handle.Outside.IsPulled",
+        0x0005_0009,
+    ),
+    (
+        "Vehicle.Cabin.Door.Row1.Left.Soldier.IsUnlocked",
+        0x0005_000A,
+    ),
+    ("Vehicle.Cabin.Door.Row1.Left.CloseCmd", 0x0005_000B),
+    ("Vehicle.Cabin.Door.Row1.Right.IsOpen", 0x0005_0011),
+    ("Vehicle.Cabin.Door.Row1.Right.IsLocked", 0x0005_0012),
+    ("Vehicle.Cabin.Door.Row1.Right.LatchStatus", 0x0005_0013),
+    (
+        "Vehicle.Cabin.Door.Row1.Right.IsChildLockActive",
+        0x0005_0014,
+    ),
+    ("Vehicle.Cabin.Door.Row1.Right.Window.Position", 0x0005_0015),
+    ("Vehicle.Cabin.Door.Row1.Right.IsDoubleLocked", 0x0005_0016),
+    ("Vehicle.Cabin.Door.Row1.Right.Latch.IsLatched", 0x0005_0017),
+    (
+        "Vehicle.Cabin.Door.Row1.Right.Handle.Inside.IsPulled",
+        0x0005_0018,
+    ),
+    (
+        "Vehicle.Cabin.Door.Row1.Right.Handle.Outside.IsPulled",
+        0x0005_0019,
+    ),
+    (
+        "Vehicle.Cabin.Door.Row1.Right.Soldier.IsUnlocked",
+        0x0005_001A,
+    ),
+    ("Vehicle.Cabin.Door.Row1.Right.CloseCmd", 0x0005_001B),
+    ("Vehicle.Cabin.Door.Row2.Left.IsOpen", 0x0005_0021),
+    ("Vehicle.Cabin.Door.Row2.Left.IsLocked", 0x0005_0022),
+    ("Vehicle.Cabin.Door.Row2.Left.LatchStatus", 0x0005_0023),
+    (
+        "Vehicle.Cabin.Door.Row2.Left.IsChildLockActive",
+        0x0005_0024,
+    ),
+    ("Vehicle.Cabin.Door.Row2.Left.Window.Position", 0x0005_0025),
+    ("Vehicle.Cabin.Door.Row2.Left.IsDoubleLocked", 0x0005_0026),
+    ("Vehicle.Cabin.Door.Row2.Left.Latch.IsLatched", 0x0005_0027),
+    (
+        "Vehicle.Cabin.Door.Row2.Left.Handle.Inside.IsPulled",
+        0x0005_0028,
+    ),
+    (
+        "Vehicle.Cabin.Door.Row2.Left.Handle.Outside.IsPulled",
+        0x0005_0029,
+    ),
+    (
+        "Vehicle.Cabin.Door.Row2.Left.Soldier.IsUnlocked",
+        0x0005_002A,
+    ),
+    ("Vehicle.Cabin.Door.Row2.Left.CloseCmd", 0x0005_002B),
+    ("Vehicle.Cabin.Door.Row2.Right.IsOpen", 0x0005_0031),
+    ("Vehicle.Cabin.Door.Row2.Right.IsLocked", 0x0005_0032),
+    ("Vehicle.Cabin.Door.Row2.Right.LatchStatus", 0x0005_0033),
+    (
+        "Vehicle.Cabin.Door.Row2.Right.IsChildLockActive",
+        0x0005_0034,
+    ),
+    ("Vehicle.Cabin.Door.Row2.Right.Window.Position", 0x0005_0035),
+    ("Vehicle.Cabin.Door.Row2.Right.IsDoubleLocked", 0x0005_0036),
+    ("Vehicle.Cabin.Door.Row2.Right.Latch.IsLatched", 0x0005_0037),
+    (
+        "Vehicle.Cabin.Door.Row2.Right.Handle.Inside.IsPulled",
+        0x0005_0038,
+    ),
+    (
+        "Vehicle.Cabin.Door.Row2.Right.Handle.Outside.IsPulled",
+        0x0005_0039,
+    ),
+    (
+        "Vehicle.Cabin.Door.Row2.Right.Soldier.IsUnlocked",
+        0x0005_003A,
+    ),
+    ("Vehicle.Cabin.Door.Row2.Right.CloseCmd", 0x0005_003B),
+    ("Vehicle.Body.Hood.IsOpen", 0x0006_0001),
+    ("Vehicle.Body.Trunk.Rear.IsOpen", 0x0006_0002),
+    ("Vehicle.Body.Trunk.Rear.IsLocked", 0x0006_0003),
+    ("Vehicle.Body.Horn.IsActive", 0x0006_0004),
+    ("Vehicle.Controller.Body.Chime.IsActive", 0x0006_000E),
+    ("Vehicle.Controller.Body.Chime.IsSounding", 0x0006_000F),
+    ("Vehicle.Controller.Body.Trunk.Rear.OpenCmd", 0x0006_0007),
+    ("Vehicle.Controller.Body.Trunk.Rear.CloseCmd", 0x0006_0008),
+    ("Vehicle.Controller.Body.FuelLid.IsOpen", 0x0006_0005),
+    ("Vehicle.Controller.Body.ChargeLid.IsOpen", 0x0006_0006),
+    ("Vehicle.Controller.Alarm.IsActive", 0x0006_0009),
+    ("Vehicle.Controller.Alarm.State", 0x0006_0010),
+    (
+        "Vehicle.Controller.Body.Trunk.Rear.ExteriorButton.IsPressed",
+        0x0006_000A,
+    ),
+    ("Vehicle.Controller.Body.Hood.OpenCmd", 0x0006_000B),
+    ("Vehicle.Controller.Body.Hood.CloseCmd", 0x0006_000C),
+    ("Vehicle.Controller.Body.Hood.LatchState", 0x0006_000D),
+    (
+        "Vehicle.Controller.Body.Doors.AutoRelock.IsArmed",
+        0x000A_0040,
+    ),
+    (
+        "Vehicle.Controller.Body.Doors.AutoRelock.TimeoutSeconds",
+        0x000A_0041,
+    ),
+    ("Vehicle.Cabin.Sunroof.Position", 0x0007_0001),
+    ("Vehicle.Cabin.Sunroof.Shade.Position", 0x0007_0002),
+    ("Vehicle.Controller.Sunroof.MoveCmd", 0x0007_0003),
+    ("Vehicle.Controller.Sunroof.Shade.MoveCmd", 0x0007_0004),
+    ("Vehicle.Cabin.Light.IsDomeOn", 0x0008_0001),
+    ("Vehicle.Cabin.Light.IsGloveBoxOn", 0x0008_0002),
+    (
+        "Vehicle.Controller.Cabin.Lights.Ambient.Intensity",
+        0x0008_0003,
+    ),
+    ("Vehicle.Controller.Cabin.Lights.Ambient.Color", 0x0008_0004),
+    (
+        "Vehicle.Controller.Cabin.Light.Dome.SwitchPosition",
+        0x0008_0005,
+    ),
+    ("Vehicle.Cabin.HVAC.IsAirConditioningActive", 0x0009_0001),
+    ("Vehicle.Cabin.HVAC.IsRecirculationActive", 0x0009_0002),
+    ("Vehicle.Cabin.HVAC.IsFrontDefrosterActive", 0x0009_0003),
+    ("Vehicle.Cabin.HVAC.IsRearDefrosterActive", 0x0009_0004),
+    (
+        "Vehicle.Cabin.HVAC.Station.Row1.Left.Temperature",
+        0x0009_0010,
+    ),
+    ("Vehicle.Cabin.HVAC.Station.Row1.Left.FanSpeed", 0x0009_0011),
+    (
+        "Vehicle.Cabin.HVAC.Station.Row1.Left.AirDistribution",
+        0x0009_0012,
+    ),
+    (
+        "Vehicle.Cabin.HVAC.Station.Row1.Right.Temperature",
+        0x0009_0020,
+    ),
+    (
+        "Vehicle.Cabin.HVAC.Station.Row1.Right.FanSpeed",
+        0x0009_0021,
+    ),
+    (
+        "Vehicle.Cabin.HVAC.Station.Row1.Right.AirDistribution",
+        0x0009_0022,
+    ),
+    (
+        "Vehicle.Controller.Cabin.Seat.Row1.Left.IsHeatingOn",
+        0x000A_0001,
+    ),
+    (
+        "Vehicle.Controller.Cabin.Seat.Row1.Left.IsVentilationOn",
+        0x000A_0002,
+    ),
+    ("Vehicle.Cabin.Seat.Row1.Left.HeatingCooling", 0x000A_0003),
+    (
+        "Vehicle.Controller.Cabin.Seat.Row1.Right.IsHeatingOn",
+        0x000A_0011,
+    ),
+    (
+        "Vehicle.Controller.Cabin.Seat.Row1.Right.IsVentilationOn",
+        0x000A_0012,
+    ),
+    ("Vehicle.Cabin.Seat.Row1.Right.HeatingCooling", 0x000A_0013),
+    ("Vehicle.Controller.Body.PEPS.KeyPresent", 0x000B_0001),
     // Switch / stalk inputs (overlay)
-    ("Body.Switches.Hazard.IsEngaged", 0x000D_0001),
-    ("Body.Switches.TurnIndicator.Direction", 0x000D_0002),
-    ("Body.Switches.HighBeam.IsEngaged", 0x000D_0003),
-    ("Chassis.ParkingBrake.IsEngaged", 0x000D_0004),
-    ("Body.Switches.Fog.Front.IsEngaged", 0x000D_0005),
-    ("Body.Switches.Fog.Rear.IsEngaged", 0x000D_0006),
-    ("Body.Switches.Panic.IsEngaged", 0x000D_0007),
-    ("Body.Switches.Mirror.Fold", 0x000D_0010),
-    ("Body.Switches.Mirror.Select", 0x000D_0011),
-    ("Body.Switches.Mirror.Direction", 0x000D_0012),
-    ("Body.Switches.Hood.Release.IsPulled", 0x000D_0020),
-    ("Body.Switches.Trunk.Release.IsPressed", 0x000D_0021),
-    ("Body.Switches.Horn.IsPressed", 0x000D_0022),
+    (
+        "Vehicle.Controller.Body.Switches.Hazard.IsEngaged",
+        0x000D_0001,
+    ),
+    (
+        "Vehicle.Controller.Body.Switches.TurnIndicator.Direction",
+        0x000D_0002,
+    ),
+    (
+        "Vehicle.Controller.Body.Switches.HighBeam.IsEngaged",
+        0x000D_0003,
+    ),
+    ("Vehicle.Chassis.ParkingBrake.IsEngaged", 0x000D_0004),
+    (
+        "Vehicle.Controller.Body.Switches.Fog.Front.IsEngaged",
+        0x000D_0005,
+    ),
+    (
+        "Vehicle.Controller.Body.Switches.Fog.Rear.IsEngaged",
+        0x000D_0006,
+    ),
+    (
+        "Vehicle.Controller.Body.Switches.Panic.IsEngaged",
+        0x000D_0007,
+    ),
+    ("Vehicle.Controller.Body.Switches.Mirror.Fold", 0x000D_0010),
+    (
+        "Vehicle.Controller.Body.Switches.Mirror.Select",
+        0x000D_0011,
+    ),
+    (
+        "Vehicle.Controller.Body.Switches.Mirror.Direction",
+        0x000D_0012,
+    ),
+    (
+        "Vehicle.Controller.Body.Switches.Hood.Release.IsPulled",
+        0x000D_0020,
+    ),
+    (
+        "Vehicle.Controller.Body.Switches.Trunk.Release.IsPressed",
+        0x000D_0021,
+    ),
+    (
+        "Vehicle.Controller.Body.Switches.Horn.IsPressed",
+        0x000D_0022,
+    ),
     // Chassis / Powertrain
-    ("Chassis.Brake.PedalPosition", 0x000C_0001),
+    ("Vehicle.Chassis.Brake.PedalPosition", 0x000C_0001),
     ("Powertrain.Transmission.CurrentGear", 0x000C_0002),
     ("Vehicle.Speed", 0x000C_0003),
-    ("Body.Lights.LightSwitch", 0x000C_0004),
+    ("Vehicle.Body.Lights.LightSwitch", 0x000C_0004),
     ("Powertrain.Transmission.SelectedGear", 0x000C_0005),
     // Door lock inputs (overlay — DoorLockInputs.vspec)
-    ("Body.Switches.DoorTrim.Row1.Left.LockButton", 0x000E_0001),
-    ("Body.Switches.DoorTrim.Row1.Right.LockButton", 0x000E_0002),
-    ("Body.Switches.DoorTrim.Row2.Left.LockButton", 0x000E_0003),
-    ("Body.Switches.DoorTrim.Row2.Right.LockButton", 0x000E_0004),
-    ("Body.Switches.DoorTrim.Row1.Left.UnlockButton", 0x000E_0005),
     (
-        "Body.Switches.DoorTrim.Row1.Right.UnlockButton",
+        "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.LockButton",
+        0x000E_0001,
+    ),
+    (
+        "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Right.LockButton",
+        0x000E_0002,
+    ),
+    (
+        "Vehicle.Controller.Body.Switches.DoorTrim.Row2.Left.LockButton",
+        0x000E_0003,
+    ),
+    (
+        "Vehicle.Controller.Body.Switches.DoorTrim.Row2.Right.LockButton",
+        0x000E_0004,
+    ),
+    (
+        "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.UnlockButton",
+        0x000E_0005,
+    ),
+    (
+        "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Right.UnlockButton",
         0x000E_0006,
     ),
-    ("Body.Switches.Keyfob.LockButton", 0x000E_0010),
-    ("Body.Connectivity.RemoteLock", 0x000E_0020),
-    ("Body.Connectivity.BleLock", 0x000E_0021),
-    ("Body.Connectivity.NfcCardPresent", 0x000E_0030),
-    ("Body.Connectivity.NfcPhonePresent", 0x000E_0031),
+    (
+        "Vehicle.Controller.Body.Switches.Keyfob.LockButton",
+        0x000E_0010,
+    ),
+    ("Vehicle.Simulation.Connectivity.RemoteLock", 0x000E_0020),
+    ("Vehicle.Simulation.Connectivity.BleLock", 0x000E_0021),
+    (
+        "Vehicle.Simulation.Connectivity.NfcCardPresent",
+        0x000E_0030,
+    ),
+    (
+        "Vehicle.Simulation.Connectivity.NfcPhonePresent",
+        0x000E_0031,
+    ),
     // Door removed sensors (removable doors)
-    ("Body.Doors.Row1.Left.IsRemoved", 0x000E_0040),
-    ("Body.Doors.Row1.Right.IsRemoved", 0x000E_0041),
-    ("Body.Doors.Row2.Left.IsRemoved", 0x000E_0042),
-    ("Body.Doors.Row2.Right.IsRemoved", 0x000E_0043),
+    ("Vehicle.Cabin.Door.Row1.Left.IsRemoved", 0x000E_0040),
+    ("Vehicle.Cabin.Door.Row1.Right.IsRemoved", 0x000E_0041),
+    ("Vehicle.Cabin.Door.Row2.Left.IsRemoved", 0x000E_0042),
+    ("Vehicle.Cabin.Door.Row2.Right.IsRemoved", 0x000E_0043),
     // Safety signals
-    ("Vehicle.Safety.CrashDetected", 0x000F_0001),
+    ("Vehicle.Controller.Safety.CrashDetected", 0x000F_0001),
     // PEPS plant model — `.Zone` retired (IDs 0x0010_0001..0x0010_0006).
     // PEPS plant model — key fob button presses
-    ("Body.PEPS.Plant.KeyFob.1.ButtonPress", 0x0010_0011),
-    ("Body.PEPS.Plant.KeyFob.2.ButtonPress", 0x0010_0012),
-    ("Body.PEPS.Plant.KeyFob.3.ButtonPress", 0x0010_0013),
-    ("Body.PEPS.Plant.KeyFob.4.ButtonPress", 0x0010_0014),
+    (
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.1.ButtonPress",
+        0x0010_0011,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.2.ButtonPress",
+        0x0010_0012,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.3.ButtonPress",
+        0x0010_0013,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.4.ButtonPress",
+        0x0010_0014,
+    ),
     // PEPS plant model — key fob pairing
-    ("Body.PEPS.Plant.KeyFob.1.Paired", 0x0010_0021),
-    ("Body.PEPS.Plant.KeyFob.2.Paired", 0x0010_0022),
-    ("Body.PEPS.Plant.KeyFob.3.Paired", 0x0010_0023),
-    ("Body.PEPS.Plant.KeyFob.4.Paired", 0x0010_0024),
-    ("Body.PEPS.Plant.KeyFob.5.Paired", 0x0010_0025),
-    ("Body.PEPS.Plant.KeyFob.6.Paired", 0x0010_0026),
+    ("Vehicle.Simulation.PEPS.Plant.KeyFob.1.Paired", 0x0010_0021),
+    ("Vehicle.Simulation.PEPS.Plant.KeyFob.2.Paired", 0x0010_0022),
+    ("Vehicle.Simulation.PEPS.Plant.KeyFob.3.Paired", 0x0010_0023),
+    ("Vehicle.Simulation.PEPS.Plant.KeyFob.4.Paired", 0x0010_0024),
+    ("Vehicle.Simulation.PEPS.Plant.KeyFob.5.Paired", 0x0010_0025),
+    ("Vehicle.Simulation.PEPS.Plant.KeyFob.6.Paired", 0x0010_0026),
     // PEPS plant model — key fob challenge responses
-    ("Body.PEPS.Plant.KeyFob.1.ChallengeResponse", 0x0010_0031),
-    ("Body.PEPS.Plant.KeyFob.2.ChallengeResponse", 0x0010_0032),
-    ("Body.PEPS.Plant.KeyFob.3.ChallengeResponse", 0x0010_0033),
-    ("Body.PEPS.Plant.KeyFob.4.ChallengeResponse", 0x0010_0034),
-    ("Body.PEPS.Plant.KeyFob.5.ChallengeResponse", 0x0010_0035),
-    ("Body.PEPS.Plant.KeyFob.6.ChallengeResponse", 0x0010_0036),
+    (
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.1.ChallengeResponse",
+        0x0010_0031,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.2.ChallengeResponse",
+        0x0010_0032,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.3.ChallengeResponse",
+        0x0010_0033,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.4.ChallengeResponse",
+        0x0010_0034,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.5.ChallengeResponse",
+        0x0010_0035,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.6.ChallengeResponse",
+        0x0010_0036,
+    ),
     // PEPS plant model — key fob RSSI responses
-    ("Body.PEPS.Plant.KeyFob.1.RssiResponse", 0x0010_0041),
-    ("Body.PEPS.Plant.KeyFob.2.RssiResponse", 0x0010_0042),
-    ("Body.PEPS.Plant.KeyFob.3.RssiResponse", 0x0010_0043),
-    ("Body.PEPS.Plant.KeyFob.4.RssiResponse", 0x0010_0044),
-    ("Body.PEPS.Plant.KeyFob.5.RssiResponse", 0x0010_0045),
-    ("Body.PEPS.Plant.KeyFob.6.RssiResponse", 0x0010_0046),
+    (
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.1.RssiResponse",
+        0x0010_0041,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.2.RssiResponse",
+        0x0010_0042,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.3.RssiResponse",
+        0x0010_0043,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.4.RssiResponse",
+        0x0010_0044,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.5.RssiResponse",
+        0x0010_0045,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.6.RssiResponse",
+        0x0010_0046,
+    ),
     // PEPS plant model — key fob RF messages
-    ("Body.PEPS.Plant.KeyFob.1.RfMessage", 0x0010_0051),
-    ("Body.PEPS.Plant.KeyFob.2.RfMessage", 0x0010_0052),
-    ("Body.PEPS.Plant.KeyFob.3.RfMessage", 0x0010_0053),
-    ("Body.PEPS.Plant.KeyFob.4.RfMessage", 0x0010_0054),
-    ("Body.PEPS.Plant.KeyFob.1.PlacedZone", 0x0010_0061),
-    ("Body.PEPS.Plant.KeyFob.2.PlacedZone", 0x0010_0062),
-    ("Body.PEPS.Plant.KeyFob.3.PlacedZone", 0x0010_0063),
-    ("Body.PEPS.Plant.KeyFob.4.PlacedZone", 0x0010_0064),
-    ("Body.PEPS.Plant.KeyFob.5.PlacedZone", 0x0010_0065),
-    ("Body.PEPS.Plant.KeyFob.6.PlacedZone", 0x0010_0066),
-    ("Body.PEPS.Plant.KeyFob.1.LastObservedZone", 0x0010_0071),
-    ("Body.PEPS.Plant.KeyFob.2.LastObservedZone", 0x0010_0072),
-    ("Body.PEPS.Plant.KeyFob.3.LastObservedZone", 0x0010_0073),
-    ("Body.PEPS.Plant.KeyFob.4.LastObservedZone", 0x0010_0074),
-    ("Body.PEPS.Plant.KeyFob.5.LastObservedZone", 0x0010_0075),
-    ("Body.PEPS.Plant.KeyFob.6.LastObservedZone", 0x0010_0076),
+    (
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.1.RfMessage",
+        0x0010_0051,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.2.RfMessage",
+        0x0010_0052,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.3.RfMessage",
+        0x0010_0053,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.4.RfMessage",
+        0x0010_0054,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.1.PlacedZone",
+        0x0010_0061,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.2.PlacedZone",
+        0x0010_0062,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.3.PlacedZone",
+        0x0010_0063,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.4.PlacedZone",
+        0x0010_0064,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.5.PlacedZone",
+        0x0010_0065,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.6.PlacedZone",
+        0x0010_0066,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.1.LastObservedZone",
+        0x0010_0071,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.2.LastObservedZone",
+        0x0010_0072,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.3.LastObservedZone",
+        0x0010_0073,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.4.LastObservedZone",
+        0x0010_0074,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.5.LastObservedZone",
+        0x0010_0075,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.KeyFob.6.LastObservedZone",
+        0x0010_0076,
+    ),
     // PEPS plant model — BlePhone `.Zone` retired (IDs 0x0011_0001 / 0x0011_0002).
     // PEPS plant model — BLE phone challenge responses
-    ("Body.PEPS.Plant.BlePhone.1.ChallengeResponse", 0x0011_0011),
-    ("Body.PEPS.Plant.BlePhone.2.ChallengeResponse", 0x0011_0012),
-    // PEPS plant model — BLE phone RSSI responses
-    ("Body.PEPS.Plant.BlePhone.1.RssiResponse", 0x0011_0021),
-    ("Body.PEPS.Plant.BlePhone.2.RssiResponse", 0x0011_0022),
-    ("Body.PEPS.Plant.BlePhone.1.NfcTap", 0x0011_0031),
-    ("Body.PEPS.Plant.BlePhone.2.NfcTap", 0x0011_0032),
-    ("Body.PEPS.Plant.BlePhone.1.PlacedZone", 0x0011_0041),
-    ("Body.PEPS.Plant.BlePhone.2.PlacedZone", 0x0011_0042),
-    ("Body.PEPS.Plant.BlePhone.1.LastObservedZone", 0x0011_0051),
-    ("Body.PEPS.Plant.BlePhone.2.LastObservedZone", 0x0011_0052),
-    // PEPS plant model — NFC card positions
-    ("Body.PEPS.Plant.NfcCard.1.Position", 0x0012_0001),
-    ("Body.PEPS.Plant.NfcCard.2.Position", 0x0012_0002),
-    // PEPS plant model — NFC card challenge responses
-    ("Body.PEPS.Plant.NfcCard.1.ChallengeResponse", 0x0012_0011),
-    ("Body.PEPS.Plant.NfcCard.2.ChallengeResponse", 0x0012_0012),
-    // PEPS vehicle-side challenge/poll signals
-    ("Body.PEPS.LfChallenge", 0x0013_0001),
-    ("Body.PEPS.BleChallenge", 0x0013_0002),
-    ("Body.PEPS.NfcChallenge", 0x0013_0003),
-    ("Body.PEPS.ApproachPoll", 0x0013_0004),
-    // Lock feedback request and keypad signals
-    ("Body.Doors.CentralLock.FeedbackRequest", 0x0014_0001),
     (
-        "Body.Doors.Row1.Left.Handle.Outside.LockPad.IsPressed",
+        "Vehicle.Simulation.PEPS.Plant.BlePhone.1.ChallengeResponse",
+        0x0011_0011,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.BlePhone.2.ChallengeResponse",
+        0x0011_0012,
+    ),
+    // PEPS plant model — BLE phone RSSI responses
+    (
+        "Vehicle.Simulation.PEPS.Plant.BlePhone.1.RssiResponse",
+        0x0011_0021,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.BlePhone.2.RssiResponse",
+        0x0011_0022,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.BlePhone.1.NfcTap",
+        0x0011_0031,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.BlePhone.2.NfcTap",
+        0x0011_0032,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.BlePhone.1.PlacedZone",
+        0x0011_0041,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.BlePhone.2.PlacedZone",
+        0x0011_0042,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.BlePhone.1.LastObservedZone",
+        0x0011_0051,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.BlePhone.2.LastObservedZone",
+        0x0011_0052,
+    ),
+    // PEPS plant model — NFC card positions
+    (
+        "Vehicle.Simulation.PEPS.Plant.NfcCard.1.Position",
+        0x0012_0001,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.NfcCard.2.Position",
+        0x0012_0002,
+    ),
+    // PEPS plant model — NFC card challenge responses
+    (
+        "Vehicle.Simulation.PEPS.Plant.NfcCard.1.ChallengeResponse",
+        0x0012_0011,
+    ),
+    (
+        "Vehicle.Simulation.PEPS.Plant.NfcCard.2.ChallengeResponse",
+        0x0012_0012,
+    ),
+    // PEPS vehicle-side challenge/poll signals
+    ("Vehicle.Controller.Body.PEPS.LfChallenge", 0x0013_0001),
+    ("Vehicle.Controller.Body.PEPS.BleChallenge", 0x0013_0002),
+    ("Vehicle.Controller.Body.PEPS.NfcChallenge", 0x0013_0003),
+    ("Vehicle.Controller.Body.PEPS.ApproachPoll", 0x0013_0004),
+    // Lock feedback request and keypad signals
+    (
+        "Vehicle.Controller.Body.Doors.CentralLock.FeedbackRequest",
+        0x0014_0001,
+    ),
+    (
+        "Vehicle.Cabin.Door.Row1.Left.Handle.Outside.LockPad.IsPressed",
         0x0014_0002,
     ),
     (
-        "Body.Doors.Row1.Right.Handle.Outside.LockPad.IsPressed",
+        "Vehicle.Cabin.Door.Row1.Right.Handle.Outside.LockPad.IsPressed",
         0x0014_0003,
     ),
-    ("Body.Doors.CentralLock.Command", 0x0014_0004),
-    ("Cabin.LockStatus", 0x0014_0005),
-    ("Cabin.LockStatus.LastRequestor", 0x0014_0006),
-    ("Cabin.LockStatus.EventNum", 0x0014_0007),
-    ("Body.Switches.PowerChildLock.IsPressed", 0x0014_0008),
-    ("Body.PowerChildLock.MasterStatus", 0x0014_0009),
-    ("Body.Lights.AmbientLightSensor.Illuminance", 0x0015_0001),
-    ("Vehicle.ADAS.HighBeam.OncomingVehicleDetected", 0x0016_0001),
+    (
+        "Vehicle.Controller.Body.Doors.CentralLock.Command",
+        0x0014_0004,
+    ),
+    ("Vehicle.Controller.Cabin.LockStatus", 0x0014_0005),
+    (
+        "Vehicle.Controller.Cabin.LockStatus.LastRequestor",
+        0x0014_0006,
+    ),
+    ("Vehicle.Controller.Cabin.LockStatus.EventNum", 0x0014_0007),
+    (
+        "Vehicle.Controller.Body.Switches.PowerChildLock.IsPressed",
+        0x0014_0008,
+    ),
+    (
+        "Vehicle.Controller.Body.PowerChildLock.MasterStatus",
+        0x0014_0009,
+    ),
+    (
+        "Vehicle.Controller.Body.Lights.AmbientLightSensor.Illuminance",
+        0x0015_0001,
+    ),
+    (
+        "Vehicle.Controller.ADAS.HighBeam.OncomingVehicleDetected",
+        0x0016_0001,
+    ),
     ("Vehicle.Cabin.Infotainment.HMI.DayNightMode", 0x0018_0001),
     (
         "Vehicle.Chassis.Axle.Row1.Wheel.Left.Tire.IsPressureLow",
@@ -943,51 +1299,96 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
         "Vehicle.Chassis.Axle.Row2.Wheel.Right.Tire.IsPressureLow",
         0x0018_0013,
     ),
-    ("Cabin.ValetMode.IsActive", 0x0017_0001),
+    ("Vehicle.Controller.Cabin.ValetMode.IsActive", 0x0017_0001),
     // Power-window block (0x001A) — Detent enums per switch.
     (
-        "Body.Switches.Window.DriverMaster.Row1.Left.Detent",
+        "Vehicle.Controller.Body.Switches.Window.DriverMaster.Row1.Left.Detent",
         0x001A_0001,
     ),
     (
-        "Body.Switches.Window.DriverMaster.Row1.Right.Detent",
+        "Vehicle.Controller.Body.Switches.Window.DriverMaster.Row1.Right.Detent",
         0x001A_0002,
     ),
     (
-        "Body.Switches.Window.DriverMaster.Row2.Left.Detent",
+        "Vehicle.Controller.Body.Switches.Window.DriverMaster.Row2.Left.Detent",
         0x001A_0003,
     ),
     (
-        "Body.Switches.Window.DriverMaster.Row2.Right.Detent",
+        "Vehicle.Controller.Body.Switches.Window.DriverMaster.Row2.Right.Detent",
         0x001A_0004,
     ),
-    ("Body.Switches.Window.Local.Row1.Left.Detent", 0x001A_0011),
-    ("Body.Switches.Window.Local.Row1.Right.Detent", 0x001A_0012),
-    ("Body.Switches.Window.Local.Row2.Left.Detent", 0x001A_0013),
-    ("Body.Switches.Window.Local.Row2.Right.Detent", 0x001A_0014),
-    ("Body.Doors.Row1.Left.Window.MotorDirection", 0x001A_0021),
-    ("Body.Doors.Row1.Right.Window.MotorDirection", 0x001A_0022),
-    ("Body.Doors.Row2.Left.Window.MotorDirection", 0x001A_0023),
-    ("Body.Doors.Row2.Right.Window.MotorDirection", 0x001A_0024),
-    ("Body.Switches.Sunroof.Detent", 0x001B_0001),
-    ("Body.Power.DelayedAccessory.IsActive", 0x001C_0001),
-    ("Body.PEPS.ApproachState", 0x001D_0001),
-    ("Body.PEPS.ApproachKeys", 0x001D_0002),
-    ("Body.PEPS.ApproachPollInterval", 0x001D_0003),
+    (
+        "Vehicle.Controller.Body.Switches.Window.Local.Row1.Left.Detent",
+        0x001A_0011,
+    ),
+    (
+        "Vehicle.Controller.Body.Switches.Window.Local.Row1.Right.Detent",
+        0x001A_0012,
+    ),
+    (
+        "Vehicle.Controller.Body.Switches.Window.Local.Row2.Left.Detent",
+        0x001A_0013,
+    ),
+    (
+        "Vehicle.Controller.Body.Switches.Window.Local.Row2.Right.Detent",
+        0x001A_0014,
+    ),
+    (
+        "Vehicle.Cabin.Door.Row1.Left.Window.MotorDirection",
+        0x001A_0021,
+    ),
+    (
+        "Vehicle.Cabin.Door.Row1.Right.Window.MotorDirection",
+        0x001A_0022,
+    ),
+    (
+        "Vehicle.Cabin.Door.Row2.Left.Window.MotorDirection",
+        0x001A_0023,
+    ),
+    (
+        "Vehicle.Cabin.Door.Row2.Right.Window.MotorDirection",
+        0x001A_0024,
+    ),
+    (
+        "Vehicle.Controller.Body.Switches.Sunroof.Detent",
+        0x001B_0001,
+    ),
+    (
+        "Vehicle.Controller.Body.Power.DelayedAccessory.IsActive",
+        0x001C_0001,
+    ),
+    ("Vehicle.Controller.Body.PEPS.ApproachState", 0x001D_0001),
+    ("Vehicle.Controller.Body.PEPS.ApproachKeys", 0x001D_0002),
+    (
+        "Vehicle.Controller.Body.PEPS.ApproachPollInterval",
+        0x001D_0003,
+    ),
     // Vehicle starting / ignition (block 0x001E).
-    ("Body.Switches.StartStop.IsPressed", 0x001E_0001),
-    ("Body.Switches.IgnitionCylinder.Position", 0x001E_0002),
-    ("Chassis.Brake.IsApplied", 0x001E_0003),
-    ("Vehicle.Starting.ImmobilizerStatus", 0x001E_0004),
+    (
+        "Vehicle.Controller.Body.Switches.StartStop.IsPressed",
+        0x001E_0001,
+    ),
+    (
+        "Vehicle.Controller.Body.Switches.IgnitionCylinder.Position",
+        0x001E_0002,
+    ),
+    ("Vehicle.Controller.Chassis.Brake.IsApplied", 0x001E_0003),
+    ("Vehicle.Controller.Starting.ImmobilizerStatus", 0x001E_0004),
     ("Powertrain.Transmission.ShiftLockEngaged", 0x001E_0005),
     (
-        "Body.Switches.IgnitionCylinder.RemovalInhibited",
+        "Vehicle.Controller.Body.Switches.IgnitionCylinder.RemovalInhibited",
         0x001E_0006,
     ),
-    ("Body.PEPS.NfcAuthBypass", 0x001E_0007),
-    ("Body.PEPS.LostKeyWarning", 0x001E_000A),
-    ("Body.Switches.StartStop.BacklightDutyCycle", 0x001E_0008),
-    ("Body.Switches.StartStop.BacklightIntensity", 0x001E_0009),
+    ("Vehicle.Controller.Body.PEPS.NfcAuthBypass", 0x001E_0007),
+    ("Vehicle.Controller.Body.PEPS.LostKeyWarning", 0x001E_000A),
+    (
+        "Vehicle.Controller.Body.Switches.StartStop.BacklightDutyCycle",
+        0x001E_0008,
+    ),
+    (
+        "Vehicle.Controller.Body.Switches.StartStop.BacklightIntensity",
+        0x001E_0009,
+    ),
 ];
 
 #[cfg(test)]
@@ -996,14 +1397,23 @@ mod tests {
 
     #[test]
     fn path_to_id_known_signals() {
-        assert_eq!(path_to_id("Body.Lights.Beam.Low.IsOn"), Some(0x0002_0001));
-        assert_eq!(path_to_id("Body.PEPS.KeyPresent"), Some(0x000B_0001));
+        assert_eq!(
+            path_to_id("Vehicle.Body.Lights.Beam.Low.IsOn"),
+            Some(0x0002_0001)
+        );
+        assert_eq!(
+            path_to_id("Vehicle.Controller.Body.PEPS.KeyPresent"),
+            Some(0x000B_0001)
+        );
         assert_eq!(path_to_id("Vehicle.Speed"), Some(0x000C_0003));
     }
 
     #[test]
     fn path_to_id_unknown_returns_none() {
-        assert_eq!(path_to_id("Body.DoesNotExist"), None);
+        assert_eq!(
+            path_to_id("Vehicle.Simulation.TestFixtures.DoesNotExist"),
+            None
+        );
     }
 
     #[test]

@@ -113,10 +113,10 @@ mod tests {
 
         let history = bus.history();
         assert!(
-            history
-                .iter()
-                .any(|(s, v)| *s == "Body.Doors.CentralLock.Command"
-                    && *v == SignalValue::String("release_double".into())),
+            history.iter().any(
+                |(s, v)| *s == "Vehicle.Controller.Body.Doors.CentralLock.Command"
+                    && *v == SignalValue::String("release_double".into())
+            ),
             "expected release_double command, history: {:?}",
             history
         );
@@ -144,7 +144,7 @@ mod tests {
         assert!(
             !history
                 .iter()
-                .any(|(s, _)| *s == "Body.Doors.CentralLock.Command"),
+                .any(|(s, _)| *s == "Vehicle.Controller.Body.Doors.CentralLock.Command"),
             "second ON without OFF should NOT dispatch release_double, history: {:?}",
             history
         );
@@ -169,10 +169,10 @@ mod tests {
 
         let history = bus.history();
         assert!(
-            history
-                .iter()
-                .any(|(s, v)| *s == "Body.Doors.CentralLock.Command"
-                    && *v == SignalValue::String("release_double".into())),
+            history.iter().any(
+                |(s, v)| *s == "Vehicle.Controller.Body.Doors.CentralLock.Command"
+                    && *v == SignalValue::String("release_double".into())
+            ),
             "OFF → ACC → ON should dispatch release_double, history: {:?}",
             history
         );

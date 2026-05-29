@@ -153,7 +153,7 @@ pub struct MirrorFoldState {
 }
 
 /// Persisted state for the MirrorFold *feature* — last commanded
-/// fold direction.  The next manual press of `Body.Switches.Mirror.Fold`
+/// fold direction.  The next manual press of `Vehicle.Controller.Body.Switches.Mirror.Fold`
 /// commands `!last_fold_cmd` (intended state = inverse of last
 /// command), so a power cycle keeps the toggle direction consistent
 /// with what the driver last asked for.

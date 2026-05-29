@@ -110,73 +110,73 @@ const INIT_STATE={
   'Vehicle.LowVoltageSystemState':'OFF',
   'Vehicle.Powertrain.Type':'COMBUSTION',
   // Braking
-  'Chassis.Brake.PedalPosition':0,
+  'Vehicle.Chassis.Brake.PedalPosition':0,
   // Transmission
   'Powertrain.Transmission.CurrentGear':0,
   // Light Switch
-  'Body.Lights.LightSwitch':'OFF',
+  'Vehicle.Body.Lights.LightSwitch':'OFF',
   // Ambient light sensor — OEM overlay (Uint16, lux). Default 10000 = daylight.
   // AUTO headlamp mode activates low beam below 200 lux (ECE R48 §6.1 threshold).
-  'Body.Lights.AmbientLightSensor.Illuminance':10000,
+  'Vehicle.Controller.Body.Lights.AmbientLightSensor.Illuminance':10000,
   // ADAS camera — oncoming vehicle detection for Auto High Beam suppression.
-  'Vehicle.ADAS.HighBeam.OncomingVehicleDetected':false,
+  'Vehicle.Controller.ADAS.HighBeam.OncomingVehicleDetected':false,
   // Switch / Stalk inputs (overlay — physical driver controls)
-  'Body.Switches.Hazard.IsEngaged':false,
-  'Body.Switches.TurnIndicator.Direction':'OFF',
-  'Body.Switches.HighBeam.IsEngaged':false,
-  'Body.Switches.Fog.Front.IsEngaged':false,
-  'Body.Switches.Fog.Rear.IsEngaged':false,
-  'Chassis.ParkingBrake.IsEngaged':true,
+  'Vehicle.Controller.Body.Switches.Hazard.IsEngaged':false,
+  'Vehicle.Controller.Body.Switches.TurnIndicator.Direction':'OFF',
+  'Vehicle.Controller.Body.Switches.HighBeam.IsEngaged':false,
+  'Vehicle.Controller.Body.Switches.Fog.Front.IsEngaged':false,
+  'Vehicle.Controller.Body.Switches.Fog.Rear.IsEngaged':false,
+  'Vehicle.Chassis.ParkingBrake.IsEngaged':true,
   // PEPS (Passive Entry / Passive Start)
-  'Body.PEPS.KeyPresent':false,
+  'Vehicle.Controller.Body.PEPS.KeyPresent':false,
   // Keyfob RKE (Remote Keyless Entry — manual button press)
-  'Body.Switches.Keyfob.LockButton':'IDLE',
+  'Vehicle.Controller.Body.Switches.Keyfob.LockButton':'IDLE',
   // Door Trim Panel Buttons (per-door)
-  'Body.Switches.DoorTrim.Row1.Left.LockButton':'IDLE',
-  'Body.Switches.DoorTrim.Row1.Right.LockButton':'IDLE',
-  'Body.Switches.DoorTrim.Row2.Left.LockButton':'IDLE',
-  'Body.Switches.DoorTrim.Row2.Right.LockButton':'IDLE',
+  'Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.LockButton':'IDLE',
+  'Vehicle.Controller.Body.Switches.DoorTrim.Row1.Right.LockButton':'IDLE',
+  'Vehicle.Controller.Body.Switches.DoorTrim.Row2.Left.LockButton':'IDLE',
+  'Vehicle.Controller.Body.Switches.DoorTrim.Row2.Right.LockButton':'IDLE',
   // Connectivity — Remote Lock Sources
-  'Body.Connectivity.RemoteLock':'IDLE',
-  'Body.Connectivity.BleLock':'IDLE',
-  'Body.Connectivity.NfcCardPresent':false,
-  'Body.Connectivity.NfcPhonePresent':false,
+  'Vehicle.Simulation.Connectivity.RemoteLock':'IDLE',
+  'Vehicle.Simulation.Connectivity.BleLock':'IDLE',
+  'Vehicle.Simulation.Connectivity.NfcCardPresent':false,
+  'Vehicle.Simulation.Connectivity.NfcPhonePresent':false,
   // Safety
-  'Vehicle.Safety.CrashDetected':false,
+  'Vehicle.Controller.Safety.CrashDetected':false,
   // Lamp defect fault injection (HMI → bridge: simulates a failed bulb;
   // BlinkRelay plant model doubles blink rate per UN ECE R6).
-  'Body.Lights.DirectionIndicator.Left.Lamp.Front.IsDefect':false,
-  'Body.Lights.DirectionIndicator.Left.Lamp.Side.IsDefect':false,
-  'Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsDefect':false,
-  'Body.Lights.DirectionIndicator.Right.Lamp.Front.IsDefect':false,
-  'Body.Lights.DirectionIndicator.Right.Lamp.Side.IsDefect':false,
-  'Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsDefect':false,
+  'Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Front.IsDefect':false,
+  'Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Side.IsDefect':false,
+  'Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsDefect':false,
+  'Vehicle.Controller.Body.Lights.DirectionIndicator.Right.Lamp.Front.IsDefect':false,
+  'Vehicle.Controller.Body.Lights.DirectionIndicator.Right.Lamp.Side.IsDefect':false,
+  'Vehicle.Controller.Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsDefect':false,
   // Lamp state (bridge → HMI): actual on/off toggled by BlinkRelay.
-  'Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn':false,
-  'Body.Lights.DirectionIndicator.Left.Lamp.Side.IsOn':false,
-  'Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsOn':false,
-  'Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn':false,
-  'Body.Lights.DirectionIndicator.Right.Lamp.Side.IsOn':false,
-  'Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsOn':false,
+  'Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn':false,
+  'Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Side.IsOn':false,
+  'Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsOn':false,
+  'Vehicle.Controller.Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn':false,
+  'Vehicle.Controller.Body.Lights.DirectionIndicator.Right.Lamp.Side.IsOn':false,
+  'Vehicle.Controller.Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsOn':false,
   // Doors — open, locked, latch state (all 4 doors)
-  'Body.Doors.Row1.Left.IsOpen':false,
-  'Body.Doors.Row1.Right.IsOpen':false,
-  'Body.Doors.Row2.Left.IsOpen':false,
-  'Body.Doors.Row2.Right.IsOpen':false,
-  'Body.Doors.Row1.Left.Soldier.IsUnlocked':false,
-  'Body.Doors.Row1.Right.Soldier.IsUnlocked':false,
-  'Body.Doors.Row2.Left.Soldier.IsUnlocked':false,
-  'Body.Doors.Row2.Right.Soldier.IsUnlocked':false,
-  'Body.Doors.Row1.Left.LatchStatus':'FULL_LATCHED',
-  'Body.Doors.Row1.Right.LatchStatus':'FULL_LATCHED',
-  'Body.Doors.Row2.Left.LatchStatus':'FULL_LATCHED',
-  'Body.Doors.Row2.Right.LatchStatus':'FULL_LATCHED',
+  'Vehicle.Cabin.Door.Row1.Left.IsOpen':false,
+  'Vehicle.Cabin.Door.Row1.Right.IsOpen':false,
+  'Vehicle.Cabin.Door.Row2.Left.IsOpen':false,
+  'Vehicle.Cabin.Door.Row2.Right.IsOpen':false,
+  'Vehicle.Cabin.Door.Row1.Left.Soldier.IsUnlocked':false,
+  'Vehicle.Cabin.Door.Row1.Right.Soldier.IsUnlocked':false,
+  'Vehicle.Cabin.Door.Row2.Left.Soldier.IsUnlocked':false,
+  'Vehicle.Cabin.Door.Row2.Right.Soldier.IsUnlocked':false,
+  'Vehicle.Cabin.Door.Row1.Left.LatchStatus':'FULL_LATCHED',
+  'Vehicle.Cabin.Door.Row1.Right.LatchStatus':'FULL_LATCHED',
+  'Vehicle.Cabin.Door.Row2.Left.LatchStatus':'FULL_LATCHED',
+  'Vehicle.Cabin.Door.Row2.Right.LatchStatus':'FULL_LATCHED',
   // Hood & Trunk
-  'Body.Hood.IsOpen':false,
-  'Body.Trunk.IsOpen':false,
+  'Vehicle.Body.Hood.IsOpen':false,
+  'Vehicle.Body.Trunk.Rear.IsOpen':false,
   // Fuel & Charge
-  'Body.FuelLid.IsOpen':false,
-  'Body.ChargeLid.IsOpen':false,
+  'Vehicle.Controller.Body.FuelLid.IsOpen':false,
+  'Vehicle.Controller.Body.ChargeLid.IsOpen':false,
 };
 
 /* ══════ MAIN APP ══════ */
@@ -263,10 +263,10 @@ function App(){
             <div className="control-label">Brake Pedal</div>
             <div className="slider-ctrl">
               <input type="range" className="slr" min="0" max="100" step="1"
-                value={state['Chassis.Brake.PedalPosition']||0}
-                onChange={(e)=>set('Chassis.Brake.PedalPosition',parseInt(e.target.value))}/>
+                value={state['Vehicle.Chassis.Brake.PedalPosition']||0}
+                onChange={(e)=>set('Vehicle.Chassis.Brake.PedalPosition',parseInt(e.target.value))}/>
             </div>
-            <div className="control-value">{state['Chassis.Brake.PedalPosition']||0}%</div>
+            <div className="control-value">{state['Vehicle.Chassis.Brake.PedalPosition']||0}%</div>
           </div>
         </div>
 
@@ -296,24 +296,24 @@ function App(){
             <div className="control-label">Mode</div>
             <div className="button-group">
               {['OFF','POSITION','DRL','AUTO','BEAM'].map(m=>(
-                <button key={m} className={`btn ${state['Body.Lights.LightSwitch']===m?'active':''}`}
-                  onClick={()=>set('Body.Lights.LightSwitch',m)}>
+                <button key={m} className={`btn ${state['Vehicle.Body.Lights.LightSwitch']===m?'active':''}`}
+                  onClick={()=>set('Vehicle.Body.Lights.LightSwitch',m)}>
                   {m}
                 </button>
               ))}
             </div>
-            <div className="control-value">{state['Body.Lights.LightSwitch']}</div>
+            <div className="control-value">{state['Vehicle.Body.Lights.LightSwitch']}</div>
           </div>
           <div style={{marginTop:'8px',padding:'10px',background:'var(--s3)',border:'1px solid var(--bdr)',borderRadius:'6px'}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:'8px'}}>
               <span style={{fontFamily:'var(--fm)',fontSize:'10px',color:'var(--white)',fontWeight:500}}>Ambient Illuminance</span>
               <span style={{fontFamily:'var(--fm)',fontSize:'11px',color:'#F59E0B',fontWeight:700}}>
-                {state['Body.Lights.AmbientLightSensor.Illuminance']} lux &nbsp;
-                <span style={{fontSize:'9px',color:state['Body.Lights.AmbientLightSensor.Illuminance']<200?'#F59E0B':'#6B7E99'}}>
-                  {state['Body.Lights.AmbientLightSensor.Illuminance']<50?'🌙 Night'
-                   :state['Body.Lights.AmbientLightSensor.Illuminance']<200?'🌆 Dusk — beam ON'
-                   :state['Body.Lights.AmbientLightSensor.Illuminance']<500?'🌇 Twilight'
-                   :state['Body.Lights.AmbientLightSensor.Illuminance']<10000?'☁ Overcast'
+                {state['Vehicle.Controller.Body.Lights.AmbientLightSensor.Illuminance']} lux &nbsp;
+                <span style={{fontSize:'9px',color:state['Vehicle.Controller.Body.Lights.AmbientLightSensor.Illuminance']<200?'#F59E0B':'#6B7E99'}}>
+                  {state['Vehicle.Controller.Body.Lights.AmbientLightSensor.Illuminance']<50?'🌙 Night'
+                   :state['Vehicle.Controller.Body.Lights.AmbientLightSensor.Illuminance']<200?'🌆 Dusk — beam ON'
+                   :state['Vehicle.Controller.Body.Lights.AmbientLightSensor.Illuminance']<500?'🌇 Twilight'
+                   :state['Vehicle.Controller.Body.Lights.AmbientLightSensor.Illuminance']<10000?'☁ Overcast'
                    :'☀ Daylight'}
                 </span>
               </span>
@@ -321,15 +321,15 @@ function App(){
             <input type="range" min="0" max="100000" step="500"
               style={{width:'100%',display:'block',marginBottom:'10px',height:'6px',WebkitAppearance:'none',
                 background:'var(--s4)',borderRadius:'4px',outline:'none',cursor:'pointer'}}
-              value={state['Body.Lights.AmbientLightSensor.Illuminance']}
-              onChange={(e)=>set('Body.Lights.AmbientLightSensor.Illuminance',parseInt(e.target.value))}/>
+              value={state['Vehicle.Controller.Body.Lights.AmbientLightSensor.Illuminance']}
+              onChange={(e)=>set('Vehicle.Controller.Body.Lights.AmbientLightSensor.Illuminance',parseInt(e.target.value))}/>
             <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
               {[{label:'Night',lux:5},{label:'Tunnel',lux:50},{label:'Dusk',lux:100},
                 {label:'Twilight',lux:300},{label:'Overcast',lux:2000},{label:'Daylight',lux:25000}
               ].map(p=>(
                 <button key={p.label}
-                  className={`btn ${state['Body.Lights.AmbientLightSensor.Illuminance']===p.lux?'active':''}`}
-                  onClick={()=>set('Body.Lights.AmbientLightSensor.Illuminance',p.lux)}>
+                  className={`btn ${state['Vehicle.Controller.Body.Lights.AmbientLightSensor.Illuminance']===p.lux?'active':''}`}
+                  onClick={()=>set('Vehicle.Controller.Body.Lights.AmbientLightSensor.Illuminance',p.lux)}>
                   {p.label} ({p.lux})
                 </button>
               ))}
@@ -338,20 +338,20 @@ function App(){
           <div className="control" style={{marginTop:'8px'}}>
             <div className="control-label">Front Fog</div>
             <div className="button-group">
-              <button className={`btn ${state['Body.Switches.Fog.Front.IsEngaged']?'active':''}`}
-                style={state['Body.Switches.Fog.Front.IsEngaged']?{background:'#BAD6FE',borderColor:'#BAD6FE',color:'#06101C'}:{}}
-                onClick={()=>set('Body.Switches.Fog.Front.IsEngaged',!state['Body.Switches.Fog.Front.IsEngaged'])}>
-                {state['Body.Switches.Fog.Front.IsEngaged']?'ON':'OFF'}
+              <button className={`btn ${state['Vehicle.Controller.Body.Switches.Fog.Front.IsEngaged']?'active':''}`}
+                style={state['Vehicle.Controller.Body.Switches.Fog.Front.IsEngaged']?{background:'#BAD6FE',borderColor:'#BAD6FE',color:'#06101C'}:{}}
+                onClick={()=>set('Vehicle.Controller.Body.Switches.Fog.Front.IsEngaged',!state['Vehicle.Controller.Body.Switches.Fog.Front.IsEngaged'])}>
+                {state['Vehicle.Controller.Body.Switches.Fog.Front.IsEngaged']?'ON':'OFF'}
               </button>
             </div>
           </div>
           <div className="control">
             <div className="control-label">Rear Fog</div>
             <div className="button-group">
-              <button className={`btn ${state['Body.Switches.Fog.Rear.IsEngaged']?'active':''}`}
-                style={state['Body.Switches.Fog.Rear.IsEngaged']?{background:'#EF4444',borderColor:'#EF4444',color:'#fff'}:{}}
-                onClick={()=>set('Body.Switches.Fog.Rear.IsEngaged',!state['Body.Switches.Fog.Rear.IsEngaged'])}>
-                {state['Body.Switches.Fog.Rear.IsEngaged']?'ON':'OFF'}
+              <button className={`btn ${state['Vehicle.Controller.Body.Switches.Fog.Rear.IsEngaged']?'active':''}`}
+                style={state['Vehicle.Controller.Body.Switches.Fog.Rear.IsEngaged']?{background:'#EF4444',borderColor:'#EF4444',color:'#fff'}:{}}
+                onClick={()=>set('Vehicle.Controller.Body.Switches.Fog.Rear.IsEngaged',!state['Vehicle.Controller.Body.Switches.Fog.Rear.IsEngaged'])}>
+                {state['Vehicle.Controller.Body.Switches.Fog.Rear.IsEngaged']?'ON':'OFF'}
               </button>
             </div>
           </div>
@@ -359,9 +359,9 @@ function App(){
             <div className="control-label">High Beam Stalk</div>
             <div style={{flex:1}}/>
             <div className="tog"
-              onClick={()=>set('Body.Switches.HighBeam.IsEngaged',!state['Body.Switches.HighBeam.IsEngaged'])}
-              style={state['Body.Switches.HighBeam.IsEngaged']?{borderColor:'#4A9EF5',background:'rgba(74,158,245,.12)'}:{}}>
-              <div className="knob" style={state['Body.Switches.HighBeam.IsEngaged']?{transform:'translateX(20px)',background:'#4A9EF5'}:{}}/>
+              onClick={()=>set('Vehicle.Controller.Body.Switches.HighBeam.IsEngaged',!state['Vehicle.Controller.Body.Switches.HighBeam.IsEngaged'])}
+              style={state['Vehicle.Controller.Body.Switches.HighBeam.IsEngaged']?{borderColor:'#4A9EF5',background:'rgba(74,158,245,.12)'}:{}}>
+              <div className="knob" style={state['Vehicle.Controller.Body.Switches.HighBeam.IsEngaged']?{transform:'translateX(20px)',background:'#4A9EF5'}:{}}/>
             </div>
           </div>
         </div>
@@ -378,25 +378,25 @@ function App(){
           <div style={{display:'flex',alignItems:'center',gap:'12px',marginTop:'8px'}}>
             <div className="control-label" style={{minWidth:'unset'}}>Oncoming Vehicle Detected</div>
             <button
-              className={`btn ${state['Vehicle.ADAS.HighBeam.OncomingVehicleDetected'] ? 'active' : ''}`}
+              className={`btn ${state['Vehicle.Controller.ADAS.HighBeam.OncomingVehicleDetected'] ? 'active' : ''}`}
               style={{
-                background: state['Vehicle.ADAS.HighBeam.OncomingVehicleDetected'] ? '#EF4444' : undefined,
-                borderColor: state['Vehicle.ADAS.HighBeam.OncomingVehicleDetected'] ? '#EF4444' : undefined,
-                color: state['Vehicle.ADAS.HighBeam.OncomingVehicleDetected'] ? '#fff' : undefined,
+                background: state['Vehicle.Controller.ADAS.HighBeam.OncomingVehicleDetected'] ? '#EF4444' : undefined,
+                borderColor: state['Vehicle.Controller.ADAS.HighBeam.OncomingVehicleDetected'] ? '#EF4444' : undefined,
+                color: state['Vehicle.Controller.ADAS.HighBeam.OncomingVehicleDetected'] ? '#fff' : undefined,
                 minWidth: '120px',
               }}
               onClick={() => set(
-                'Vehicle.ADAS.HighBeam.OncomingVehicleDetected',
-                !state['Vehicle.ADAS.HighBeam.OncomingVehicleDetected']
+                'Vehicle.Controller.ADAS.HighBeam.OncomingVehicleDetected',
+                !state['Vehicle.Controller.ADAS.HighBeam.OncomingVehicleDetected']
               )}>
-              {state['Vehicle.ADAS.HighBeam.OncomingVehicleDetected'] ? '🚗 ONCOMING — HIGH BEAM OFF' : '✅ Path clear'}
+              {state['Vehicle.Controller.ADAS.HighBeam.OncomingVehicleDetected'] ? '🚗 ONCOMING — HIGH BEAM OFF' : '✅ Path clear'}
             </button>
             <span style={{
               fontSize:'12px',
-              color: state['Vehicle.ADAS.HighBeam.OncomingVehicleDetected'] ? '#EF4444' : '#6B7E99',
-              fontWeight: state['Vehicle.ADAS.HighBeam.OncomingVehicleDetected'] ? 700 : 400,
+              color: state['Vehicle.Controller.ADAS.HighBeam.OncomingVehicleDetected'] ? '#EF4444' : '#6B7E99',
+              fontWeight: state['Vehicle.Controller.ADAS.HighBeam.OncomingVehicleDetected'] ? 700 : 400,
             }}>
-              {state['Vehicle.ADAS.HighBeam.OncomingVehicleDetected']
+              {state['Vehicle.Controller.ADAS.HighBeam.OncomingVehicleDetected']
                 ? 'AHB suppressing high beam'
                 : 'Manual high beam available'}
             </span>
@@ -413,27 +413,27 @@ function App(){
             UN&nbsp;ECE&nbsp;R6 the blink rate doubles to ~3&nbsp;Hz.
           </div>
           {(() => {
-            const li = state['Body.Lights.DirectionIndicator.Left.IsSignaling'];
-            const ri = state['Body.Lights.DirectionIndicator.Right.IsSignaling'];
+            const li = state['Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling'];
+            const ri = state['Vehicle.Body.Lights.DirectionIndicator.Right.IsSignaling'];
             const L = {
-              Front: state['Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn'],
-              Side:  state['Body.Lights.DirectionIndicator.Left.Lamp.Side.IsOn'],
-              Rear:  state['Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsOn'],
+              Front: state['Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn'],
+              Side:  state['Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Side.IsOn'],
+              Rear:  state['Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsOn'],
             };
             const R = {
-              Front: state['Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn'],
-              Side:  state['Body.Lights.DirectionIndicator.Right.Lamp.Side.IsOn'],
-              Rear:  state['Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsOn'],
+              Front: state['Vehicle.Controller.Body.Lights.DirectionIndicator.Right.Lamp.Front.IsOn'],
+              Side:  state['Vehicle.Controller.Body.Lights.DirectionIndicator.Right.Lamp.Side.IsOn'],
+              Rear:  state['Vehicle.Controller.Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsOn'],
             };
             const Ldef = {
-              Front: state['Body.Lights.DirectionIndicator.Left.Lamp.Front.IsDefect'],
-              Side:  state['Body.Lights.DirectionIndicator.Left.Lamp.Side.IsDefect'],
-              Rear:  state['Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsDefect'],
+              Front: state['Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Front.IsDefect'],
+              Side:  state['Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Side.IsDefect'],
+              Rear:  state['Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Rear.IsDefect'],
             };
             const Rdef = {
-              Front: state['Body.Lights.DirectionIndicator.Right.Lamp.Front.IsDefect'],
-              Side:  state['Body.Lights.DirectionIndicator.Right.Lamp.Side.IsDefect'],
-              Rear:  state['Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsDefect'],
+              Front: state['Vehicle.Controller.Body.Lights.DirectionIndicator.Right.Lamp.Front.IsDefect'],
+              Side:  state['Vehicle.Controller.Body.Lights.DirectionIndicator.Right.Lamp.Side.IsDefect'],
+              Rear:  state['Vehicle.Controller.Body.Lights.DirectionIndicator.Right.Lamp.Rear.IsDefect'],
             };
             const anyLdef = Ldef.Front || Ldef.Side || Ldef.Rear;
             const anyRdef = Rdef.Front || Rdef.Side || Rdef.Rear;
@@ -510,30 +510,30 @@ function App(){
             <div className="control-label">Hazard Switch</div>
             <div style={{flex:1}}/>
             <div className="tog"
-              onClick={()=>set('Body.Switches.Hazard.IsEngaged',!state['Body.Switches.Hazard.IsEngaged'])}
-              style={state['Body.Switches.Hazard.IsEngaged']?{borderColor:'#F59E0B',background:'rgba(245,158,11,.15)'}:{}}>
-              <div className="knob" style={state['Body.Switches.Hazard.IsEngaged']?{transform:'translateX(20px)',background:'#F59E0B'}:{}}/>
+              onClick={()=>set('Vehicle.Controller.Body.Switches.Hazard.IsEngaged',!state['Vehicle.Controller.Body.Switches.Hazard.IsEngaged'])}
+              style={state['Vehicle.Controller.Body.Switches.Hazard.IsEngaged']?{borderColor:'#F59E0B',background:'rgba(245,158,11,.15)'}:{}}>
+              <div className="knob" style={state['Vehicle.Controller.Body.Switches.Hazard.IsEngaged']?{transform:'translateX(20px)',background:'#F59E0B'}:{}}/>
             </div>
           </div>
           <div className="control">
             <div className="control-label">Turn Stalk</div>
             <div className="button-group">
               {['OFF','LEFT','RIGHT'].map(d=>(
-                <button key={d} className={`btn ${state['Body.Switches.TurnIndicator.Direction']===d?'active':''}`}
-                  onClick={()=>set('Body.Switches.TurnIndicator.Direction',d)}>
+                <button key={d} className={`btn ${state['Vehicle.Controller.Body.Switches.TurnIndicator.Direction']===d?'active':''}`}
+                  onClick={()=>set('Vehicle.Controller.Body.Switches.TurnIndicator.Direction',d)}>
                   {d}
                 </button>
               ))}
             </div>
-            <div className="control-value">{state['Body.Switches.TurnIndicator.Direction']}</div>
+            <div className="control-value">{state['Vehicle.Controller.Body.Switches.TurnIndicator.Direction']}</div>
           </div>
           <div className="control">
             <div className="control-label">Parking Brake</div>
             <div style={{flex:1}}/>
             <div className="tog"
-              onClick={()=>set('Chassis.ParkingBrake.IsEngaged',!state['Chassis.ParkingBrake.IsEngaged'])}
-              style={state['Chassis.ParkingBrake.IsEngaged']?{borderColor:'#F04040',background:'rgba(240,64,64,.12)'}:{}}>
-              <div className="knob" style={state['Chassis.ParkingBrake.IsEngaged']?{transform:'translateX(20px)',background:'#F04040'}:{}}/>
+              onClick={()=>set('Vehicle.Chassis.ParkingBrake.IsEngaged',!state['Vehicle.Chassis.ParkingBrake.IsEngaged'])}
+              style={state['Vehicle.Chassis.ParkingBrake.IsEngaged']?{borderColor:'#F04040',background:'rgba(240,64,64,.12)'}:{}}>
+              <div className="knob" style={state['Vehicle.Chassis.ParkingBrake.IsEngaged']?{transform:'translateX(20px)',background:'#F04040'}:{}}/>
             </div>
           </div>
         </div>
@@ -548,9 +548,9 @@ function App(){
             <div className="control-label">PEPS Key Present</div>
             <div className="section-info" style={{flex:1,margin:0,fontSize:'8px'}}>Capacitive touch chain</div>
             <div className="tog"
-              onClick={()=>set('Body.PEPS.KeyPresent',!state['Body.PEPS.KeyPresent'])}
-              style={state['Body.PEPS.KeyPresent']?{borderColor:'#10D98A',background:'rgba(16,217,138,.12)'}:{}}>
-              <div className="knob" style={state['Body.PEPS.KeyPresent']?{transform:'translateX(20px)',background:'#10D98A'}:{}}/>
+              onClick={()=>set('Vehicle.Controller.Body.PEPS.KeyPresent',!state['Vehicle.Controller.Body.PEPS.KeyPresent'])}
+              style={state['Vehicle.Controller.Body.PEPS.KeyPresent']?{borderColor:'#10D98A',background:'rgba(16,217,138,.12)'}:{}}>
+              <div className="knob" style={state['Vehicle.Controller.Body.PEPS.KeyPresent']?{transform:'translateX(20px)',background:'#10D98A'}:{}}/>
             </div>
           </div>
 
@@ -559,8 +559,8 @@ function App(){
             <div className="control-label">Keyfob RKE</div>
             <div className="button-group">
               {['IDLE','LOCK','UNLOCK','DOUBLE_LOCK'].map(m=>(
-                <button key={m} className={`btn ${state['Body.Switches.Keyfob.LockButton']===m?'active':''}`}
-                  onClick={()=>set('Body.Switches.Keyfob.LockButton',m)}>
+                <button key={m} className={`btn ${state['Vehicle.Controller.Body.Switches.Keyfob.LockButton']===m?'active':''}`}
+                  onClick={()=>set('Vehicle.Controller.Body.Switches.Keyfob.LockButton',m)}>
                   {m}
                 </button>
               ))}
@@ -569,10 +569,10 @@ function App(){
 
           {/* Door Trim Buttons */}
           {[
-            {key:'Body.Switches.DoorTrim.Row1.Left.LockButton',name:'Trim FL'},
-            {key:'Body.Switches.DoorTrim.Row1.Right.LockButton',name:'Trim FR'},
-            {key:'Body.Switches.DoorTrim.Row2.Left.LockButton',name:'Trim RL'},
-            {key:'Body.Switches.DoorTrim.Row2.Right.LockButton',name:'Trim RR'},
+            {key:'Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.LockButton',name:'Trim FL'},
+            {key:'Vehicle.Controller.Body.Switches.DoorTrim.Row1.Right.LockButton',name:'Trim FR'},
+            {key:'Vehicle.Controller.Body.Switches.DoorTrim.Row2.Left.LockButton',name:'Trim RL'},
+            {key:'Vehicle.Controller.Body.Switches.DoorTrim.Row2.Right.LockButton',name:'Trim RR'},
           ].map(d=>(
             <div key={d.key} className="control">
               <div className="control-label">{d.name}</div>
@@ -592,8 +592,8 @@ function App(){
             <div className="control-label">Phone App</div>
             <div className="button-group">
               {['IDLE','LOCK','UNLOCK'].map(m=>(
-                <button key={m} className={`btn ${state['Body.Connectivity.RemoteLock']===m?'active':''}`}
-                  onClick={()=>set('Body.Connectivity.RemoteLock',m)}>
+                <button key={m} className={`btn ${state['Vehicle.Simulation.Connectivity.RemoteLock']===m?'active':''}`}
+                  onClick={()=>set('Vehicle.Simulation.Connectivity.RemoteLock',m)}>
                   {m}
                 </button>
               ))}
@@ -605,8 +605,8 @@ function App(){
             <div className="control-label">BLE Key</div>
             <div className="button-group">
               {['IDLE','LOCK','UNLOCK'].map(m=>(
-                <button key={m} className={`btn ${state['Body.Connectivity.BleLock']===m?'active':''}`}
-                  onClick={()=>set('Body.Connectivity.BleLock',m)}>
+                <button key={m} className={`btn ${state['Vehicle.Simulation.Connectivity.BleLock']===m?'active':''}`}
+                  onClick={()=>set('Vehicle.Simulation.Connectivity.BleLock',m)}>
                   {m}
                 </button>
               ))}
@@ -618,9 +618,9 @@ function App(){
             <div className="control-label">NFC Card</div>
             <div style={{flex:1}}/>
             <div className="tog"
-              onClick={()=>set('Body.Connectivity.NfcCardPresent',!state['Body.Connectivity.NfcCardPresent'])}
-              style={state['Body.Connectivity.NfcCardPresent']?{borderColor:'#9B6DFF',background:'rgba(155,109,255,.12)'}:{}}>
-              <div className="knob" style={state['Body.Connectivity.NfcCardPresent']?{transform:'translateX(20px)',background:'#9B6DFF'}:{}}/>
+              onClick={()=>set('Vehicle.Simulation.Connectivity.NfcCardPresent',!state['Vehicle.Simulation.Connectivity.NfcCardPresent'])}
+              style={state['Vehicle.Simulation.Connectivity.NfcCardPresent']?{borderColor:'#9B6DFF',background:'rgba(155,109,255,.12)'}:{}}>
+              <div className="knob" style={state['Vehicle.Simulation.Connectivity.NfcCardPresent']?{transform:'translateX(20px)',background:'#9B6DFF'}:{}}/>
             </div>
           </div>
 
@@ -629,9 +629,9 @@ function App(){
             <div className="control-label">NFC Phone</div>
             <div style={{flex:1}}/>
             <div className="tog"
-              onClick={()=>set('Body.Connectivity.NfcPhonePresent',!state['Body.Connectivity.NfcPhonePresent'])}
-              style={state['Body.Connectivity.NfcPhonePresent']?{borderColor:'#9B6DFF',background:'rgba(155,109,255,.12)'}:{}}>
-              <div className="knob" style={state['Body.Connectivity.NfcPhonePresent']?{transform:'translateX(20px)',background:'#9B6DFF'}:{}}/>
+              onClick={()=>set('Vehicle.Simulation.Connectivity.NfcPhonePresent',!state['Vehicle.Simulation.Connectivity.NfcPhonePresent'])}
+              style={state['Vehicle.Simulation.Connectivity.NfcPhonePresent']?{borderColor:'#9B6DFF',background:'rgba(155,109,255,.12)'}:{}}>
+              <div className="knob" style={state['Vehicle.Simulation.Connectivity.NfcPhonePresent']?{transform:'translateX(20px)',background:'#9B6DFF'}:{}}/>
             </div>
           </div>
         </div>
@@ -644,9 +644,9 @@ function App(){
             <div className="control-label">Crash Detected</div>
             <div style={{flex:1}}/>
             <div className="tog"
-              onClick={()=>set('Vehicle.Safety.CrashDetected',!state['Vehicle.Safety.CrashDetected'])}
-              style={state['Vehicle.Safety.CrashDetected']?{borderColor:'#F04040',background:'rgba(240,64,64,.12)'}:{}}>
-              <div className="knob" style={state['Vehicle.Safety.CrashDetected']?{transform:'translateX(20px)',background:'#F04040'}:{}}/>
+              onClick={()=>set('Vehicle.Controller.Safety.CrashDetected',!state['Vehicle.Controller.Safety.CrashDetected'])}
+              style={state['Vehicle.Controller.Safety.CrashDetected']?{borderColor:'#F04040',background:'rgba(240,64,64,.12)'}:{}}>
+              <div className="knob" style={state['Vehicle.Controller.Safety.CrashDetected']?{transform:'translateX(20px)',background:'#F04040'}:{}}/>
             </div>
           </div>
         </div>
@@ -696,10 +696,10 @@ function App(){
         <div className="section">
           <div className="section-title">Openings</div>
           {[
-            {key:'Body.Hood.IsOpen',name:'Hood'},
-            {key:'Body.Trunk.IsOpen',name:'Trunk'},
-            {key:'Body.FuelLid.IsOpen',name:'Fuel Lid'},
-            {key:'Body.ChargeLid.IsOpen',name:'Charge Lid'},
+            {key:'Vehicle.Body.Hood.IsOpen',name:'Hood'},
+            {key:'Vehicle.Body.Trunk.Rear.IsOpen',name:'Trunk'},
+            {key:'Vehicle.Controller.Body.FuelLid.IsOpen',name:'Fuel Lid'},
+            {key:'Vehicle.Controller.Body.ChargeLid.IsOpen',name:'Charge Lid'},
           ].map(o=>(
             <div key={o.key} className="control">
               <div className="control-label">{o.name}</div>

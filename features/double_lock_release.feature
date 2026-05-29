@@ -96,5 +96,5 @@ Feature: Double-Lock Release on Ignition ON
   Scenario: No lock-feedback flash when superlock is released
     When Vehicle.LowVoltageSystemState transitions from "OFF" to "ON"
     Then a ReleaseDouble command is issued
-    And Body.Doors.CentralLock.FeedbackRequest is NOT published
+    And Vehicle.Controller.Body.Doors.CentralLock.FeedbackRequest is NOT published
     And no direction indicator flash pattern is played

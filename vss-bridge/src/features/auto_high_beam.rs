@@ -22,7 +22,7 @@
 //!
 //! # Signal
 //!
-//! - **Input**: `Vehicle.ADAS.HighBeam.OncomingVehicleDetected` — `Bool(true)` when
+//! - **Input**: `Vehicle.Controller.ADAS.HighBeam.OncomingVehicleDetected` — `Bool(true)` when
 //!   the ADAS camera reports a risk of glare; `Bool(false)` when path is clear.
 //!
 //! # Hysteresis
@@ -40,8 +40,8 @@ use crate::signal_bus::SignalBus;
 
 // ── Signal constants ───────────────────────────────────────────────────────
 
-const ADAS_ONCOMING: &str = "Vehicle.ADAS.HighBeam.OncomingVehicleDetected";
-const HIGH_BEAM_OUT: &str = "Body.Lights.Beam.High.IsOn";
+const ADAS_ONCOMING: &str = "Vehicle.Controller.ADAS.HighBeam.OncomingVehicleDetected";
+const HIGH_BEAM_OUT: &str = "Vehicle.Body.Lights.Beam.High.IsOn";
 
 // ── Feature struct ─────────────────────────────────────────────────────────
 
@@ -111,7 +111,7 @@ mod tests {
     use std::sync::Arc;
     use tokio::time::Duration;
 
-    const LOW_BEAM: &str = "Body.Lights.Beam.Low.IsOn";
+    const LOW_BEAM: &str = "Vehicle.Body.Lights.Beam.Low.IsOn";
 
     /// Set up the LowBeam arbiter + AHB feature. Returns (bus, arb).
     /// Callers can submit their own medium-priority claims via `arb` to simulate

@@ -1,8 +1,8 @@
 //! Chime — plant model for the interior buzzer / piezo.
 //!
-//! Subscribes to the actuator-intent signal `Body.Chime.IsActive`
+//! Subscribes to the actuator-intent signal `Vehicle.Controller.Body.Chime.IsActive`
 //! (the bool a feature publishes when it wants the chime to make
-//! noise) and publishes `Body.Chime.IsSounding` — the physical
+//! noise) and publishes `Vehicle.Controller.Body.Chime.IsSounding` — the physical
 //! buzzer state.
 //!
 //! In production this would model real piezo behaviour:
@@ -19,7 +19,7 @@
 //!   * matches the horn / chime symmetry: features request, plant
 //!     model represents the actuator, HMI renders the actuator state.
 //!
-//! Single writer of `Body.Chime.IsActive` today is `PerimeterAlarm`
+//! Single writer of `Vehicle.Controller.Body.Chime.IsActive` today is `PerimeterAlarm`
 //! (12 s warning chime); add an arbiter when a second feature wants
 //! the same actuator (door-ajar reminder, seatbelt chime, …).
 
@@ -30,8 +30,8 @@ use futures::StreamExt;
 use crate::ipc_message::SignalValue;
 use crate::signal_bus::{SignalBus, VssPath};
 
-const CHIME_INTENT: VssPath = "Body.Chime.IsActive";
-const CHIME_SOUNDING: VssPath = "Body.Chime.IsSounding";
+const CHIME_INTENT: VssPath = "Vehicle.Controller.Body.Chime.IsActive";
+const CHIME_SOUNDING: VssPath = "Vehicle.Controller.Body.Chime.IsSounding";
 
 pub struct ChimePlantModel<B: SignalBus> {
     bus: Arc<B>,

@@ -8,7 +8,7 @@ Feature: Lock / Unlock Feedback Flash
   # -------------------------------------------------------------------------
   # Implementation model
   # -------------------------------------------------------------------------
-  # This feature subscribes to Body.Doors.CentralLock.FeedbackRequest
+  # This feature subscribes to Vehicle.Controller.Body.Doors.CentralLock.FeedbackRequest
   # (published by RKE, WalkAwayLock, KeypadLock, AutoRelock) and plays
   # timed flash patterns on both direction indicators via the Lighting domain
   # arbiter at priority HIGH.
@@ -30,7 +30,7 @@ Feature: Lock / Unlock Feedback Flash
   #
   # REQ-LKF-003: When FeedbackRequest = "trunk_unlock" is received, the feature
   #              SHALL play the UNLOCK pattern and additionally arm a trunk-close
-  #              latch: when Body.Trunk.IsOpen subsequently transitions to false,
+  #              latch: when Vehicle.Body.Trunk.Rear.IsOpen subsequently transitions to false,
   #              a LOCK pattern SHALL be played automatically.
   #
   # REQ-LKF-004: Lock feedback SHALL overlay on any active hazard or turn
@@ -82,14 +82,14 @@ Feature: Lock / Unlock Feedback Flash
     When FeedbackRequest "trunk_unlock" is published
     Then the UNLOCK pattern plays (same as REQ-LKF-002)
     And the feature arms an internal trunk-close flag
-    When Body.Trunk.IsOpen transitions to false
+    When Vehicle.Body.Trunk.Rear.IsOpen transitions to false
     Then the LOCK pattern plays automatically
     And the trunk-close flag is cleared
 
   # --- REQ-LKF-003 ---
   Scenario: Trunk closes without prior trunk_unlock — no feedback
     Given no FeedbackRequest "trunk_unlock" has been received
-    When Body.Trunk.IsOpen transitions to false
+    When Vehicle.Body.Trunk.Rear.IsOpen transitions to false
     Then no flash pattern is played
 
   # --- REQ-LKF-004 ---

@@ -7,7 +7,7 @@
 //! ## How it works
 //!
 //! The HMI or test harness positions devices by publishing PlacedZone
-//! signals (e.g., `Body.PEPS.Plant.KeyFob.1.PlacedZone = "LeftFront"`).
+//! signals (e.g., `Vehicle.Simulation.PEPS.Plant.KeyFob.1.PlacedZone = "LeftFront"`).
 //! When the vehicle-side feature logic sends a challenge, each device
 //! in a compatible zone responds with an AES-128 encrypted reply.
 //! The `KeySearchArbiter` separately publishes `LastObservedZone`

@@ -58,8 +58,8 @@ use crate::ipc_message::{FeatureId, SignalValue};
 use crate::plant_models::peps::zone::Zone;
 use crate::signal_bus::SignalBus;
 
-const LEFT_PAD: &str = "Body.Doors.Row1.Left.Handle.Outside.LockPad.IsPressed";
-const RIGHT_PAD: &str = "Body.Doors.Row1.Right.Handle.Outside.LockPad.IsPressed";
+const LEFT_PAD: &str = "Vehicle.Cabin.Door.Row1.Left.Handle.Outside.LockPad.IsPressed";
+const RIGHT_PAD: &str = "Vehicle.Cabin.Door.Row1.Right.Handle.Outside.LockPad.IsPressed";
 
 /// Debounce duration before the lock fires.
 const DEBOUNCE: Duration = Duration::from_millis(500);
@@ -276,17 +276,17 @@ mod tests {
     /// mark it Paired so the Authenticated scan returns it.
     fn place_paired(bus: &MockBus, fob_slot: u8, zone: &str) {
         let zone_path = match fob_slot {
-            1 => "Body.PEPS.Plant.KeyFob.1.PlacedZone",
-            2 => "Body.PEPS.Plant.KeyFob.2.PlacedZone",
-            3 => "Body.PEPS.Plant.KeyFob.3.PlacedZone",
-            4 => "Body.PEPS.Plant.KeyFob.4.PlacedZone",
+            1 => "Vehicle.Simulation.PEPS.Plant.KeyFob.1.PlacedZone",
+            2 => "Vehicle.Simulation.PEPS.Plant.KeyFob.2.PlacedZone",
+            3 => "Vehicle.Simulation.PEPS.Plant.KeyFob.3.PlacedZone",
+            4 => "Vehicle.Simulation.PEPS.Plant.KeyFob.4.PlacedZone",
             _ => panic!("unknown fob slot {fob_slot}"),
         };
         let paired_path = match fob_slot {
-            1 => "Body.PEPS.Plant.KeyFob.1.Paired",
-            2 => "Body.PEPS.Plant.KeyFob.2.Paired",
-            3 => "Body.PEPS.Plant.KeyFob.3.Paired",
-            4 => "Body.PEPS.Plant.KeyFob.4.Paired",
+            1 => "Vehicle.Simulation.PEPS.Plant.KeyFob.1.Paired",
+            2 => "Vehicle.Simulation.PEPS.Plant.KeyFob.2.Paired",
+            3 => "Vehicle.Simulation.PEPS.Plant.KeyFob.3.Paired",
+            4 => "Vehicle.Simulation.PEPS.Plant.KeyFob.4.Paired",
             _ => unreachable!(),
         };
         bus.inject(zone_path, SignalValue::String(zone.into()));
@@ -296,8 +296,8 @@ mod tests {
     /// Same for the BLE phone slots (5 + 6 in arbiter indexing).
     fn place_paired_phone(bus: &MockBus, phone_slot: u8, zone: &str) {
         let zone_path = match phone_slot {
-            1 => "Body.PEPS.Plant.BlePhone.1.PlacedZone",
-            2 => "Body.PEPS.Plant.BlePhone.2.PlacedZone",
+            1 => "Vehicle.Simulation.PEPS.Plant.BlePhone.1.PlacedZone",
+            2 => "Vehicle.Simulation.PEPS.Plant.BlePhone.2.PlacedZone",
             _ => panic!("unknown phone slot {phone_slot}"),
         };
         let paired_path = match phone_slot {
@@ -322,8 +322,10 @@ mod tests {
 
         let h = bus.history();
         assert!(
-            h.iter().any(|(s, v)| *s == "Body.Doors.CentralLock.Command"
-                && *v == SignalValue::String("lock_all".into())),
+            h.iter().any(
+                |(s, v)| *s == "Vehicle.Controller.Body.Doors.CentralLock.Command"
+                    && *v == SignalValue::String("lock_all".into())
+            ),
             "expected lock_all after 500ms debounce, history: {:?}",
             h
         );
@@ -342,8 +344,10 @@ mod tests {
 
         let h = bus.history();
         assert!(
-            h.iter().any(|(s, v)| *s == "Body.Doors.CentralLock.Command"
-                && *v == SignalValue::String("lock_all".into())),
+            h.iter().any(
+                |(s, v)| *s == "Vehicle.Controller.Body.Doors.CentralLock.Command"
+                    && *v == SignalValue::String("lock_all".into())
+            ),
             "expected lock_all from right pad, history: {:?}",
             h
         );
@@ -369,7 +373,7 @@ mod tests {
         let h = bus.history();
         assert!(
             !h.iter()
-                .any(|(s, _)| *s == "Body.Doors.CentralLock.Command"),
+                .any(|(s, _)| *s == "Vehicle.Controller.Body.Doors.CentralLock.Command"),
             "release before debounce should cancel lock, history: {:?}",
             h
         );
@@ -408,7 +412,7 @@ mod tests {
         let count_after_first = bus
             .history()
             .iter()
-            .filter(|(s, _)| *s == "Body.Doors.CentralLock.Command")
+            .filter(|(s, _)| *s == "Vehicle.Controller.Body.Doors.CentralLock.Command")
             .count();
 
         // Advance more — should not fire again without a new press
@@ -418,7 +422,7 @@ mod tests {
         let count_after_second = bus
             .history()
             .iter()
-            .filter(|(s, _)| *s == "Body.Doors.CentralLock.Command")
+            .filter(|(s, _)| *s == "Vehicle.Controller.Body.Doors.CentralLock.Command")
             .count();
 
         assert_eq!(
@@ -445,7 +449,7 @@ mod tests {
         let h = bus.history();
         assert!(
             !h.iter()
-                .any(|(s, _)| *s == "Body.Doors.CentralLock.Command"),
+                .any(|(s, _)| *s == "Vehicle.Controller.Body.Doors.CentralLock.Command"),
             "expected NO lock command when no paired device is outside, got {h:?}"
         );
         assert!(
@@ -475,7 +479,7 @@ mod tests {
         let h = bus.history();
         assert!(
             !h.iter()
-                .any(|(s, _)| *s == "Body.Doors.CentralLock.Command"),
+                .any(|(s, _)| *s == "Vehicle.Controller.Body.Doors.CentralLock.Command"),
             "lock must be denied when only paired device is inside the cabin: {h:?}"
         );
     }
@@ -499,8 +503,10 @@ mod tests {
 
         let h = bus.history();
         assert!(
-            h.iter().any(|(s, v)| *s == "Body.Doors.CentralLock.Command"
-                && *v == SignalValue::String("lock_all".into())),
+            h.iter().any(
+                |(s, v)| *s == "Vehicle.Controller.Body.Doors.CentralLock.Command"
+                    && *v == SignalValue::String("lock_all".into())
+            ),
             "expected lock_all when at least one paired device is outside (split case): {h:?}"
         );
     }
@@ -523,8 +529,10 @@ mod tests {
 
         let h = bus.history();
         assert!(
-            h.iter().any(|(s, v)| *s == "Body.Doors.CentralLock.Command"
-                && *v == SignalValue::String("lock_all".into())),
+            h.iter().any(
+                |(s, v)| *s == "Vehicle.Controller.Body.Doors.CentralLock.Command"
+                    && *v == SignalValue::String("lock_all".into())
+            ),
             "expected lock_all with phone in LeftFront zone: {h:?}"
         );
     }
@@ -541,7 +549,7 @@ mod tests {
         let (bus, _h) = setup_no_paired_device_outside().await;
         // Stale "fob outside" reading from a poll ~10 s ago.
         bus.inject(
-            "Body.PEPS.Plant.KeyFob.1.LastObservedZone",
+            "Vehicle.Simulation.PEPS.Plant.KeyFob.1.LastObservedZone",
             SignalValue::String("LeftFront".into()),
         );
         // But the fob is actually inside the cabin right now.
@@ -558,7 +566,7 @@ mod tests {
         let h = bus.history();
         assert!(
             !h.iter()
-                .any(|(s, _)| *s == "Body.Doors.CentralLock.Command"),
+                .any(|(s, _)| *s == "Vehicle.Controller.Body.Doors.CentralLock.Command"),
             "fresh scan must override stale LastObservedZone — lock should be denied: {h:?}"
         );
         assert!(
