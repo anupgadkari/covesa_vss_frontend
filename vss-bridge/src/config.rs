@@ -849,6 +849,21 @@ impl PlatformConfig {
         self.dealer_config_rx.borrow().clone()
     }
 
+    /// Vehicle orientation (LHD / RHD).  Single source of truth for
+    /// "which physical Row1 door is the driver".  Today this reads
+    /// from `dealer_config().driver_door_side`; sub-PR 4 of the VSS
+    /// v6.0 migration will rename the field to `vehicle_orientation`
+    /// and this accessor becomes a direct return.  Until then,
+    /// every feature that needs driver-vs-passenger semantics
+    /// should call this — *not* match on `DriverDoorSide` directly.
+    pub fn orientation(&self) -> crate::plant_models::side::VehicleOrientation {
+        use crate::plant_models::side::VehicleOrientation;
+        match self.dealer_config().driver_door_side {
+            DriverDoorSide::Left => VehicleOrientation::Lhd,
+            DriverDoorSide::Right => VehicleOrientation::Rhd,
+        }
+    }
+
     /// Subscribe to dealer config changes. Features that need to react
     /// to runtime config updates (e.g., auto-relock enable/disable)
     /// should clone this receiver and `await changed()`.
