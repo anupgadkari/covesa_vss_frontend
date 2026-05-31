@@ -252,7 +252,10 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Vehicle.Chassis.ParkingBrake.IsEngaged" => Some(0x000D_0004),
         "Vehicle.Body.Lights.Fog.Front.Switch.IsEngaged" => Some(0x000D_0005),
         "Vehicle.Body.Lights.Fog.Rear.Switch.IsEngaged" => Some(0x000D_0006),
-        "Vehicle.Simulation.KeyFob.Switch.Panic" => Some(0x000D_0007),
+        // Authenticated panic-press event counter — RKE bumps on each
+        // confirmed panic RfMessage; PanicAlarm + PerimeterAlarm watch
+        // for bumps.  Single-writer (RKE), multi-reader.
+        "Vehicle.Controller.Alarm.PanicEventNum" => Some(0x000D_0007),
         // Mirror control switches (project extension — VSS does not
         // define mirror movement controls).
         // - Fold: bool, momentary (false→true edge = press).
@@ -314,7 +317,9 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // unlock fires while the alarm is armed.
         "Vehicle.Cabin.Door.Row1.Left.Switch.Unlock" => Some(0x000E_0005),
         "Vehicle.Cabin.Door.Row1.Right.Switch.Unlock" => Some(0x000E_0006),
-        "Vehicle.Simulation.KeyFob.Switch.Lock" => Some(0x000E_0010),
+        // 0x000E_0010 retired: was Vehicle.Simulation.KeyFob.Switch.Lock —
+        // vestigial; RKE handles fob lock via the per-fob ButtonPress →
+        // RfMessage chain, not a standalone signal.  ID left unallocated.
         "Vehicle.Simulation.Connectivity.RemoteLock" => Some(0x000E_0020),
         "Vehicle.Simulation.Connectivity.BleLock" => Some(0x000E_0021),
         "Vehicle.Simulation.Connectivity.NfcCardPresent" => Some(0x000E_0030),
@@ -946,7 +951,7 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
         0x000D_0005,
     ),
     ("Vehicle.Body.Lights.Fog.Rear.Switch.IsEngaged", 0x000D_0006),
-    ("Vehicle.Simulation.KeyFob.Switch.Panic", 0x000D_0007),
+    ("Vehicle.Controller.Alarm.PanicEventNum", 0x000D_0007),
     ("Vehicle.Body.Mirrors.Switch.Fold", 0x000D_0010),
     ("Vehicle.Body.Mirrors.Switch.Select", 0x000D_0011),
     ("Vehicle.Body.Mirrors.Switch.Direction", 0x000D_0012),
@@ -969,7 +974,6 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Vehicle.Cabin.Door.Row2.Right.Switch.Lock", 0x000E_0004),
     ("Vehicle.Cabin.Door.Row1.Left.Switch.Unlock", 0x000E_0005),
     ("Vehicle.Cabin.Door.Row1.Right.Switch.Unlock", 0x000E_0006),
-    ("Vehicle.Simulation.KeyFob.Switch.Lock", 0x000E_0010),
     ("Vehicle.Simulation.Connectivity.RemoteLock", 0x000E_0020),
     ("Vehicle.Simulation.Connectivity.BleLock", 0x000E_0021),
     (

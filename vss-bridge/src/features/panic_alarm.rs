@@ -1,11 +1,13 @@
 //! Panic Alarm — synchronized direction-indicator blink + horn chirps
-//! triggered by a paired keyfob's PANIC button (or any other source that
-//! engages `Vehicle.Simulation.KeyFob.Switch.Panic`).
+//! triggered by a paired keyfob's PANIC button (via RKE) or any other
+//! source that bumps `Vehicle.Controller.Alarm.PanicEventNum`.
 //!
 //! # Inputs
-//!   - `Vehicle.Simulation.KeyFob.Switch.Panic` (Bool) — toggled by RKE on a
-//!     paired-keyfob PANIC press, or by other sources (HMI test button,
-//!     telematics remote panic, intrusion sensor).
+//!   - `Vehicle.Controller.Alarm.PanicEventNum` (Uint16, monotonic) —
+//!     bumped by RKE on each confirmed authenticated PANIC press, or by
+//!     other sources (HMI test button, telematics remote panic, intrusion
+//!     sensor).  Each distinct value is one user press; PanicAlarm owns
+//!     its own engaged latch and toggles it on every press edge.
 //!
 //! # Outputs
 //!   - `Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling`  via Lighting arbiter @ HIGH
@@ -39,12 +41,12 @@
 //!
 //! # Cancel-on-unlock
 //! Any successful unlock command on the central-lock feedback bus
-//! (`Vehicle.Controller.Body.Doors.CentralLock.FeedbackRequest = "unlock"`) cancels the
-//! alarm — matches typical OEM behaviour where returning to the vehicle
-//! and unlocking it (RKE / smart entry / phone / BLE / NFC) is treated
-//! as proof that the user is back.  When this happens, PanicAlarm
-//! self-publishes `Vehicle.Simulation.KeyFob.Switch.Panic = false` so the source
-//! of truth stays consistent with internal state.
+//! (`Vehicle.Controller.Body.Doors.CentralLock.FeedbackRequest = "unlock"`)
+//! cancels the alarm — matches typical OEM behaviour where returning to
+//! the vehicle and unlocking it (RKE / smart entry / phone / BLE / NFC)
+//! is treated as proof that the user is back.  PanicAlarm flips its own
+//! engaged latch internally — no write-back to the `PanicEventNum`
+//! signal (RKE is the single owner of that counter).
 
 use std::sync::Arc;
 
@@ -58,7 +60,7 @@ use crate::signal_bus::{SignalBus, VssPath};
 
 // ── Signal constants ───────────────────────────────────────────────────────
 
-const PANIC_SWITCH: VssPath = "Vehicle.Simulation.KeyFob.Switch.Panic";
+const PANIC_EVENT_NUM: VssPath = "Vehicle.Controller.Alarm.PanicEventNum";
 
 const LEFT_INDICATOR: VssPath = "Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling";
 const RIGHT_INDICATOR: VssPath = "Vehicle.Body.Lights.DirectionIndicator.Right.IsSignaling";
@@ -97,130 +99,89 @@ impl<B: SignalBus + Send + Sync + 'static> PanicAlarm<B> {
     pub async fn run(self) {
         tracing::info!("PanicAlarm feature started");
 
-        // Cancel-on-unlock watcher — runs independently of the main switch
-        // loop.  Whenever an authenticated source publishes
-        // `FEEDBACK_REQUEST = "unlock"`, this task injects
-        // `PANIC_SWITCH = false` on the bus.  The main loop then sees the
-        // transition like any other disengage and tears the alarm down.
-        // Doing this is idempotent — a redundant FALSE while already
-        // disengaged is a no-op (PanicAlarm dedups same-state edges).
-        let bus_for_watcher = Arc::clone(&self.bus);
-        tokio::spawn(async move {
-            let mut feedback_rx = bus_for_watcher.subscribe(FEEDBACK_REQUEST).await;
-            while let Some(val) = feedback_rx.next().await {
-                if matches!(&val, SignalValue::String(s) if s == "unlock") {
-                    tracing::debug!(
-                        "PanicAlarm: unlock feedback observed — synthesising panic cancel"
-                    );
-                    let _ = bus_for_watcher
-                        .publish(PANIC_SWITCH, SignalValue::Bool(false))
-                        .await;
-                }
-            }
-        });
-
-        let mut switch_rx = self.bus.subscribe(PANIC_SWITCH).await;
-        // Subscribe to the shared `Vehicle.Body.Alarm.IsActive` flag so a
-        // panic-button press during another alarm (e.g. PerimeterAlarm)
-        // is correctly interpreted as "cancel that alarm" rather than
-        // "start a new panic alarm."  PerimeterAlarm separately watches
-        // PANIC_SWITCH and disarms itself; we just have to make sure
-        // PanicAlarm doesn't simultaneously engage.
-        //
-        // `biased` select! ordering processes the panic stream first so
-        // a press received in the same tick as a `ALARM_STATUS=false`
-        // publish (the other alarm's disarm) is evaluated against the
-        // *previous* cached value, not the new one — preserving the
-        // "press during alarm = cancel" semantics.
+        // Panic-press event counter: bumped by RKE on each confirmed
+        // authenticated press.  We toggle our own internal engaged
+        // latch on each bump — no shared state with RKE, no write-back.
+        let mut event_num_rx = self.bus.subscribe(PANIC_EVENT_NUM).await;
+        // Cancel-on-unlock: an authenticated unlock disengages without
+        // needing another panic press.  Internal state flip only — no
+        // write-back to any input signal.
+        let mut feedback_rx = self.bus.subscribe(FEEDBACK_REQUEST).await;
+        // Cache `Vehicle.Body.Alarm.IsActive` so a panic press arriving
+        // while *another* alarm (PerimeterAlarm) is running is treated
+        // as "that alarm's cancel" — we skip our own engagement.
+        // PerimeterAlarm's own subscription disarms it.  `biased`
+        // ordering processes the press first so a tick where ALARM_STATUS
+        // also drops to false is evaluated against the previous cache.
         let mut alarm_status_rx = self.bus.subscribe(ALARM_STATUS).await;
+
+        // Seed last_event_num with the boot value (0); any subsequent
+        // distinct value is a real press from RKE.
+        let mut last_event_num: u16 = 0;
         let mut alarm_status_cache = false;
         let mut current: Option<JoinHandle<()>> = None;
         let mut engaged = false;
 
         loop {
-            let val = tokio::select! {
+            tokio::select! {
                 biased;
-                Some(v) = switch_rx.next() => v,
+                Some(v) = event_num_rx.next() => {
+                    let SignalValue::Uint16(n) = v else { continue };
+                    if n == last_event_num { continue; }
+                    last_event_num = n;
+                    if !engaged && alarm_status_cache {
+                        tracing::info!(
+                            "PanicAlarm: panic press while another alarm is active — \
+                             not engaging (other alarm handles the cancel)"
+                        );
+                        continue;
+                    }
+                    engaged = !engaged;
+                    if engaged {
+                        tracing::info!("PanicAlarm: ENGAGED — starting blink + chirp loop");
+                        let _ = self.bus.publish(ALARM_STATUS, SignalValue::Bool(true)).await;
+                        let lighting = Arc::clone(&self.lighting_arb);
+                        let horn = Arc::clone(&self.horn_arb);
+                        current = Some(tokio::spawn(async move {
+                            pulse_loop(lighting, horn).await;
+                        }));
+                    } else {
+                        tracing::info!("PanicAlarm: DISENGAGED — stopping alarm");
+                        if let Some(handle) = current.take() {
+                            handle.abort();
+                            let _ = handle.await;
+                        }
+                        release_all(&self.lighting_arb, &self.horn_arb).await;
+                        let _ = self.bus.publish(ALARM_STATUS, SignalValue::Bool(false)).await;
+                    }
+                }
+                Some(v) = feedback_rx.next() => {
+                    if engaged && matches!(&v, SignalValue::String(s) if s == "unlock") {
+                        tracing::info!("PanicAlarm: unlock feedback — cancelling panic alarm");
+                        engaged = false;
+                        if let Some(handle) = current.take() {
+                            handle.abort();
+                            let _ = handle.await;
+                        }
+                        release_all(&self.lighting_arb, &self.horn_arb).await;
+                        let _ = self.bus.publish(ALARM_STATUS, SignalValue::Bool(false)).await;
+                    }
+                }
                 Some(v) = alarm_status_rx.next() => {
                     if let SignalValue::Bool(b) = v {
                         alarm_status_cache = b;
                     }
-                    continue;
                 }
                 else => break,
-            };
-            let want = matches!(val, SignalValue::Bool(true));
-            if want == engaged {
-                // Idempotent — repeated TRUE/FALSE while already in that state.
-                continue;
-            }
-
-            // Engagement gate: if another feature has already asserted
-            // `Vehicle.Body.Alarm.IsActive` (PerimeterAlarm), a fresh
-            // `PANIC_SWITCH=true` is the user telling us to *cancel*
-            // that alarm, not start a panic alarm.  PerimeterAlarm
-            // sees the same press on its own subscription and disarms;
-            // we just skip our engagement.
-            //
-            // We also write `PANIC_SWITCH=false` back to the bus to keep
-            // every subscriber's view of the switch coherent — including
-            // RKE, which mirrors the published value into its local
-            // `panic_engaged` latch via its own watcher.  Without this,
-            // RKE's latch would stay `true` (it published `true` on the
-            // press), the bus would also stay `true`, and the user's
-            // next fob press would just toggle back to `false` with
-            // nothing observable happening — they'd need a second press
-            // to actually start a panic alarm.
-            if want && !engaged && alarm_status_cache {
-                tracing::info!(
-                    "PanicAlarm: panic press while another alarm is active — \
-                     treating as cancel, not engaging panic alarm"
-                );
-                let _ = self
-                    .bus
-                    .publish(PANIC_SWITCH, SignalValue::Bool(false))
-                    .await;
-                // Don't update `engaged` — we never engaged.  The cached
-                // alarm_status will flip to false shortly when the other
-                // alarm publishes its disarm.
-                continue;
-            }
-
-            engaged = want;
-
-            if engaged {
-                tracing::info!("PanicAlarm: ENGAGED — starting blink + chirp loop");
-                let _ = self
-                    .bus
-                    .publish(ALARM_STATUS, SignalValue::Bool(true))
-                    .await;
-
-                let lighting = Arc::clone(&self.lighting_arb);
-                let horn = Arc::clone(&self.horn_arb);
-                current = Some(tokio::spawn(async move {
-                    pulse_loop(lighting, horn).await;
-                }));
-            } else {
-                tracing::info!("PanicAlarm: DISENGAGED — stopping alarm");
-                if let Some(handle) = current.take() {
-                    handle.abort();
-                    let _ = handle.await;
-                }
-                release_all(&self.lighting_arb, &self.horn_arb).await;
-                let _ = self
-                    .bus
-                    .publish(ALARM_STATUS, SignalValue::Bool(false))
-                    .await;
             }
         }
 
-        // Bus stream closed — clean up before exiting.
         if let Some(handle) = current.take() {
             handle.abort();
             let _ = handle.await;
         }
         release_all(&self.lighting_arb, &self.horn_arb).await;
-        tracing::warn!("PanicAlarm: switch stream closed, exiting");
+        tracing::warn!("PanicAlarm: event-num stream closed, exiting");
     }
 }
 
@@ -311,11 +272,21 @@ mod tests {
         }
     }
 
+    /// Stateful press helper: bumps the `PanicEventNum` counter so the
+    /// PanicAlarm subscriber sees a fresh authenticated press edge.
+    /// Caller threads a `&mut u16` so successive calls produce distinct
+    /// values; PanicAlarm toggles its internal engaged latch on each.
+    fn press_panic(bus: &MockBus, ev: &mut u16) {
+        *ev = ev.wrapping_add(1);
+        bus.inject(PANIC_EVENT_NUM, SignalValue::Uint16(*ev));
+    }
+
     #[tokio::test(start_paused = true)]
     async fn engage_publishes_alarm_active_true_and_starts_pulses() {
         let (bus, _h) = setup().await;
+        let mut ev: u16 = 0;
 
-        bus.inject(PANIC_SWITCH, SignalValue::Bool(true));
+        press_panic(&bus, &mut ev);
         settle(1).await;
 
         // Status flag asserted on engage transition.
@@ -341,11 +312,12 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn disengage_releases_all_outputs() {
         let (bus, _h) = setup().await;
+        let mut ev: u16 = 0;
 
-        bus.inject(PANIC_SWITCH, SignalValue::Bool(true));
+        press_panic(&bus, &mut ev);
         settle(1).await;
 
-        bus.inject(PANIC_SWITCH, SignalValue::Bool(false));
+        press_panic(&bus, &mut ev);
         settle(1).await;
 
         // After disengage, status flag, indicators, and horn all default-off.
@@ -368,7 +340,8 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn lights_and_horn_pulse_synchronously() {
         let (bus, _h) = setup().await;
-        bus.inject(PANIC_SWITCH, SignalValue::Bool(true));
+        let mut ev: u16 = 0;
+        press_panic(&bus, &mut ev);
         settle(1).await;
 
         // Capture the pattern over a couple of cycles.  ON window first.
@@ -414,7 +387,8 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn alarm_status_does_not_duty_cycle() {
         let (bus, _h) = setup().await;
-        bus.inject(PANIC_SWITCH, SignalValue::Bool(true));
+        let mut ev: u16 = 0;
+        press_panic(&bus, &mut ev);
         settle(1).await;
 
         // Run through several pulse cycles and then count Vehicle.Body.Alarm.IsActive
@@ -437,6 +411,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn works_with_ignition_off() {
         let (bus, _h) = setup().await;
+        let mut ev: u16 = 0;
 
         // Ignition explicitly OFF before engaging panic.
         bus.inject(
@@ -445,7 +420,7 @@ mod tests {
         );
         settle(1).await;
 
-        bus.inject(PANIC_SWITCH, SignalValue::Bool(true));
+        press_panic(&bus, &mut ev);
         settle(1).await;
 
         assert_eq!(
@@ -464,19 +439,57 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn re_engage_while_running_is_idempotent() {
+    async fn second_press_while_running_disengages() {
+        // Post-refactor: PanicAlarm owns the engaged latch and toggles
+        // it on every distinct PanicEventNum bump.  Press 1 engages,
+        // press 2 disengages (pulse loop aborted, claims released,
+        // ALARM_STATUS=false published).
         let (bus, _h) = setup().await;
+        let mut ev: u16 = 0;
 
-        bus.inject(PANIC_SWITCH, SignalValue::Bool(true));
+        press_panic(&bus, &mut ev);
         settle(ON_MS / 2).await;
+        assert_eq!(
+            bus.latest_value(ALARM_STATUS),
+            Some(SignalValue::Bool(true))
+        );
         bus.clear_history();
 
-        // Inject TRUE again while already engaged.  Should be a no-op:
-        // no new ALARM_STATUS publish, and the running pulse loop is not
-        // restarted (no extra claim publishes).
-        bus.inject(PANIC_SWITCH, SignalValue::Bool(true));
+        // Second authenticated press → cancel.
+        press_panic(&bus, &mut ev);
         settle(1).await;
 
+        assert_eq!(
+            bus.latest_value(ALARM_STATUS),
+            Some(SignalValue::Bool(false)),
+            "second press toggles engaged latch off"
+        );
+        assert_eq!(
+            bus.latest_value(LEFT_INDICATOR),
+            Some(SignalValue::Bool(false)),
+        );
+        assert_eq!(bus.latest_value(HORN), Some(SignalValue::Bool(false)));
+    }
+
+    /// A duplicate PanicEventNum (same Uint16 value) — should never
+    /// happen from RKE but could from a misbehaving telematics source
+    /// — must be deduped: no extra toggle, alarm stays engaged.
+    #[tokio::test(start_paused = true)]
+    async fn duplicate_event_num_is_deduped() {
+        let (bus, _h) = setup().await;
+
+        // First real press — event 1.
+        bus.inject(PANIC_EVENT_NUM, SignalValue::Uint16(1));
+        settle(ON_MS / 2).await;
+        assert_eq!(
+            bus.latest_value(ALARM_STATUS),
+            Some(SignalValue::Bool(true))
+        );
+        bus.clear_history();
+
+        // Same value re-injected — must be ignored.
+        bus.inject(PANIC_EVENT_NUM, SignalValue::Uint16(1));
+        settle(1).await;
         let status_publishes = bus
             .history()
             .iter()
@@ -484,44 +497,32 @@ mod tests {
             .count();
         assert_eq!(
             status_publishes, 0,
-            "Re-engage must NOT re-publish ALARM_STATUS"
+            "duplicate event-num must not re-publish ALARM_STATUS"
         );
 
-        // Verify the loop is still actively pulsing by stepping one full
-        // cycle and checking the latched value at each known transition.
-        // Step past the first ON-window remainder + into OFF-window.
+        // Pulse loop should still be running — verify by stepping one
+        // full cycle.
         settle(ON_MS).await;
         assert_eq!(
             bus.latest_value(LEFT_INDICATOR),
             Some(SignalValue::Bool(false)),
             "after ON window expires lights should be OFF"
         );
-        assert_eq!(
-            bus.latest_value(HORN),
-            Some(SignalValue::Bool(false)),
-            "horn should be OFF in sync with lights"
-        );
-
-        // Step past the OFF window into the next ON-window.
         settle(OFF_MS).await;
         assert_eq!(
             bus.latest_value(LEFT_INDICATOR),
             Some(SignalValue::Bool(true)),
             "after OFF window lights should be ON again"
         );
-        assert_eq!(
-            bus.latest_value(HORN),
-            Some(SignalValue::Bool(true)),
-            "horn should be ON in sync with lights"
-        );
     }
 
     #[tokio::test(start_paused = true)]
     async fn unlock_feedback_cancels_running_alarm() {
         let (bus, _h) = setup().await;
+        let mut ev: u16 = 0;
 
         // Engage the alarm.
-        bus.inject(PANIC_SWITCH, SignalValue::Bool(true));
+        press_panic(&bus, &mut ev);
         settle(1).await;
         assert_eq!(
             bus.latest_value(ALARM_STATUS),
@@ -551,21 +552,19 @@ mod tests {
         );
         assert_eq!(bus.latest_value(HORN), Some(SignalValue::Bool(false)));
 
-        // PanicAlarm must self-publish the switch FALSE so internal state
-        // tracked by RKE / HMI stays in sync.
-        assert_eq!(
-            bus.latest_value(PANIC_SWITCH),
-            Some(SignalValue::Bool(false)),
-            "PanicAlarm must self-publish the switch FALSE on unlock cancel"
-        );
+        // PanicAlarm owns its own engaged latch — it must NOT write back
+        // to the panic event counter on cancel (no shared-latch smell).
+        // Verify the canonical ALARM_STATUS=false above is the only state
+        // signal we touch.
     }
 
     #[tokio::test(start_paused = true)]
     async fn lock_feedback_does_not_cancel_alarm() {
         let (bus, _h) = setup().await;
+        let mut ev: u16 = 0;
 
         // Engage the alarm.
-        bus.inject(PANIC_SWITCH, SignalValue::Bool(true));
+        press_panic(&bus, &mut ev);
         settle(1).await;
         assert_eq!(
             bus.latest_value(ALARM_STATUS),
@@ -593,11 +592,10 @@ mod tests {
         bus.inject(FEEDBACK_REQUEST, SignalValue::String("unlock".into()));
         settle(1).await;
 
-        // The watcher publishes PANIC_SWITCH=false unconditionally on every
-        // "unlock" — that's benign because PanicAlarm dedups same-state
-        // transitions.  Verify the *state* of the alarm is unchanged:
+        // Unlock feedback while alarm was never engaged is a state no-op:
         //   - no ALARM_STATUS toggle
         //   - no indicator / horn claim transitions
+        //   - no write-back to PANIC_EVENT_NUM (single-owner: RKE)
         let h = bus.history();
         assert!(
             !h.iter().any(|(s, _)| *s == ALARM_STATUS),
@@ -624,6 +622,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn panic_press_during_other_alarm_does_not_engage_panic_alarm() {
         let (bus, _h) = setup().await;
+        let mut ev: u16 = 0;
 
         // Pretend PerimeterAlarm (or any other alarm source) has just
         // asserted ALARM_STATUS=true.
@@ -631,7 +630,7 @@ mod tests {
         settle(1).await;
 
         // User presses panic — meant as "cancel the running alarm".
-        bus.inject(PANIC_SWITCH, SignalValue::Bool(true));
+        press_panic(&bus, &mut ev);
         settle(50).await;
 
         // PanicAlarm must NOT have engaged its own pulse — no claims on
@@ -639,7 +638,7 @@ mod tests {
         let h = bus.history();
         let indicator_claims_after_inject: Vec<_> = h
             .iter()
-            .skip_while(|(s, _)| *s != PANIC_SWITCH)
+            .skip_while(|(s, _)| *s != PANIC_EVENT_NUM)
             .filter(|(s, v)| *s == LEFT_INDICATOR && *v == SignalValue::Bool(true))
             .collect();
         assert!(
@@ -648,7 +647,7 @@ mod tests {
         );
         let horn_claims_after_inject: Vec<_> = h
             .iter()
-            .skip_while(|(s, _)| *s != PANIC_SWITCH)
+            .skip_while(|(s, _)| *s != PANIC_EVENT_NUM)
             .filter(|(s, v)| *s == HORN && *v == SignalValue::Bool(true))
             .collect();
         assert!(

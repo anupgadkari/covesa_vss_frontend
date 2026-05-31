@@ -32,7 +32,7 @@ use vss_bridge::signal_bus::VssPath;
 const LEFT_SIGNALING: VssPath = "Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling";
 const RIGHT_SIGNALING: VssPath = "Vehicle.Body.Lights.DirectionIndicator.Right.IsSignaling";
 const HORN: VssPath = "Vehicle.Body.Horn.IsActive";
-const PANIC_SWITCH: VssPath = "Vehicle.Simulation.KeyFob.Switch.Panic";
+const PANIC_EVENT_NUM: VssPath = "Vehicle.Controller.Alarm.PanicEventNum";
 const ALARM_STATUS: VssPath = "Vehicle.Body.Alarm.IsActive";
 
 // PassiveEntry observable outputs — the door-lock arbiter publishes
@@ -71,6 +71,10 @@ pub struct VssWorld {
     /// stack.  Tracked separately from `started` because the two
     /// stacks are unrelated and either can be active alone.
     pe_started: bool,
+    /// Monotonic counter mirroring RKE's `PanicEventNum` writer state.
+    /// Each "panic press" step bumps this and re-publishes; PanicAlarm
+    /// / PerimeterAlarm dedup on the integer value.
+    panic_event_num: u16,
 }
 
 impl std::fmt::Debug for VssWorld {
@@ -709,13 +713,16 @@ async fn panic_infrastructure(w: &mut VssWorld) {
 #[given("the panic switch is not engaged")]
 async fn given_panic_off(w: &mut VssWorld) {
     w.ensure_started().await;
-    w.inject(PANIC_SWITCH, SignalValue::Bool(false)).await;
+    // No press has happened — PanicEventNum stays at boot value (0).
+    // Nothing to publish; PanicAlarm's engaged latch is false by default.
 }
 
 #[given("the panic switch is engaged")]
 async fn given_panic_on(w: &mut VssWorld) {
     w.ensure_started().await;
-    w.inject(PANIC_SWITCH, SignalValue::Bool(true)).await;
+    w.panic_event_num = w.panic_event_num.wrapping_add(1);
+    let ev = w.panic_event_num;
+    w.inject(PANIC_EVENT_NUM, SignalValue::Uint16(ev)).await;
     // Settle into the first ON window so subsequent steps see active claims.
     settle().await;
 }
@@ -767,29 +774,40 @@ async fn given_hazard_high(w: &mut VssWorld) {
 /// the spawned `pulse_loop`'s first claim has time to traverse:
 ///   PanicAlarm task → mpsc → arbiter loop → publish_resolved → bus.publish
 /// (~8 awaits) before the first Then assertion runs.
-async fn panic_engage_helper(w: &mut VssWorld, val: bool) {
+async fn panic_press_helper(w: &mut VssWorld) {
     w.bus().clear_history();
-    w.inject(PANIC_SWITCH, SignalValue::Bool(val)).await;
+    w.panic_event_num = w.panic_event_num.wrapping_add(1);
+    let ev = w.panic_event_num;
+    w.inject(PANIC_EVENT_NUM, SignalValue::Uint16(ev)).await;
     settle().await;
     settle().await;
 }
 
-// ---- When: panic switch transitions ----
+// ---- When: panic press / re-press ----
+//
+// After the fob-button-unification refactor the simulated "transition
+// TRUE" and "transition FALSE" gestures are both *presses* — RKE bumps
+// PanicEventNum on each authenticated press and PanicAlarm toggles its
+// engaged latch internally.  Step language is kept stable to avoid
+// rewriting every feature file.
 
 #[when("Vehicle.Simulation.KeyFob.Switch.Panic transitions to TRUE")]
 async fn when_panic_engage(w: &mut VssWorld) {
-    panic_engage_helper(w, true).await;
+    panic_press_helper(w).await;
 }
 
 #[when("Vehicle.Simulation.KeyFob.Switch.Panic transitions to FALSE")]
 async fn when_panic_disengage(w: &mut VssWorld) {
-    panic_engage_helper(w, false).await;
+    panic_press_helper(w).await;
 }
 
 #[when("Vehicle.Simulation.KeyFob.Switch.Panic is set to TRUE again")]
 async fn when_panic_re_engage(w: &mut VssWorld) {
+    // Same value re-published (no event-num bump) — must be deduped by
+    // PanicAlarm; verifies the "redundant edge is a no-op" guarantee.
     w.bus().clear_history();
-    w.inject(PANIC_SWITCH, SignalValue::Bool(true)).await;
+    let ev = w.panic_event_num;
+    w.inject(PANIC_EVENT_NUM, SignalValue::Uint16(ev)).await;
 }
 
 // ---- When: panic timing windows ----
@@ -1062,12 +1080,11 @@ async fn when_lock_feedback(w: &mut VssWorld) {
 }
 
 #[then("Vehicle.Simulation.KeyFob.Switch.Panic is self-published as FALSE")]
-async fn then_panic_switch_self_published_false(w: &mut VssWorld) {
-    assert_eq!(
-        w.current_value(PANIC_SWITCH),
-        Some(SignalValue::Bool(false)),
-        "PanicAlarm must self-publish PANIC_SWITCH = FALSE on unlock cancel"
-    );
+async fn then_panic_switch_self_published_false(_w: &mut VssWorld) {
+    // No-op: post-refactor, PanicAlarm owns the engaged latch and does
+    // NOT write back to RKE's PanicEventNum signal (single-owner
+    // discipline).  ALARM_STATUS=false is the assertion that matters,
+    // covered by sibling Then-steps.
 }
 
 #[then("Vehicle.Body.Alarm.IsActive remains TRUE")]
