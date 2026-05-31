@@ -54,7 +54,8 @@ use futures::stream::StreamExt;
 use tokio::time::sleep;
 
 use crate::arbiter::{DoorLockArbiter, DoorLockRequest, LockCommand, FEEDBACK_REQUEST};
-use crate::config::{DriverDoorSide, PlatformConfig};
+use crate::config::PlatformConfig;
+use crate::plant_models::side::PhysicalSide;
 use crate::ipc_message::{FeatureId, SignalValue};
 use crate::signal_bus::{SignalBus, VssPath};
 
@@ -118,13 +119,8 @@ fn is_armable_lock_state(status: &str) -> bool {
 }
 
 /// Which physical side of Row 1 is the driver door under the current
-/// cal.  Returned as a label ("Left" / "Right") so the dispatch site
-/// can compare against the button it just observed.  Reads from the
-/// dealer cal because that's where `driver_door_side` lives today —
-/// see the migration note in `config.rs`.
-fn driver_side(cfg: &PlatformConfig) -> DriverDoorSide {
-    cfg.dealer_config().driver_door_side
-}
+/// vehicle orientation.  Returned as a `PhysicalSide` so the dispatch
+/// site can compare against the button it just observed.
 
 pub struct SlamLock<B: SignalBus> {
     bus: Arc<B>,
@@ -257,10 +253,10 @@ impl<B: SignalBus + Send + Sync + 'static> SlamLock<B> {
         }
         // Determine driver vs passenger side for stage-1 routing.  RHD
         // swaps which physical row1 door is the driver side.
-        let driver = driver_side(&self.cfg);
+        let driver = self.cfg.orientation().driver_physical();
         let pressed_side_is_driver = matches!(
             (side, driver),
-            (SideLabel::Left, DriverDoorSide::Left) | (SideLabel::Right, DriverDoorSide::Right),
+            (SideLabel::Left, PhysicalSide::Left) | (SideLabel::Right, PhysicalSide::Right),
         );
         // Driver-side trim respects two-stage; passenger-side trim is
         // always full UnlockAll (passenger-bypass — same rule as
@@ -339,7 +335,7 @@ mod tests {
     use super::*;
     use crate::adapters::mock::MockBus;
     use crate::arbiter::door_lock_arbiter;
-    use crate::config::VehicleLineCal;
+    use crate::config::{DriverDoorSide, VehicleLineCal};
 
     /// Advance the paused tokio clock past the inversion delay and
     /// yield enough times for the dispatch + arbiter + plant-model

@@ -94,7 +94,8 @@ use std::sync::Arc;
 use futures::stream::{select_all, StreamExt};
 
 use crate::arbiter::{DoorLockArbiter, DoorLockRequest, LockCommand, FEEDBACK_REQUEST};
-use crate::config::{DriverDoorSide, PlatformConfig};
+use crate::config::PlatformConfig;
+use crate::plant_models::side::PhysicalSide;
 use crate::ipc_message::{FeatureId, SignalValue};
 use crate::signal_bus::{SignalBus, VssPath};
 
@@ -277,10 +278,10 @@ impl<B: SignalBus + Send + Sync + 'static> DoorTrimButton<B> {
         if lock_status == "DRIVER_UNLOCKED" {
             return Some(LockCommand::UnlockAll);
         }
-        let driver = self.cfg.dealer_config().driver_door_side;
+        let driver = self.cfg.orientation().driver_physical();
         let pressed_side_is_driver = matches!(
             (side, driver),
-            (SideLabel::Left, DriverDoorSide::Left) | (SideLabel::Right, DriverDoorSide::Right),
+            (SideLabel::Left, PhysicalSide::Left) | (SideLabel::Right, PhysicalSide::Right),
         );
         if pressed_side_is_driver && self.cfg.dealer_config().two_stage_unlock {
             Some(LockCommand::UnlockDriver)
@@ -330,7 +331,7 @@ mod tests {
     use crate::adapters::mock::MockBus;
     use crate::arbiter::door_lock_arbiter;
 
-    use crate::config::VehicleLineCal;
+    use crate::config::{DriverDoorSide, VehicleLineCal};
 
     async fn setup() -> Arc<MockBus> {
         // Default cal: slam_lock_protect = true (EU defensive default).

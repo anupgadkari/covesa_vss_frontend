@@ -192,16 +192,17 @@ impl<B: SignalBus + Send + Sync + 'static> DoorLockPlantModel<B> {
         self
     }
 
-    /// Index of the driver door per the current dealer cal.  Defaults
-    /// to Row1.Left when no `PlatformConfig` is attached (LHD / tests).
+    /// Index of the driver door per the current vehicle orientation.
+    /// Defaults to Row1.Left when no `PlatformConfig` is attached
+    /// (LHD / tests).
     fn driver_door_idx(&self) -> usize {
-        use crate::config::DriverDoorSide;
+        use crate::plant_models::side::PhysicalSide;
         match self
             .cfg
             .as_ref()
-            .map(|c| c.dealer_config().driver_door_side)
+            .map(|c| c.orientation().driver_physical())
         {
-            Some(DriverDoorSide::Right) => ROW1_RIGHT,
+            Some(PhysicalSide::Right) => ROW1_RIGHT,
             _ => ROW1_LEFT,
         }
     }
