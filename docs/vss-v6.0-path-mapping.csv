@@ -1,5 +1,5 @@
 original,target,category,note
-Body.ChargeLid.IsOpen,Vehicle.Controller.Body.ChargeLid.IsOpen,controller-namespace,no VSS equivalent
+Body.ChargeLid.IsOpen,Vehicle.Body.ChargeLid.IsOpen,vehicle-state-overlay,moved out of Vehicle.Controller.* — observable vehicle state
 Body.Chime.IsActive,Vehicle.Controller.Body.Chime.IsActive,controller-namespace,aggregate or actuator-intent signal; no VSS equivalent
 Body.Chime.IsSounding,Vehicle.Controller.Body.Chime.IsSounding,controller-namespace,aggregate or actuator-intent signal; no VSS equivalent
 Body.Connectivity.BleLock,Vehicle.Simulation.Connectivity.BleLock,simulation,project HMI connectivity flag; no VSS equivalent
@@ -65,10 +65,10 @@ Body.Doors.Row2.Right.LatchStatus,Vehicle.Cabin.Door.Row2.PassengerSide.LatchSta
 Body.Doors.Row2.Right.Soldier.IsUnlocked,Vehicle.Cabin.Door.Row2.PassengerSide.Soldier.IsUnlocked,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
 Body.Doors.Row2.Right.Window.MotorDirection,Vehicle.Cabin.Door.Row2.PassengerSide.Window.MotorDirection,project-door-side-extension,mirrors VSS Door schema; suffix not in v6.0 catalog
 Body.Doors.Row2.Right.Window.Position,Vehicle.Cabin.Door.Row2.PassengerSide.Window.Position,canonical-door-side-rename,Row2.Right → Row2.PassengerSide (LHD assumed; flips on RHD)
-Body.FuelLid.IsOpen,Vehicle.Controller.Body.FuelLid.IsOpen,controller-namespace,no VSS equivalent
+Body.FuelLid.IsOpen,Vehicle.Body.FuelLid.IsOpen,vehicle-state-overlay,moved out of Vehicle.Controller.* — observable vehicle state
 Body.Hood.CloseCmd,Vehicle.Controller.Body.Hood.CloseCmd,controller-extension,actuator-intent; VSS models Position/Switch state only
 Body.Hood.IsOpen,Vehicle.Body.Hood.IsOpen,canonical-with-vehicle-prefix,
-Body.Hood.LatchState,Vehicle.Controller.Body.Hood.LatchState,controller-extension,internal latch state; VSS has no equivalent
+Body.Hood.LatchState,Vehicle.Body.Hood.LatchState,vehicle-state-overlay,moved out of Vehicle.Controller.* — observable vehicle state
 Body.Hood.OpenCmd,Vehicle.Controller.Body.Hood.OpenCmd,controller-extension,actuator-intent; VSS models Position/Switch state only
 Body.Horn.IsActive,Vehicle.Body.Horn.IsActive,canonical-with-vehicle-prefix,
 Body.Lights.AmbientLightSensor.Illuminance,Vehicle.Controller.Body.Lights.AmbientLightSensor.Illuminance,controller-namespace,OEM custom — not in standard VSS
@@ -179,40 +179,40 @@ Body.Sunroof.MoveCmd,Vehicle.Controller.Sunroof.MoveCmd,controller-extension,act
 Body.Sunroof.Position,Vehicle.Cabin.Sunroof.Position,canonical-restructured,Body.Sunroof → Cabin.Sunroof
 Body.Sunroof.Shade.MoveCmd,Vehicle.Controller.Sunroof.Shade.MoveCmd,controller-extension,actuator-intent
 Body.Sunroof.Shade.Position,Vehicle.Cabin.Sunroof.Shade.Position,canonical-restructured,Body.Sunroof.Shade → Cabin.Sunroof.Shade
-Body.Switches.DoorTrim.Row1.Left.LockButton,Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.LockButton,controller-namespace,bridge-internal switch input; no VSS equivalent
-Body.Switches.DoorTrim.Row1.Left.UnlockButton,Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.UnlockButton,controller-namespace,bridge-internal switch input; no VSS equivalent
-Body.Switches.DoorTrim.Row1.Right.LockButton,Vehicle.Controller.Body.Switches.DoorTrim.Row1.Right.LockButton,controller-namespace,bridge-internal switch input; no VSS equivalent
-Body.Switches.DoorTrim.Row1.Right.UnlockButton,Vehicle.Controller.Body.Switches.DoorTrim.Row1.Right.UnlockButton,controller-namespace,bridge-internal switch input; no VSS equivalent
-Body.Switches.DoorTrim.Row2.Left.LockButton,Vehicle.Controller.Body.Switches.DoorTrim.Row2.Left.LockButton,controller-namespace,bridge-internal switch input; no VSS equivalent
-Body.Switches.DoorTrim.Row2.Right.LockButton,Vehicle.Controller.Body.Switches.DoorTrim.Row2.Right.LockButton,controller-namespace,bridge-internal switch input; no VSS equivalent
-Body.Switches.Fog.Front.IsEngaged,Vehicle.Controller.Body.Switches.Fog.Front.IsEngaged,controller-namespace,bridge-internal switch input; no VSS equivalent
-Body.Switches.Fog.Rear.IsEngaged,Vehicle.Controller.Body.Switches.Fog.Rear.IsEngaged,controller-namespace,bridge-internal switch input; no VSS equivalent
-Body.Switches.Hazard.IsEngaged,Vehicle.Controller.Body.Switches.Hazard.IsEngaged,controller-namespace,bridge-internal switch input; no VSS equivalent
-Body.Switches.HighBeam.IsEngaged,Vehicle.Controller.Body.Switches.HighBeam.IsEngaged,controller-namespace,bridge-internal switch input; no VSS equivalent
-Body.Switches.Hood.Release.IsPulled,Vehicle.Controller.Body.Switches.Hood.Release.IsPulled,controller-namespace,bridge-internal switch input; no VSS equivalent
-Body.Switches.Horn.IsPressed,Vehicle.Controller.Body.Switches.Horn.IsPressed,controller-namespace,bridge-internal switch input; no VSS equivalent
-Body.Switches.IgnitionCylinder.Position,Vehicle.Controller.Body.Switches.IgnitionCylinder.Position,controller-namespace,bridge-internal switch input; no VSS equivalent
+Body.Switches.DoorTrim.Row1.Left.LockButton,Vehicle.Cabin.Door.Row1.Left.Switch.Lock,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
+Body.Switches.DoorTrim.Row1.Left.UnlockButton,Vehicle.Cabin.Door.Row1.Left.Switch.Unlock,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
+Body.Switches.DoorTrim.Row1.Right.LockButton,Vehicle.Cabin.Door.Row1.Right.Switch.Lock,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
+Body.Switches.DoorTrim.Row1.Right.UnlockButton,Vehicle.Cabin.Door.Row1.Right.Switch.Unlock,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
+Body.Switches.DoorTrim.Row2.Left.LockButton,Vehicle.Cabin.Door.Row2.Left.Switch.Lock,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
+Body.Switches.DoorTrim.Row2.Right.LockButton,Vehicle.Cabin.Door.Row2.Right.Switch.Lock,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
+Body.Switches.Fog.Front.IsEngaged,Vehicle.Body.Lights.Fog.Front.Switch.IsEngaged,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
+Body.Switches.Fog.Rear.IsEngaged,Vehicle.Body.Lights.Fog.Rear.Switch.IsEngaged,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
+Body.Switches.Hazard.IsEngaged,Vehicle.Body.Lights.Hazard.Switch.IsEngaged,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
+Body.Switches.HighBeam.IsEngaged,Vehicle.Body.Lights.Beam.High.Switch.IsEngaged,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
+Body.Switches.Hood.Release.IsPulled,Vehicle.Body.Hood.ReleaseSwitch.IsPulled,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
+Body.Switches.Horn.IsPressed,Vehicle.Body.Horn.Switch.IsPressed,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
+Body.Switches.IgnitionCylinder.Position,Vehicle.PowerMode.IgnitionCylinder.Position,switch-input-overlay,power-mode control — grouped under Vehicle.PowerMode.* (pairs with the canonical Vehicle.LowVoltageSystemState)
 Body.Switches.IgnitionCylinder.RemovalInhibited,Vehicle.Controller.Body.Switches.IgnitionCylinder.RemovalInhibited,controller-namespace,bridge-internal switch input; no VSS equivalent
-Body.Switches.Keyfob.LockButton,Vehicle.Controller.Body.Switches.Keyfob.LockButton,controller-namespace,bridge-internal switch input; no VSS equivalent
-Body.Switches.Mirror.Direction,Vehicle.Controller.Body.Switches.Mirror.Direction,controller-namespace,bridge-internal switch input; no VSS equivalent
-Body.Switches.Mirror.Fold,Vehicle.Controller.Body.Switches.Mirror.Fold,controller-namespace,bridge-internal switch input; no VSS equivalent
-Body.Switches.Mirror.Select,Vehicle.Controller.Body.Switches.Mirror.Select,controller-namespace,bridge-internal switch input; no VSS equivalent
-Body.Switches.Panic.IsEngaged,Vehicle.Controller.Body.Switches.Panic.IsEngaged,controller-namespace,bridge-internal switch input; no VSS equivalent
-Body.Switches.PowerChildLock.IsPressed,Vehicle.Controller.Body.Switches.PowerChildLock.IsPressed,controller-namespace,bridge-internal switch input; no VSS equivalent
+Body.Switches.Keyfob.LockButton,Vehicle.Simulation.KeyFob.Switch.Lock,simulation,"fob-mounted switch — input from the simulated keyfob, not a vehicle component"
+Body.Switches.Mirror.Direction,Vehicle.Body.Mirrors.Switch.Direction,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
+Body.Switches.Mirror.Fold,Vehicle.Body.Mirrors.Switch.Fold,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
+Body.Switches.Mirror.Select,Vehicle.Body.Mirrors.Switch.Select,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
+Body.Switches.Panic.IsEngaged,Vehicle.Simulation.KeyFob.Switch.Panic,simulation,"fob-mounted switch — input from the simulated keyfob, not a vehicle component"
+Body.Switches.PowerChildLock.IsPressed,Vehicle.Cabin.ChildLock.Switch.IsPressed,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
 Body.Switches.StartStop.BacklightDutyCycle,Vehicle.Controller.Body.Switches.StartStop.BacklightDutyCycle,controller-namespace,bridge-internal switch input; no VSS equivalent
 Body.Switches.StartStop.BacklightIntensity,Vehicle.Controller.Body.Switches.StartStop.BacklightIntensity,controller-namespace,bridge-internal switch input; no VSS equivalent
-Body.Switches.StartStop.IsPressed,Vehicle.Controller.Body.Switches.StartStop.IsPressed,controller-namespace,bridge-internal switch input; no VSS equivalent
-Body.Switches.Sunroof.Detent,Vehicle.Controller.Body.Switches.Sunroof.Detent,controller-namespace,bridge-internal switch input; no VSS equivalent
-Body.Switches.Trunk.Release.IsPressed,Vehicle.Controller.Body.Switches.Trunk.Release.IsPressed,controller-namespace,bridge-internal switch input; no VSS equivalent
-Body.Switches.TurnIndicator.Direction,Vehicle.Controller.Body.Switches.TurnIndicator.Direction,controller-namespace,bridge-internal switch input; no VSS equivalent
-Body.Switches.Window.DriverMaster.Row1.Left.Detent,Vehicle.Controller.Body.Switches.Window.DriverMaster.Row1.Left.Detent,controller-namespace,bridge-internal switch input; no VSS equivalent
-Body.Switches.Window.DriverMaster.Row1.Right.Detent,Vehicle.Controller.Body.Switches.Window.DriverMaster.Row1.Right.Detent,controller-namespace,bridge-internal switch input; no VSS equivalent
-Body.Switches.Window.DriverMaster.Row2.Left.Detent,Vehicle.Controller.Body.Switches.Window.DriverMaster.Row2.Left.Detent,controller-namespace,bridge-internal switch input; no VSS equivalent
-Body.Switches.Window.DriverMaster.Row2.Right.Detent,Vehicle.Controller.Body.Switches.Window.DriverMaster.Row2.Right.Detent,controller-namespace,bridge-internal switch input; no VSS equivalent
-Body.Switches.Window.Local.Row1.Left.Detent,Vehicle.Controller.Body.Switches.Window.Local.Row1.Left.Detent,controller-namespace,bridge-internal switch input; no VSS equivalent
-Body.Switches.Window.Local.Row1.Right.Detent,Vehicle.Controller.Body.Switches.Window.Local.Row1.Right.Detent,controller-namespace,bridge-internal switch input; no VSS equivalent
-Body.Switches.Window.Local.Row2.Left.Detent,Vehicle.Controller.Body.Switches.Window.Local.Row2.Left.Detent,controller-namespace,bridge-internal switch input; no VSS equivalent
-Body.Switches.Window.Local.Row2.Right.Detent,Vehicle.Controller.Body.Switches.Window.Local.Row2.Right.Detent,controller-namespace,bridge-internal switch input; no VSS equivalent
+Body.Switches.StartStop.IsPressed,Vehicle.PowerMode.StartStopSwitch.IsPressed,switch-input-overlay,power-mode control — grouped under Vehicle.PowerMode.* (pairs with the canonical Vehicle.LowVoltageSystemState)
+Body.Switches.Sunroof.Detent,Vehicle.Cabin.Sunroof.Switch.Detent,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
+Body.Switches.Trunk.Release.IsPressed,Vehicle.Body.Trunk.Rear.ReleaseSwitch.IsPressed,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
+Body.Switches.TurnIndicator.Direction,Vehicle.Body.Lights.DirectionIndicator.Switch.Direction,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
+Body.Switches.Window.DriverMaster.Row1.Left.Detent,Vehicle.Cabin.Door.Row1.Left.Window.Switch.MasterDetent,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
+Body.Switches.Window.DriverMaster.Row1.Right.Detent,Vehicle.Cabin.Door.Row1.Right.Window.Switch.MasterDetent,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
+Body.Switches.Window.DriverMaster.Row2.Left.Detent,Vehicle.Cabin.Door.Row2.Left.Window.Switch.MasterDetent,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
+Body.Switches.Window.DriverMaster.Row2.Right.Detent,Vehicle.Cabin.Door.Row2.Right.Window.Switch.MasterDetent,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
+Body.Switches.Window.Local.Row1.Left.Detent,Vehicle.Cabin.Door.Row1.Left.Window.Switch.LocalDetent,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
+Body.Switches.Window.Local.Row1.Right.Detent,Vehicle.Cabin.Door.Row1.Right.Window.Switch.LocalDetent,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
+Body.Switches.Window.Local.Row2.Left.Detent,Vehicle.Cabin.Door.Row2.Left.Window.Switch.LocalDetent,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
+Body.Switches.Window.Local.Row2.Right.Detent,Vehicle.Cabin.Door.Row2.Right.Window.Switch.LocalDetent,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
 Body.Trunk.CloseCmd,Vehicle.Controller.Body.Trunk.Rear.CloseCmd,controller-extension,actuator-intent
 Body.Trunk.ExteriorButton.IsPressed,Vehicle.Controller.Body.Trunk.Rear.ExteriorButton.IsPressed,controller-extension,exterior trunk-pop button input
 Body.Trunk.IsLocked,Vehicle.Body.Trunk.Rear.IsLocked,canonical-restructured,VSS Front/Rear split
@@ -238,7 +238,7 @@ Cabin.Lights.Ambient.Intensity,Vehicle.Controller.Cabin.Lights.Ambient.Intensity
 Cabin.Lights.Dome.SwitchPosition,Vehicle.Controller.Cabin.Light.Dome.SwitchPosition,controller-extension,3-position dome switch input; VSS has IsDomeOn state only
 Cabin.Lights.IsDomeOn,Vehicle.Cabin.Light.IsDomeOn,canonical-restructured,Lights → Light
 Cabin.Lights.IsGloveBoxOn,Vehicle.Cabin.Light.IsGloveBoxOn,canonical-restructured,Lights → Light
-Cabin.LockStatus,Vehicle.Controller.Cabin.LockStatus,controller-namespace,aggregate or actuator-intent signal; no VSS equivalent
+Cabin.LockStatus,Vehicle.Cabin.LockStatus,vehicle-state-overlay,moved out of Vehicle.Controller.* — observable vehicle state
 Cabin.LockStatus.EventNum,Vehicle.Controller.Cabin.LockStatus.EventNum,controller-namespace,aggregate or actuator-intent signal; no VSS equivalent
 Cabin.LockStatus.LastRequestor,Vehicle.Controller.Cabin.LockStatus.LastRequestor,controller-namespace,aggregate or actuator-intent signal; no VSS equivalent
 Cabin.Seat.Row1.Left.HeatingLevel,Vehicle.Cabin.Seat.Row1.DriverSide.HeatingCooling,canonical-restructured,"Left → DriverSide; .HeatingLevel → .HeatingCooling (positive = heat, negative = cool in VSS)"
@@ -248,11 +248,11 @@ Cabin.Seat.Row1.Right.HeatingLevel,Vehicle.Cabin.Seat.Row1.PassengerSide.Heating
 Cabin.Seat.Row1.Right.IsHeatingOn,Vehicle.Controller.Cabin.Seat.Row1.PassengerSide.IsHeatingOn,controller-extension,see Left
 Cabin.Seat.Row1.Right.IsVentilationOn,Vehicle.Controller.Cabin.Seat.Row1.PassengerSide.IsVentilationOn,controller-extension,see Left
 Cabin.ValetMode.IsActive,Vehicle.Controller.Cabin.ValetMode.IsActive,controller-namespace,OEM valet-mode flag; not in VSS
-Chassis.Brake.IsApplied,Vehicle.Controller.Chassis.Brake.IsApplied,controller-extension,boolean brake-pressed; VSS only exposes PedalPosition (0-100)
+Chassis.Brake.IsApplied,Vehicle.Chassis.Brake.IsApplied,vehicle-state-overlay,moved out of Vehicle.Controller.* — observable vehicle state
 Chassis.Brake.PedalPosition,Vehicle.Chassis.Brake.PedalPosition,canonical-with-vehicle-prefix,
 Chassis.ParkingBrake.IsEngaged,Vehicle.Chassis.ParkingBrake.IsEngaged,canonical-with-vehicle-prefix,
-Vehicle.ADAS.HighBeam.OncomingVehicleDetected,Vehicle.Controller.ADAS.HighBeam.OncomingVehicleDetected,controller-namespace,AutoHighBeam OEM input; VSS has no oncoming-vehicle-detection signal
-Vehicle.Body.Alarm.IsActive,Vehicle.Controller.Alarm.IsActive,controller-namespace,OEM alarm state; VSS has no alarm taxonomy
+Vehicle.ADAS.HighBeam.OncomingVehicleDetected,Vehicle.ADAS.HighBeam.OncomingVehicleDetected,vehicle-state-overlay,moved out of Vehicle.Controller.* — observable vehicle state
+Vehicle.Body.Alarm.IsActive,Vehicle.Body.Alarm.IsActive,vehicle-state-overlay,moved out of Vehicle.Controller.* — observable vehicle state
 Vehicle.Body.Alarm.State,Vehicle.Controller.Alarm.State,controller-namespace,OEM alarm FSM string (DISARMED/PRE_ARMED/ARMED/ACTIVATED)
 Vehicle.Cabin.Infotainment.HMI.DayNightMode,Vehicle.Cabin.Infotainment.HMI.DayNightMode,canonical-as-is,
 Vehicle.Chassis.Axle.Row1.Wheel.Left.Tire.IsPressureLow,Vehicle.Chassis.Axle.Row1.Wheel.Left.Tire.IsPressureLow,canonical-as-is,
@@ -261,6 +261,6 @@ Vehicle.Chassis.Axle.Row2.Wheel.Left.Tire.IsPressureLow,Vehicle.Chassis.Axle.Row
 Vehicle.Chassis.Axle.Row2.Wheel.Right.Tire.IsPressureLow,Vehicle.Chassis.Axle.Row2.Wheel.Right.Tire.IsPressureLow,canonical-as-is,
 Vehicle.LowVoltageSystemState,Vehicle.LowVoltageSystemState,canonical-as-is,
 Vehicle.Powertrain.Type,Vehicle.Powertrain.Type,canonical-as-is,
-Vehicle.Safety.CrashDetected,Vehicle.Controller.Safety.CrashDetected,controller-namespace,safety-monitor signal; VSS exposes Vehicle.Service.IsServiceDue and ADAS faults but no general crash flag
+Vehicle.Safety.CrashDetected,Vehicle.CrashDetected,vehicle-state-overlay,moved out of Vehicle.Controller.* — observable vehicle state
 Vehicle.Speed,Vehicle.Speed,canonical-as-is,
 Vehicle.Starting.ImmobilizerStatus,Vehicle.Controller.Starting.ImmobilizerStatus,controller-namespace,PEPS immobiliser FSM; not in VSS

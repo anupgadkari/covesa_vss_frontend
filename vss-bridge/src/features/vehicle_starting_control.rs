@@ -34,9 +34,9 @@
 //!
 //! # Subscriptions
 //!
-//! - `Vehicle.Controller.Body.Switches.StartStop.IsPressed` (Bool, PEPS only)
-//! - `Vehicle.Controller.Body.Switches.IgnitionCylinder.Position` (String, KeyCylinder only)
-//! - `Vehicle.Controller.Chassis.Brake.IsApplied` (Bool)
+//! - `Vehicle.PowerMode.StartStopSwitch.IsPressed` (Bool, PEPS only)
+//! - `Vehicle.PowerMode.IgnitionCylinder.Position` (String, KeyCylinder only)
+//! - `Vehicle.Chassis.Brake.IsApplied` (Bool)
 //!
 //! # Out of scope (deferred)
 //!
@@ -59,9 +59,9 @@ use crate::signal_bus::{SignalBus, VssPath};
 
 // ── Signal constants ───────────────────────────────────────────────────────
 
-const START_STOP_IN: VssPath = "Vehicle.Controller.Body.Switches.StartStop.IsPressed";
-const CYLINDER_IN: VssPath = "Vehicle.Controller.Body.Switches.IgnitionCylinder.Position";
-const BRAKE_IN: VssPath = "Vehicle.Controller.Chassis.Brake.IsApplied";
+const START_STOP_IN: VssPath = "Vehicle.PowerMode.StartStopSwitch.IsPressed";
+const CYLINDER_IN: VssPath = "Vehicle.PowerMode.IgnitionCylinder.Position";
+const BRAKE_IN: VssPath = "Vehicle.Chassis.Brake.IsApplied";
 const CURRENT_GEAR_IN: VssPath = "Powertrain.Transmission.CurrentGear";
 /// NFC auth bypass — published by `NfcEntry` on a start-button NFC
 /// tap.  Stays `true` for a short window; while it's true, a PEPS

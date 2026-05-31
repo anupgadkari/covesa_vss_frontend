@@ -3,7 +3,7 @@
 //!
 //! ```text
 //!  HMI driver-master button
-//!      │  Vehicle.Controller.Body.Switches.PowerChildLock.IsPressed  (momentary)
+//!      │  Vehicle.Cabin.ChildLock.Switch.IsPressed  (momentary)
 //!      ▼
 //!  PowerChildLock feature              ← this module
 //!      │
@@ -44,7 +44,7 @@ use futures::StreamExt;
 use crate::ipc_message::SignalValue;
 use crate::signal_bus::{SignalBus, VssPath};
 
-const PRESS: VssPath = "Vehicle.Controller.Body.Switches.PowerChildLock.IsPressed";
+const PRESS: VssPath = "Vehicle.Cabin.ChildLock.Switch.IsPressed";
 const MASTER: VssPath = "Vehicle.Controller.Body.PowerChildLock.MasterStatus";
 const PER_DOOR: [VssPath; 2] = [
     "Vehicle.Cabin.Door.Row2.Left.IsChildLockActive",

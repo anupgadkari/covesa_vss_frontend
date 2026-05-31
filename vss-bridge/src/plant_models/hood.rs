@@ -2,12 +2,12 @@
 //!
 //! ```text
 //!  HMI dash hood-release lever            HMI top-view click on hood
-//!      │  Vehicle.Controller.Body.Switches.Hood.Release.IsPulled │ Vehicle.Controller.Body.Hood.OpenCmd
+//!      │  Vehicle.Body.Hood.ReleaseSwitch.IsPulled │ Vehicle.Controller.Body.Hood.OpenCmd
 //!      │  (rising-edge pulses)                │ Vehicle.Controller.Body.Hood.CloseCmd
 //!      ▼                                      ▼
 //!  HoodPlantModel          ← this module
 //!      │  publishes:
-//!      │    Vehicle.Controller.Body.Hood.LatchState  ("LATCHED" | "HALF_LATCHED" | "OPEN")
+//!      │    Vehicle.Body.Hood.LatchState  ("LATCHED" | "HALF_LATCHED" | "OPEN")
 //!      │    Vehicle.Body.Hood.IsOpen      (true iff LatchState == "OPEN")
 //!      ▼
 //!  SignalBus → WsBridge → HMI
@@ -55,9 +55,9 @@ use crate::signal_bus::SignalBus;
 
 const OPEN_CMD: &str = "Vehicle.Controller.Body.Hood.OpenCmd";
 const CLOSE_CMD: &str = "Vehicle.Controller.Body.Hood.CloseCmd";
-const RELEASE_PULL: &str = "Vehicle.Controller.Body.Switches.Hood.Release.IsPulled";
+const RELEASE_PULL: &str = "Vehicle.Body.Hood.ReleaseSwitch.IsPulled";
 const IS_OPEN: &str = "Vehicle.Body.Hood.IsOpen";
-const LATCH_STATE: &str = "Vehicle.Controller.Body.Hood.LatchState";
+const LATCH_STATE: &str = "Vehicle.Body.Hood.LatchState";
 
 /// Window between the two release-lever pulls required to advance
 /// from `LATCHED` to `HALF_LATCHED`.

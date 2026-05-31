@@ -8,7 +8,7 @@
 //! # Behaviour
 //!
 //! On a rising edge of `Vehicle.Controller.Body.Trunk.Rear.ExteriorButton.IsPressed`, branch
-//! on the cached `Vehicle.Controller.Cabin.LockStatus` and `Vehicle.Controller.Cabin.ValetMode.IsActive`:
+//! on the cached `Vehicle.Cabin.LockStatus` and `Vehicle.Controller.Cabin.ValetMode.IsActive`:
 //!
 //! | Cabin lock state                | Valet | Action                                              |
 //! |---------------------------------|:-----:|-----------------------------------------------------|
@@ -32,8 +32,8 @@
 //!
 //! # Lock-state independence
 //!
-//! Trunk-only open never publishes `Vehicle.Controller.Cabin.LockStatus` or
-//! `Vehicle.Controller.Cabin.LockStatus.LastRequestor`.  AutoRelock's external-source
+//! Trunk-only open never publishes `Vehicle.Cabin.LockStatus` or
+//! `Vehicle.Cabin.LockStatus.LastRequestor`.  AutoRelock's external-source
 //! filter never fires on a trunk press, and the cabin lock indicator
 //! stays consistent across a "pop-trunk-while-locked" sequence.
 //!
@@ -61,7 +61,7 @@ use crate::signal_bus::{SignalBus, VssPath};
 const FEATURE_ID: FeatureId = FeatureId::ExteriorTrunkButton;
 
 const BUTTON: VssPath = "Vehicle.Controller.Body.Trunk.Rear.ExteriorButton.IsPressed";
-const LOCK_STATUS: VssPath = "Vehicle.Controller.Cabin.LockStatus";
+const LOCK_STATUS: VssPath = "Vehicle.Cabin.LockStatus";
 const VALET_MODE: VssPath = "Vehicle.Controller.Cabin.ValetMode.IsActive";
 
 pub struct ExteriorTrunkButton<B: SignalBus> {
@@ -290,7 +290,7 @@ mod tests {
         );
         assert!(
             !lock_status_was_published(&bus),
-            "trunk-only open must not mutate Vehicle.Controller.Cabin.LockStatus"
+            "trunk-only open must not mutate Vehicle.Cabin.LockStatus"
         );
     }
 
@@ -356,7 +356,7 @@ mod tests {
         );
         assert!(
             !lock_status_was_published(&bus),
-            "locked auth path must not mutate Vehicle.Controller.Cabin.LockStatus"
+            "locked auth path must not mutate Vehicle.Cabin.LockStatus"
         );
     }
 

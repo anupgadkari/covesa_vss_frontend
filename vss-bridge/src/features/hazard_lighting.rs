@@ -2,7 +2,7 @@
 //! driver engages the physical hazard switch.
 //!
 //! Subscribes to:
-//!   - Vehicle.Controller.Body.Switches.Hazard.IsEngaged (overlay sensor — physical switch)
+//!   - Vehicle.Body.Lights.Hazard.Switch.IsEngaged (overlay sensor — physical switch)
 //!
 //! Outputs (via Lighting arbiter):
 //!   - Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling  @ HIGH (3)
@@ -26,7 +26,7 @@ use crate::ipc_message::{FeatureId, Priority, SignalValue};
 use crate::signal_bus::{SignalBus, VssPath};
 
 /// Physical hazard switch input (overlay signal).
-const HAZARD_SWITCH: VssPath = "Vehicle.Controller.Body.Switches.Hazard.IsEngaged";
+const HAZARD_SWITCH: VssPath = "Vehicle.Body.Lights.Hazard.Switch.IsEngaged";
 
 /// Actuator outputs — both direction indicators.
 const LEFT_INDICATOR: VssPath = "Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling";

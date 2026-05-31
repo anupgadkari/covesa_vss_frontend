@@ -4,7 +4,7 @@
 //!
 //! # Behaviour
 //!
-//! On a rising edge of `Vehicle.Controller.Body.Switches.Trunk.Release.IsPressed`,
+//! On a rising edge of `Vehicle.Body.Trunk.Rear.ReleaseSwitch.IsPressed`,
 //! pulse `Vehicle.Controller.Body.Trunk.Rear.OpenCmd` through the **trunk arbiter**.  No
 //! lock-state or auth gate — the user is already inside the cabin,
 //! which is the trust boundary.  Valet mode is enforced at the
@@ -33,7 +33,7 @@ use crate::ipc_message::{FeatureId, Priority, SignalValue};
 use crate::signal_bus::{SignalBus, VssPath};
 
 const FEATURE_ID: FeatureId = FeatureId::CabinTrunkRelease;
-const SWITCH: VssPath = "Vehicle.Controller.Body.Switches.Trunk.Release.IsPressed";
+const SWITCH: VssPath = "Vehicle.Body.Trunk.Rear.ReleaseSwitch.IsPressed";
 
 pub struct CabinTrunkRelease<B: SignalBus> {
     bus: Arc<B>,
@@ -181,7 +181,7 @@ mod tests {
         // mistakenly add a lock-state gate later.
         let bus = setup().await;
         bus.inject(
-            "Vehicle.Controller.Cabin.LockStatus",
+            "Vehicle.Cabin.LockStatus",
             SignalValue::String("LOCKED".into()),
         );
         settle().await;

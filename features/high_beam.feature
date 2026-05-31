@@ -7,18 +7,18 @@ Feature: High Beam Headlamps
   # -------------------------------------------------------------------------
   # Requirements
   # -------------------------------------------------------------------------
-  # REQ-HIGH-001: When Vehicle.Controller.Body.Switches.HighBeam.IsEngaged transitions to TRUE,
+  # REQ-HIGH-001: When Vehicle.Body.Lights.Beam.High.Switch.IsEngaged transitions to TRUE,
   #               the feature SHALL request
   #               Vehicle.Body.Lights.Beam.High.IsOn = TRUE via the Lighting arbiter
   #               at priority MEDIUM (2).
   #
-  # REQ-HIGH-002: When Vehicle.Controller.Body.Switches.HighBeam.IsEngaged transitions to FALSE,
+  # REQ-HIGH-002: When Vehicle.Body.Lights.Beam.High.Switch.IsEngaged transitions to FALSE,
   #               the feature SHALL request
   #               Vehicle.Body.Lights.Beam.High.IsOn = FALSE via the Lighting arbiter
   #               at priority MEDIUM (2).
   #
   # REQ-HIGH-003: The high beam feature SHALL subscribe to the physical stalk
-  #               input (Vehicle.Controller.Body.Switches.HighBeam.IsEngaged), NOT the actuator
+  #               input (Vehicle.Body.Lights.Beam.High.Switch.IsEngaged), NOT the actuator
   #               output.
   #
   # REQ-HIGH-004: High beam requests SHALL use priority MEDIUM (2).
@@ -38,7 +38,7 @@ Feature: High Beam Headlamps
   Scenario: High beam stalk engaged
     Given the high beam switch is not engaged
     When the driver engages the high beam stalk
-    Then Vehicle.Controller.Body.Switches.HighBeam.IsEngaged becomes TRUE
+    Then Vehicle.Body.Lights.Beam.High.Switch.IsEngaged becomes TRUE
     And the High Beam feature requests Vehicle.Body.Lights.Beam.High.IsOn = TRUE at priority MEDIUM
 
   # --- REQ-HIGH-002 ---
@@ -46,17 +46,17 @@ Feature: High Beam Headlamps
     Given the high beam switch is engaged
     And high beams are on
     When the driver releases the high beam stalk
-    Then Vehicle.Controller.Body.Switches.HighBeam.IsEngaged becomes FALSE
+    Then Vehicle.Body.Lights.Beam.High.Switch.IsEngaged becomes FALSE
     And the High Beam feature requests Vehicle.Body.Lights.Beam.High.IsOn = FALSE at priority MEDIUM
 
   # --- REQ-HIGH-001 ---
   Scenario: Flash-to-pass (momentary high beam)
     Given the high beam switch is not engaged
     When the driver momentarily pulls the high beam stalk
-    Then Vehicle.Controller.Body.Switches.HighBeam.IsEngaged becomes TRUE briefly
+    Then Vehicle.Body.Lights.Beam.High.Switch.IsEngaged becomes TRUE briefly
     And the High Beam feature requests high beam ON
     When the stalk returns to rest
-    Then Vehicle.Controller.Body.Switches.HighBeam.IsEngaged becomes FALSE
+    Then Vehicle.Body.Lights.Beam.High.Switch.IsEngaged becomes FALSE
     And the High Beam feature requests high beam OFF
 
   # --- REQ-HIGH-005 ---

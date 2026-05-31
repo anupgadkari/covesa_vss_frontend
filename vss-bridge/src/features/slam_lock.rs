@@ -71,13 +71,12 @@ const INVERSION_DELAY_MS: u64 = 500;
 
 const FEATURE_ID: FeatureId = FeatureId::SlamLock;
 
-const LEFT_LOCK_BUTTON: VssPath = "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.LockButton";
-const RIGHT_LOCK_BUTTON: VssPath =
-    "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Right.LockButton";
+const LEFT_LOCK_BUTTON: VssPath = "Vehicle.Cabin.Door.Row1.Left.Switch.Lock";
+const RIGHT_LOCK_BUTTON: VssPath = "Vehicle.Cabin.Door.Row1.Right.Switch.Lock";
 
-const LOCK_STATUS: VssPath = "Vehicle.Controller.Cabin.LockStatus";
-const LAST_REQUESTOR: VssPath = "Vehicle.Controller.Cabin.LockStatus.LastRequestor";
-const LOCK_EVENT_NUM: VssPath = "Vehicle.Controller.Cabin.LockStatus.EventNum";
+const LOCK_STATUS: VssPath = "Vehicle.Cabin.LockStatus";
+const LAST_REQUESTOR: VssPath = "Vehicle.Cabin.LockStatus.LastRequestor";
+const LOCK_EVENT_NUM: VssPath = "Vehicle.Cabin.LockStatus.EventNum";
 
 const DOOR_OPEN_SIGNALS: [VssPath; 4] = [
     "Vehicle.Cabin.Door.Row1.Left.IsOpen",
@@ -422,7 +421,7 @@ mod tests {
 
         assert_last_lock_cmd(&bus, "unlock_driver");
         assert_eq!(
-            bus.latest_value("Vehicle.Controller.Cabin.LockStatus.LastRequestor"),
+            bus.latest_value("Vehicle.Cabin.LockStatus.LastRequestor"),
             Some(SignalValue::String("SlamLock".into()))
         );
     }
@@ -611,7 +610,7 @@ mod tests {
 
         assert_last_lock_cmd(&bus, "unlock_all");
         assert_eq!(
-            bus.latest_value("Vehicle.Controller.Cabin.LockStatus.LastRequestor"),
+            bus.latest_value("Vehicle.Cabin.LockStatus.LastRequestor"),
             Some(SignalValue::String("SlamLock".into())),
             "the inversion's requestor is SlamLock"
         );

@@ -101,20 +101,94 @@ relevant to us:
 
 ## Migration strategy
 
+### The input → command → state three-layer rule
+
+`Vehicle.Controller.*` is reserved for signals whose **only meaning
+is inside the control plumbing** — they fail the test *"would this
+signal still be true with every controller deleted and just a sensor
+present?"*.  Everything that represents the vehicle's own observable
+state, or a control the user directly operates, lives at a canonical
+`Vehicle.*` position instead (overlaid where VSS lacks it).  Three
+layers, sorted by that test:
+
+| Layer | What it is | Home | Example |
+|---|---|---|---|
+| **1. Input** | a control the user directly operates | canonical component location (overlay if VSS lacks it) | `Vehicle.Body.Lights.Hazard.Switch.IsEngaged`, `Vehicle.Cabin.Door.Row1.Left.Switch.Lock` |
+| **2. Command** | controller-arbitrated actuator intent | `Vehicle.Controller.*` | `Vehicle.Controller.Body.Doors.CentralLock.Command`, `…Body.Hood.OpenCmd` |
+| **3. State** | physical outcome / vehicle-observable state | canonical `Vehicle.*` | `Vehicle.CrashDetected`, `Vehicle.Cabin.LockStatus`, `Vehicle.Body.ChargeLid.IsOpen` |
+
+A switch press (layer 1) is an input the driver makes; the arbiter
+turns it into a command (layer 2, stays in Controller); the actuator
+produces a state (layer 3).  Only layer 2 is controller plumbing.
+
+### Namespace refinement (applied)
+
+The initial rename parked ~165 paths in `Vehicle.Controller.*`,
+which over-collected layers 1 and 3.  A refinement moved **39**
+of them out:
+
+- **8 vehicle-state signals** → canonical overlay: `CrashDetected`
+  → `Vehicle.CrashDetected`; `ChargeLid`/`FuelLid` → `Vehicle.Body.*`;
+  `Brake.IsApplied` → `Vehicle.Chassis.Brake.IsApplied`;
+  `OncomingVehicleDetected` → `Vehicle.ADAS.HighBeam.*`;
+  `Hood.LatchState` → `Vehicle.Body.Hood.*`; `Alarm.IsActive` →
+  `Vehicle.Body.Alarm.IsActive`; `Cabin.LockStatus` (aggregate value)
+  → `Vehicle.Cabin.LockStatus`.
+- **29 vehicle-mounted switch inputs** → canonical component homes,
+  following VSS's own `.Switch` precedent: hazard/high-beam/fog/turn
+  switches under `Vehicle.Body.Lights.*.Switch.*`; trim lock/unlock
+  buttons under `Vehicle.Cabin.Door.RowN.Side.Switch.{Lock,Unlock}`;
+  window rockers under `…Window.Switch.{Local,Master}Detent`; mirror
+  switch under `Vehicle.Body.Mirrors.Switch.*`; sunroof under
+  `Vehicle.Cabin.Sunroof.Switch.Detent`; hood/trunk release, horn,
+  child-lock at their respective component homes.  The two
+  power-mode controls — `StartStop.IsPressed` (PEPS) and
+  `IgnitionCylinder.Position` (KeyCylinder) — go to a function-named
+  `Vehicle.PowerMode.*` branch rather than `Cabin.*`: they're
+  power-mode controls, not cabin furniture, and grouping them names
+  what they do.  The power-mode *state* stays at the canonical
+  top-level `Vehicle.LowVoltageSystemState` (LOCK/OFF/ACC/ON/START),
+  which `PowerMode.*` thematically pairs with.  (The controller-side
+  `IgnitionCylinder.RemovalInhibited` stays in `Vehicle.Controller.*`
+  — it's a controller output, not a user control.)
+- **2 fob-mounted switches** → `Vehicle.Simulation.KeyFob.Switch.*`.
+  The panic and keyfob-lock buttons are physically *on the keyfob*,
+  not on the vehicle — so a vehicle-component home was wrong
+  (`Vehicle.Body.Alarm.PanicSwitch` corrected here).  The keyfob is
+  a simulated device, and a fob-button-as-bus-signal is inherently
+  a simulator construct — on a real vehicle the press arrives over
+  RF and the BCM decodes an RKE command.  `Panic.IsEngaged` →
+  `Vehicle.Simulation.KeyFob.Switch.Panic`; the lock button →
+  `Vehicle.Simulation.KeyFob.Switch.Lock`, consistent with the
+  existing per-fob `Vehicle.Simulation.KeyFob.N.ButtonPress`.
+
+**Deliberately kept in `Vehicle.Controller.*`** (layer 2/3 plumbing,
+not user input): `Alarm.State` (FSM enum — distinct from the
+observable `Alarm.IsActive`), `Cabin.LockStatus.LastRequestor` +
+`.EventNum` (who-and-when bookkeeping), `Starting.ImmobilizerStatus`,
+and the three switch *outputs* that aren't inputs —
+`StartStop.BacklightDutyCycle` / `.BacklightIntensity` (controller
+driving the button LED) and `IgnitionCylinder.RemovalInhibited`
+(controller asserting a key-interlock).
+
+The HMI keeps its legacy vocabulary; the `hmi_alias` shim's canonical
+side was updated to the new homes automatically (the rename touched
+`hmi_alias.rs`).
+
 ### Three-namespace split
 
-Our 265 paths land in three root namespaces:
+Post-refinement, the 265 paths land in these roots:
 
 | Tier | Path root | Used for | ~Count |
 |---|---|---|---:|
-| **Canonical** | `Vehicle.*` (per v6.0 schema) | Paths that map directly to VSS, including restructured variants and `DriverSide`/`PassengerSide` renames | 70 |
-| **Door-extension under canonical** | `Vehicle.Cabin.Door.RowN.{Driver,Passenger}Side.*` | Project-specific door-handle / lockpad signals that extend the canonical Door schema (VSS has the parent path, we add leaves) | 38 |
-| **Controller** | `Vehicle.Controller.*` | Body-controller-owned signals: arbiter command channels, FSM state, processed user-input edges, derived sensor views, per-feature outputs.  These are exactly what an OEM body engineer would call "body controller signals." | 100 |
-| **Simulation** | `Vehicle.Simulation.*` | Signals that exist *only* because we model the LF / connectivity subsystems in software, plus HMI affordances that simulate external command inputs.  Gated behind `cfg(feature = "simulator")` for production builds. | 57 |
+| **Canonical** | `Vehicle.*` (per v6.0 schema) | Direct VSS maps, restructured variants, `DriverSide` renames, **+8 vehicle-state overlays** | 78 |
+| **Door-extension under canonical** | `Vehicle.Cabin.Door.RowN.{Driver,Passenger}Side.*` | Door-handle/lockpad + **the relocated door-lock/window switch inputs** | ~60 |
+| **Controller** | `Vehicle.Controller.*` | Layer-2 plumbing only: arbiter commands, FSM intermediates, derived feature outputs, the 3 switch-driver outputs | ~125 |
+| **Simulation** | `Vehicle.Simulation.*` | LF/connectivity model state + HMI affordances; `cfg(feature = "simulator")` | 57 |
 
-**Earlier draft of this document proposed a single
-`Vehicle.Body.Bridge.*` catchall.**  That was rejected in favour
-of the three-namespace split for three reasons:
+**An earlier draft proposed a single `Vehicle.Body.Bridge.*`
+catchall.**  That was rejected in favour of the split for three
+reasons:
 
 1. **`Bridge` is a software-artifact name.**  The `vss-bridge`
    binary is the executable; "Bridge" describes our code, not a
@@ -125,7 +199,7 @@ of the three-namespace split for three reasons:
 2. **Simulator signals should be obviously simulator-only.**
    `Vehicle.Body.Bridge.Body.PEPS.Plant.KeyFob.1.PlacedZone` is
    indistinguishable from a real controller output by namespace
-   alone.  Tagging it `Vehicle.Simulation.PEPS.Plant.…` makes
+   alone.  Tagging it `Vehicle.Simulation.…` makes
    the simulator-only status visible at a glance, and the kuksa.val
    catalog for production builds simply omits the
    `Vehicle.Simulation.*` subtree.
@@ -406,6 +480,29 @@ Out of scope for the rebase; covered separately in backlog item
 22 step 5.  Likely candidates: expanded child-lock signals,
 cabin lighting taxonomy, Driver.IdentifierType for PEPS
 integration.
+
+### Follow-up — Unify fob buttons through the RfMessage chain *(deferred)*
+
+The namespace refinement parked the two fob-mounted buttons at
+`Vehicle.Simulation.KeyFob.Switch.{Panic,Lock}` as interim homes.
+But the per-fob `Vehicle.Simulation.KeyFob.N.ButtonPress` →
+authenticated `RfMessage` chain already handles every fob button,
+and `FobButton` already includes `PanicAlarm`.  The clean target:
+
+- Route panic through the same chain: a panic press becomes
+  `ButtonPress = "PANIC_ALARM"` → `RfMessage(PanicAlarm)`,
+  authenticated like lock/unlock.
+- `PanicAlarm` consumes that `RfMessage`, owns its engaged-state
+  internally (no more writing `false` back to its own input
+  signal — a current smell), and publishes only
+  `Vehicle.Body.Alarm.IsActive` (the canonical vehicle-state).
+- Delete the now-redundant `Vehicle.Simulation.KeyFob.Switch.Panic`
+  aggregate **and** the vestigial `Vehicle.Simulation.KeyFob.Switch.Lock`
+  (nothing consumes the latter — RKE already uses the RfMessage
+  chain for lock).
+
+A behavioural refactor of `PanicAlarm` + its tests, so kept out of
+the rename/relocation PRs.
 
 ## Doc-comment update
 

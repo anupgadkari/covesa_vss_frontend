@@ -94,7 +94,7 @@ Feature: Passive Entry (PEPS unlock-on-handle-pull)
     Then PassiveEntry does NOT dispatch any lock command
 
   # --- REQ-PE-005: stage-2 escalation via the OTHER side handle ---
-  # Cabin-state gate (Vehicle.Controller.Cabin.LockStatus = DRIVER_UNLOCKED after stage-1)
+  # Cabin-state gate (Vehicle.Cabin.LockStatus = DRIVER_UNLOCKED after stage-1)
   # silently skips a repeat pull on the driver handle — the user
   # already has access through that door.  To unlock all, pull a
   # passenger or rear handle (both bypass two-stage and dispatch

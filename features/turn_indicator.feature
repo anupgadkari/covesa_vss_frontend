@@ -7,21 +7,21 @@ Feature: Turn Indicator
   # -------------------------------------------------------------------------
   # Requirements
   # -------------------------------------------------------------------------
-  # REQ-TURN-001: When Vehicle.Controller.Body.Switches.TurnIndicator.Direction transitions to
+  # REQ-TURN-001: When Vehicle.Body.Lights.DirectionIndicator.Switch.Direction transitions to
   #               "LEFT", the feature SHALL request
   #               DirectionIndicator.Left.IsSignaling = TRUE at priority
   #               MEDIUM (2) via the Lighting arbiter, and SHALL release
   #               any existing TurnIndicator claim on
   #               DirectionIndicator.Right.IsSignaling.
   #
-  # REQ-TURN-002: When Vehicle.Controller.Body.Switches.TurnIndicator.Direction transitions to
+  # REQ-TURN-002: When Vehicle.Body.Lights.DirectionIndicator.Switch.Direction transitions to
   #               "RIGHT", the feature SHALL request
   #               DirectionIndicator.Right.IsSignaling = TRUE at priority
   #               MEDIUM (2) via the Lighting arbiter, and SHALL release
   #               any existing TurnIndicator claim on
   #               DirectionIndicator.Left.IsSignaling.
   #
-  # REQ-TURN-003: When Vehicle.Controller.Body.Switches.TurnIndicator.Direction transitions to
+  # REQ-TURN-003: When Vehicle.Body.Lights.DirectionIndicator.Switch.Direction transitions to
   #               "OFF", the feature SHALL release any TurnIndicator claims
   #               on both DirectionIndicator.Left.IsSignaling and
   #               DirectionIndicator.Right.IsSignaling. A released claim
@@ -30,7 +30,7 @@ Feature: Turn Indicator
   #               the arbiter publishes the default-off value.
   #
   # REQ-TURN-004: The turn indicator feature SHALL subscribe to the physical
-  #               stalk input (Vehicle.Controller.Body.Switches.TurnIndicator.Direction), NOT
+  #               stalk input (Vehicle.Body.Lights.DirectionIndicator.Switch.Direction), NOT
   #               the actuator outputs.
   #
   # REQ-TURN-005: Turn indicator requests SHALL use priority MEDIUM (2).
@@ -58,7 +58,7 @@ Feature: Turn Indicator
   # REQ-TURN-009: (Auto lane change / comfort blink / tip-to-signal)
   #               The feature SHALL count complete flash cycles (on+off)
   #               while the stalk is held. When
-  #               Vehicle.Controller.Body.Switches.TurnIndicator.Direction transitions from
+  #               Vehicle.Body.Lights.DirectionIndicator.Switch.Direction transitions from
   #               "LEFT" or "RIGHT" to "OFF":
   #               (a) If fewer than `lane_change_flash_count` (default 3)
   #                   flashes have completed, the feature SHALL maintain
@@ -80,7 +80,7 @@ Feature: Turn Indicator
   #               cancelled (arbiter claim released, lamps stop) when:
   #               (a) Vehicle.LowVoltageSystemState transitions away from
   #                   ON/START (REQ-TURN-008 takes precedence), or
-  #               (b) Vehicle.Controller.Body.Switches.TurnIndicator.Direction transitions
+  #               (b) Vehicle.Body.Lights.DirectionIndicator.Switch.Direction transitions
   #                   to the opposite direction (the new direction
   #                   activates immediately and the old side is released).
   #
@@ -101,7 +101,7 @@ Feature: Turn Indicator
   Scenario: Turn stalk moved to LEFT
     Given the turn stalk is in position OFF
     When the driver moves the turn stalk to LEFT
-    Then Vehicle.Controller.Body.Switches.TurnIndicator.Direction becomes "LEFT"
+    Then Vehicle.Body.Lights.DirectionIndicator.Switch.Direction becomes "LEFT"
     And the Turn feature requests DirectionIndicator.Left.IsSignaling = TRUE at priority MEDIUM
     And the Turn feature releases its claim on DirectionIndicator.Right.IsSignaling
 
@@ -109,7 +109,7 @@ Feature: Turn Indicator
   Scenario: Turn stalk moved to RIGHT
     Given the turn stalk is in position OFF
     When the driver moves the turn stalk to RIGHT
-    Then Vehicle.Controller.Body.Switches.TurnIndicator.Direction becomes "RIGHT"
+    Then Vehicle.Body.Lights.DirectionIndicator.Switch.Direction becomes "RIGHT"
     And the Turn feature requests DirectionIndicator.Right.IsSignaling = TRUE at priority MEDIUM
     And the Turn feature releases its claim on DirectionIndicator.Left.IsSignaling
 

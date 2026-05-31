@@ -3,9 +3,9 @@
 //!
 //! # Inputs
 //!
-//! - **`Vehicle.Controller.Body.Switches.Mirror.Fold`** — momentary bool.  Each rising
+//! - **`Vehicle.Body.Mirrors.Switch.Fold`** — momentary bool.  Each rising
 //!   edge (`false → true`) is a manual fold-toggle press.
-//! - **`Vehicle.Controller.Cabin.LockStatus`** — vehicle-level lock state published by
+//! - **`Vehicle.Cabin.LockStatus`** — vehicle-level lock state published by
 //!   the door-lock arbiter.  AUTO mode triggers on transitions:
 //!   - entering `LOCKED` or `DOUBLE_LOCKED` → fold both mirrors
 //!   - entering `UNLOCKED` or `DRIVER_UNLOCKED` → unfold both mirrors
@@ -54,15 +54,15 @@ use crate::signal_bus::{SignalBus, VssPath};
 #[allow(dead_code)]
 const FEATURE_ID: FeatureId = FeatureId::MirrorFold;
 
-const SWITCH_FOLD: VssPath = "Vehicle.Controller.Body.Switches.Mirror.Fold";
-const LOCK_STATUS: VssPath = "Vehicle.Controller.Cabin.LockStatus";
+const SWITCH_FOLD: VssPath = "Vehicle.Body.Mirrors.Switch.Fold";
+const LOCK_STATUS: VssPath = "Vehicle.Cabin.LockStatus";
 
 const FB_LEFT: VssPath = "Vehicle.Body.Mirrors.Left.IsFolded";
 const FB_RIGHT: VssPath = "Vehicle.Body.Mirrors.Right.IsFolded";
 const CMD_LEFT: VssPath = "Vehicle.Controller.Body.Mirror.Left.FoldCmd";
 const CMD_RIGHT: VssPath = "Vehicle.Controller.Body.Mirror.Right.FoldCmd";
 
-/// Map a `Vehicle.Controller.Cabin.LockStatus` value to the AUTO target it should drive,
+/// Map a `Vehicle.Cabin.LockStatus` value to the AUTO target it should drive,
 /// if any.  Returns `Some(true)` for fold, `Some(false)` for unfold,
 /// `None` if the status doesn't trigger AUTO action.
 fn auto_target_for(status: &str) -> Option<bool> {

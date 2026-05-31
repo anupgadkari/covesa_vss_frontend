@@ -194,7 +194,7 @@ fn is_rear_door(door: &Door) -> bool {
 
 /// Returns true if this handle pull should kick off a key search
 /// (LF challenge + verify + arbiter dispatch).  False means the
-/// `Vehicle.Controller.Cabin.LockStatus` indicates the door is already accessible —
+/// `Vehicle.Cabin.LockStatus` indicates the door is already accessible —
 /// PassiveEntry stays silent and the mechanical pull is handled by
 /// `DoorHandlePlantModel` (which simply opens the door).
 ///
@@ -208,10 +208,10 @@ fn is_rear_door(door: &Door) -> bool {
 /// | UNLOCKED         | skip        | skip        |
 ///
 /// Key design choice: this is gated on the vehicle-level
-/// `Vehicle.Controller.Cabin.LockStatus`, not per-door `IsLocked`.  A thief inside the
+/// `Vehicle.Cabin.LockStatus`, not per-door `IsLocked`.  A thief inside the
 /// cabin can pop a sill-pin (soldier knob) and unlock a single
 /// door without authentication, which would update `IsLocked`
-/// locally but cannot update `Vehicle.Controller.Cabin.LockStatus` (the door-lock
+/// locally but cannot update `Vehicle.Cabin.LockStatus` (the door-lock
 /// arbiter only publishes that on accepted external commands).
 /// Using cabin-level state keeps the gate immune to that bypass.
 fn auth_needed_for_door(door: &Door, lock_status: &str, cfg: &PlatformConfig) -> bool {
@@ -306,7 +306,7 @@ struct PendingStageTwo {
 /// Cabin lock-state signal — used to short-circuit handle-pull auth
 /// when the requested door is already unlocked.  See the
 /// `auth_needed_for_door` matrix.
-const LOCK_STATUS: VssPath = "Vehicle.Controller.Cabin.LockStatus";
+const LOCK_STATUS: VssPath = "Vehicle.Cabin.LockStatus";
 
 /// Passive-entry feature.
 pub struct PassiveEntry<B: SignalBus> {
@@ -438,7 +438,7 @@ impl<B: SignalBus + Send + Sync + 'static> PassiveEntry<B> {
                 // Cabin-state gate — auth (key search) is only needed
                 // when the cabin is in a state where this specific
                 // door is still locked.  Soldier-knob unlocks don't
-                // promote `Vehicle.Controller.Cabin.LockStatus` so a thief popping a sill
+                // promote `Vehicle.Cabin.LockStatus` so a thief popping a sill
                 // pin from inside cannot slip past this check.
                 //
                 //   • UNLOCKED         — every door already unlocked,
@@ -1142,7 +1142,7 @@ mod tests {
     }
 
     /// 4. After stage-1 unlocks the driver door, a second pull on the
-    /// SAME (driver) handle is now silently skipped — `Vehicle.Controller.Cabin.LockStatus`
+    /// SAME (driver) handle is now silently skipped — `Vehicle.Cabin.LockStatus`
     /// is `DRIVER_UNLOCKED`, the driver door is the only one unlocked,
     /// the user already has access.  No regression to `UnlockDriver`.
     /// To reach `UnlockAll`, the user pulls a passenger or rear handle
@@ -1250,7 +1250,7 @@ mod tests {
         );
         // Force cabin into UNLOCKED.
         bus.publish(
-            "Vehicle.Controller.Cabin.LockStatus",
+            "Vehicle.Cabin.LockStatus",
             SignalValue::String("UNLOCKED".into()),
         )
         .await

@@ -166,16 +166,16 @@ const SOURCES: [Source; 2] = [Source::DriverMaster, Source::Local];
 const WINDOW_LABELS: [&str; NUM_WINDOWS] = ["Row1.Left", "Row1.Right", "Row2.Left", "Row2.Right"];
 
 const DRIVER_DETENTS: [VssPath; NUM_WINDOWS] = [
-    "Vehicle.Controller.Body.Switches.Window.DriverMaster.Row1.Left.Detent",
-    "Vehicle.Controller.Body.Switches.Window.DriverMaster.Row1.Right.Detent",
-    "Vehicle.Controller.Body.Switches.Window.DriverMaster.Row2.Left.Detent",
-    "Vehicle.Controller.Body.Switches.Window.DriverMaster.Row2.Right.Detent",
+    "Vehicle.Cabin.Door.Row1.Left.Window.Switch.MasterDetent",
+    "Vehicle.Cabin.Door.Row1.Right.Window.Switch.MasterDetent",
+    "Vehicle.Cabin.Door.Row2.Left.Window.Switch.MasterDetent",
+    "Vehicle.Cabin.Door.Row2.Right.Window.Switch.MasterDetent",
 ];
 const LOCAL_DETENTS: [VssPath; NUM_WINDOWS] = [
-    "Vehicle.Controller.Body.Switches.Window.Local.Row1.Left.Detent",
-    "Vehicle.Controller.Body.Switches.Window.Local.Row1.Right.Detent",
-    "Vehicle.Controller.Body.Switches.Window.Local.Row2.Left.Detent",
-    "Vehicle.Controller.Body.Switches.Window.Local.Row2.Right.Detent",
+    "Vehicle.Cabin.Door.Row1.Left.Window.Switch.LocalDetent",
+    "Vehicle.Cabin.Door.Row1.Right.Window.Switch.LocalDetent",
+    "Vehicle.Cabin.Door.Row2.Left.Window.Switch.LocalDetent",
+    "Vehicle.Cabin.Door.Row2.Right.Window.Switch.LocalDetent",
 ];
 const MOTOR_SIGNALS: [VssPath; NUM_WINDOWS] = [
     "Vehicle.Cabin.Door.Row1.Left.Window.MotorDirection",

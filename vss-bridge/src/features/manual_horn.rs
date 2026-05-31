@@ -1,6 +1,6 @@
 //! ManualHorn — steering-wheel horn pad driver.
 //!
-//! Subscribes to `Vehicle.Controller.Body.Switches.Horn.IsPressed` and claims
+//! Subscribes to `Vehicle.Body.Horn.Switch.IsPressed` and claims
 //! `Vehicle.Body.Horn.IsActive` at `Medium` priority while pressed.  Releases
 //! on release.  PanicAlarm at `High` preempts when the alarm is
 //! engaged; the arbiter handles the priority resolution.
@@ -21,7 +21,7 @@ use crate::ipc_message::{FeatureId, Priority, SignalValue};
 use crate::signal_bus::{SignalBus, VssPath};
 
 const FEATURE_ID: FeatureId = FeatureId::ManualHorn;
-const SWITCH: VssPath = "Vehicle.Controller.Body.Switches.Horn.IsPressed";
+const SWITCH: VssPath = "Vehicle.Body.Horn.Switch.IsPressed";
 const HORN: VssPath = "Vehicle.Body.Horn.IsActive";
 
 pub struct ManualHorn<B: SignalBus> {

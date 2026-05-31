@@ -38,6 +38,7 @@ jobs:
         uses: arduino/setup-protoc@v3
         with:
           version: "27.x"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - run: cargo clippy --manifest-path vss-bridge/Cargo.toml --all-targets -- -D warnings
 
   test-unit:
@@ -55,6 +56,7 @@ jobs:
         uses: arduino/setup-protoc@v3
         with:
           version: "27.x"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - run: cargo test --manifest-path vss-bridge/Cargo.toml --lib
         name: Unit tests (85 tests)
 
@@ -73,6 +75,7 @@ jobs:
         uses: arduino/setup-protoc@v3
         with:
           version: "27.x"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - run: cargo test --manifest-path vss-bridge/Cargo.toml --test e2e
         name: Cucumber scenarios (19 scenarios)
 
@@ -91,6 +94,7 @@ jobs:
         uses: arduino/setup-protoc@v3
         with:
           version: "27.x"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Build release binary
         run: cargo build --manifest-path vss-bridge/Cargo.toml --release
       - run: cargo test --manifest-path vss-bridge/Cargo.toml --test ws_integration -- --test-threads=1

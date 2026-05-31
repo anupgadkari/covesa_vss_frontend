@@ -32,8 +32,8 @@ use vss_bridge::signal_bus::VssPath;
 const LEFT_SIGNALING: VssPath = "Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling";
 const RIGHT_SIGNALING: VssPath = "Vehicle.Body.Lights.DirectionIndicator.Right.IsSignaling";
 const HORN: VssPath = "Vehicle.Body.Horn.IsActive";
-const PANIC_SWITCH: VssPath = "Vehicle.Controller.Body.Switches.Panic.IsEngaged";
-const ALARM_STATUS: VssPath = "Vehicle.Controller.Alarm.IsActive";
+const PANIC_SWITCH: VssPath = "Vehicle.Simulation.KeyFob.Switch.Panic";
+const ALARM_STATUS: VssPath = "Vehicle.Body.Alarm.IsActive";
 
 // PassiveEntry observable outputs — the door-lock arbiter publishes
 // `Vehicle.Controller.Body.Doors.CentralLock.Command` ("unlock_driver"/"unlock_all"/...)
@@ -345,7 +345,7 @@ async fn given_stalk(w: &mut VssWorld, dir: String) {
         .await;
     }
     w.inject(
-        "Vehicle.Controller.Body.Switches.TurnIndicator.Direction",
+        "Vehicle.Body.Lights.DirectionIndicator.Switch.Direction",
         SignalValue::String(dir),
     )
     .await;
@@ -357,7 +357,7 @@ async fn given_stalk(w: &mut VssWorld, dir: String) {
 async fn given_hazard_off(w: &mut VssWorld) {
     w.ensure_started().await;
     w.inject(
-        "Vehicle.Controller.Body.Switches.Hazard.IsEngaged",
+        "Vehicle.Body.Lights.Hazard.Switch.IsEngaged",
         SignalValue::Bool(false),
     )
     .await;
@@ -368,7 +368,7 @@ async fn given_hazard_off(w: &mut VssWorld) {
 async fn given_hazard_on(w: &mut VssWorld) {
     w.ensure_started().await;
     w.inject(
-        "Vehicle.Controller.Body.Switches.Hazard.IsEngaged",
+        "Vehicle.Body.Lights.Hazard.Switch.IsEngaged",
         SignalValue::Bool(true),
     )
     .await;
@@ -430,7 +430,7 @@ async fn given_ignition_was(w: &mut VssWorld, state: String) {
 async fn when_stalk(w: &mut VssWorld, dir: String) {
     w.bus().clear_history();
     w.inject(
-        "Vehicle.Controller.Body.Switches.TurnIndicator.Direction",
+        "Vehicle.Body.Lights.DirectionIndicator.Switch.Direction",
         SignalValue::String(dir),
     )
     .await;
@@ -440,7 +440,7 @@ async fn when_stalk(w: &mut VssWorld, dir: String) {
 async fn when_hazard_on(w: &mut VssWorld) {
     w.bus().clear_history();
     w.inject(
-        "Vehicle.Controller.Body.Switches.Hazard.IsEngaged",
+        "Vehicle.Body.Lights.Hazard.Switch.IsEngaged",
         SignalValue::Bool(true),
     )
     .await;
@@ -450,7 +450,7 @@ async fn when_hazard_on(w: &mut VssWorld) {
 async fn when_hazard_off(w: &mut VssWorld) {
     w.bus().clear_history();
     w.inject(
-        "Vehicle.Controller.Body.Switches.Hazard.IsEngaged",
+        "Vehicle.Body.Lights.Hazard.Switch.IsEngaged",
         SignalValue::Bool(false),
     )
     .await;
@@ -481,10 +481,10 @@ async fn when_flash_cycles(_w: &mut VssWorld, count: u32) {
 // ---- Sensor echo (verifies the bus injection path) ----
 
 #[then(
-    regex = r#"^Vehicle\.Controller\.Body\.Switches\.TurnIndicator\.Direction becomes "(OFF|LEFT|RIGHT)"$"#
+    regex = r#"^Vehicle\.Body\.Lights\.DirectionIndicator\.Switch\.Direction becomes "(OFF|LEFT|RIGHT)"$"#
 )]
 async fn then_stalk_becomes(w: &mut VssWorld, dir: String) {
-    let last = w.current_value("Vehicle.Controller.Body.Switches.TurnIndicator.Direction");
+    let last = w.current_value("Vehicle.Body.Lights.DirectionIndicator.Switch.Direction");
     assert_eq!(
         last,
         Some(SignalValue::String(dir.clone())),
@@ -492,15 +492,15 @@ async fn then_stalk_becomes(w: &mut VssWorld, dir: String) {
     );
 }
 
-#[then("Vehicle.Controller.Body.Switches.Hazard.IsEngaged becomes TRUE")]
+#[then("Vehicle.Body.Lights.Hazard.Switch.IsEngaged becomes TRUE")]
 async fn then_hazard_becomes_true(w: &mut VssWorld) {
-    let last = w.current_value("Vehicle.Controller.Body.Switches.Hazard.IsEngaged");
+    let last = w.current_value("Vehicle.Body.Lights.Hazard.Switch.IsEngaged");
     assert_eq!(last, Some(SignalValue::Bool(true)));
 }
 
-#[then("Vehicle.Controller.Body.Switches.Hazard.IsEngaged becomes FALSE")]
+#[then("Vehicle.Body.Lights.Hazard.Switch.IsEngaged becomes FALSE")]
 async fn then_hazard_becomes_false(w: &mut VssWorld) {
-    let last = w.current_value("Vehicle.Controller.Body.Switches.Hazard.IsEngaged");
+    let last = w.current_value("Vehicle.Body.Lights.Hazard.Switch.IsEngaged");
     assert_eq!(last, Some(SignalValue::Bool(false)));
 }
 
@@ -720,13 +720,13 @@ async fn given_panic_on(w: &mut VssWorld) {
     settle().await;
 }
 
-#[given("Vehicle.Controller.Alarm.IsActive is TRUE")]
+#[given("Vehicle.Body.Alarm.IsActive is TRUE")]
 async fn given_alarm_status_true(w: &mut VssWorld) {
     settle().await;
     assert_eq!(
         w.current_value(ALARM_STATUS),
         Some(SignalValue::Bool(true)),
-        "expected Vehicle.Controller.Alarm.IsActive = TRUE as precondition"
+        "expected Vehicle.Body.Alarm.IsActive = TRUE as precondition"
     );
 }
 
@@ -776,17 +776,17 @@ async fn panic_engage_helper(w: &mut VssWorld, val: bool) {
 
 // ---- When: panic switch transitions ----
 
-#[when("Vehicle.Controller.Body.Switches.Panic.IsEngaged transitions to TRUE")]
+#[when("Vehicle.Simulation.KeyFob.Switch.Panic transitions to TRUE")]
 async fn when_panic_engage(w: &mut VssWorld) {
     panic_engage_helper(w, true).await;
 }
 
-#[when("Vehicle.Controller.Body.Switches.Panic.IsEngaged transitions to FALSE")]
+#[when("Vehicle.Simulation.KeyFob.Switch.Panic transitions to FALSE")]
 async fn when_panic_disengage(w: &mut VssWorld) {
     panic_engage_helper(w, false).await;
 }
 
-#[when("Vehicle.Controller.Body.Switches.Panic.IsEngaged is set to TRUE again")]
+#[when("Vehicle.Simulation.KeyFob.Switch.Panic is set to TRUE again")]
 async fn when_panic_re_engage(w: &mut VssWorld) {
     w.bus().clear_history();
     w.inject(PANIC_SWITCH, SignalValue::Bool(true)).await;
@@ -894,12 +894,12 @@ async fn then_horn_true(w: &mut VssWorld) {
 
 // ---- Then: alarm status flag ----
 
-#[then("Vehicle.Controller.Alarm.IsActive becomes TRUE")]
+#[then("Vehicle.Body.Alarm.IsActive becomes TRUE")]
 async fn then_alarm_status_true(w: &mut VssWorld) {
     assert_eq!(w.current_value(ALARM_STATUS), Some(SignalValue::Bool(true)));
 }
 
-#[then("Vehicle.Controller.Alarm.IsActive becomes FALSE")]
+#[then("Vehicle.Body.Alarm.IsActive becomes FALSE")]
 async fn then_alarm_status_false(w: &mut VssWorld) {
     assert_eq!(
         w.current_value(ALARM_STATUS),
@@ -907,7 +907,7 @@ async fn then_alarm_status_false(w: &mut VssWorld) {
     );
 }
 
-#[then("Vehicle.Controller.Alarm.IsActive has been published exactly once with value TRUE")]
+#[then("Vehicle.Body.Alarm.IsActive has been published exactly once with value TRUE")]
 async fn then_alarm_status_once(w: &mut VssWorld) {
     let publishes: Vec<_> = w
         .bus()
@@ -924,11 +924,11 @@ async fn then_alarm_status_once(w: &mut VssWorld) {
         .count();
     assert_eq!(
         true_count, 1,
-        "expected exactly one TRUE publish on Vehicle.Controller.Alarm.IsActive, got {true_count} (history: {publishes:?})"
+        "expected exactly one TRUE publish on Vehicle.Body.Alarm.IsActive, got {true_count} (history: {publishes:?})"
     );
 }
 
-#[then("Vehicle.Controller.Alarm.IsActive has not been re-published on any pulse edge")]
+#[then("Vehicle.Body.Alarm.IsActive has not been re-published on any pulse edge")]
 async fn then_alarm_status_no_duty_cycle(w: &mut VssWorld) {
     let publishes: Vec<_> = w
         .bus()
@@ -945,7 +945,7 @@ async fn then_alarm_status_no_duty_cycle(w: &mut VssWorld) {
     );
 }
 
-#[then("Vehicle.Controller.Alarm.IsActive is not re-published")]
+#[then("Vehicle.Body.Alarm.IsActive is not re-published")]
 async fn then_alarm_status_idempotent(w: &mut VssWorld) {
     let publishes = w.publish_count(ALARM_STATUS);
     assert_eq!(
@@ -1061,7 +1061,7 @@ async fn when_lock_feedback(w: &mut VssWorld) {
     settle().await;
 }
 
-#[then("Vehicle.Controller.Body.Switches.Panic.IsEngaged is self-published as FALSE")]
+#[then("Vehicle.Simulation.KeyFob.Switch.Panic is self-published as FALSE")]
 async fn then_panic_switch_self_published_false(w: &mut VssWorld) {
     assert_eq!(
         w.current_value(PANIC_SWITCH),
@@ -1070,7 +1070,7 @@ async fn then_panic_switch_self_published_false(w: &mut VssWorld) {
     );
 }
 
-#[then("Vehicle.Controller.Alarm.IsActive remains TRUE")]
+#[then("Vehicle.Body.Alarm.IsActive remains TRUE")]
 async fn then_alarm_status_remains_true(w: &mut VssWorld) {
     assert_eq!(
         w.current_value(ALARM_STATUS),

@@ -4,7 +4,7 @@
 //! # Trigger
 //!
 //! Any door's `IsOpen` transitions FALSE→TRUE while
-//! `Vehicle.Controller.Cabin.LockStatus` is `LOCKED` or `DOUBLE_LOCKED` AND the cabin
+//! `Vehicle.Cabin.LockStatus` is `LOCKED` or `DOUBLE_LOCKED` AND the cabin
 //! has been continuously locked for at least `PRE_ARM_DURATION_SECS`
 //! (20 s).  The 20 s pre-arm window absorbs the common case of "lock
 //! the car, then realise you forgot something" — re-opening a door
@@ -30,12 +30,12 @@
 //!
 //! # Disarm conditions (any one ends the alarm immediately)
 //!
-//! 1. **Auth-validated unlock** — `Vehicle.Controller.Cabin.LockStatus.LastRequestor`
+//! 1. **Auth-validated unlock** — `Vehicle.Cabin.LockStatus.LastRequestor`
 //!    transitions to one of the external auth sources (RKE,
-//!    PassiveEntry, PEPS, phone, NFC) AND `Vehicle.Controller.Cabin.LockStatus` is
+//!    PassiveEntry, PEPS, phone, NFC) AND `Vehicle.Cabin.LockStatus` is
 //!    `UNLOCKED` or `DRIVER_UNLOCKED`.  Models "the user came back
 //!    and proved they own the vehicle."
-//! 2. **Panic button press** — `Vehicle.Controller.Body.Switches.Panic.IsEngaged`
+//! 2. **Panic button press** — `Vehicle.Simulation.KeyFob.Switch.Panic`
 //!    transitions to `true` from any source (paired fob, HMI test,
 //!    telematics).  Same pattern PanicAlarm uses, treats the user
 //!    grabbing the panic button as a "stop everything" override.
@@ -62,7 +62,7 @@
 //!
 //! # Status flag
 //!
-//! `Vehicle.Controller.Alarm.IsActive` (already published by PanicAlarm)
+//! `Vehicle.Body.Alarm.IsActive` (already published by PanicAlarm)
 //! is also asserted by this feature for the duration of the
 //! alarm.  Telematics / HMI consumers see a single "alarm active"
 //! bool regardless of source.
@@ -89,10 +89,10 @@ const DOOR_OPEN_SIGNALS: [VssPath; 4] = [
     "Vehicle.Cabin.Door.Row2.Right.IsOpen",
 ];
 
-const LOCK_STATUS: VssPath = "Vehicle.Controller.Cabin.LockStatus";
-const LAST_REQUESTOR: VssPath = "Vehicle.Controller.Cabin.LockStatus.LastRequestor";
-const PANIC_SWITCH: VssPath = "Vehicle.Controller.Body.Switches.Panic.IsEngaged";
-const ALARM_STATUS: VssPath = "Vehicle.Controller.Alarm.IsActive";
+const LOCK_STATUS: VssPath = "Vehicle.Cabin.LockStatus";
+const LAST_REQUESTOR: VssPath = "Vehicle.Cabin.LockStatus.LastRequestor";
+const PANIC_SWITCH: VssPath = "Vehicle.Simulation.KeyFob.Switch.Panic";
+const ALARM_STATUS: VssPath = "Vehicle.Body.Alarm.IsActive";
 /// Authoritative perimeter-alarm state, published by this feature on
 /// every transition so the HMI / telematics display a single string
 /// enum rather than computing state from secondary signals (lock
@@ -188,13 +188,13 @@ const EXTERNAL_LOCK_REQUESTORS: &[&str] = &[
 ];
 
 /// Cached EventNum signal path.  The arbiter publishes
-/// `Vehicle.Controller.Cabin.LockStatus` then `Vehicle.Controller.Cabin.LockStatus.LastRequestor` then
-/// `Vehicle.Controller.Cabin.LockStatus.EventNum` on every accepted lock command — by
+/// `Vehicle.Cabin.LockStatus` then `Vehicle.Cabin.LockStatus.LastRequestor` then
+/// `Vehicle.Cabin.LockStatus.EventNum` on every accepted lock command — by
 /// the time we receive an EventNum bump we are guaranteed to have
 /// the matching status + requestor cached, which gives us a clean
 /// "the entire lock event is now visible" wakeup.  Drives the
 /// `DISARMED → PRE_ARMED` transition.
-const LOCK_EVENT_NUM: VssPath = "Vehicle.Controller.Cabin.LockStatus.EventNum";
+const LOCK_EVENT_NUM: VssPath = "Vehicle.Cabin.LockStatus.EventNum";
 
 const UNLOCKED_STATES: &[&str] = &["UNLOCKED", "DRIVER_UNLOCKED"];
 
@@ -769,7 +769,7 @@ mod tests {
     /// Mirrors the order in which `door_lock_arbiter` emits a lock
     /// event onto the bus: status → requestor → event_num, all three
     /// from the same logical command.  Tests must use this helper
-    /// rather than poking `Vehicle.Controller.Cabin.LockStatus` directly — only the
+    /// rather than poking `Vehicle.Cabin.LockStatus` directly — only the
     /// EventNum bump triggers a `DISARMED → PRE_ARMED` transition,
     /// and only when the requestor is in `EXTERNAL_LOCK_REQUESTORS`.
     /// `event_num_seq` is bumped by the caller so each event is unique.

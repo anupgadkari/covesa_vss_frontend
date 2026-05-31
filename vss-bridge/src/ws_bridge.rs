@@ -3,7 +3,7 @@
 //! Listens on `0.0.0.0:8080` for WebSocket connections from the HMI.
 //!
 //! Protocol (JSON):
-//!   HMI → bridge:  {"type":"sensor","path":"Vehicle.Controller.Body.Switches.Hazard.IsEngaged","value":true}
+//!   HMI → bridge:  {"type":"sensor","path":"Vehicle.Body.Lights.Hazard.Switch.IsEngaged","value":true}
 //!   HMI → bridge:  {"type":"config_set","key":"dealer.two_stage_unlock","value":true}
 //!   bridge → HMI:  {"state":{"Vehicle.Body.Lights.DirectionIndicator.Left.IsSignaling":true,...}}
 //!   bridge → HMI:  {"config":{"dealer":{...},"variant":{...},"vehicle_line":{...}}}
@@ -29,11 +29,11 @@ use crate::signal_bus::{SignalBus, VssPath};
 /// Signals the HMI can write (sensor inputs — physical switches/stalks).
 const INPUT_SIGNALS: &[VssPath] = &[
     "Vehicle.LowVoltageSystemState",
-    "Vehicle.Controller.Body.Switches.Hazard.IsEngaged",
-    "Vehicle.Controller.Body.Switches.TurnIndicator.Direction",
-    "Vehicle.Controller.Body.Switches.HighBeam.IsEngaged",
-    "Vehicle.Controller.Body.Switches.Fog.Front.IsEngaged",
-    "Vehicle.Controller.Body.Switches.Fog.Rear.IsEngaged",
+    "Vehicle.Body.Lights.Hazard.Switch.IsEngaged",
+    "Vehicle.Body.Lights.DirectionIndicator.Switch.Direction",
+    "Vehicle.Body.Lights.Beam.High.Switch.IsEngaged",
+    "Vehicle.Body.Lights.Fog.Front.Switch.IsEngaged",
+    "Vehicle.Body.Lights.Fog.Rear.Switch.IsEngaged",
     "Vehicle.Chassis.ParkingBrake.IsEngaged",
     "Vehicle.Chassis.Brake.PedalPosition",
     // Driver's gear-selector intent — written by HMI cockpit shifter
@@ -42,21 +42,21 @@ const INPUT_SIGNALS: &[VssPath] = &[
     "Powertrain.Transmission.SelectedGear",
     "Vehicle.Body.Lights.LightSwitch",
     "Vehicle.Controller.Body.PEPS.KeyPresent",
-    "Vehicle.Controller.Body.Switches.Keyfob.LockButton",
-    "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.LockButton",
-    "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Right.LockButton",
-    "Vehicle.Controller.Body.Switches.DoorTrim.Row2.Left.LockButton",
-    "Vehicle.Controller.Body.Switches.DoorTrim.Row2.Right.LockButton",
-    "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Left.UnlockButton",
-    "Vehicle.Controller.Body.Switches.DoorTrim.Row1.Right.UnlockButton",
+    "Vehicle.Simulation.KeyFob.Switch.Lock",
+    "Vehicle.Cabin.Door.Row1.Left.Switch.Lock",
+    "Vehicle.Cabin.Door.Row1.Right.Switch.Lock",
+    "Vehicle.Cabin.Door.Row2.Left.Switch.Lock",
+    "Vehicle.Cabin.Door.Row2.Right.Switch.Lock",
+    "Vehicle.Cabin.Door.Row1.Left.Switch.Unlock",
+    "Vehicle.Cabin.Door.Row1.Right.Switch.Unlock",
     "Vehicle.Simulation.Connectivity.RemoteLock",
     "Vehicle.Simulation.Connectivity.BleLock",
     "Vehicle.Simulation.Connectivity.NfcCardPresent",
     "Vehicle.Simulation.Connectivity.NfcPhonePresent",
-    "Vehicle.Controller.Safety.CrashDetected",
+    "Vehicle.CrashDetected",
     "Vehicle.Controller.Body.Lights.AmbientLightSensor.Illuminance",
     // ADAS camera input — HMI toggle simulates oncoming vehicle detection.
-    "Vehicle.Controller.ADAS.HighBeam.OncomingVehicleDetected",
+    "Vehicle.ADAS.HighBeam.OncomingVehicleDetected",
     // Bulb defect fault-injection (HMI toggles to simulate failed lamp).
     // Three physical lamps per side: Front, Side (mirror repeater), Rear.
     "Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Front.IsDefect",
@@ -129,20 +129,20 @@ const INPUT_SIGNALS: &[VssPath] = &[
     // Gates the trunk arbiter's ValetGate `PhysicalGate`.
     "Vehicle.Controller.Cabin.ValetMode.IsActive",
     // Hood commands — HoodPlantModel runs a tri-state latch FSM.
-    //   • Vehicle.Controller.Body.Switches.Hood.Release.IsPulled — dash release lever
+    //   • Vehicle.Body.Hood.ReleaseSwitch.IsPulled — dash release lever
     //     (momentary, double-pull within 3 s pops to HALF_LATCHED).
     //   • Vehicle.Controller.Body.Hood.OpenCmd  — top-view click HALF_LATCHED → OPEN.
     //   • Vehicle.Controller.Body.Hood.CloseCmd — top-view click OPEN → LATCHED.
-    "Vehicle.Controller.Body.Switches.Hood.Release.IsPulled",
+    "Vehicle.Body.Hood.ReleaseSwitch.IsPulled",
     "Vehicle.Controller.Body.Hood.OpenCmd",
     "Vehicle.Controller.Body.Hood.CloseCmd",
     // Cabin trunk release switch — interior push-button / pull-handle.
     // CabinTrunkRelease feature pulses Vehicle.Controller.Body.Trunk.Rear.OpenCmd through the
     // trunk arbiter (which applies the valet gate).
-    "Vehicle.Controller.Body.Switches.Trunk.Release.IsPressed",
+    "Vehicle.Body.Trunk.Rear.ReleaseSwitch.IsPressed",
     // Steering-wheel horn pad — momentary press.  ManualHorn feature
     // claims Vehicle.Body.Horn.IsActive at Medium priority while held.
-    "Vehicle.Controller.Body.Switches.Horn.IsPressed",
+    "Vehicle.Body.Horn.Switch.IsPressed",
     // Sunroof commands — string enum "OPEN" | "CLOSE" | "STOP".
     // SunroofPlantModel runs a 5 s full-travel motor model and
     // NVM-persists settled positions.
@@ -164,7 +164,7 @@ const INPUT_SIGNALS: &[VssPath] = &[
     // ws_integration tests to simulate "vehicle is locked" without
     // generating a full fob LOCK press.  In production the door-lock
     // arbiter is the only writer; HMI side-channel is for testing.
-    "Vehicle.Controller.Cabin.LockStatus",
+    "Vehicle.Cabin.LockStatus",
     // Thumb-pad lock inputs — Row 1 outside handle lock areas (HMI top-view).
     "Vehicle.Cabin.Door.Row1.Left.Handle.Outside.LockPad.IsPressed",
     "Vehicle.Cabin.Door.Row1.Right.Handle.Outside.LockPad.IsPressed",
@@ -173,9 +173,9 @@ const INPUT_SIGNALS: &[VssPath] = &[
     // - Select / Direction: defined now so the namespace is reserved;
     //   the Mirror-Adjust feature that consumes these is not implemented
     //   in this PR.
-    "Vehicle.Controller.Body.Switches.Mirror.Fold",
-    "Vehicle.Controller.Body.Switches.Mirror.Select",
-    "Vehicle.Controller.Body.Switches.Mirror.Direction",
+    "Vehicle.Body.Mirrors.Switch.Fold",
+    "Vehicle.Body.Mirrors.Switch.Select",
+    "Vehicle.Body.Mirrors.Switch.Direction",
     // 3-position interior dome-light switch (String enum OFF/DOOR/ON).
     // Driven by the cockpit HMI; consumed by the DomeSwitch feature.
     "Vehicle.Controller.Cabin.Light.Dome.SwitchPosition",
@@ -186,34 +186,34 @@ const INPUT_SIGNALS: &[VssPath] = &[
     // Master child-lock momentary push — HMI writes this; the
     // PowerChildLock feature observes the rising edge and toggles
     // MasterStatus + the per-door IsChildLockActive fan-out.
-    "Vehicle.Controller.Body.Switches.PowerChildLock.IsPressed",
+    "Vehicle.Cabin.ChildLock.Switch.IsPressed",
     // Sunroof rocker detent (String enum NEUTRAL / OPEN_HOLD /
     // OPEN_AUTO / CLOSE_HOLD / CLOSE_AUTO).  Written by the cockpit
     // OVERHEAD CONSOLE rocker; the SunroofControl feature sequences
     // the two motors from it.
-    "Vehicle.Controller.Body.Switches.Sunroof.Detent",
+    "Vehicle.Cabin.Sunroof.Switch.Detent",
     // Driver-master per-window Detent rockers (4 total — one per
     // window).  Consumed by PowerWindow which claims the window
     // arbiter at Medium.  String enum: NEUTRAL / UP_HOLD / UP_AUTO /
     // DOWN_HOLD / DOWN_AUTO.
-    "Vehicle.Controller.Body.Switches.Window.DriverMaster.Row1.Left.Detent",
-    "Vehicle.Controller.Body.Switches.Window.DriverMaster.Row1.Right.Detent",
-    "Vehicle.Controller.Body.Switches.Window.DriverMaster.Row2.Left.Detent",
-    "Vehicle.Controller.Body.Switches.Window.DriverMaster.Row2.Right.Detent",
+    "Vehicle.Cabin.Door.Row1.Left.Window.Switch.MasterDetent",
+    "Vehicle.Cabin.Door.Row1.Right.Window.Switch.MasterDetent",
+    "Vehicle.Cabin.Door.Row2.Left.Window.Switch.MasterDetent",
+    "Vehicle.Cabin.Door.Row2.Right.Window.Switch.MasterDetent",
     // Local per-door Detent rockers (4 total).  All 4 sides defined
     // symmetrically.  Cockpit only writes the front-passenger and
     // rear sides in production; Local.Row1.{driver-side} is reserved
     // for tests and stays at NEUTRAL otherwise.
-    "Vehicle.Controller.Body.Switches.Window.Local.Row1.Left.Detent",
-    "Vehicle.Controller.Body.Switches.Window.Local.Row1.Right.Detent",
-    "Vehicle.Controller.Body.Switches.Window.Local.Row2.Left.Detent",
-    "Vehicle.Controller.Body.Switches.Window.Local.Row2.Right.Detent",
+    "Vehicle.Cabin.Door.Row1.Left.Window.Switch.LocalDetent",
+    "Vehicle.Cabin.Door.Row1.Right.Window.Switch.LocalDetent",
+    "Vehicle.Cabin.Door.Row2.Left.Window.Switch.LocalDetent",
+    "Vehicle.Cabin.Door.Row2.Right.Window.Switch.LocalDetent",
     // Vehicle starting inputs — consumed by VehicleStartingControl.
     //   • StartStop.IsPressed       — PEPS push-button momentary.
     //   • IgnitionCylinder.Position — KeyCylinder rotary (String enum
     //     "LOCK" | "ACC" | "ON" | "START"; spring-loaded START).
-    "Vehicle.Controller.Body.Switches.StartStop.IsPressed",
-    "Vehicle.Controller.Body.Switches.IgnitionCylinder.Position",
+    "Vehicle.PowerMode.StartStopSwitch.IsPressed",
+    "Vehicle.PowerMode.IgnitionCylinder.Position",
 ];
 
 /// Signals the bridge pushes back to the HMI (actuator outputs from arbiters).
@@ -251,13 +251,13 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     // Vehicle-level central lock status (string enum: UNLOCKED |
     // DRIVER_UNLOCKED | LOCKED | DOUBLE_LOCKED) — published by the
     // door-lock arbiter on every accepted command, NVM-persisted.
-    "Vehicle.Controller.Cabin.LockStatus",
-    // Companion signals to Vehicle.Controller.Cabin.LockStatus — published by the
+    "Vehicle.Cabin.LockStatus",
+    // Companion signals to Vehicle.Cabin.LockStatus — published by the
     // door-lock arbiter on every accepted command.  AutoRelock
     // subscribes; HMI displays them as a small "last lock event"
     // chip useful for forensics / debugging.
-    "Vehicle.Controller.Cabin.LockStatus.LastRequestor",
-    "Vehicle.Controller.Cabin.LockStatus.EventNum",
+    "Vehicle.Cabin.LockStatus.LastRequestor",
+    "Vehicle.Cabin.LockStatus.EventNum",
     "Vehicle.Cabin.Door.Row1.Left.IsLocked",
     "Vehicle.Cabin.Door.Row1.Right.IsLocked",
     "Vehicle.Cabin.Door.Row2.Left.IsLocked",
@@ -305,7 +305,7 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     "Vehicle.Body.Trunk.Rear.IsOpen",
     // Hood plant model outputs — tri-state latch + IsOpen companion.
     "Vehicle.Body.Hood.IsOpen",
-    "Vehicle.Controller.Body.Hood.LatchState",
+    "Vehicle.Body.Hood.LatchState",
     // Sunroof plant model outputs — motor positions, NVM-backed.
     "Vehicle.Cabin.Sunroof.Position",
     "Vehicle.Cabin.Sunroof.Shade.Position",
@@ -321,7 +321,7 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     // continue writing the intent flag.
     "Vehicle.Controller.Body.Chime.IsSounding",
     // Anti-theft alarm status (PanicAlarm direct publish).
-    "Vehicle.Controller.Alarm.IsActive",
+    "Vehicle.Body.Alarm.IsActive",
     // Authoritative PerimeterAlarm state enum: "DISARMED" |
     // "PRE_ARMED" | "ARMED" | "ACTIVATED".  HMI subscribes for the
     // status pill + countdown banners.
@@ -364,7 +364,7 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     // Panic switch — set by RKE on PANIC press, cleared by PanicAlarm
     // on cancel-via-unlock.  HMI consumes this to keep its own alarm
     // toggle state in sync.
-    "Vehicle.Controller.Body.Switches.Panic.IsEngaged",
+    "Vehicle.Simulation.KeyFob.Switch.Panic",
     // AutoRelock status — drives the HMI countdown banner.  IsArmed
     // is published TRUE when the timer starts, FALSE on every exit.
     // TimeoutSeconds is published once per arm so the HMI can render
@@ -374,7 +374,7 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     // Vehicle starting outputs — derived by the brake plant + sole
     // writer VehicleStartingControl.  The HMI displays the immobilizer
     // status next to the Power Mode chip.
-    "Vehicle.Controller.Chassis.Brake.IsApplied",
+    "Vehicle.Chassis.Brake.IsApplied",
     "Vehicle.Controller.Starting.ImmobilizerStatus",
     // BTSI + Key-in-Ignition Inhibit derived flags.
     "Powertrain.Transmission.ShiftLockEngaged",
@@ -436,13 +436,13 @@ const ESSENTIAL_BOOT_SIGNALS: &[VssPath] = &[
     // Hood plant model — boots from NVM and publishes both
     // IsOpen + LatchState on startup.
     "Vehicle.Body.Hood.IsOpen",
-    "Vehicle.Controller.Body.Hood.LatchState",
+    "Vehicle.Body.Hood.LatchState",
     // Sunroof plant model — boots from NVM and publishes both Positions on startup.
     "Vehicle.Cabin.Sunroof.Position",
     "Vehicle.Cabin.Sunroof.Shade.Position",
     // Status flags published once at boot from main.rs.
-    "Vehicle.Controller.Body.Switches.Panic.IsEngaged",
-    "Vehicle.Controller.Alarm.IsActive",
+    "Vehicle.Simulation.KeyFob.Switch.Panic",
+    "Vehicle.Body.Alarm.IsActive",
     "Vehicle.Controller.Body.Doors.AutoRelock.IsArmed",
 ];
 

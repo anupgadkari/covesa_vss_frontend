@@ -170,7 +170,7 @@ pub enum FeatureId {
     DomeSwitch = 0x23,
     /// Master "power child lock" latching feature.  Consumes the
     /// driver-master momentary push
-    /// `Vehicle.Controller.Body.Switches.PowerChildLock.IsPressed` and toggles, on each
+    /// `Vehicle.Cabin.ChildLock.Switch.IsPressed` and toggles, on each
     /// press edge, the latched master output
     /// `Vehicle.Controller.Body.PowerChildLock.MasterStatus` plus the per-rear-door
     /// fan-out signals `Body.Doors.Row2.{Left,Right}.IsChildLockActive`.
@@ -200,7 +200,7 @@ pub enum FeatureId {
     /// the single resolved motor direction per window.
     PowerWindow = 0x25,
     /// Sunroof + shade coordinated control.  Consumes the
-    /// overhead-console rocker detent (`Vehicle.Controller.Body.Switches.Sunroof.Detent`),
+    /// overhead-console rocker detent (`Vehicle.Cabin.Sunroof.Switch.Detent`),
     /// resolves the sequencing rule (shade opens before roof when
     /// opening; roof closes before shade when closing), and writes
     /// `Vehicle.Controller.Sunroof.MoveCmd` + `Vehicle.Controller.Sunroof.Shade.MoveCmd` so the
@@ -208,7 +208,7 @@ pub enum FeatureId {
     SunroofControl = 0x27,
     /// Smart Unlock — re-unlocks a PEPS vehicle that was locked from
     /// outside while a paired key is still in the cabin.  Triggered
-    /// on every external `Vehicle.Controller.Cabin.LockStatus` lock event with ignition
+    /// on every external `Vehicle.Cabin.LockStatus` lock event with ignition
     /// quiescent.  See `features::smart_unlock`.
     SmartUnlock = 0x2B,
     // ---- Future window-arbiter participants (allow-list reserved) ----
@@ -226,7 +226,7 @@ pub enum FeatureId {
 
 impl std::fmt::Display for FeatureId {
     /// Stable, wire-format-safe string representation of a `FeatureId`.
-    /// Used to publish `Vehicle.Controller.Cabin.LockStatus.LastRequestor` so subscribers
+    /// Used to publish `Vehicle.Cabin.LockStatus.LastRequestor` so subscribers
     /// (AutoRelock today) can filter on requestor identity by string
     /// match without coupling to the enum's u8 layout.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

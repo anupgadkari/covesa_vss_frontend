@@ -127,7 +127,7 @@ Feature: Slam-lock & slam-lock-protect (interior trim Lock with door open)
     Given all four doors are closed
     When the driver presses the Row1.Left trim Lock button
     Then Vehicle.Controller.Body.Doors.CentralLock.Command becomes "lock_all"
-    And Vehicle.Controller.Cabin.LockStatus.LastRequestor becomes "DoorTrimButton"
+    And Vehicle.Cabin.LockStatus.LastRequestor becomes "DoorTrimButton"
 
   # --- REQ-SLP-003 ---
   Scenario: US — trim lock with door open dispatches as SlamLock
@@ -135,7 +135,7 @@ Feature: Slam-lock & slam-lock-protect (interior trim Lock with door open)
     And the Row1.Left door is open
     When the driver presses the Row1.Left trim Lock button
     Then Vehicle.Controller.Body.Doors.CentralLock.Command becomes "lock_all"
-    And Vehicle.Controller.Cabin.LockStatus.LastRequestor becomes "SlamLock"
+    And Vehicle.Cabin.LockStatus.LastRequestor becomes "SlamLock"
     # The user closes the door physically; cabin is already locked.
     # PerimeterAlarm sees SlamLock in EXTERNAL_LOCK_REQUESTORS and arms.
 
@@ -146,8 +146,8 @@ Feature: Slam-lock & slam-lock-protect (interior trim Lock with door open)
     And vehicle_line.driver_door_side is Left
     And the Row1.Left door is open
     When the driver presses the Row1.Left trim Lock button
-    Then Vehicle.Controller.Cabin.LockStatus.EventNum bumps with LockStatus = "LOCKED" and LastRequestor = "DoorTrimButton"
-    And Vehicle.Controller.Cabin.LockStatus.EventNum bumps again with LockStatus = "DRIVER_UNLOCKED" and LastRequestor = "SlamLock"
+    Then Vehicle.Cabin.LockStatus.EventNum bumps with LockStatus = "LOCKED" and LastRequestor = "DoorTrimButton"
+    And Vehicle.Cabin.LockStatus.EventNum bumps again with LockStatus = "DRIVER_UNLOCKED" and LastRequestor = "SlamLock"
     And Vehicle.Controller.Body.Doors.CentralLock.FeedbackRequest = "unlock" is published
 
   # --- REQ-SLP-006 ---
@@ -157,7 +157,7 @@ Feature: Slam-lock & slam-lock-protect (interior trim Lock with door open)
     And vehicle_line.driver_door_side is Left
     And the Row1.Left door is open
     When the driver presses the Row1.Left trim Lock button
-    Then Vehicle.Controller.Cabin.LockStatus.LastRequestor cycles "DoorTrimButton" → "SlamLock"
+    Then Vehicle.Cabin.LockStatus.LastRequestor cycles "DoorTrimButton" → "SlamLock"
     And the second event has LockStatus = "UNLOCKED"
 
   # --- REQ-SLP-007 ---
