@@ -3159,9 +3159,9 @@ function DevicePanel({s, set, cfg, sel, setSel}){
   // Fob 6 is an incompatible key blank (modelled in the zone-button
   // filter — its CYLINDER tile is hidden).
   const devices=[
-    ...[1,2,3,4].map(i=>({type:'fob',  index:i, label:`F${i}`, color:'#F59E0B', pfx:`Body.PEPS.Plant.KeyFob.${i}`,  sigKey:'Zone'})),
-    ...[5,6]    .map(i=>({type:'fob',  index:i, label:`F${i}`, color:'#F04040', pfx:`Body.PEPS.Plant.KeyFob.${i}`,  sigKey:'Zone', intruder:true})),
-    ...[1,2]    .map(i=>({type:'phone',index:i, label:`P${i}`, color:'#4A9EF5', pfx:`Body.PEPS.Plant.BlePhone.${i}`, sigKey:'Zone'})),
+    ...[1,2,3,4].map(i=>({type:'fob',  index:i, label:`F${i}`, color:'#F59E0B', pfx:`Body.PEPS.Plant.KeyFob.${i}`,  sigKey:'PlacedZone'})),
+    ...[5,6]    .map(i=>({type:'fob',  index:i, label:`F${i}`, color:'#F04040', pfx:`Body.PEPS.Plant.KeyFob.${i}`,  sigKey:'PlacedZone', intruder:true})),
+    ...[1,2]    .map(i=>({type:'phone',index:i, label:`P${i}`, color:'#4A9EF5', pfx:`Body.PEPS.Plant.BlePhone.${i}`, sigKey:'PlacedZone'})),
     // NFC cards — signal is `.Position` (NfcPosition enum), not `.Zone`.
     // Default value `NotPresent` represents "no NFC reader contact".
     ...[1,2]    .map(i=>({type:'nfc',  index:i, label:`N${i}`, color:'#0DC8C8', pfx:`Body.PEPS.Plant.NfcCard.${i}`,  sigKey:'Position', isNfc:true})),
@@ -3680,11 +3680,17 @@ function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
         <div className="peps-section" style={{padding:'0 0 4px',fontFamily:'var(--fm)',fontSize:'9px',color:'var(--dim)'}}>KEY FOBS — button press + zone</div>
         {[1,2,3,4].map(i=>{
           const pfx=`Body.PEPS.Plant.KeyFob.${i}`;
+          // PlacedZone = ground-truth placement (user-set, instant); drives
+          // the <select> control + physical-occupancy checks (cylinder).
+          // LastObservedZone = what the vehicle has actually detected via
+          // its periodic PEPS scan — may lag PlacedZone until the next
+          // scan tick.  PEPS Devices card displays the vehicle view.
           const zone=s[`${pfx}.PlacedZone`]||'OutOfRange';
+          const lastObservedZone=s[`${pfx}.LastObservedZone`]||'OutOfRange';
           const rssi=s[`${pfx}.RssiResponse`]||'';
           return <div key={i} className="peps-card">
             <div className="peps-title">FOB {i} <span className="peps-badge paired">PAIRED</span>
-              <span style={{marginLeft:'auto',fontFamily:'var(--fm)',fontSize:'9px',color:'var(--dim)'}}>{zone}</span>
+              <span style={{marginLeft:'auto',fontFamily:'var(--fm)',fontSize:'9px',color:'var(--dim)'}}>{lastObservedZone}</span>
             </div>
             {rssi&&<div style={{fontFamily:'var(--fm)',fontSize:'8px',color:'var(--dim)',wordBreak:'break-all'}}>{rssi.slice(0,60)}</div>}
             {/* Zone select — quick placement without leaving the panel.
@@ -3724,7 +3730,10 @@ function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
         })}
         {[5,6].map(i=>{
           const pfx=`Body.PEPS.Plant.KeyFob.${i}`;
+          // See note on the paired-fob cards above: PlacedZone for the
+          // <select> + cylinder physics, LastObservedZone for the badge.
           const zone=s[`${pfx}.PlacedZone`]||'OutOfRange';
+          const lastObservedZone=s[`${pfx}.LastObservedZone`]||'OutOfRange';
           // Fob 5: mechanically-compatible key blank — fits the
           //   cylinder but fails the immobilizer challenge, so the
           //   cylinder rotates without authorising a state change.
@@ -3739,7 +3748,7 @@ function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
             : 'incompatible key blank';
           return <div key={i} className="peps-card intruder">
             <div className="peps-title">FOB {i} <span className="peps-badge unpaired">INTRUDER</span>
-              <span style={{marginLeft:'auto',fontFamily:'var(--fm)',fontSize:'9px',color:'var(--dim)'}}>{zone}</span>
+              <span style={{marginLeft:'auto',fontFamily:'var(--fm)',fontSize:'9px',color:'var(--dim)'}}>{lastObservedZone}</span>
             </div>
             <div style={{fontFamily:'var(--fm)',fontSize:'7px',color:'var(--muted)',marginTop:1}}>{fobSubtitle}</div>
             {(()=>{
