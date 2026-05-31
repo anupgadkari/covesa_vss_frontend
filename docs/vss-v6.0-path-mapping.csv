@@ -193,11 +193,11 @@ Body.Switches.Hood.Release.IsPulled,Vehicle.Body.Hood.ReleaseSwitch.IsPulled,swi
 Body.Switches.Horn.IsPressed,Vehicle.Body.Horn.Switch.IsPressed,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
 Body.Switches.IgnitionCylinder.Position,Vehicle.PowerMode.IgnitionCylinder.Position,switch-input-overlay,power-mode control — grouped under Vehicle.PowerMode.* (pairs with the canonical Vehicle.LowVoltageSystemState)
 Body.Switches.IgnitionCylinder.RemovalInhibited,Vehicle.Controller.Body.Switches.IgnitionCylinder.RemovalInhibited,controller-namespace,bridge-internal switch input; no VSS equivalent
-Body.Switches.Keyfob.LockButton,Vehicle.Simulation.KeyFob.Switch.Lock,simulation,"fob-mounted switch — input from the simulated keyfob, not a vehicle component"
+Body.Switches.Keyfob.LockButton,(retired),retired,"fob-button intent is carried per-fob via Vehicle.Simulation.KeyFob.{N}.ButtonPress + Vehicle.Simulation.KeyFob.{N}.RfMessage; no aggregate switch signal — RKE is the single owner of decoded lock state"
 Body.Switches.Mirror.Direction,Vehicle.Body.Mirrors.Switch.Direction,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
 Body.Switches.Mirror.Fold,Vehicle.Body.Mirrors.Switch.Fold,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
 Body.Switches.Mirror.Select,Vehicle.Body.Mirrors.Switch.Select,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
-Body.Switches.Panic.IsEngaged,Vehicle.Simulation.KeyFob.Switch.Panic,simulation,"fob-mounted switch — input from the simulated keyfob, not a vehicle component"
+Body.Switches.Panic.IsEngaged,Vehicle.Controller.Alarm.PanicEventNum,controller-namespace,"RKE-decoded authenticated PANIC press counter (Uint16, monotonic). RKE is the single writer; PanicAlarm + PerimeterAlarm subscribe and dedup on the integer value. Replaces the old shared-latch Bool — PanicAlarm owns its engaged state internally and no longer writes back."
 Body.Switches.PowerChildLock.IsPressed,Vehicle.Cabin.ChildLock.Switch.IsPressed,switch-input-overlay,moved out of Vehicle.Controller.* — user-operated switch input at canonical component home
 Body.Switches.StartStop.BacklightDutyCycle,Vehicle.Controller.Body.Switches.StartStop.BacklightDutyCycle,controller-namespace,bridge-internal switch input; no VSS equivalent
 Body.Switches.StartStop.BacklightIntensity,Vehicle.Controller.Body.Switches.StartStop.BacklightIntensity,controller-namespace,bridge-internal switch input; no VSS equivalent

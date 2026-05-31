@@ -151,16 +151,21 @@ of them out:
   which `PowerMode.*` thematically pairs with.  (The controller-side
   `IgnitionCylinder.RemovalInhibited` stays in `Vehicle.Controller.*`
   — it's a controller output, not a user control.)
-- **2 fob-mounted switches** → `Vehicle.Simulation.KeyFob.Switch.*`.
-  The panic and keyfob-lock buttons are physically *on the keyfob*,
-  not on the vehicle — so a vehicle-component home was wrong
-  (`Vehicle.Body.Alarm.PanicSwitch` corrected here).  The keyfob is
-  a simulated device, and a fob-button-as-bus-signal is inherently
-  a simulator construct — on a real vehicle the press arrives over
-  RF and the BCM decodes an RKE command.  `Panic.IsEngaged` →
-  `Vehicle.Simulation.KeyFob.Switch.Panic`; the lock button →
-  `Vehicle.Simulation.KeyFob.Switch.Lock`, consistent with the
-  existing per-fob `Vehicle.Simulation.KeyFob.N.ButtonPress`.
+- **Fob-button intent unified on the per-fob RfMessage chain.**
+  Earlier drafts placed the panic and keyfob-lock buttons under
+  `Vehicle.Simulation.KeyFob.Switch.*` (vehicle-mounted-switch homes
+  were already wrong).  But on a real vehicle the keyfob doesn't
+  expose discrete switch signals to the bus at all — every press
+  arrives as an RF transmission decoded by RKE.  The simulator
+  already models that pipeline per fob
+  (`Vehicle.Simulation.KeyFob.{N}.ButtonPress` → encoded
+  `RfMessage`); panic now rides the same chain.  RKE's decoded
+  output is `Vehicle.Controller.Alarm.PanicEventNum` (Uint16,
+  monotonic) — a single-writer event counter.  PanicAlarm + the
+  PerimeterAlarm disarm path subscribe and dedup on the integer
+  value; PanicAlarm owns its engaged-state latch internally (no
+  more shared-latch back-write).  The standalone keyfob lock
+  switch is deleted entirely — it had no consumers.
 
 **Deliberately kept in `Vehicle.Controller.*`** (layer 2/3 plumbing,
 not user input): `Alarm.State` (FSM enum — distinct from the
@@ -503,6 +508,19 @@ and `FobButton` already includes `PanicAlarm`.  The clean target:
 
 A behavioural refactor of `PanicAlarm` + its tests, so kept out of
 the rename/relocation PRs.
+
+**Status: landed.**  Sub-PR `feature/vss-v6.0/fob-button-unification`
+implements this.  RKE's `handle_panic` now bumps
+`Vehicle.Controller.Alarm.PanicEventNum` (Uint16, monotonic) on each
+confirmed authenticated press — symmetric with the existing
+`Cabin.LockStatus.EventNum` pattern.  `PanicAlarm` subscribes,
+dedups on the integer value, toggles its internal engaged latch on
+each distinct bump, and publishes only `Vehicle.Body.Alarm.IsActive`
++ its lighting/horn arbiter claims (no write-back).  `PerimeterAlarm`
+subscribes to the same event-num for its panic-press disarm path.
+DOUBLE-press mode in `panic_press_mode` now gates both engage *and*
+cancel (RKE no longer knows the alarm's state); users wanting a
+faster cancel can unlock, which `PanicAlarm` self-cancels on.
 
 ## Doc-comment update
 

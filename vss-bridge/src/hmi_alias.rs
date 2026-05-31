@@ -614,10 +614,6 @@ const HMI_ALIASES: &[(VssPath, VssPath)] = &[
         "Body.Switches.IgnitionCylinder.RemovalInhibited",
     ),
     (
-        "Vehicle.Simulation.KeyFob.Switch.Lock",
-        "Body.Switches.Keyfob.LockButton",
-    ),
-    (
         "Vehicle.Body.Mirrors.Switch.Direction",
         "Body.Switches.Mirror.Direction",
     ),
@@ -628,10 +624,6 @@ const HMI_ALIASES: &[(VssPath, VssPath)] = &[
     (
         "Vehicle.Body.Mirrors.Switch.Select",
         "Body.Switches.Mirror.Select",
-    ),
-    (
-        "Vehicle.Simulation.KeyFob.Switch.Panic",
-        "Body.Switches.Panic.IsEngaged",
     ),
     (
         "Vehicle.Cabin.ChildLock.Switch.IsPressed",

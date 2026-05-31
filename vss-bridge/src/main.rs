@@ -628,9 +628,11 @@ async fn boot_simulation_stack(
     // ── Initial signal state ────────────────────────────────────────
     // `Vehicle.LowVoltageSystemState` is seeded by `VehicleStartingControl`
     // (sole writer); no top-level publish here.
+    // PanicEventNum seeded at 0; PanicAlarm + PerimeterAlarm react to
+    // bumps relative to whatever they last saw.
     bus.publish(
-        "Vehicle.Simulation.KeyFob.Switch.Panic",
-        SignalValue::Bool(false),
+        "Vehicle.Controller.Alarm.PanicEventNum",
+        SignalValue::Uint16(0),
     )
     .await?;
     bus.publish("Vehicle.Body.Alarm.IsActive", SignalValue::Bool(false))

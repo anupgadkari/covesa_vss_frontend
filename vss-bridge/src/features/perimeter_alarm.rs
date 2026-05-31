@@ -91,7 +91,7 @@ const DOOR_OPEN_SIGNALS: [VssPath; 4] = [
 
 const LOCK_STATUS: VssPath = "Vehicle.Cabin.LockStatus";
 const LAST_REQUESTOR: VssPath = "Vehicle.Cabin.LockStatus.LastRequestor";
-const PANIC_SWITCH: VssPath = "Vehicle.Simulation.KeyFob.Switch.Panic";
+const PANIC_EVENT_NUM: VssPath = "Vehicle.Controller.Alarm.PanicEventNum";
 const ALARM_STATUS: VssPath = "Vehicle.Body.Alarm.IsActive";
 /// Authoritative perimeter-alarm state, published by this feature on
 /// every transition so the HMI / telematics display a single string
@@ -278,7 +278,8 @@ impl<B: SignalBus + Send + Sync + 'static> PerimeterAlarm<B> {
         let mut status_rx = self.bus.subscribe(LOCK_STATUS).await;
         let mut requestor_rx = self.bus.subscribe(LAST_REQUESTOR).await;
         let mut event_num_rx = self.bus.subscribe(LOCK_EVENT_NUM).await;
-        let mut panic_rx = self.bus.subscribe(PANIC_SWITCH).await;
+        let mut panic_rx = self.bus.subscribe(PANIC_EVENT_NUM).await;
+        let mut last_panic_event_num: u16 = 0;
         let mut power_rx = self.bus.subscribe(POWER_STATE).await;
 
         // Cached signals — handlers below read them, but the explicit
@@ -448,8 +449,11 @@ impl<B: SignalBus + Send + Sync + 'static> PerimeterAlarm<B> {
                     }
                 }
                 Some(val) = panic_rx.next() => {
-                    if matches!(val, SignalValue::Bool(true)) && active.is_some() {
-                        tracing::info!("PerimeterAlarm: panic switch engaged — DISARM");
+                    let SignalValue::Uint16(n) = val else { continue };
+                    if n == last_panic_event_num { continue; }
+                    last_panic_event_num = n;
+                    if active.is_some() {
+                        tracing::info!("PerimeterAlarm: panic press (event {n}) — DISARM");
                         self.disarm(&mut active).await;
                         armed_when_unlocked = false;
                         self.transition_to(&mut current_state, AlarmState::Disarmed).await;
@@ -753,6 +757,14 @@ mod tests {
     use crate::adapters::mock::MockBus;
     use crate::arbiter::{courtesy_arbiter, horn_arbiter, lighting_arbiter, puddle_arbiter};
 
+    /// Bump the `PanicEventNum` counter — equivalent to RKE seeing one
+    /// confirmed authenticated PANIC press.  PerimeterAlarm dedups on
+    /// the integer value, so the caller threads a `&mut u16`.
+    fn press_panic(bus: &MockBus, ev: &mut u16) {
+        *ev = ev.wrapping_add(1);
+        bus.inject(PANIC_EVENT_NUM, SignalValue::Uint16(*ev));
+    }
+
     async fn settle(ms: u64) {
         // In start_paused mode the runtime auto-advances the mocked
         // clock whenever all tasks are parked on timers — so a real
@@ -911,6 +923,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn panic_press_during_chime_disarms_silently() {
+        let mut ev: u16 = 0;
         let bus = setup().await;
         inject_lock(&bus, "LOCKED", "KeyfobRke", 1).await;
         // Skip past the 20 s pre-arm window so subsequent door-opens
@@ -923,7 +936,7 @@ mod tests {
         settle(2_000).await;
         assert_eq!(bus.latest_value(HORN), None);
 
-        bus.inject(PANIC_SWITCH, SignalValue::Bool(true));
+        press_panic(&bus, &mut ev);
         settle(50).await;
 
         assert_eq!(
@@ -1041,6 +1054,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn panic_press_disarms_alarm() {
+        let mut ev: u16 = 0;
         let bus = setup().await;
         inject_lock(&bus, "LOCKED", "KeyfobRke", 1).await;
         // Skip past the 20 s pre-arm window so subsequent door-opens
@@ -1057,7 +1071,7 @@ mod tests {
             Some(SignalValue::Bool(true))
         );
 
-        bus.inject(PANIC_SWITCH, SignalValue::Bool(true));
+        press_panic(&bus, &mut ev);
         settle(50).await;
 
         assert_eq!(
