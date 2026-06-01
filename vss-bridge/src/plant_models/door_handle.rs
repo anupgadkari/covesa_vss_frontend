@@ -95,6 +95,45 @@ const AJAR_SIGNALS: [&str; 4] = [
     "Vehicle.Cabin.Door.Row2.Right.IsOpen",
 ];
 
+// ── Canonical VSS v6.0 siblings ─────────────────────────────────────
+//
+// Each published `Row{1,2}.{Left,Right}.X` state signal also fires
+// under its VSS v6.0 canonical `Row{N}.{DriverSide,PassengerSide}.X`
+// sibling so external Kuksa consumers can subscribe canonically.
+// Mirrors door_lock's pattern (sub-PR 4b PR #55).  See backlog
+// #22 sub-PR 4b for the architectural rationale.
+//
+// Indexed identically to the physical arrays above — `canonical[i]`
+// is the canonical sibling of `LATCH_SIGNALS[i]` / `AJAR_SIGNALS[i]`.
+// LHD vs RHD is picked at construction via `with_cfg` and stored on
+// the struct (no per-publish allocation).
+
+const LATCH_CANONICAL_LHD: [&str; 4] = [
+    "Vehicle.Cabin.Door.Row1.DriverSide.Latch.IsLatched",
+    "Vehicle.Cabin.Door.Row1.PassengerSide.Latch.IsLatched",
+    "Vehicle.Cabin.Door.Row2.DriverSide.Latch.IsLatched",
+    "Vehicle.Cabin.Door.Row2.PassengerSide.Latch.IsLatched",
+];
+const LATCH_CANONICAL_RHD: [&str; 4] = [
+    "Vehicle.Cabin.Door.Row1.PassengerSide.Latch.IsLatched",
+    "Vehicle.Cabin.Door.Row1.DriverSide.Latch.IsLatched",
+    "Vehicle.Cabin.Door.Row2.PassengerSide.Latch.IsLatched",
+    "Vehicle.Cabin.Door.Row2.DriverSide.Latch.IsLatched",
+];
+
+const AJAR_CANONICAL_LHD: [&str; 4] = [
+    "Vehicle.Cabin.Door.Row1.DriverSide.IsOpen",
+    "Vehicle.Cabin.Door.Row1.PassengerSide.IsOpen",
+    "Vehicle.Cabin.Door.Row2.DriverSide.IsOpen",
+    "Vehicle.Cabin.Door.Row2.PassengerSide.IsOpen",
+];
+const AJAR_CANONICAL_RHD: [&str; 4] = [
+    "Vehicle.Cabin.Door.Row1.PassengerSide.IsOpen",
+    "Vehicle.Cabin.Door.Row1.DriverSide.IsOpen",
+    "Vehicle.Cabin.Door.Row2.PassengerSide.IsOpen",
+    "Vehicle.Cabin.Door.Row2.DriverSide.IsOpen",
+];
+
 /// Per-door child-lock state (output of the `PowerChildLock` feature).
 /// Only Row2 doors are ever child-locked; the Row1 slots are `None`
 /// because no signal is subscribed for them.  When the indexed slot is
@@ -117,15 +156,55 @@ const DOOR_LABELS: [&str; 4] = ["Row1.Left", "Row1.Right", "Row2.Left", "Row2.Ri
 /// Spawn 4 per-door coroutines via [`DoorHandlePlantModel::run`].
 pub struct DoorHandlePlantModel<B: SignalBus> {
     bus: Arc<B>,
+    /// Canonical VSS v6.0 sibling paths for `Latch.IsLatched`, one
+    /// per door.  Default LHD; `with_cfg` swaps to the RHD variant
+    /// when the attached `PlatformConfig` reports
+    /// `vehicle_orientation = Rhd`.  Each `bus.publish(LATCH_SIGNALS[i], ...)`
+    /// is followed by `bus.publish(canonical_latch[i], ...)` with the
+    /// same value so external Kuksa consumers can subscribe under
+    /// either name.  See backlog #22 sub-PR 4b.
+    canonical_latch: [&'static str; 4],
+    /// Canonical VSS v6.0 sibling paths for `IsOpen`, one per door.
+    /// Same default + override semantics as `canonical_latch`.
+    canonical_ajar: [&'static str; 4],
 }
 
 impl<B: SignalBus + Send + Sync + 'static> DoorHandlePlantModel<B> {
     pub fn new(bus: Arc<B>) -> Self {
-        Self { bus }
+        Self {
+            bus,
+            canonical_latch: LATCH_CANONICAL_LHD,
+            canonical_ajar: AJAR_CANONICAL_LHD,
+        }
     }
 
-    /// Drive a single door indefinitely.
-    async fn run_door(door: usize, bus: Arc<B>) {
+    /// Builder — attach a `PlatformConfig` so the canonical-path
+    /// arrays match the configured `vehicle_orientation`.  Without
+    /// this the plant stays on the LHD defaults set in `new`.
+    pub fn with_cfg(mut self, cfg: Arc<crate::config::PlatformConfig>) -> Self {
+        use crate::plant_models::side::VehicleOrientation;
+        match cfg.orientation() {
+            VehicleOrientation::Lhd => {
+                self.canonical_latch = LATCH_CANONICAL_LHD;
+                self.canonical_ajar = AJAR_CANONICAL_LHD;
+            }
+            VehicleOrientation::Rhd => {
+                self.canonical_latch = LATCH_CANONICAL_RHD;
+                self.canonical_ajar = AJAR_CANONICAL_RHD;
+            }
+        }
+        self
+    }
+
+    /// Drive a single door indefinitely.  Takes the canonical-path
+    /// pair (`canonical_latch`, `canonical_ajar`) so it can mirror
+    /// every publish to both the physical and canonical names.
+    async fn run_door(
+        door: usize,
+        bus: Arc<B>,
+        canonical_latch: &'static str,
+        canonical_ajar: &'static str,
+    ) {
         let label = DOOR_LABELS[door];
 
         // Subscribe to all relevant signals.
@@ -166,217 +245,254 @@ impl<B: SignalBus + Send + Sync + 'static> DoorHandlePlantModel<B> {
         let _ = bus
             .publish(LATCH_SIGNALS[door], SignalValue::Bool(true))
             .await;
+        let _ = bus.publish(canonical_latch, SignalValue::Bool(true)).await;
         let _ = bus
             .publish(AJAR_SIGNALS[door], SignalValue::Bool(false))
             .await;
+        let _ = bus.publish(canonical_ajar, SignalValue::Bool(false)).await;
 
         tracing::info!(door = label, "DoorHandle plant: door initialized");
 
         loop {
             select! {
-                // ── Track lock state from DoorLockPlantModel / arbiter ──────
-                Some(val) = is_locked_rx.next() => {
-                    if let SignalValue::Bool(b) = val {
-                        let was_locked = locked;
-                        locked = b;
-                        tracing::debug!(door = label, locked, "DoorHandle: tracked IsLocked");
+                            // ── Track lock state from DoorLockPlantModel / arbiter ──────
+                            Some(val) = is_locked_rx.next() => {
+                                if let SignalValue::Bool(b) = val {
+                                    let was_locked = locked;
+                                    locked = b;
+                                    tracing::debug!(door = label, locked, "DoorHandle: tracked IsLocked");
 
-                        // Lock → unlock transition while the user is still
-                        // holding a handle: release the latch under their hand.
-                        // This is the canonical PassiveEntry flow:
-                        //   1. user pulls outside handle on a locked door
-                        //   2. PassiveEntry runs auth, dispatches Unlock
-                        //   3. DoorLockPlantModel publishes IsLocked = false
-                        //   4. (us) → if outside_held, open the door now
-                        if was_locked && !locked && !double_locked && !is_open
-                            && (outside_held || inside_held)
-                        {
-                            is_latched = false;
-                            is_open = true;
-                            let _ = bus
-                                .publish(LATCH_SIGNALS[door], SignalValue::Bool(false))
-                                .await;
-                            let _ = bus
-                                .publish(AJAR_SIGNALS[door], SignalValue::Bool(true))
-                                .await;
-                            tracing::info!(
-                                door = label,
-                                via = if outside_held { "outside" } else { "inside" },
-                                "DoorHandle: door opened on lock release while handle held"
-                            );
-                        }
-                    }
-                }
-
-                Some(val) = is_double_locked_rx.next() => {
-                    if let SignalValue::Bool(b) = val {
-                        double_locked = b;
-                        tracing::debug!(door = label, double_locked, "DoorHandle: tracked IsDoubleLocked");
-                    }
-                }
-
-                // ── Track IsOpen even when set externally (e.g. DoorCard) ──
-                Some(val) = is_open_rx.next() => {
-                    if let SignalValue::Bool(b) = val {
-                        let was_open = is_open;
-                        is_open = b;
-                        if !b && was_open {
-                            // Door transitioned from open → closed externally — re-latch.
-                            is_latched = true;
-                            let _ = bus
-                                .publish(LATCH_SIGNALS[door], SignalValue::Bool(true))
-                                .await;
-                        }
-                    }
-                }
-
-                // ── Child-lock state (Row2 only — Row1 stream is empty) ──
-                Some(val) = child_lock_rx.next() => {
-                    if let SignalValue::Bool(b) = val {
-                        if child_locked != b {
-                            child_locked = b;
-                            tracing::debug!(door = label, child_locked,
-                                "DoorHandle: tracked IsChildLockActive");
-                        }
-                    }
-                }
-
-                // ── Inside handle ────────────────────────────────────────────
-                Some(val) = inside_rx.next() => {
-                    if let SignalValue::Bool(pulled) = val {
-                        inside_held = pulled;
-                        if pulled {
-                            if child_locked {
-                                // Inside-pull suppressed — kids can't
-                                // open the door from inside.  Outside
-                                // handle is unaffected.
-                                tracing::debug!(door = label,
-                                    "DoorHandle: inside handle suppressed (child-locked)");
-                            } else if double_locked {
-                                // Interior linkage disconnected — completely blocked.
-                                tracing::debug!(door = label,
-                                    "DoorHandle: inside handle blocked (double-locked)");
-                            } else if locked {
-                                // Single-locked: latch moves while held, no ajar.
-                                if is_latched {
-                                    is_latched = false;
-                                    let _ = bus
-                                        .publish(LATCH_SIGNALS[door], SignalValue::Bool(false))
-                                        .await;
-                                    tracing::debug!(door = label,
-                                        "DoorHandle: inside handle on locked door — latch unlatched");
+                                    // Lock → unlock transition while the user is still
+                                    // holding a handle: release the latch under their hand.
+                                    // This is the canonical PassiveEntry flow:
+                                    //   1. user pulls outside handle on a locked door
+                                    //   2. PassiveEntry runs auth, dispatches Unlock
+                                    //   3. DoorLockPlantModel publishes IsLocked = false
+                                    //   4. (us) → if outside_held, open the door now
+                                    if was_locked && !locked && !double_locked && !is_open
+                                        && (outside_held || inside_held)
+                                    {
+                                        is_latched = false;
+                                        is_open = true;
+                                        let _ = bus
+                                            .publish(LATCH_SIGNALS[door], SignalValue::Bool(false))
+                                            .await;
+            let _ = bus
+                                            .publish(canonical_latch, SignalValue::Bool(false))
+                                            .await;
+                                        let _ = bus
+                                            .publish(AJAR_SIGNALS[door], SignalValue::Bool(true))
+                                            .await;
+            let _ = bus
+                                            .publish(canonical_ajar, SignalValue::Bool(true))
+                                            .await;
+                                        tracing::info!(
+                                            door = label,
+                                            via = if outside_held { "outside" } else { "inside" },
+                                            "DoorHandle: door opened on lock release while handle held"
+                                        );
+                                    }
                                 }
-                            } else {
-                                // Unlocked: door opens.
-                                is_latched = false;
-                                is_open = true;
-                                let _ = bus
-                                    .publish(LATCH_SIGNALS[door], SignalValue::Bool(false))
-                                    .await;
-                                let _ = bus
-                                    .publish(AJAR_SIGNALS[door], SignalValue::Bool(true))
-                                    .await;
-                                tracing::info!(door = label,
-                                    "DoorHandle: door opened via inside handle");
                             }
-                        } else {
-                            // Handle released.
-                            if locked && !double_locked && !is_open {
-                                // Re-engage latch on single-locked door.
-                                is_latched = true;
-                                let _ = bus
-                                    .publish(LATCH_SIGNALS[door], SignalValue::Bool(true))
-                                    .await;
-                                tracing::debug!(door = label,
-                                    "DoorHandle: inside handle released — latch re-engaged");
+
+                            Some(val) = is_double_locked_rx.next() => {
+                                if let SignalValue::Bool(b) = val {
+                                    double_locked = b;
+                                    tracing::debug!(door = label, double_locked, "DoorHandle: tracked IsDoubleLocked");
+                                }
+                            }
+
+                            // ── Track IsOpen even when set externally (e.g. DoorCard) ──
+                            Some(val) = is_open_rx.next() => {
+                                if let SignalValue::Bool(b) = val {
+                                    let was_open = is_open;
+                                    is_open = b;
+                                    if !b && was_open {
+                                        // Door transitioned from open → closed externally — re-latch.
+                                        is_latched = true;
+                                        let _ = bus
+                                            .publish(LATCH_SIGNALS[door], SignalValue::Bool(true))
+                                            .await;
+            let _ = bus
+                                            .publish(canonical_latch, SignalValue::Bool(true))
+                                            .await;
+                                    }
+                                }
+                            }
+
+                            // ── Child-lock state (Row2 only — Row1 stream is empty) ──
+                            Some(val) = child_lock_rx.next() => {
+                                if let SignalValue::Bool(b) = val {
+                                    if child_locked != b {
+                                        child_locked = b;
+                                        tracing::debug!(door = label, child_locked,
+                                            "DoorHandle: tracked IsChildLockActive");
+                                    }
+                                }
+                            }
+
+                            // ── Inside handle ────────────────────────────────────────────
+                            Some(val) = inside_rx.next() => {
+                                if let SignalValue::Bool(pulled) = val {
+                                    inside_held = pulled;
+                                    if pulled {
+                                        if child_locked {
+                                            // Inside-pull suppressed — kids can't
+                                            // open the door from inside.  Outside
+                                            // handle is unaffected.
+                                            tracing::debug!(door = label,
+                                                "DoorHandle: inside handle suppressed (child-locked)");
+                                        } else if double_locked {
+                                            // Interior linkage disconnected — completely blocked.
+                                            tracing::debug!(door = label,
+                                                "DoorHandle: inside handle blocked (double-locked)");
+                                        } else if locked {
+                                            // Single-locked: latch moves while held, no ajar.
+                                            if is_latched {
+                                                is_latched = false;
+                                                let _ = bus
+                                                    .publish(LATCH_SIGNALS[door], SignalValue::Bool(false))
+                                                    .await;
+            let _ = bus
+                                                    .publish(canonical_latch, SignalValue::Bool(false))
+                                                    .await;
+                                                tracing::debug!(door = label,
+                                                    "DoorHandle: inside handle on locked door — latch unlatched");
+                                            }
+                                        } else {
+                                            // Unlocked: door opens.
+                                            is_latched = false;
+                                            is_open = true;
+                                            let _ = bus
+                                                .publish(LATCH_SIGNALS[door], SignalValue::Bool(false))
+                                                .await;
+            let _ = bus
+                                                .publish(canonical_latch, SignalValue::Bool(false))
+                                                .await;
+                                            let _ = bus
+                                                .publish(AJAR_SIGNALS[door], SignalValue::Bool(true))
+                                                .await;
+            let _ = bus
+                                                .publish(canonical_ajar, SignalValue::Bool(true))
+                                                .await;
+                                            tracing::info!(door = label,
+                                                "DoorHandle: door opened via inside handle");
+                                        }
+                                    } else {
+                                        // Handle released.
+                                        if locked && !double_locked && !is_open {
+                                            // Re-engage latch on single-locked door.
+                                            is_latched = true;
+                                            let _ = bus
+                                                .publish(LATCH_SIGNALS[door], SignalValue::Bool(true))
+                                                .await;
+            let _ = bus
+                                                .publish(canonical_latch, SignalValue::Bool(true))
+                                                .await;
+                                            tracing::debug!(door = label,
+                                                "DoorHandle: inside handle released — latch re-engaged");
+                                        }
+                                    }
+                                }
+                            }
+
+                            // ── Outside handle ───────────────────────────────────────────
+                            Some(val) = outside_rx.next() => {
+                                if let SignalValue::Bool(pulled) = val {
+                                    outside_held = pulled;
+                                    if pulled {
+                                        if locked {
+                                            // Locked: don't open now, but the held
+                                            // state is recorded so a subsequent
+                                            // unlock-while-pulled (PassiveEntry) opens
+                                            // the door under the user's hand.
+                                            tracing::debug!(door = label,
+                                                "DoorHandle: outside handle held on locked door (deferred — will open on unlock)");
+                                        } else {
+                                            // Unlocked: door opens.
+                                            is_latched = false;
+                                            is_open = true;
+                                            let _ = bus
+                                                .publish(LATCH_SIGNALS[door], SignalValue::Bool(false))
+                                                .await;
+            let _ = bus
+                                                .publish(canonical_latch, SignalValue::Bool(false))
+                                                .await;
+                                            let _ = bus
+                                                .publish(AJAR_SIGNALS[door], SignalValue::Bool(true))
+                                                .await;
+            let _ = bus
+                                                .publish(canonical_ajar, SignalValue::Bool(true))
+                                                .await;
+                                            tracing::info!(door = label,
+                                                "DoorHandle: door opened via outside handle");
+                                        }
+                                    }
+                                    // Outside handle release: no re-latch needed (was blocked or door opened).
+                                }
+                            }
+
+                            // ── Soldier (interior lock knob) ──────────────────────────────
+                            Some(val) = soldier_rx.next() => {
+                                if let SignalValue::Bool(soldier_unlocked) = val {
+                                    if double_locked {
+                                        // Superlock physically disconnects interior linkage.
+                                        tracing::debug!(door = label,
+                                            "DoorHandle: soldier movement ignored (double-locked)");
+                                    } else {
+                                        let new_locked = !soldier_unlocked;
+                                        locked = new_locked;
+                                        let _ = bus
+                                            .publish(IS_LOCKED_SIGNALS[door], SignalValue::Bool(locked))
+                                            .await;
+                                        tracing::info!(door = label, locked,
+                                            "DoorHandle: soldier moved — lock state updated");
+                                    }
+                                }
+                            }
+
+                            // ── Close door (user clicks ajar door in top view) ────────────
+                            Some(val) = close_rx.next() => {
+                                if let SignalValue::Bool(true) = val {
+                                    if is_open {
+                                        is_open = false;
+                                        is_latched = true;
+                                        let _ = bus
+                                            .publish(AJAR_SIGNALS[door], SignalValue::Bool(false))
+                                            .await;
+            let _ = bus
+                                            .publish(canonical_ajar, SignalValue::Bool(false))
+                                            .await;
+                                        let _ = bus
+                                            .publish(LATCH_SIGNALS[door], SignalValue::Bool(true))
+                                            .await;
+            let _ = bus
+                                            .publish(canonical_latch, SignalValue::Bool(true))
+                                            .await;
+                                        // Republish IsLocked so the soldier indicator on the HMI
+                                        // reflects the door's current lock state after closing.
+                                        let _ = bus
+                                            .publish(IS_LOCKED_SIGNALS[door], SignalValue::Bool(locked))
+                                            .await;
+                                        tracing::info!(door = label, locked,
+                                            "DoorHandle: door closed — latch engaged, soldier refreshed");
+                                    }
+                                }
                             }
                         }
-                    }
-                }
-
-                // ── Outside handle ───────────────────────────────────────────
-                Some(val) = outside_rx.next() => {
-                    if let SignalValue::Bool(pulled) = val {
-                        outside_held = pulled;
-                        if pulled {
-                            if locked {
-                                // Locked: don't open now, but the held
-                                // state is recorded so a subsequent
-                                // unlock-while-pulled (PassiveEntry) opens
-                                // the door under the user's hand.
-                                tracing::debug!(door = label,
-                                    "DoorHandle: outside handle held on locked door (deferred — will open on unlock)");
-                            } else {
-                                // Unlocked: door opens.
-                                is_latched = false;
-                                is_open = true;
-                                let _ = bus
-                                    .publish(LATCH_SIGNALS[door], SignalValue::Bool(false))
-                                    .await;
-                                let _ = bus
-                                    .publish(AJAR_SIGNALS[door], SignalValue::Bool(true))
-                                    .await;
-                                tracing::info!(door = label,
-                                    "DoorHandle: door opened via outside handle");
-                            }
-                        }
-                        // Outside handle release: no re-latch needed (was blocked or door opened).
-                    }
-                }
-
-                // ── Soldier (interior lock knob) ──────────────────────────────
-                Some(val) = soldier_rx.next() => {
-                    if let SignalValue::Bool(soldier_unlocked) = val {
-                        if double_locked {
-                            // Superlock physically disconnects interior linkage.
-                            tracing::debug!(door = label,
-                                "DoorHandle: soldier movement ignored (double-locked)");
-                        } else {
-                            let new_locked = !soldier_unlocked;
-                            locked = new_locked;
-                            let _ = bus
-                                .publish(IS_LOCKED_SIGNALS[door], SignalValue::Bool(locked))
-                                .await;
-                            tracing::info!(door = label, locked,
-                                "DoorHandle: soldier moved — lock state updated");
-                        }
-                    }
-                }
-
-                // ── Close door (user clicks ajar door in top view) ────────────
-                Some(val) = close_rx.next() => {
-                    if let SignalValue::Bool(true) = val {
-                        if is_open {
-                            is_open = false;
-                            is_latched = true;
-                            let _ = bus
-                                .publish(AJAR_SIGNALS[door], SignalValue::Bool(false))
-                                .await;
-                            let _ = bus
-                                .publish(LATCH_SIGNALS[door], SignalValue::Bool(true))
-                                .await;
-                            // Republish IsLocked so the soldier indicator on the HMI
-                            // reflects the door's current lock state after closing.
-                            let _ = bus
-                                .publish(IS_LOCKED_SIGNALS[door], SignalValue::Bool(locked))
-                                .await;
-                            tracing::info!(door = label, locked,
-                                "DoorHandle: door closed — latch engaged, soldier refreshed");
-                        }
-                    }
-                }
-            }
         }
     }
 
     /// Spawns all 4 per-door coroutines and drives them concurrently.
     pub async fn run(self) {
         let b = self.bus;
+        let cl = self.canonical_latch;
+        let ca = self.canonical_ajar;
         tokio::join!(
-            Self::run_door(0, Arc::clone(&b)),
-            Self::run_door(1, Arc::clone(&b)),
-            Self::run_door(2, Arc::clone(&b)),
-            Self::run_door(3, Arc::clone(&b)),
+            Self::run_door(0, Arc::clone(&b), cl[0], ca[0]),
+            Self::run_door(1, Arc::clone(&b), cl[1], ca[1]),
+            Self::run_door(2, Arc::clone(&b), cl[2], ca[2]),
+            Self::run_door(3, Arc::clone(&b), cl[3], ca[3]),
         );
     }
 }
@@ -416,7 +532,11 @@ mod tests {
         let h = bus.history();
         let latched: Vec<_> = h
             .iter()
-            .filter(|(p, v)| p.contains("Latch.IsLatched") && *v == SignalValue::Bool(true))
+            .filter(|(p, v)| {
+                p.contains("Latch.IsLatched")
+                    && !p.contains("Side")
+                    && *v == SignalValue::Bool(true)
+            })
             .collect();
         assert_eq!(latched.len(), 4, "all 4 doors should start latched");
         handle.abort();

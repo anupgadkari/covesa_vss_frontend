@@ -295,6 +295,18 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     "Vehicle.Cabin.Door.Row1.Right.Latch.IsLatched",
     "Vehicle.Cabin.Door.Row2.Left.Latch.IsLatched",
     "Vehicle.Cabin.Door.Row2.Right.Latch.IsLatched",
+    // Canonical VSS v6.0 siblings — DoorHandlePlantModel dual-publishes
+    // each physical state above under its DriverSide / PassengerSide
+    // canonical name so external Kuksa consumers can subscribe
+    // canonically.  Backlog #22 sub-PR 4b.
+    "Vehicle.Cabin.Door.Row1.DriverSide.IsOpen",
+    "Vehicle.Cabin.Door.Row1.PassengerSide.IsOpen",
+    "Vehicle.Cabin.Door.Row2.DriverSide.IsOpen",
+    "Vehicle.Cabin.Door.Row2.PassengerSide.IsOpen",
+    "Vehicle.Cabin.Door.Row1.DriverSide.Latch.IsLatched",
+    "Vehicle.Cabin.Door.Row1.PassengerSide.Latch.IsLatched",
+    "Vehicle.Cabin.Door.Row2.DriverSide.Latch.IsLatched",
+    "Vehicle.Cabin.Door.Row2.PassengerSide.Latch.IsLatched",
     // Plant model outputs — actual lamp state from BlinkRelay.
     // Three physical lamps per side: Front, Side (mirror repeater), Rear.
     "Vehicle.Controller.Body.Lights.DirectionIndicator.Left.Lamp.Front.IsOn",
