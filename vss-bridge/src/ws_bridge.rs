@@ -773,7 +773,13 @@ fn build_config_msg(cfg: &PlatformConfig) -> String {
                 "courtesy_light_timeout_secs":dealer.courtesy_light_timeout_secs,
                 "remote_start_max_minutes":   dealer.remote_start_max_minutes,
                 "two_stage_unlock":           dealer.two_stage_unlock,
-                "driver_door_side":           format!("{:?}", dealer.driver_door_side),
+                // HMI wire key kept as `driver_door_side` with "Left"/"Right"
+                // values for backward compat — the internal field is now
+                // `vehicle_orientation: VehicleOrientation`.
+                "driver_door_side":           match dealer.vehicle_orientation {
+                    crate::plant_models::side::VehicleOrientation::Lhd => "Left",
+                    crate::plant_models::side::VehicleOrientation::Rhd => "Right",
+                },
                 "mirror_fold_mode":           format!("{:?}", dealer.mirror_fold_mode).to_uppercase(),
                 "farewell_hold_secs":         dealer.farewell_hold_secs,
             },
@@ -811,7 +817,7 @@ fn build_config_msg(cfg: &PlatformConfig) -> String {
 /// Apply a `config_set` message to PlatformConfig.
 /// Returns `true` if the config was changed (triggers broadcast).
 fn handle_config_set(msg: &serde_json::Value, cfg: &PlatformConfig) -> bool {
-    use crate::config::DriverDoorSide;
+    use crate::plant_models::side::VehicleOrientation;
 
     let key = msg.get("key").and_then(|v| v.as_str()).unwrap_or("");
     let value = match msg.get("value") {
@@ -865,9 +871,9 @@ fn handle_config_set(msg: &serde_json::Value, cfg: &PlatformConfig) -> bool {
             }
         }
         "dealer.driver_door_side" => {
-            dealer.driver_door_side = match value.as_str() {
-                Some("Right") => DriverDoorSide::Right,
-                _ => DriverDoorSide::Left,
+            dealer.vehicle_orientation = match value.as_str() {
+                Some("Right") => VehicleOrientation::Rhd,
+                _ => VehicleOrientation::Lhd,
             };
             true
         }

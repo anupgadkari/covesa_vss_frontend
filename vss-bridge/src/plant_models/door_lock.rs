@@ -105,7 +105,7 @@ pub struct DoorLockPlantModel<B: SignalBus> {
     /// Tests that don't care about persistence pass `None` (via `new`).
     nvm: Option<crate::nvm::NvmStore>,
     /// Optional `PlatformConfig` — when present, `unlock_driver` resolves
-    /// the driver-door index from `dealer.driver_door_side` at runtime.
+    /// the driver-door index from `dealer.vehicle_orientation` at runtime.
     /// `None` (the default for tests) means LHD: Row1.Left is the driver.
     cfg: Option<Arc<crate::config::PlatformConfig>>,
 }
@@ -185,23 +185,20 @@ impl<B: SignalBus + Send + Sync + 'static> DoorLockPlantModel<B> {
     }
 
     /// Builder — attach a `PlatformConfig` so this plant resolves the
-    /// driver-door index from `dealer.driver_door_side` at runtime.
+    /// driver-door index from `dealer.vehicle_orientation` at runtime.
     /// Without this, the plant defaults to LHD (Row1.Left).
     pub fn with_cfg(mut self, cfg: Arc<crate::config::PlatformConfig>) -> Self {
         self.cfg = Some(cfg);
         self
     }
 
-    /// Index of the driver door per the current dealer cal.  Defaults
-    /// to Row1.Left when no `PlatformConfig` is attached (LHD / tests).
+    /// Index of the driver door per the current vehicle orientation.
+    /// Defaults to Row1.Left when no `PlatformConfig` is attached
+    /// (LHD / tests).
     fn driver_door_idx(&self) -> usize {
-        use crate::config::DriverDoorSide;
-        match self
-            .cfg
-            .as_ref()
-            .map(|c| c.dealer_config().driver_door_side)
-        {
-            Some(DriverDoorSide::Right) => ROW1_RIGHT,
+        use crate::plant_models::side::PhysicalSide;
+        match self.cfg.as_ref().map(|c| c.orientation().driver_physical()) {
+            Some(PhysicalSide::Right) => ROW1_RIGHT,
             _ => ROW1_LEFT,
         }
     }
@@ -361,7 +358,7 @@ impl<B: SignalBus + Send + Sync + 'static> DoorLockPlantModel<B> {
                         "unlock_driver" => {
                             // Stage-1 two-stage unlock: driver door only.
                             // Driver door index is resolved at runtime from
-                            // `dealer.driver_door_side` so the same plant code
+                            // `dealer.vehicle_orientation` so the same plant code
                             // serves LHD and RHD vehicles.
                             let driver_idx = self.driver_door_idx();
                             self.apply_lock_cmd(driver_idx, false).await;
@@ -607,15 +604,15 @@ mod tests {
         let _ = handle.await;
     }
 
-    /// RHD: with `dealer.driver_door_side = Right`, `unlock_driver`
+    /// RHD: with `dealer.vehicle_orientation = Right`, `unlock_driver`
     /// must unlock Row1.Right (the RHD driver door), not Row1.Left.
     #[tokio::test]
     async fn unlock_driver_rhd_releases_row1_right() {
-        use crate::config::DriverDoorSide;
+        use crate::config::VehicleOrientation;
         let bus = Arc::new(MockBus::new());
         let cfg = crate::config::PlatformConfig::load();
         let mut dc = cfg.dealer_config();
-        dc.driver_door_side = DriverDoorSide::Right;
+        dc.vehicle_orientation = VehicleOrientation::Rhd;
         cfg.update_dealer_config(dc);
 
         let model = DoorLockPlantModel::new(Arc::clone(&bus)).with_cfg(Arc::clone(&cfg));

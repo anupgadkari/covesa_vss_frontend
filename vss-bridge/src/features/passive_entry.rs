@@ -228,15 +228,16 @@ fn auth_needed_for_door(door: &Door, lock_status: &str, cfg: &PlatformConfig) ->
 }
 
 /// True if this physical door is the driver door under the current
-/// `dealer.driver_door_side` cal.  RHD swaps Row1.Left ↔ Row1.Right
-/// for stage-1 / passenger-bypass routing; rear doors (Row2.*) are
+/// vehicle orientation.  RHD swaps Row1.Left ↔ Row1.Right for
+/// stage-1 / passenger-bypass routing; rear doors (Row2.*) are
 /// never the driver door.
 fn is_driver_door(door: &Door, cfg: &PlatformConfig) -> bool {
-    use crate::config::DriverDoorSide;
-    match cfg.dealer_config().driver_door_side {
-        DriverDoorSide::Left => door.name == "Row1.Left",
-        DriverDoorSide::Right => door.name == "Row1.Right",
-    }
+    use crate::plant_models::side::PhysicalSide;
+    let driver_segment = match cfg.orientation().driver_physical() {
+        PhysicalSide::Left => "Row1.Left",
+        PhysicalSide::Right => "Row1.Right",
+    };
+    door.name == driver_segment
 }
 
 /// Paired-device record carried internally — one per fob slot or phone
@@ -920,12 +921,12 @@ mod tests {
     }
 
     /// RHD variant of `setup()` — same stack but with
-    /// `dealer.driver_door_side = Right`, so Row1.Right is the driver
+    /// `dealer.vehicle_orientation = Right`, so Row1.Right is the driver
     /// door and Row1.Left is the passenger door.  The plant model
     /// also gets the cfg via `with_cfg` so `unlock_driver` resolves
     /// to the correct physical door.
     async fn setup_rhd() -> Arc<MockBus> {
-        use crate::config::DriverDoorSide;
+        use crate::config::VehicleOrientation;
 
         let bus = Arc::new(MockBus::new());
         let (arb, ack_tx, arb_fut) = door_lock_arbiter(Arc::clone(&bus));
@@ -937,7 +938,7 @@ mod tests {
 
         let config = PlatformConfig::load();
         let mut dc = config.dealer_config();
-        dc.driver_door_side = DriverDoorSide::Right;
+        dc.vehicle_orientation = VehicleOrientation::Rhd;
         config.update_dealer_config(dc);
 
         let dlpm =

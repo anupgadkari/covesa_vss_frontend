@@ -4,7 +4,7 @@
 //!
 //! When all three conditions are true simultaneously:
 //! 1. Ignition is `OFF` or `ACC` (feature is **armed**).
-//! 2. The driver door (`Vehicle.Cabin.Door.Row1.Left.IsOpen`) transitions closed → ajar
+//! 2. A front door (Row1 Left OR Right `IsOpen`) transitions closed → ajar
 //!    (rising edge only — a closing door does not trigger).
 //! 3. Ambient illuminance (`Vehicle.Controller.Body.Lights.AmbientLightSensor.Illuminance`) is below
 //!    `lux_threshold` at the moment of the door-open event (dark outside).
@@ -44,8 +44,14 @@ use crate::signal_bus::{SignalBus, VssPath};
 
 const POWER_STATE: &str = "Vehicle.LowVoltageSystemState";
 const ILLUMINANCE: &str = "Vehicle.Controller.Body.Lights.AmbientLightSensor.Illuminance";
-/// Driver door (LHD — Row1.Left). RHD variants would use Row1.Right.
-const DRIVER_DOOR: &str = "Vehicle.Cabin.Door.Row1.Left.IsOpen";
+/// Row1 front-door IsOpen signals.  FMH triggers on the rising edge
+/// of *either* — "user opened a front door after ignition off" is the
+/// semantic trigger.  Orientation-independent by design (avoids
+/// hardcoding the driver side and matches user intent: a passenger
+/// opening their door after the driver shuts off the engine is the
+/// same "we've arrived, please light the path" gesture).
+const LEFT_FRONT_DOOR: &str = "Vehicle.Cabin.Door.Row1.Left.IsOpen";
+const RIGHT_FRONT_DOOR: &str = "Vehicle.Cabin.Door.Row1.Right.IsOpen";
 
 const LOW_BEAM_OUT: VssPath = "Vehicle.Body.Lights.Beam.Low.IsOn";
 const PARKING_OUT: VssPath = "Vehicle.Body.Lights.Parking.IsOn";
@@ -83,11 +89,15 @@ impl<B: SignalBus + Send + Sync + 'static> FollowMeHome<B> {
 
     pub async fn run(self) {
         let mut power_rx = self.bus.subscribe(POWER_STATE).await;
-        let mut door_rx = self.bus.subscribe(DRIVER_DOOR).await;
+        // Either front door's IsOpen edge triggers — see comment on
+        // the constants above for why orientation-blind here.
+        let mut left_door_rx = self.bus.subscribe(LEFT_FRONT_DOOR).await;
+        let mut right_door_rx = self.bus.subscribe(RIGHT_FRONT_DOOR).await;
         let mut lux_rx = self.bus.subscribe(ILLUMINANCE).await;
 
         let mut fmh_armed = false; // true once ignition goes off
-        let mut door_ajar = false;
+        let mut left_ajar = false;
+        let mut right_ajar = false;
         let mut ambient_lux: u16 = u16::MAX; // safe default — daylight until first reading
         let mut fmh_deadline: Option<Instant> = None;
 
@@ -117,16 +127,31 @@ impl<B: SignalBus + Send + Sync + 'static> FollowMeHome<B> {
                         fmh_armed = true;
                     }
                 }
-                Some(val) = door_rx.next() => {
-                    let was_ajar = door_ajar;
-                    door_ajar = matches!(val, SignalValue::Bool(true));
-                    // Trigger on rising edge (closed → ajar) while armed and dark.
-                    if !was_ajar && door_ajar && fmh_armed && ambient_lux < self.lux_threshold {
+                Some(val) = left_door_rx.next() => {
+                    let was_ajar = left_ajar;
+                    left_ajar = matches!(val, SignalValue::Bool(true));
+                    if !was_ajar && left_ajar && fmh_armed && ambient_lux < self.lux_threshold {
                         let deadline = Instant::now() + Duration::from_secs(FMH_DURATION_SECS);
                         fmh_deadline = Some(deadline);
                         tracing::info!(
                             duration_s = FMH_DURATION_SECS,
                             lux = ambient_lux,
+                            door = "Row1.Left",
+                            "FollowMeHome activated"
+                        );
+                        self.claim_all().await;
+                    }
+                }
+                Some(val) = right_door_rx.next() => {
+                    let was_ajar = right_ajar;
+                    right_ajar = matches!(val, SignalValue::Bool(true));
+                    if !was_ajar && right_ajar && fmh_armed && ambient_lux < self.lux_threshold {
+                        let deadline = Instant::now() + Duration::from_secs(FMH_DURATION_SECS);
+                        fmh_deadline = Some(deadline);
+                        tracing::info!(
+                            duration_s = FMH_DURATION_SECS,
+                            lux = ambient_lux,
+                            door = "Row1.Right",
                             "FollowMeHome activated"
                         );
                         self.claim_all().await;
@@ -223,7 +248,7 @@ mod tests {
         drain().await;
         bus.clear_history();
 
-        bus.inject(DRIVER_DOOR, SignalValue::Bool(true));
+        bus.inject(LEFT_FRONT_DOOR, SignalValue::Bool(true));
         drain().await;
 
         let h = bus.history();
@@ -244,7 +269,7 @@ mod tests {
         drain().await;
         bus.clear_history();
 
-        bus.inject(DRIVER_DOOR, SignalValue::Bool(true));
+        bus.inject(LEFT_FRONT_DOOR, SignalValue::Bool(true));
         drain().await;
 
         let h = bus.history();
@@ -271,7 +296,7 @@ mod tests {
         drain().await;
         bus.clear_history();
 
-        bus.inject(DRIVER_DOOR, SignalValue::Bool(true));
+        bus.inject(LEFT_FRONT_DOOR, SignalValue::Bool(true));
         drain().await;
 
         let h = bus.history();
@@ -288,7 +313,7 @@ mod tests {
         let (bus, _arb) = setup().await;
         bus.inject(POWER_STATE, SignalValue::String("ON".into()));
         bus.inject(ILLUMINANCE, SignalValue::Uint16(THRESHOLD - 1));
-        bus.inject(DRIVER_DOOR, SignalValue::Bool(true));
+        bus.inject(LEFT_FRONT_DOOR, SignalValue::Bool(true));
         drain().await;
         let h = bus.history();
         assert!(
@@ -304,11 +329,11 @@ mod tests {
         let (bus, _arb) = setup().await;
         bus.inject(POWER_STATE, SignalValue::String("OFF".into()));
         bus.inject(ILLUMINANCE, SignalValue::Uint16(THRESHOLD - 1));
-        bus.inject(DRIVER_DOOR, SignalValue::Bool(true));
+        bus.inject(LEFT_FRONT_DOOR, SignalValue::Bool(true));
         drain().await;
         bus.clear_history();
 
-        bus.inject(DRIVER_DOOR, SignalValue::Bool(false));
+        bus.inject(LEFT_FRONT_DOOR, SignalValue::Bool(false));
         drain().await;
 
         let h = bus.history();
@@ -326,7 +351,7 @@ mod tests {
         bus.inject(POWER_STATE, SignalValue::String("OFF".into()));
         bus.inject(ILLUMINANCE, SignalValue::Uint16(50));
         drain_yields().await;
-        bus.inject(DRIVER_DOOR, SignalValue::Bool(true));
+        bus.inject(LEFT_FRONT_DOOR, SignalValue::Bool(true));
         drain_yields().await;
         bus.clear_history();
 
@@ -349,7 +374,7 @@ mod tests {
         bus.inject(POWER_STATE, SignalValue::String("OFF".into()));
         bus.inject(ILLUMINANCE, SignalValue::Uint16(50));
         drain_yields().await;
-        bus.inject(DRIVER_DOOR, SignalValue::Bool(true));
+        bus.inject(LEFT_FRONT_DOOR, SignalValue::Bool(true));
         drain_yields().await;
         tokio::time::advance(Duration::from_secs(5)).await;
         drain_yields().await;

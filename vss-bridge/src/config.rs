@@ -90,6 +90,11 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
 
+// Re-exported so existing `use crate::config::VehicleOrientation`
+// imports keep working after the v6.0 sub-PR 4 rename
+// (`DriverDoorSide` → `VehicleOrientation` moved to plant_models::side).
+pub use crate::plant_models::side::VehicleOrientation;
+
 /// Default base directory for the static (Tier 2 / Tier 3) calibration
 /// JSON files when no env override is set.
 const DEFAULT_CONFIG_DIR: &str = "/etc/vss-bridge";
@@ -580,7 +585,7 @@ pub struct DealerConfig {
     /// channelled hot updates — migrating to `VehicleLineCal` is a
     /// follow-up that requires plumbing a watch channel for vehicle-
     /// line cals.
-    pub driver_door_side: DriverDoorSide,
+    pub vehicle_orientation: VehicleOrientation,
 
     /// Side-mirror fold mode.
     /// DID 0xF197. Per-vehicle-line / trim cal.
@@ -611,17 +616,6 @@ pub enum MirrorFoldMode {
     Off,
 }
 
-/// Which side of the vehicle has the driver door.
-/// Affects RKE two-stage unlock (first press unlocks driver door only).
-#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Copy)]
-pub enum DriverDoorSide {
-    /// Left-hand drive (most markets). Row1.Left is the driver door.
-    #[default]
-    Left,
-    /// Right-hand drive (UK, Japan, Australia, etc.). Row1.Right is the driver door.
-    Right,
-}
-
 impl Default for DealerConfig {
     fn default() -> Self {
         Self {
@@ -630,7 +624,7 @@ impl Default for DealerConfig {
             courtesy_light_timeout_secs: 30,
             remote_start_max_minutes: 10,
             two_stage_unlock: true,
-            driver_door_side: DriverDoorSide::Left,
+            vehicle_orientation: VehicleOrientation::Lhd,
             mirror_fold_mode: MirrorFoldMode::Manual,
             farewell_hold_secs: 20,
         }
@@ -851,17 +845,12 @@ impl PlatformConfig {
 
     /// Vehicle orientation (LHD / RHD).  Single source of truth for
     /// "which physical Row1 door is the driver".  Today this reads
-    /// from `dealer_config().driver_door_side`; sub-PR 4 of the VSS
-    /// v6.0 migration will rename the field to `vehicle_orientation`
-    /// and this accessor becomes a direct return.  Until then,
-    /// every feature that needs driver-vs-passenger semantics
-    /// should call this — *not* match on `DriverDoorSide` directly.
+    /// from `dealer_config().vehicle_orientation`; sub-PR 4 of the VSS
+    /// Every feature that needs driver-vs-passenger semantics should
+    /// call this — *not* match on the dealer cal directly.  Single
+    /// source of truth for "which physical Row1 door is the driver".
     pub fn orientation(&self) -> crate::plant_models::side::VehicleOrientation {
-        use crate::plant_models::side::VehicleOrientation;
-        match self.dealer_config().driver_door_side {
-            DriverDoorSide::Left => VehicleOrientation::Lhd,
-            DriverDoorSide::Right => VehicleOrientation::Rhd,
-        }
+        self.dealer_config().vehicle_orientation
     }
 
     /// Subscribe to dealer config changes. Features that need to react
