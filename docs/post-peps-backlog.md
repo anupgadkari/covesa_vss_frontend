@@ -28,7 +28,8 @@ item is independently shippable as its own sub-branch / PR.
 | 14 | Stop continuous Zone publishing; `PlacedZone` + `LastObservedZone` | L | ⚠️ Partial — signals are defined (`Vehicle.Simulation.KeyFob.{N}.PlacedZone` + `LastObservedZone` in `plant_models/peps/signals.rs`); HMI cards display each correctly (Auth Device = PlacedZone, PEPS Devices = LastObservedZone, PR #43).  **Remaining:** audit any feature subscribers still reading the legacy continuous `.Zone` and migrate them to `.LastObservedZone` |
 | 14c | Extra scan triggers — brake-press pre-auth | S | ✅ Done |
 | 14d | Lost-paired-key scan + cluster warning (formerly door-close snapshot) | S | ✅ Done — publishes `LostKeyWarning` bool on door-close with no paired key found; chime hookup is item 17 |
-| 15 | Smart Unlock feature (key-locked-in-trunk) | M | ✅ Done — `features/smart_unlock.rs` subscribes to `LockStatus`/`LastRequestor`/`EventNum`, runs `Sequence(Cabin + AllApproach, Authenticated)` scan, dispatches `UnlockAll` on "paired key in cabin only" |
+| 15 | Smart Cabin Unlock (key-locked-in-cabin) | M | ✅ Done — `features/smart_unlock.rs` subscribes to `LockStatus`/`LastRequestor`/`EventNum`, runs `Sequence(Cabin + AllApproach, Authenticated)` scan, dispatches `UnlockAll` on "paired key in cabin only".  **Originally specified as the key-locked-in-trunk case (now item 23); the cabin case was built under the `SmartUnlock` name and is documented here.** |
+| 23 | Smart Trunk Pop (key-locked-in-trunk) | M | ⏳ Pending — sibling of #15 for the trunk case: on a fresh lock from an external source while quiescent, run a `TrunkInside` Authenticated scan; if a paired key is found, dispatch trunk-pop via the trunk arbiter + chime + hazards.  Distinct customer flow from #15 (trunk pops, doors stay locked). |
 | 16 | NFC Entry feature (card/phone tap → unlock; tap at push-button → start) | M | ✅ Done — `features/nfc_entry.rs` handles `NfcCard.{1,2}.Position → DriverHandle` and `BlePhone.{1,2}.NfcTap → UnlockAll`; PushButton tap publishes `NfcAuthBypass = true` for start-button override |
 | 17 | Key-lost warning chime | XS | ⏳ Pending — `lost_pk_scan` already publishes the `LostKeyWarning` bool; needs a chime claim when `LostKeyWarning && Speed > threshold` |
 | 18 | ASIL-B on FreeRTOS + Ferrocene-qualified Rust (replaces Classic AUTOSAR M7) | XXL | 📋 Program-level — see plan |
@@ -37,7 +38,7 @@ item is independently shippable as its own sub-branch / PR.
 | 21 | Run the test suite on a virtualised target (QEMU / Renode / Avocado) | L | 📋 Program-level |
 | 22 | Refresh to the latest COVESA VSS release (v4.0 → v6.0) | XL | 🔄 In progress — sub-PRs 1-3, 5-7 done (rename complete, PRs up to #41); sub-PR 4 DriverSide adoption Phases 1-4 landed (#44, #45); sub-PR 4 Phase 5 (cucumber-step language consolidation) + sub-PR 4b (canonical paths on the bus) + sub-PR 8 (new VSS v6.0 signals worth exposing) remain.  See [vss-v6.0-migration.md](./vss-v6.0-migration.md) |
 
-Suggested next order from what genuinely remains: **17 → 14 (remainder) → 22 sub-PR 4b / 4 Phase 5 / 8**.
+Suggested next order from what genuinely remains: **17 (in PR) → 23 → 14 (remainder) → 22 sub-PR 4b / 4 Phase 5 / 8**.
 Reasoning: **17** is XS and unblocked — `LostKeyWarning` bool is already
 published, just needs a chime claim when the vehicle is moving.
 **14 remainder** is a targeted audit of feature subscribers (no
@@ -213,44 +214,53 @@ path.
 
 ---
 
-## 15. Smart Unlock feature (key-locked-in-trunk)  *(M)* — ✅ Done
+## 15. Smart Cabin Unlock (key-locked-in-cabin)  *(M)* — ✅ Done
 
-**Trigger.**  Real OEM convenience feature: when the user double-
-locks the vehicle and walks away, if any paired fob is detected
-inside the trunk via a follow-up cargo-area scan, the vehicle
-unlocks itself + chirps + flashes to alert the user.  Prevents the
-classic "locked my keys in the trunk" failure mode.
+> **Note.**  This item was originally written up as the
+> *key-locked-in-trunk* case (trunk-pop on detection).  The
+> implementation that landed under `features/smart_unlock.rs` solves
+> a sibling problem — *key-locked-in-cabin* (UnlockAll on
+> detection).  Both flows make sense; the cabin case was built first
+> and got the `SmartUnlock` name.  The trunk-pop case is now item
+> **23** below.
 
-**Built on (in `main`).**  KeySearchArbiter with `AntennaSet::
-TrunkInside` already defined.  `walk_away_lock` event marks the
-"freshly locked from outside" moment.  Chime + hazard light
-arbiters already accept claims.
+**Trigger.**  Real OEM convenience feature: when the user locks the
+vehicle from outside (RKE / PEPS / keypad / phone / NFC) while
+ignition is quiescent, run a cabin-presence check.  If a paired
+fob is detected in the cabin **and** nothing is detected outside,
+the vehicle silently un-locks itself with a `mislock` audible cue
++ the standard unlock flash pattern.  Prevents the classic "locked
+my keys in the car" failure mode.
+
+**Built on (in `main`).**  KeySearchArbiter with `AntennaSet::Cabin`
++ `AntennaSet::AllApproach`, the standard door-lock arbiter,
+`LockStatus`/`LastRequestor`/`EventNum` tuple from the existing
+arbiter.
 
 **Plan.**
-1. New `FeatureId::SmartUnlock = 0x1E` (or next free).
+1. `FeatureId::SmartUnlock = 0x2B`.
 2. Subscribe to `Cabin.LockStatus`, `Cabin.LockStatus.LastRequestor`,
    `Cabin.LockStatus.EventNum`.
-3. On a fresh lock event whose `LastRequestor` ∈ {`KeyfobRke`,
-   `WalkAwayLock`, `KeypadLock`}:
-   - Delay 1.5 s (gives the user time to step away).
-   - Submit `TrunkInside + Authenticated` search.
-   - If non-empty: claim trunk open through `trunk_arbiter`,
-     chirp horn briefly, flash hazards 3×.
-   - Publish `Body.SmartUnlock.LastEvent` (String, e.g.
-     `"TRIGGERED" | "NO_KEY"`).
-4. Dealer cal: `dealer.smart_unlock_enabled` (default `true`).
-5. Re-locks: if the user re-locks during the delay window, abort
-   the search.
-6. Tests:
-   - Fob in trunk + lock → triggers.
-   - No fob → no-op.
-   - Re-lock during delay → aborts.
-   - Dealer flag off → never triggers.
+3. On a fresh lock event whose `LastRequestor` is an external
+   source (`KeyfobRke`, `KeyfobPeps`, `KeypadLock`, `PhoneApp`,
+   `PhoneBle`, `NfcCard`, `NfcPhone`) **and** ignition ∈ {OFF, ACC,
+   LOCK}:
+   - Submit `Sequence(Cabin + AllApproach, Authenticated)`.
+   - If key in Cabin **and** no key in any outside zone: publish
+     `FeedbackRequest = "mislock"` and dispatch `UnlockAll` via the
+     door-lock arbiter as `FeatureId::SmartUnlock`.
+4. PEPS-only — KeyCylinder builds disable the feature (the legacy
+   key cylinder is the primary auth and a fob-in-cabin doesn't
+   imply the same failure mode).
+5. Tests cover: trigger condition with key in cabin; suppression
+   when a key is also outside; no-fire on KeyCylinder builds;
+   no-fire on internal-source lock; ignition non-quiescent
+   suppression.
 
-**Risks.**  False positives if the user actually wanted to lock a
-fob inside (rare).  The 1.5 s delay + audible feedback should make
-it obvious; can extend with a "confirm by holding RKE LOCK"
-override later.
+**Risks.**  False positives if the driver legitimately locked a
+phone or fob inside and then re-locked from the keypad.  The
+`mislock` audible cue is distinct from the normal lock chirp, so
+the user knows the lock didn't take.
 
 ---
 
@@ -730,6 +740,88 @@ want to expose to head units / fleet telematics / OTA tools.
   release) if we keep up; let it slip 2-3 releases and the next
   bump grows non-linearly.  Worth wiring into the team's
   quarterly cadence after the first catch-up.
+
+---
+
+## 23. Smart Trunk Pop (key-locked-in-trunk)  *(M)*
+
+The sibling case to #15.  When the user locks the vehicle from
+outside (RKE / PEPS / keypad / phone / NFC) while ignition is
+quiescent, run a **TrunkInside** authenticated scan; if a paired
+key is detected in the trunk, **pop the trunk** (not unlock the
+doors) and chirp + flash to draw the user's attention.
+
+**Why a separate feature from SmartUnlock (#15).**  The remediation
+is different — popping the trunk leaves the doors locked, which
+is the correct response for "you put a paired phone in the grocery
+bag that's now in the trunk."  Unlocking everything (SmartUnlock)
+would invite a passerby to walk into the cabin.  SmartUnlock
+explicitly excludes TrunkInside coverage and has a regression test
+asserting the trunk case is a no-op for it (`smart_unlock.rs`
+line 625, `key_in_trunk_inside_alone_does_not_unlock`).
+
+**Built on (in `main`).**
+- `KeySearchArbiter` with `AntennaSet::TrunkInside` already defined.
+- Trunk arbiter accepts `TRUNK_OPEN_CMD` claims; ExteriorTrunkButton
+  already uses the same path for its locked-cabin auth flow
+  (`features/exterior_trunk_button.rs:191`).
+- `LockStatus` / `LastRequestor` / `EventNum` tuple, same as #15.
+- Chime + hazard arbiters already accept claims.
+
+**Plan.**
+1. New `FeatureId::SmartTrunkPop` (next free, ~0x2D).
+2. New `features/smart_trunk_pop.rs`.  Constructor takes
+   `KeySearchArbiterHandle`, the trunk arbiter, and `PlatformConfig`
+   (for the PEPS-vs-KeyCylinder gate).
+3. Subscribe to `Cabin.LockStatus`, `Cabin.LockStatus.LastRequestor`,
+   `Cabin.LockStatus.EventNum`, `Vehicle.LowVoltageSystemState`,
+   `Vehicle.Body.Trunk.Rear.IsOpen`.
+4. On a fresh lock event with `LastRequestor` in the same
+   external-source list as SmartUnlock and ignition ∈ {OFF, ACC, LOCK}:
+   - Skip if trunk is already open (someone's at it).
+   - Submit `AntennaSet::TrunkInside, SearchMode::Authenticated,
+     Coalescing::Disallowed` to the KeySearchArbiter.
+   - On non-empty: pulse `TRUNK_OPEN_CMD` via the trunk arbiter,
+     same momentary edge ExteriorTrunkButton uses; publish
+     `FeedbackRequest = "mislock_trunk"` (new variant) for the
+     audible cue; claim hazard 3-flash via the lighting arbiter.
+   - On empty: no-op (the cabin case will be picked up by
+     SmartUnlock if applicable).
+5. PEPS-only — disabled on KeyCylinder builds.
+6. Dealer cal `dealer.smart_trunk_pop_enabled` (default `true`);
+   skip the whole flow when false.
+7. Tests:
+   - Paired key in `TrunkInside` + external lock → trunk pops,
+     doors stay locked.
+   - Paired key in cabin + trunk → trunk pops; cabin unlock is
+     SmartUnlock's call.
+   - No paired key in trunk → no-op.
+   - Trunk already open at lock time → no-op.
+   - KeyCylinder build → no-op.
+   - Internal-source lock (`DoorTrimButton`, `WalkAwayLock`) → no-op.
+
+**Risks.**
+- *Latency window.*  The trunk pop happens after a real arbiter
+  scan (~100 ms LF airtime) plus arbiter request serialization.
+  The user's hand could already be off the lock button by the time
+  the trunk lid releases — the audible cue is essential to make the
+  cause-and-effect clear.
+- *Phantom-fob trigger.*  An intruder fob (mechanically compatible
+  blank) won't trigger because the scan is `Authenticated` — the
+  HMAC challenge filters unpaired fobs out.
+- *Auto-relock interaction.*  After the trunk-pop, the doors are
+  still locked.  If AutoRelock is enabled and the trunk closes,
+  the cycle could repeat; the trunk arbiter's pulse semantics +
+  the `trunk_already_open` skip should prevent this, but worth a
+  scenario-level test.
+
+**Signals introduced.**
+- `Vehicle.Controller.Body.Trunk.SmartPop.LastEvent` (String,
+  optional — for telemetry / fault logging).
+- `dealer.smart_trunk_pop_enabled` (Bool, default true).
+- `FeedbackRequest = "mislock_trunk"` (extends the existing
+  `FeedbackRequest` String enum — LockFeedback can play a distinct
+  chime sequence to distinguish from `"mislock"`).
 
 ---
 
