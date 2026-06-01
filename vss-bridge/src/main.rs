@@ -53,10 +53,10 @@ use vss_bridge::features::farewell::Farewell;
 use vss_bridge::features::fog_lamps::FogLamps;
 use vss_bridge::features::follow_me_home::FollowMeHome;
 use vss_bridge::features::hazard_lighting::HazardLighting;
+use vss_bridge::features::key_lost_warning::KeyLostWarning;
 use vss_bridge::features::key_search_arbiter::KeySearchArbiter;
 use vss_bridge::features::keypad_lock::KeypadLock;
 use vss_bridge::features::lock_feedback::LockFeedback;
-use vss_bridge::features::lost_pk_scan::LostPkScan;
 use vss_bridge::features::manual_horn::ManualHorn;
 use vss_bridge::features::manual_lighting::ManualLighting;
 use vss_bridge::features::mirror_adjust::MirrorAdjust;
@@ -546,13 +546,9 @@ async fn boot_simulation_stack(
     // the reader IS the authentication in production).
     set.spawn(NfcEntry::new(Arc::clone(&bus), Arc::clone(&door_lock_arb)).run());
 
-    // Item #14d — Lost-Paired-Key scan.  On the all-doors-closed
-    // edge while ignition is live (ON / START), run a Presence
-    // sweep across all on-vehicle zones.  If zero paired keys are
-    // found, publish Vehicle.Controller.Body.PEPS.LostKeyWarning=true so the cluster
-    // can pop up a "KEY NOT IN VEHICLE" alert.  Cleared when a key
-    // reappears in a subsequent cycle or when ignition goes OFF.
-    set.spawn(LostPkScan::new(Arc::clone(&bus), key_search_handle.clone()).run());
+    // (LostPkScan deleted — KeyLostWarning below is its successor and
+    // publishes the same Vehicle.Controller.Body.PEPS.LostKeyWarning
+    // signal on the wire.)
 
     // Smart Unlock — PEPS only.  Re-unlocks the vehicle if the lock
     // event came from an exterior source while ignition is quiescent
@@ -569,7 +565,14 @@ async fn boot_simulation_stack(
         .run(),
     );
 
-    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, KeypadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome, MirrorFold, MirrorAdjust, Farewell, DoorOpenAssist, LostPkScan, ExteriorTrunkButton, CabinTrunkRelease, ManualHorn, PerimeterAlarm, KeySearchArbiter, VehicleStartingControl, NfcEntry, SmartUnlock");
+    // Key-Lost Warning — owns its own cabin scans via the
+    // KeySearchArbiter (no piggyback on the ApproachKeys aggregate);
+    // chimes + raises a cluster flag when the cabin is sealed under
+    // power with no paired key inside.  Triggers on the all-sealed
+    // edge, on ignition-on while sealed, and on a 1-minute periodic.
+    set.spawn(KeyLostWarning::new(Arc::clone(&bus), key_search_handle.clone()).run());
+
+    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, KeypadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome, MirrorFold, MirrorAdjust, Farewell, DoorOpenAssist, ExteriorTrunkButton, CabinTrunkRelease, ManualHorn, PerimeterAlarm, KeySearchArbiter, VehicleStartingControl, NfcEntry, SmartUnlock, KeyLostWarning");
 
     // ── Plant Models ────────────────────────────────────────────────
     set.spawn(BlinkRelay::new(Arc::clone(&bus)).run());

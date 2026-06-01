@@ -626,15 +626,17 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         //     gamma / RC-filter / ambient compensation.
         "Vehicle.Controller.Body.Switches.StartStop.BacklightDutyCycle" => Some(0x001E_0008),
         "Vehicle.Controller.Body.Switches.StartStop.BacklightIntensity" => Some(0x001E_0009),
-        // Published by the LostPkScan feature.  True while the
-        // vehicle is in a live ignition state (ON / START) and the
-        // most recent on-vehicle key search (fired on the
-        // all-doors-closed edge) found zero paired devices — i.e.
-        // the driver is operating the vehicle without an
-        // authenticated key on board.  Cleared on the next scan
-        // that finds at least one key, or on ignition leaving
-        // ON / START.  The HMI cluster can subscribe and display
-        // a "KEY NOT IN VEHICLE" warning popup.  OEM extension.
+        // Published by the KeyLostWarning feature.  True while the
+        // cabin is sealed under power (every door + trunk closed,
+        // ignition ∈ {ON, START}) and the most recent Cabin /
+        // Authenticated arbiter scan found zero paired devices —
+        // i.e. the driver is sitting in a running vehicle with no
+        // paired key in the cabin.  Cleared when a subsequent scan
+        // finds a paired key, when a door or the trunk opens, or
+        // when ignition leaves ON / START.  The HMI cluster can
+        // subscribe and display a "KEY NOT IN VEHICLE" warning
+        // popup; KeyLostWarning also claims the chime for 2 s on
+        // the fire edge.  OEM extension.
         "Vehicle.Controller.Body.PEPS.LostKeyWarning" => Some(0x001E_000A),
 
         _ => None,
