@@ -25,7 +25,7 @@ item is independently shippable as its own sub-branch / PR.
 | 11 | BTSI in TransmissionPlant | M | ✅ Done — PR #27 |
 | 12 | Key-in-Ignition Inhibit (KeyCylinder mode) | S | ✅ Done — PR #27 |
 | 13 | Migrate ExteriorTrunkButton → KeySearch arbiter | M | ✅ Done — `exterior_trunk_button` now submits `AntennaSet::TrunkOutside` + `Authenticated` via `KeySearchArbiterHandle`; no direct `.Zone`/`.PlacedZone` reads |
-| 14 | Stop continuous Zone publishing; `PlacedZone` + `LastObservedZone` | L | ⚠️ Partial — signals are defined (`Vehicle.Simulation.KeyFob.{N}.PlacedZone` + `LastObservedZone` in `plant_models/peps/signals.rs`); HMI cards display each correctly (Auth Device = PlacedZone, PEPS Devices = LastObservedZone, PR #43).  **Remaining:** audit any feature subscribers still reading the legacy continuous `.Zone` and migrate them to `.LastObservedZone` |
+| 14 | Stop continuous Zone publishing; `PlacedZone` + `LastObservedZone` | L | ✅ Done.  Closed out by audit in the wake of #17 / #23 / #24: zero remaining subscribers to legacy `.Zone` signals anywhere in `vss-bridge/src/`, `signal_ids.rs`, `hmi_alias.rs`, `ws_bridge.rs`, or the HMI.  PEPS plant subscribes only to `PlacedZone`; KeySearchArbiter publishes `LastObservedZone` from every scan; Welcome / SmartUnlock / SmartTrunkPop / KeyLostWarning consume `LastObservedZone`.  Originally targeted as a substantial L; reduced to a no-op audit because the migration completed organically as the other items landed. |
 | 14c | Extra scan triggers — brake-press pre-auth | S | ✅ Done |
 | 14d | Lost-paired-key scan + cluster warning (formerly door-close snapshot) | S | ✅ Done — merged into #17.  The standalone `lost_pk_scan` feature was deleted; `KeyLostWarning` (item 17) is its strict successor and publishes the same `Vehicle.Controller.Body.PEPS.LostKeyWarning` bool on the wire, with corrected gating (cabin sealed under power vs. the original door-close trigger) and a chime claim. |
 | 15 | Smart Cabin Unlock (key-locked-in-cabin) | M | ✅ Done — `features/smart_unlock.rs` subscribes to `LockStatus`/`LastRequestor`/`EventNum`, runs `Sequence(Cabin + AllApproach, Authenticated)` scan, dispatches `UnlockAll` on "paired key in cabin only".  **Originally specified as the key-locked-in-trunk case (now item 23); the cabin case was built under the `SmartUnlock` name and is documented here.** |
@@ -39,16 +39,16 @@ item is independently shippable as its own sub-branch / PR.
 | 21 | Run the test suite on a virtualised target (QEMU / Renode / Avocado) | L | 📋 Program-level |
 | 22 | Refresh to the latest COVESA VSS release (v4.0 → v6.0) | XL | 🔄 In progress — sub-PRs 1-3, 5-7 done (rename complete, PRs up to #41); sub-PR 4 DriverSide adoption Phases 1-4 landed (#44, #45); sub-PR 4 Phase 5 (cucumber-step language consolidation) + sub-PR 4b (canonical paths on the bus) + sub-PR 8 (new VSS v6.0 signals worth exposing) remain.  See [vss-v6.0-migration.md](./vss-v6.0-migration.md) |
 
-Suggested next order from what genuinely remains: **14 (remainder) → 22 sub-PR 4b / 4 Phase 5 / 8**.
-Reasoning: **14 remainder** is a targeted audit of feature
-subscribers (no plant-model rework, since the signals already
-exist).  **22**'s remaining sub-PRs are doc / test-clarity and
-external surface work that compose cleanly on top.
+Suggested next order from what genuinely remains: **22 sub-PR 4b / 4 Phase 5 / 8**.
+The remaining sub-PRs are doc / test-clarity and external-surface
+work that compose cleanly on top.
 
 The "every key search is feature-driven" architectural cleanup is
 *complete* with #24 landed — KeyLostWarning (#17), SmartTrunkPop
 (#23), and Welcome's approach poll (#24) all own their own scans,
-and `KeySearchArbiter` is purely a request serialiser.
+and `KeySearchArbiter` is purely a request serialiser.  Item #14
+(stop continuous Zone publishing) closed out as a side effect of
+that cleanup — no subscribers to the legacy `.Zone` remain.
 
 ---
 
@@ -89,7 +89,16 @@ checks.
 
 ---
 
-## 14. Stop continuous Zone publishing; introduce `PlacedZone` + `LastObservedZone`  *(L)*
+## 14. Stop continuous Zone publishing; introduce `PlacedZone` + `LastObservedZone`  *(L)* — ✅ Done
+
+> Closed out by audit after PR #51 landed.  See the status row at
+> the top of this doc.  No subscribers to the legacy continuous
+> `Vehicle.Simulation.KeyFob.{N}.Zone` / `Body.PEPS.Plant.KeyFob.{N}.Zone`
+> remain in `vss-bridge/src/`, `signal_ids.rs`, `hmi_alias.rs`,
+> `ws_bridge.rs`, or the HMI.  The migration completed organically
+> as #17, #23, and #24 each split their consumers off the
+> continuous-Zone path; what's preserved below is the original
+> plan for the historical record.
 
 **Trigger.**  The PEPS plant currently broadcasts
 `Body.PEPS.Plant.KeyFob.{N}.Zone` on every HMI drag.  That worked as
