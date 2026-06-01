@@ -44,7 +44,7 @@
 //!
 //! When a scan result returns with `keys_found.is_empty()` AND the
 //! gating condition is still true AND no warning is already latched:
-//! publish `Vehicle.Controller.Starting.KeyLostWarning = true` and
+//! publish `Vehicle.Controller.Body.PEPS.LostKeyWarning = true` and
 //! claim the chime for `WARNING_DURATION` (2 s).  After the timer
 //! expires we publish both signals `false` and *keep the latch held*
 //! so subsequent periodic scans don't chime every minute.
@@ -82,7 +82,13 @@ use crate::signal_bus::{SignalBus, VssPath};
 const POWER_STATE: VssPath = "Vehicle.LowVoltageSystemState";
 const TRUNK_OPEN: VssPath = "Vehicle.Body.Trunk.Rear.IsOpen";
 const CHIME: VssPath = "Vehicle.Controller.Body.Chime.IsActive";
-const KEY_LOST_WARNING_OUT: VssPath = "Vehicle.Controller.Starting.KeyLostWarning";
+// Cluster-facing "no paired key on board" flag.  Lives under
+// `Body.PEPS.*` rather than `Starting.*` because semantically it's
+// the PEPS subsystem reporting a detection, not an ignition state.
+// This is the same signal the deleted LostPkScan feature used to
+// publish — KeyLostWarning is its strict successor, and any HMI
+// subscriber that was already wired up needs no change.
+const LOST_KEY_WARNING_OUT: VssPath = "Vehicle.Controller.Body.PEPS.LostKeyWarning";
 
 /// Per-door `IsOpen` signals.  Index order matches the existing
 /// arbiter / plant-model convention (Row1.Left, Row1.Right,
@@ -396,7 +402,7 @@ impl<B: SignalBus + Send + Sync + 'static> KeyLostWarning<B> {
     async fn assert_warning(&self) {
         let _ = self
             .bus
-            .publish(KEY_LOST_WARNING_OUT, SignalValue::Bool(true))
+            .publish(LOST_KEY_WARNING_OUT, SignalValue::Bool(true))
             .await;
         let _ = self.bus.publish(CHIME, SignalValue::Bool(true)).await;
     }
@@ -405,7 +411,7 @@ impl<B: SignalBus + Send + Sync + 'static> KeyLostWarning<B> {
         let _ = self.bus.publish(CHIME, SignalValue::Bool(false)).await;
         let _ = self
             .bus
-            .publish(KEY_LOST_WARNING_OUT, SignalValue::Bool(false))
+            .publish(LOST_KEY_WARNING_OUT, SignalValue::Bool(false))
             .await;
     }
 }
@@ -507,7 +513,7 @@ mod tests {
         settle(200).await;
 
         assert_eq!(
-            bus.latest_value(KEY_LOST_WARNING_OUT),
+            bus.latest_value(LOST_KEY_WARNING_OUT),
             Some(SignalValue::Bool(true)),
         );
         assert_eq!(bus.latest_value(CHIME), Some(SignalValue::Bool(true)));
@@ -515,7 +521,7 @@ mod tests {
         // Both auto-clear after WARNING_DURATION.
         settle(WARNING_DURATION.as_millis() as u64 + 50).await;
         assert_eq!(
-            bus.latest_value(KEY_LOST_WARNING_OUT),
+            bus.latest_value(LOST_KEY_WARNING_OUT),
             Some(SignalValue::Bool(false)),
         );
         assert_eq!(bus.latest_value(CHIME), Some(SignalValue::Bool(false)));
@@ -532,7 +538,7 @@ mod tests {
         assert!(
             bus.history()
                 .iter()
-                .all(|(s, _)| *s != KEY_LOST_WARNING_OUT),
+                .all(|(s, _)| *s != LOST_KEY_WARNING_OUT),
             "no warning expected with ignition OFF"
         );
     }
@@ -551,7 +557,7 @@ mod tests {
         assert!(
             bus.history()
                 .iter()
-                .all(|(s, _)| *s != KEY_LOST_WARNING_OUT),
+                .all(|(s, _)| *s != LOST_KEY_WARNING_OUT),
             "paired key in cabin — warning must not fire"
         );
     }
@@ -572,7 +578,7 @@ mod tests {
         assert!(
             bus.history()
                 .iter()
-                .all(|(s, _)| *s != KEY_LOST_WARNING_OUT),
+                .all(|(s, _)| *s != LOST_KEY_WARNING_OUT),
             "trunk still open — warning must not fire"
         );
 
@@ -580,7 +586,7 @@ mod tests {
         bus.inject(TRUNK_OPEN, SignalValue::Bool(false));
         settle(300).await;
         assert_eq!(
-            bus.latest_value(KEY_LOST_WARNING_OUT),
+            bus.latest_value(LOST_KEY_WARNING_OUT),
             Some(SignalValue::Bool(true)),
         );
     }
@@ -596,7 +602,7 @@ mod tests {
         close_everything(&bus);
         settle(300).await;
         assert_eq!(
-            bus.latest_value(KEY_LOST_WARNING_OUT),
+            bus.latest_value(LOST_KEY_WARNING_OUT),
             Some(SignalValue::Bool(true)),
         );
 
@@ -604,7 +610,7 @@ mod tests {
         settle(50).await;
 
         assert_eq!(
-            bus.latest_value(KEY_LOST_WARNING_OUT),
+            bus.latest_value(LOST_KEY_WARNING_OUT),
             Some(SignalValue::Bool(false)),
         );
     }
@@ -619,7 +625,7 @@ mod tests {
         close_everything(&bus);
         settle(300).await;
         assert_eq!(
-            bus.latest_value(KEY_LOST_WARNING_OUT),
+            bus.latest_value(LOST_KEY_WARNING_OUT),
             Some(SignalValue::Bool(true)),
         );
 
@@ -627,7 +633,7 @@ mod tests {
         settle(50).await;
 
         assert_eq!(
-            bus.latest_value(KEY_LOST_WARNING_OUT),
+            bus.latest_value(LOST_KEY_WARNING_OUT),
             Some(SignalValue::Bool(false)),
         );
     }
@@ -655,7 +661,7 @@ mod tests {
         let trues = bus
             .history()
             .iter()
-            .filter(|(s, v)| *s == KEY_LOST_WARNING_OUT && *v == SignalValue::Bool(true))
+            .filter(|(s, v)| *s == LOST_KEY_WARNING_OUT && *v == SignalValue::Bool(true))
             .count();
         assert_eq!(
             trues, 0,
@@ -678,7 +684,7 @@ mod tests {
         settle(WARNING_DURATION.as_millis() as u64 + 50).await;
         bus.clear_history();
         assert_eq!(
-            bus.latest_value(KEY_LOST_WARNING_OUT),
+            bus.latest_value(LOST_KEY_WARNING_OUT),
             Some(SignalValue::Bool(false)),
         );
 
@@ -705,7 +711,7 @@ mod tests {
         settle(300).await;
 
         assert_eq!(
-            bus.latest_value(KEY_LOST_WARNING_OUT),
+            bus.latest_value(LOST_KEY_WARNING_OUT),
             Some(SignalValue::Bool(true)),
             "after the periodic-found-key cleared the latch, a new \
              rising edge should re-fire the warning"
@@ -733,7 +739,7 @@ mod tests {
         settle(300).await;
 
         assert_eq!(
-            bus.latest_value(KEY_LOST_WARNING_OUT),
+            bus.latest_value(LOST_KEY_WARNING_OUT),
             Some(SignalValue::Bool(true)),
         );
     }
@@ -753,14 +759,14 @@ mod tests {
         assert!(bus
             .history()
             .iter()
-            .all(|(s, _)| *s != KEY_LOST_WARNING_OUT));
+            .all(|(s, _)| *s != LOST_KEY_WARNING_OUT));
 
         // Now turn the key.
         bus.inject(POWER_STATE, SignalValue::String("ON".into()));
         settle(300).await;
 
         assert_eq!(
-            bus.latest_value(KEY_LOST_WARNING_OUT),
+            bus.latest_value(LOST_KEY_WARNING_OUT),
             Some(SignalValue::Bool(true)),
         );
     }

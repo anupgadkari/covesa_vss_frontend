@@ -17,7 +17,6 @@ pub mod key_lost_warning;
 pub mod key_search_arbiter;
 pub mod keypad_lock;
 pub mod lock_feedback;
-pub mod lost_pk_scan;
 pub mod manual_horn;
 pub mod manual_lighting;
 pub mod mirror_adjust;
