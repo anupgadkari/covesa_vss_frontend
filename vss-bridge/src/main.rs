@@ -610,7 +610,11 @@ async fn boot_simulation_stack(
             .with_cfg(Arc::clone(&cfg))
             .run(),
     );
-    set.spawn(DoorHandlePlantModel::new(Arc::clone(&bus)).run());
+    set.spawn(
+        DoorHandlePlantModel::new(Arc::clone(&bus))
+            .with_cfg(Arc::clone(&cfg))
+            .run(),
+    );
     set.spawn(TrunkPlantModel::with_nvm(Arc::clone(&bus), nvm.clone()).run());
     set.spawn(HoodPlantModel::with_nvm(Arc::clone(&bus), nvm.clone()).run());
     set.spawn(SunroofPlantModel::with_nvm(Arc::clone(&bus), nvm.clone()).run());

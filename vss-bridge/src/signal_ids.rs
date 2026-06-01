@@ -171,6 +171,17 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Vehicle.Cabin.Door.Row1.PassengerSide.Soldier.IsUnlocked" => Some(0x0005_0049),
         "Vehicle.Cabin.Door.Row2.DriverSide.Soldier.IsUnlocked" => Some(0x0005_004A),
         "Vehicle.Cabin.Door.Row2.PassengerSide.Soldier.IsUnlocked" => Some(0x0005_004B),
+        // Canonical siblings for DoorHandlePlantModel's outputs
+        // (Latch.IsLatched and IsOpen).  Same mirror pattern + same
+        // backlog reference as the door_lock block above.
+        "Vehicle.Cabin.Door.Row1.DriverSide.Latch.IsLatched" => Some(0x0005_004C),
+        "Vehicle.Cabin.Door.Row1.PassengerSide.Latch.IsLatched" => Some(0x0005_004D),
+        "Vehicle.Cabin.Door.Row2.DriverSide.Latch.IsLatched" => Some(0x0005_004E),
+        "Vehicle.Cabin.Door.Row2.PassengerSide.Latch.IsLatched" => Some(0x0005_004F),
+        "Vehicle.Cabin.Door.Row1.DriverSide.IsOpen" => Some(0x0005_0050),
+        "Vehicle.Cabin.Door.Row1.PassengerSide.IsOpen" => Some(0x0005_0051),
+        "Vehicle.Cabin.Door.Row2.DriverSide.IsOpen" => Some(0x0005_0052),
+        "Vehicle.Cabin.Door.Row2.PassengerSide.IsOpen" => Some(0x0005_0053),
 
         // Body misc
         "Vehicle.Body.Hood.IsOpen" => Some(0x0006_0001),
@@ -913,6 +924,27 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
         "Vehicle.Cabin.Door.Row2.PassengerSide.Soldier.IsUnlocked",
         0x0005_004B,
     ),
+    // door_handle canonical siblings — see lookup block above.
+    (
+        "Vehicle.Cabin.Door.Row1.DriverSide.Latch.IsLatched",
+        0x0005_004C,
+    ),
+    (
+        "Vehicle.Cabin.Door.Row1.PassengerSide.Latch.IsLatched",
+        0x0005_004D,
+    ),
+    (
+        "Vehicle.Cabin.Door.Row2.DriverSide.Latch.IsLatched",
+        0x0005_004E,
+    ),
+    (
+        "Vehicle.Cabin.Door.Row2.PassengerSide.Latch.IsLatched",
+        0x0005_004F,
+    ),
+    ("Vehicle.Cabin.Door.Row1.DriverSide.IsOpen", 0x0005_0050),
+    ("Vehicle.Cabin.Door.Row1.PassengerSide.IsOpen", 0x0005_0051),
+    ("Vehicle.Cabin.Door.Row2.DriverSide.IsOpen", 0x0005_0052),
+    ("Vehicle.Cabin.Door.Row2.PassengerSide.IsOpen", 0x0005_0053),
     ("Vehicle.Body.Hood.IsOpen", 0x0006_0001),
     ("Vehicle.Body.Trunk.Rear.IsOpen", 0x0006_0002),
     ("Vehicle.Body.Trunk.Rear.IsLocked", 0x0006_0003),
