@@ -570,10 +570,12 @@ async fn boot_simulation_stack(
         .run(),
     );
 
-    // Key-Lost Warning — short chime + cluster flag when ApproachKeys
-    // drops to 0 while the vehicle is moving and ignition is on.
-    // Catches the "fob fell out of the cabin mid-drive" case.
-    set.spawn(KeyLostWarning::new(Arc::clone(&bus)).run());
+    // Key-Lost Warning — owns its own cabin scans via the
+    // KeySearchArbiter (no piggyback on the ApproachKeys aggregate);
+    // chimes + raises a cluster flag when the cabin is sealed under
+    // power with no paired key inside.  Triggers on the all-sealed
+    // edge, on ignition-on while sealed, and on a 1-minute periodic.
+    set.spawn(KeyLostWarning::new(Arc::clone(&bus), key_search_handle.clone()).run());
 
     tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, KeypadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome, MirrorFold, MirrorAdjust, Farewell, DoorOpenAssist, LostPkScan, ExteriorTrunkButton, CabinTrunkRelease, ManualHorn, PerimeterAlarm, KeySearchArbiter, VehicleStartingControl, NfcEntry, SmartUnlock, KeyLostWarning");
 
