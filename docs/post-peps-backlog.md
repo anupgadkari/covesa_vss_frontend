@@ -32,22 +32,23 @@ item is independently shippable as its own sub-branch / PR.
 | 23 | Smart Trunk Pop (key-locked-in-trunk) | M | ✅ Done — `features/smart_trunk_pop.rs` runs `TrunkInside` Authenticated scans on a fresh external lock event while quiescent and pops the trunk via the trunk arbiter when a paired key is found.  Two trigger paths: direct (lock event with trunk already closed) and pending-after-trunk-close (latched on a lock event with trunk still open; consumed on the trunk's open→closed edge — power-tailgate case).  PR #49. |
 | 16 | NFC Entry feature (card/phone tap → unlock; tap at push-button → start) | M | ✅ Done — `features/nfc_entry.rs` handles `NfcCard.{1,2}.Position → DriverHandle` and `BlePhone.{1,2}.NfcTap → UnlockAll`; PushButton tap publishes `NfcAuthBypass = true` for start-button override |
 | 17 | Key-lost warning chime | XS | ✅ Done — `features/key_lost_warning.rs` owns its own Cabin / Authenticated arbiter scans (last-close edge, ignition-on while sealed, 1-min periodic).  Publishes `Vehicle.Controller.Body.PEPS.LostKeyWarning` (same signal the deleted LostPkScan used) and claims the chime for 2 s.  Latch held across the periodic so still-no-key ticks don't re-chime.  PR #47. |
-| 24 | Welcome owns the approach poll (drop arbiter's self-driven loop) | M | ⏳ Pending — move the `AllApproach / Presence` periodic poll out of `KeySearchArbiter` and into the `Welcome` feature, where it conceptually belongs (Welcome is the feature that needs to know whether a paired fob is approaching).  Last step of the "every scan is feature-driven" cleanup that #17 (KeyLostWarning) and #23 (SmartTrunkPop) already applied to their respective scans.  Eliminates the arbiter's "feelings of its own."  Detail section below. |
+| 24 | Welcome owns the approach poll (drop arbiter's self-driven loop) | M | ✅ Done — PR #51.  `features::welcome` runs the `AllApproach / Presence / Coalescing::Allowed` periodic scan (fast 700 ms / slow 10 s, suspended ACC/ON/START) and publishes `ApproachState` / `ApproachKeys` / `ApproachPollInterval`.  KeySearchArbiter lost its poll loop, ignition subscription, cadence state, and `with_cadence` constructor — it's now purely a request serialiser.  Completes the "every scan is feature-driven" architectural principle. |
 | 18 | ASIL-B on FreeRTOS + Ferrocene-qualified Rust (replaces Classic AUTOSAR M7) | XXL | 📋 Program-level — see plan |
 | 19 | Kuksa.val databroker integration (replace MockBus on the SignalBus seam) | L | 📋 Program-level |
 | 20 | Feature-completeness + interconnection audit (requirements + Gherkin + tests) | M | 📋 Program-level |
 | 21 | Run the test suite on a virtualised target (QEMU / Renode / Avocado) | L | 📋 Program-level |
 | 22 | Refresh to the latest COVESA VSS release (v4.0 → v6.0) | XL | 🔄 In progress — sub-PRs 1-3, 5-7 done (rename complete, PRs up to #41); sub-PR 4 DriverSide adoption Phases 1-4 landed (#44, #45); sub-PR 4 Phase 5 (cucumber-step language consolidation) + sub-PR 4b (canonical paths on the bus) + sub-PR 8 (new VSS v6.0 signals worth exposing) remain.  See [vss-v6.0-migration.md](./vss-v6.0-migration.md) |
 
-Suggested next order from what genuinely remains: **24 → 14 (remainder) → 22 sub-PR 4b / 4 Phase 5 / 8**.
-Reasoning: **24** closes the "every key search is feature-driven"
-loop opened by #17 and #23 — the last consumer of the arbiter's
-self-driven periodic scan is Welcome, and moving the scan there
-lets us delete the arbiter's internal poll loop entirely.  **14
-remainder** is a targeted audit of feature subscribers (no plant-
-model rework, since the signals already exist).  **22**'s
-remaining sub-PRs are doc / test-clarity and external surface
-work that compose cleanly on top.
+Suggested next order from what genuinely remains: **14 (remainder) → 22 sub-PR 4b / 4 Phase 5 / 8**.
+Reasoning: **14 remainder** is a targeted audit of feature
+subscribers (no plant-model rework, since the signals already
+exist).  **22**'s remaining sub-PRs are doc / test-clarity and
+external surface work that compose cleanly on top.
+
+The "every key search is feature-driven" architectural cleanup is
+*complete* with #24 landed — KeyLostWarning (#17), SmartTrunkPop
+(#23), and Welcome's approach poll (#24) all own their own scans,
+and `KeySearchArbiter` is purely a request serialiser.
 
 ---
 
@@ -841,7 +842,7 @@ line 625, `key_in_trunk_inside_alone_does_not_unlock`).
 
 ---
 
-## 24. Welcome owns the approach poll  *(M)*
+## 24. Welcome owns the approach poll  *(M)* — ✅ Done (PR #51)
 
 The final step of the "every key search is feature-driven"
 principle that #17 (KeyLostWarning) and #23 (SmartTrunkPop)

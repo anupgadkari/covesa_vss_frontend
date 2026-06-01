@@ -39,9 +39,10 @@ own.
 > approach poll on its own as a fourth "feature."  Subsequent work
 > (KeyLostWarning #17, SmartTrunkPop #23) made it clear that
 > putting a scan in the arbiter is just the wrong layer — the
-> arbiter has no decision to make with the result.  The poll's
-> consumer is the `Welcome` feature; the migration is backlog
-> item #24.  §3.3 documents the legacy shape until that lands.
+> arbiter has no decision to make with the result.  The poll moved
+> into the `Welcome` feature in PR #51 (backlog #24); the arbiter
+> is now purely a request serialiser.  §3.3 below describes the
+> poll as it lives today in `features::welcome`.
 
 ---
 
@@ -153,23 +154,22 @@ pub struct KeyFinding {
   for the same `(antennas, mode)` within 50 ms get one underlying
   scan and both `oneshot::Sender`s receive the same result.
 
-### 3.3 Approach poll loop
+### 3.3 Approach poll loop (now owned by `Welcome`)
 
-> **⚠️ Architectural correction (backlog item #24, pending).**
-> Subsequent feature-level work (KeyLostWarning #17, SmartTrunkPop
-> #23) settled on the principle that **every key search is
-> triggered by the feature that needs the result**, with the
-> arbiter acting purely as a serialiser of LF airtime.  Under that
-> rule, the approach-poll loop described in this section belongs
-> in the `Welcome` feature, not in the arbiter — Welcome is the
-> only consumer of the poll's result, and moving it there
-> eliminates the last time-driven scan that isn't tied to a
-> feature event.  See backlog #24 for the migration plan.  The
-> behaviour described below is what `main` does today; the long-
-> term shape is identical (same cadence, same publish surface)
-> but lives in a different module.
+> **Architectural correction landed in PR #51 (backlog #24).**
+> The periodic approach poll described below originally lived in
+> `KeySearchArbiter` as an internal task.  It now lives in the
+> [`Welcome` feature](../vss-bridge/src/features/welcome.rs) —
+> Welcome is the only consumer of the poll's result, and the rule
+> the rest of the codebase landed on (KeyLostWarning #17,
+> SmartTrunkPop #23) is that *every key search is triggered by the
+> feature that needs the result*, with the arbiter acting purely as
+> a serialiser of LF airtime.  Cadences, suspension semantics, and
+> published-signal contract are identical to the legacy shape —
+> only the writer changed.
 
-Built into the arbiter as an internal periodic task:
+Welcome runs the periodic poll as one arm of its `select!` loop
+(the last, biased so courtesy-lighting decisions take precedence):
 
 ```text
 poll @ 700 ms when ApproachState == false
@@ -177,12 +177,20 @@ poll @  10 s when ApproachState == true
 suspended when ign in ACC/ON/START   (driving — fob is in cabin anyway)
 ```
 
-The poll is `AllApproach` in `Presence` mode (cheap, no HMAC).  From
-the result, the arbiter derives and publishes:
+The poll submits `AntennaSet::AllApproach` in `SearchMode::Presence`
+(cheap, no HMAC) with `Coalescing::Allowed` (concurrent in-flight
+approach scans can share the result).  From the response Welcome
+derives and publishes:
 
-- `Body.PEPS.ApproachState` (bool — any paired key in approach)
-- `Body.PEPS.ApproachKeys` (uint count — useful for "key-lost" features)
-- `Body.PEPS.ApproachPollInterval` (uint ms — for HMI visualization)
+- `Vehicle.Controller.Body.PEPS.ApproachState` (Bool — any paired key in approach)
+- `Vehicle.Controller.Body.PEPS.ApproachKeys` (Uint8 count)
+- `Vehicle.Controller.Body.PEPS.ApproachPollInterval` (Uint16 ms — current cadence)
+
+Suspension sets all three to their "paused" markers (`false`, `0`,
+`0`) so the HMI's PEPS-status indicator reads correctly during
+driving without needing its own ignition subscription.  The
+cadence-flip + suspension tests live alongside Welcome's other
+tests in [`features/welcome.rs`](../vss-bridge/src/features/welcome.rs).
 
 ---
 
@@ -379,7 +387,7 @@ Each phase is a single commit.  Order matters; do not skip ahead.
 | # | Phase | Deliverable |
 |---|---|---|
 | 1 | KeySearch arbiter foundation | New `key_search_arbiter` module + `run_search` API on the PEPS plant + `Presence` / `Authenticated` modes + scheduling + coalescing.  No feature uses it yet.  Unit tests on arbiter scheduling, coalescing, both latencies. |
-| 2 | Approach poll loop | Arbiter's internal periodic task driving `Body.PEPS.ApproachState` / `ApproachKeys` / `ApproachPollInterval`.  Paused on `ACC`/`ON`/`START`.  Tests for cadence flips. |
+| 2 | Approach poll loop | *Originally* an arbiter-internal periodic task driving `Body.PEPS.ApproachState` / `ApproachKeys` / `ApproachPollInterval`.  Paused on `ACC`/`ON`/`START`.  Backlog #24 / PR #51 moved the poll into the `Welcome` feature; the signal contract is unchanged.  See §3.3. |
 | 3 | Migrate Passive Entry | `SingleHandle + Authenticated` requests on handle-pull edges; drop direct `Zone` signal subscriptions.  Existing passive-entry tests rewritten to seed `PlacedZone` and assert via arbiter mock. |
 | 4 | Migrate Keypad Lock | Same pattern as Passive Entry. |
 | 5 | Migrate Welcome | Subscribe to `Body.PEPS.ApproachState` rather than zone transitions. |
