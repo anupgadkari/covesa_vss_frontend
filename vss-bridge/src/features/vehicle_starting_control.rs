@@ -713,10 +713,7 @@ mod tests {
         let (arb, handle, rx) = KeySearchArbiter::new_with_rx(Arc::clone(&bus));
         // Very short cadences so the poll loop doesn't drag the test;
         // the start-control feature doesn't depend on the poll loop.
-        tokio::spawn(
-            arb.with_cadence(Duration::from_millis(20), Duration::from_millis(200))
-                .run(rx),
-        );
+        tokio::spawn(arb.run(rx));
         tokio::spawn(VehicleStartingControl::new(Arc::clone(&bus), cfg, handle).run());
         settle().await;
         bus

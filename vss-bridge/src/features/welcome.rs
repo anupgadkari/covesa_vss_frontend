@@ -47,9 +47,12 @@ use std::time::Duration;
 
 use futures::StreamExt;
 use tokio::select;
-use tokio::time::{sleep, Instant};
+use tokio::time::{sleep, sleep_until, Instant};
 
 use crate::arbiter::{ActuatorRequest, DomainArbiter};
+use crate::features::key_search_arbiter::{
+    AntennaSet, Coalescing, KeySearchArbiterHandle, SearchMode,
+};
 use crate::ipc_message::{FeatureId, Priority, SignalValue};
 use crate::plant_models::peps::signals as peps_signals;
 use crate::plant_models::peps::zone::Zone;
@@ -62,6 +65,25 @@ const PUDDLE_RIGHT: VssPath = "Vehicle.Controller.Body.Lights.Puddle.Right.IsOn"
 const DOME: VssPath = "Vehicle.Cabin.Light.IsDomeOn";
 
 const POWER_STATE: VssPath = "Vehicle.LowVoltageSystemState";
+
+// ── Approach-poll publishes (formerly owned by KeySearchArbiter) ──────────
+//
+// Welcome runs the periodic AllApproach / Presence poll itself
+// (backlog item #24 / PR #50) and publishes these three aggregate
+// signals from each tick.  HMI consumers see the same names + types
+// as before; only the writer changed.
+
+const APPROACH_STATE_OUT: VssPath = "Vehicle.Controller.Body.PEPS.ApproachState";
+const APPROACH_KEYS_OUT: VssPath = "Vehicle.Controller.Body.PEPS.ApproachKeys";
+const APPROACH_POLL_INTERVAL_OUT: VssPath = "Vehicle.Controller.Body.PEPS.ApproachPollInterval";
+
+/// Approach-poll cadence when no key is currently in approach —
+/// scan briskly so we detect arrivals quickly.
+pub const APPROACH_POLL_FAST: Duration = Duration::from_millis(700);
+
+/// Approach-poll cadence when a key is already in approach —
+/// confirm presence less often (saves both vehicle and fob battery).
+pub const APPROACH_POLL_SLOW: Duration = Duration::from_secs(10);
 
 // Note: the mirror-folded suppression for puddle lamps is enforced
 // at the *arbiter* layer (see `puddle_arbiter` in `arbiter.rs` —
@@ -133,7 +155,14 @@ pub struct Welcome<B: SignalBus> {
     /// are all expected to claim them under different conditions
     /// and priorities.
     puddle_arb: Arc<DomainArbiter>,
+    /// Handle to the KeySearchArbiter.  Welcome owns the periodic
+    /// AllApproach / Presence poll — every other feature submits
+    /// scans event-driven, and Welcome is the only consumer of the
+    /// approach poll's result, so the cadence lives here too.
+    key_search: KeySearchArbiterHandle,
     hold: Duration,
+    fast_cadence: Duration,
+    slow_cadence: Duration,
 }
 
 impl<B: SignalBus + Send + Sync + 'static> Welcome<B> {
@@ -141,12 +170,16 @@ impl<B: SignalBus + Send + Sync + 'static> Welcome<B> {
         bus: Arc<B>,
         courtesy_arb: Arc<DomainArbiter>,
         puddle_arb: Arc<DomainArbiter>,
+        key_search: KeySearchArbiterHandle,
     ) -> Self {
         Self {
             bus,
             courtesy_arb,
             puddle_arb,
+            key_search,
             hold: Duration::from_secs(WELCOME_HOLD_SECS),
+            fast_cadence: APPROACH_POLL_FAST,
+            slow_cadence: APPROACH_POLL_SLOW,
         }
     }
 
@@ -156,8 +189,22 @@ impl<B: SignalBus + Send + Sync + 'static> Welcome<B> {
         self
     }
 
+    /// Override the default approach-poll cadences (700 ms / 10 s).
+    /// Tests use much shorter durations so virtual time doesn't have
+    /// to advance by seconds to exercise cadence flips.
+    pub fn with_cadence(mut self, fast: Duration, slow: Duration) -> Self {
+        self.fast_cadence = fast;
+        self.slow_cadence = slow;
+        self
+    }
+
     pub async fn run(self) {
-        tracing::info!(hold_secs = self.hold.as_secs(), "Welcome feature started");
+        tracing::info!(
+            hold_secs = self.hold.as_secs(),
+            fast_ms = self.fast_cadence.as_millis() as u64,
+            slow_ms = self.slow_cadence.as_millis() as u64,
+            "Welcome feature started"
+        );
 
         let mut zone_streams: Vec<futures::stream::BoxStream<'static, SignalValue>> =
             Vec::with_capacity(PAIRED_ZONE_SIGNALS.len());
@@ -181,6 +228,37 @@ impl<B: SignalBus + Send + Sync + 'static> Welcome<B> {
         // devices in LF / etc.).
         let mut deadline: Option<Instant> = None;
 
+        // ── Approach-poll state ──────────────────────────────────────
+        //
+        // Welcome owns the periodic AllApproach / Presence scan
+        // (formerly the arbiter's internal task — see PR #50 / backlog
+        // #24).  Adaptive cadence: fast when nothing in approach,
+        // slow once a key is detected.  Suspended while ignition is
+        // in ACC / ON / START (driving — fob is in the cabin anyway,
+        // no need to burn LF airtime on approach detection).
+        let mut approach_state: bool = false;
+        let mut approach_keys: u8 = 0;
+        let mut poll_suspended: bool = false;
+        let mut poll_deadline: Instant = Instant::now() + self.fast_cadence;
+
+        // Seed the aggregate signals so HMI snapshots see defined values
+        // before the first scan completes.
+        let _ = self
+            .bus
+            .publish(APPROACH_STATE_OUT, SignalValue::Bool(false))
+            .await;
+        let _ = self
+            .bus
+            .publish(APPROACH_KEYS_OUT, SignalValue::Uint8(0))
+            .await;
+        let _ = self
+            .bus
+            .publish(
+                APPROACH_POLL_INTERVAL_OUT,
+                SignalValue::Uint16(self.fast_cadence.as_millis() as u16),
+            )
+            .await;
+
         loop {
             let zone_event = futures::future::select_all(
                 zone_streams
@@ -203,7 +281,25 @@ impl<B: SignalBus + Send + Sync + 'static> Welcome<B> {
                 None => Duration::from_secs(3600),
             };
 
+            // While suspended, push the poll deadline far out so the
+            // poll branch never wins; only zone / power / door events
+            // wake the loop.
+            let next_poll_deadline = if poll_suspended {
+                Instant::now() + Duration::from_secs(3600)
+            } else {
+                poll_deadline
+            };
+
             select! {
+                // `biased` so the existing zone / power / door / hold
+                // arms (which arbitrate courtesy lighting) take
+                // precedence over the periodic approach poll.  Without
+                // this, under paused virtual time the poll arm and the
+                // hold-timer arm can both be simultaneously ready and
+                // the random selection occasionally picks the poll
+                // first, starving the hold-expiry release.
+                biased;
+
                 ((slot, opt), _, _) = zone_event => {
                     let new_zone = match opt {
                         Some(SignalValue::String(s)) => {
@@ -251,6 +347,46 @@ impl<B: SignalBus + Send + Sync + 'static> Welcome<B> {
                         self.release_all().await;
                         deadline = None;
                     }
+                    // Approach-poll suspension follows the same
+                    // ACC / ON / START rule the arbiter used — keep
+                    // the legacy semantic so HMI cadence behaviour
+                    // matches `main` byte-for-byte.
+                    let should_suspend = matches!(
+                        &val,
+                        SignalValue::String(s) if s == "ACC" || s == "ON" || s == "START"
+                    );
+                    if should_suspend != poll_suspended {
+                        poll_suspended = should_suspend;
+                        tracing::info!(
+                            suspended = poll_suspended,
+                            "Welcome: approach poll suspension changed"
+                        );
+                        if poll_suspended {
+                            // Going suspended — clear aggregate state
+                            // and publish the legacy "paused" markers
+                            // (interval = 0 was the arbiter's
+                            // suspended-marker; preserved here).
+                            approach_state = false;
+                            approach_keys = 0;
+                            let _ = self
+                                .bus
+                                .publish(APPROACH_STATE_OUT, SignalValue::Bool(false))
+                                .await;
+                            let _ = self
+                                .bus
+                                .publish(APPROACH_KEYS_OUT, SignalValue::Uint8(0))
+                                .await;
+                            let _ = self
+                                .bus
+                                .publish(APPROACH_POLL_INTERVAL_OUT, SignalValue::Uint16(0))
+                                .await;
+                        } else {
+                            // Resuming — kick an immediate poll so
+                            // ApproachState catches up without waiting
+                            // a full fast_cadence.
+                            poll_deadline = Instant::now();
+                        }
+                    }
                 }
                 ((door_idx, opt), _, _) = door_event => {
                     if deadline.is_some()
@@ -270,6 +406,71 @@ impl<B: SignalBus + Send + Sync + 'static> Welcome<B> {
                         self.release_all().await;
                         deadline = None;
                     }
+                }
+                // Periodic AllApproach / Presence poll — last in the
+                // biased order so courtesy-lighting decisions (zone,
+                // power, door, hold) always take precedence.
+                _ = sleep_until(next_poll_deadline), if !poll_suspended => {
+                    let started = Instant::now();
+                    // Coalescing::Allowed — concurrent in-flight
+                    // approach scans (e.g. a feature that submits its
+                    // own AllApproach Presence query) can share the
+                    // result.  Periodic polls are inherently
+                    // refresh-tolerant.
+                    let result = self
+                        .key_search
+                        .submit(
+                            "Welcome",
+                            AntennaSet::AllApproach,
+                            SearchMode::Presence,
+                            Coalescing::Allowed,
+                        )
+                        .await;
+
+                    if let Some(result) = result {
+                        let now_any = !result.keys_found.is_empty();
+                        let now_count = result.keys_found.len() as u8;
+
+                        if now_any != approach_state || now_count != approach_keys {
+                            approach_state = now_any;
+                            approach_keys = now_count;
+                            let next_interval = if now_any {
+                                self.slow_cadence
+                            } else {
+                                self.fast_cadence
+                            };
+                            let _ = self
+                                .bus
+                                .publish(APPROACH_STATE_OUT, SignalValue::Bool(now_any))
+                                .await;
+                            let _ = self
+                                .bus
+                                .publish(APPROACH_KEYS_OUT, SignalValue::Uint8(now_count))
+                                .await;
+                            let _ = self
+                                .bus
+                                .publish(
+                                    APPROACH_POLL_INTERVAL_OUT,
+                                    SignalValue::Uint16(next_interval.as_millis() as u16),
+                                )
+                                .await;
+                            tracing::debug!(
+                                approach_state, approach_keys, ?next_interval,
+                                "Welcome: approach state changed"
+                            );
+                        }
+                    } else {
+                        tracing::warn!("Welcome: approach poll returned no result");
+                    }
+
+                    // Schedule next poll regardless of result
+                    // (a transport error shouldn't kill the cadence).
+                    let next_interval = if approach_state {
+                        self.slow_cadence
+                    } else {
+                        self.fast_cadence
+                    };
+                    poll_deadline = started + next_interval;
                 }
                 else => break,
             }
@@ -320,9 +521,13 @@ mod tests {
     use crate::arbiter::{courtesy_arbiter, puddle_arbiter};
     use tokio::time::advance;
 
-    /// Build the bus, courtesy arbiter, and a Welcome feature with a
-    /// short 100 ms hold so tests don't have to advance virtual time
-    /// by 30 s for the timer-expiry case.
+    /// Build the bus, courtesy + puddle arbiters, the KeySearch
+    /// arbiter (Welcome owns the approach-poll now, so the
+    /// KeySearchArbiterHandle is required at construction), and a
+    /// Welcome feature with a short 100 ms hold so tests don't have
+    /// to advance virtual time by 30 s for the timer-expiry case.
+    /// The approach-poll cadence is set to a tiny value too so any
+    /// cadence-flip-driven side effects fire promptly.
     async fn setup_with_hold(hold: Duration) -> (Arc<MockBus>, tokio::task::JoinHandle<()>) {
         let bus = Arc::new(MockBus::new());
         let (carb, cfut) = courtesy_arbiter(Arc::clone(&bus));
@@ -331,7 +536,12 @@ mod tests {
         tokio::spawn(pfut);
         let carb = Arc::new(carb);
         let parb = Arc::new(parb);
-        let feature = Welcome::new(Arc::clone(&bus), carb, parb).with_hold(hold);
+        let (ksa, ksa_handle, ksa_rx) =
+            crate::features::key_search_arbiter::KeySearchArbiter::new_with_rx(Arc::clone(&bus));
+        tokio::spawn(ksa.run(ksa_rx));
+        let feature = Welcome::new(Arc::clone(&bus), carb, parb, ksa_handle)
+            .with_hold(hold)
+            .with_cadence(Duration::from_millis(20), Duration::from_millis(200));
         let h = tokio::spawn(feature.run());
         for _ in 0..16 {
             tokio::task::yield_now().await;
@@ -581,4 +791,166 @@ mod tests {
     // against the puddle arbiter in `arbiter::tests` (it's an
     // arbiter-level concern, not Welcome's).  Welcome simply claims
     // both puddles; the arbiter applies the PhysicalGate.
+
+    // ── Approach-poll cadence + suspension ──────────────────────────
+    //
+    // Migrated from `key_search_arbiter::tests` along with the poll
+    // itself.  Welcome now owns the periodic AllApproach / Presence
+    // scan; these tests assert the published `ApproachState` /
+    // `ApproachKeys` / `ApproachPollInterval` signals behave exactly
+    // as the arbiter's loop used to make them behave (same cadence
+    // flip, same suspension semantics, same suspended-marker
+    // interval = 0).  See backlog item #24 / PR #50.
+
+    fn approach_state(bus: &MockBus) -> Option<bool> {
+        match bus.latest_value(APPROACH_STATE_OUT) {
+            Some(SignalValue::Bool(b)) => Some(b),
+            _ => None,
+        }
+    }
+    fn approach_keys(bus: &MockBus) -> Option<u8> {
+        match bus.latest_value(APPROACH_KEYS_OUT) {
+            Some(SignalValue::Uint8(v)) => Some(v),
+            _ => None,
+        }
+    }
+    fn approach_interval(bus: &MockBus) -> Option<u16> {
+        match bus.latest_value(APPROACH_POLL_INTERVAL_OUT) {
+            Some(SignalValue::Uint16(v)) => Some(v),
+            _ => None,
+        }
+    }
+
+    /// Yield + a tiny sleep in real time so spawned subscribers
+    /// process injected signals before we assert.  Used in tests
+    /// that don't pause virtual time (the cadence-flip ones).
+    async fn settle_real() {
+        for _ in 0..32 {
+            tokio::task::yield_now().await;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+        for _ in 0..32 {
+            tokio::task::yield_now().await;
+        }
+    }
+
+    /// Place a fob's `PlacedZone` + `Paired` so the arbiter's
+    /// `AllApproach / Presence` poll surfaces it.  Same shape the
+    /// smart_unlock / smart_trunk_pop / key_lost_warning tests use.
+    fn place(bus: &MockBus, slot: u8, zone: Zone) {
+        let zone_path: &'static str = match slot {
+            0 => "Vehicle.Simulation.KeyFob.1.PlacedZone",
+            1 => "Vehicle.Simulation.KeyFob.2.PlacedZone",
+            2 => "Vehicle.Simulation.KeyFob.3.PlacedZone",
+            _ => panic!("unknown slot"),
+        };
+        let paired_path: &'static str = match slot {
+            0 => "Vehicle.Simulation.KeyFob.1.Paired",
+            1 => "Vehicle.Simulation.KeyFob.2.Paired",
+            2 => "Vehicle.Simulation.KeyFob.3.Paired",
+            _ => unreachable!(),
+        };
+        bus.inject(zone_path, SignalValue::String(zone.as_str().into()));
+        bus.inject(paired_path, SignalValue::Bool(true));
+    }
+
+    /// Spawn a Welcome with very short cadences so we can exercise
+    /// the poll loop in real time without making the test suite slow.
+    /// Fast = 20 ms, slow = 200 ms.  Adds the 50 ms AllApproach
+    /// Presence scan latency on top.
+    async fn setup_short_cadence() -> Arc<MockBus> {
+        let bus = Arc::new(MockBus::new());
+        let (carb, cfut) = courtesy_arbiter(Arc::clone(&bus));
+        let (parb, pfut) = puddle_arbiter(Arc::clone(&bus));
+        tokio::spawn(cfut);
+        tokio::spawn(pfut);
+        let (ksa, ksa_handle, ksa_rx) =
+            crate::features::key_search_arbiter::KeySearchArbiter::new_with_rx(Arc::clone(&bus));
+        tokio::spawn(ksa.run(ksa_rx));
+        let feature = Welcome::new(Arc::clone(&bus), Arc::new(carb), Arc::new(parb), ksa_handle)
+            .with_cadence(Duration::from_millis(20), Duration::from_millis(200));
+        tokio::spawn(feature.run());
+        settle_real().await;
+        bus
+    }
+
+    #[tokio::test]
+    async fn approach_state_starts_false_with_no_keys() {
+        // Spawn at production cadence — only the initial seeded
+        // publishes are exercised here, no need to wait a tick.
+        let bus = Arc::new(MockBus::new());
+        let (carb, cfut) = courtesy_arbiter(Arc::clone(&bus));
+        let (parb, pfut) = puddle_arbiter(Arc::clone(&bus));
+        tokio::spawn(cfut);
+        tokio::spawn(pfut);
+        let (ksa, ksa_handle, ksa_rx) =
+            crate::features::key_search_arbiter::KeySearchArbiter::new_with_rx(Arc::clone(&bus));
+        tokio::spawn(ksa.run(ksa_rx));
+        tokio::spawn(
+            Welcome::new(Arc::clone(&bus), Arc::new(carb), Arc::new(parb), ksa_handle).run(),
+        );
+        settle_real().await;
+        assert_eq!(approach_state(&bus), Some(false));
+        assert_eq!(approach_keys(&bus), Some(0));
+        // Initial cadence published is fast (no key detected).
+        assert_eq!(approach_interval(&bus), Some(700));
+    }
+
+    #[tokio::test]
+    async fn approach_state_flips_to_true_when_key_enters_approach() {
+        let bus = setup_short_cadence().await;
+        place(&bus, 0, Zone::Approach);
+        // One fast cadence (20) + scan latency (50) = ~70 ms; slack.
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        assert_eq!(approach_state(&bus), Some(true));
+        assert_eq!(approach_keys(&bus), Some(1));
+        assert_eq!(approach_interval(&bus), Some(200)); // slow cadence
+    }
+
+    #[tokio::test]
+    async fn approach_state_flips_back_when_key_leaves() {
+        let bus = setup_short_cadence().await;
+        place(&bus, 0, Zone::Approach);
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        assert_eq!(approach_state(&bus), Some(true));
+
+        // Move the fob out — should flip back after one slow cycle.
+        place(&bus, 0, Zone::OutOfRange);
+        tokio::time::sleep(Duration::from_millis(400)).await;
+        assert_eq!(approach_state(&bus), Some(false));
+        assert_eq!(approach_keys(&bus), Some(0));
+        assert_eq!(approach_interval(&bus), Some(20)); // fast cadence
+    }
+
+    #[tokio::test]
+    async fn poll_suspended_on_ignition_on() {
+        let bus = setup_short_cadence().await;
+        // Place a fob in Approach and immediately turn ignition ON.
+        place(&bus, 0, Zone::Approach);
+        bus.inject(POWER_STATE, SignalValue::String("ON".into()));
+        // Wait well past what would be a poll cycle.
+        tokio::time::sleep(Duration::from_millis(400)).await;
+        // Suspension forces ApproachState=false and interval=0
+        // (the legacy "paused" marker).
+        assert_eq!(approach_state(&bus), Some(false));
+        assert_eq!(approach_keys(&bus), Some(0));
+        assert_eq!(approach_interval(&bus), Some(0));
+    }
+
+    #[tokio::test]
+    async fn poll_resumes_when_ignition_returns_to_off() {
+        let bus = setup_short_cadence().await;
+        // Suspend first.
+        bus.inject(POWER_STATE, SignalValue::String("ON".into()));
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        place(&bus, 0, Zone::Approach);
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        assert_eq!(approach_state(&bus), Some(false), "suspended");
+
+        // Resume — kick is immediate, plus the scan latency.
+        bus.inject(POWER_STATE, SignalValue::String("OFF".into()));
+        tokio::time::sleep(Duration::from_millis(150)).await;
+        assert_eq!(approach_state(&bus), Some(true));
+        assert_eq!(approach_interval(&bus), Some(200));
+    }
 }

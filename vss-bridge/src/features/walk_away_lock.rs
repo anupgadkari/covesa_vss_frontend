@@ -484,7 +484,9 @@ mod tests {
         // walk-away.  Place fob 1 in the Approach zone via
         // PlacedZone, wait for a poll cycle, then move it
         // OutOfRange and verify walk-away dispatches LockAll.
+        use crate::arbiter::{courtesy_arbiter, puddle_arbiter};
         use crate::features::key_search_arbiter::KeySearchArbiter;
+        use crate::features::welcome::Welcome;
         use std::time::Duration;
 
         let bus = Arc::new(MockBus::new());
@@ -493,9 +495,26 @@ mod tests {
         let arb = Arc::new(arb);
 
         let (ksa, ksa_handle, rx) = KeySearchArbiter::new_with_rx(Arc::clone(&bus));
+        tokio::spawn(ksa.run(rx));
+
+        // Welcome owns the periodic AllApproach / Presence poll now
+        // (backlog #24 / PR #50).  Spawn it alongside so the
+        // `LastObservedZone` per-fob publishes that walk-away depends
+        // on get produced.  Use a fast cadence so the test runs in
+        // real time.
+        let (carb, cfut) = courtesy_arbiter(Arc::clone(&bus));
+        let (parb, pfut) = puddle_arbiter(Arc::clone(&bus));
+        tokio::spawn(cfut);
+        tokio::spawn(pfut);
         tokio::spawn(
-            ksa.with_cadence(Duration::from_millis(20), Duration::from_millis(40))
-                .run(rx),
+            Welcome::new(
+                Arc::clone(&bus),
+                Arc::new(carb),
+                Arc::new(parb),
+                ksa_handle.clone(),
+            )
+            .with_cadence(Duration::from_millis(20), Duration::from_millis(40))
+            .run(),
         );
 
         tokio::spawn(WalkAwayLock::new(Arc::clone(&bus), arb, ksa_handle).run());
