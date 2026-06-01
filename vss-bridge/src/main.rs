@@ -85,6 +85,7 @@ use vss_bridge::plant_models::chime::ChimePlantModel;
 use vss_bridge::plant_models::day_night_mode::DayNightModePlant;
 use vss_bridge::plant_models::door_handle::DoorHandlePlantModel;
 use vss_bridge::plant_models::door_lock::DoorLockPlantModel;
+use vss_bridge::plant_models::driver::DriverPlantModel;
 use vss_bridge::plant_models::hood::HoodPlantModel;
 use vss_bridge::plant_models::mirror_adjust::MirrorAdjustPlantModel;
 use vss_bridge::plant_models::mirror_fold::MirrorFoldPlantModel;
@@ -632,7 +633,12 @@ async fn boot_simulation_stack(
             .with_response_stagger_ms(vss_bridge::plant_models::peps::PRODUCTION_STAGGER_MS)
             .run(),
     );
-    tracing::info!("plant models spawned: BlinkRelay, BrakePlant, ChimePlantModel, DayNightModePlant, DoorLockPlantModel, DoorHandlePlantModel, TrunkPlantModel, HoodPlantModel, SunroofPlantModel, PepsPlantModel");
+    // Vehicle.Driver.Identifier.{Type,Subject} — VSS v6.0 canonical
+    // identity branch.  Bridge owns publish since there's no separate
+    // POSIX driver-monitoring / telematics service on this platform.
+    // Derived from Vehicle.Cabin.LockStatus.LastRequestor edges.
+    set.spawn(DriverPlantModel::new(Arc::clone(&bus)).run());
+    tracing::info!("plant models spawned: BlinkRelay, BrakePlant, ChimePlantModel, DayNightModePlant, DoorLockPlantModel, DoorHandlePlantModel, TrunkPlantModel, HoodPlantModel, SunroofPlantModel, PepsPlantModel, DriverPlantModel");
 
     // ── WebSocket bridge ────────────────────────────────────────────
     let ws_port: u16 = std::env::var("VSS_BRIDGE_WS_PORT")

@@ -677,6 +677,13 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // the fire edge.  OEM extension.
         "Vehicle.Controller.Body.PEPS.LostKeyWarning" => Some(0x001E_000A),
 
+        // VSS v6.0 `Vehicle.Driver.Identifier.*` branch (block 0x001F).
+        // Published by `plant_models::driver::DriverPlantModel` —
+        // derived from `Vehicle.Cabin.LockStatus.LastRequestor`.
+        // See `docs/post-peps-backlog.md` item #25 (sub-PR 8b).
+        "Vehicle.Driver.Identifier.Type" => Some(0x001F_0001),
+        "Vehicle.Driver.Identifier.Subject" => Some(0x001F_0002),
+
         _ => None,
     }
 }
@@ -1326,6 +1333,9 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
         "Vehicle.Controller.Body.Switches.StartStop.BacklightIntensity",
         0x001E_0009,
     ),
+    // Vehicle.Driver.Identifier branch (block 0x001F) — DriverPlantModel.
+    ("Vehicle.Driver.Identifier.Type", 0x001F_0001),
+    ("Vehicle.Driver.Identifier.Subject", 0x001F_0002),
 ];
 
 #[cfg(test)]
