@@ -77,20 +77,20 @@ Feature: Passive Entry (PEPS unlock-on-handle-pull)
   # --- REQ-PE-001, REQ-PE-002 ---
   Scenario: Handle pull with paired fob in LeftFront zone unlocks driver door
     Given paired fob 1 is in the LeftFront zone
-    When the driver pulls the Row1.Left outside handle
+    When the driver pulls the outside handle
     Then PassiveEntry dispatches UnlockDriver via the DoorLockArbiter
     And Vehicle.Controller.Body.Doors.CentralLock.FeedbackRequest is "unlock"
 
   # --- REQ-PE-003 ---
   Scenario: Handle pull with no paired device in any zone is a no-op
     Given no paired devices are positioned in any zone
-    When the driver pulls the Row1.Left outside handle
+    When the driver pulls the outside handle
     Then PassiveEntry does NOT dispatch any lock command
 
   # --- REQ-PE-004 ---
   Scenario: Handle pull with fob in Approach (RSSI-only) does not unlock
     Given paired fob 1 is in the Approach zone
-    When the driver pulls the Row1.Left outside handle
+    When the driver pulls the outside handle
     Then PassiveEntry does NOT dispatch any lock command
 
   # --- REQ-PE-005: stage-2 escalation via the OTHER side handle ---
@@ -102,22 +102,22 @@ Feature: Passive Entry (PEPS unlock-on-handle-pull)
   Scenario: Two-stage unlock — passenger pull after stage-1 unlocks all
     Given paired fob 1 is in the LeftFront zone
     And dealer.two_stage_unlock is enabled
-    When the driver pulls the Row1.Left outside handle
+    When the driver pulls the outside handle
     Then PassiveEntry dispatches UnlockDriver
     Given paired fob 1 is in the RightFront zone
-    When the passenger pulls the Row1.Right outside handle
+    When the passenger pulls the outside handle
     Then PassiveEntry dispatches UnlockAll
 
   # --- REQ-PE-006 ---
   Scenario: Unpaired fob in proximity zone is ignored
     Given unpaired fob 5 is in the LeftFront zone
-    When the driver pulls the Row1.Left outside handle
+    When the driver pulls the outside handle
     Then PassiveEntry does NOT dispatch any lock command
 
   # --- REQ-PE-007 ---
   Scenario: Paired BLE phone in LeftFront zone unlocks driver door
     Given paired phone 1 is in the LeftFront zone
-    When the driver pulls the Row1.Left outside handle
+    When the driver pulls the outside handle
     Then PassiveEntry dispatches UnlockDriver via the DoorLockArbiter
 
   # --- REQ-PE-008: Two-stage disabled — single pull unlocks all doors.
@@ -126,7 +126,7 @@ Feature: Passive Entry (PEPS unlock-on-handle-pull)
   Scenario: Two-stage disabled — single pull unlocks all doors
     Given paired fob 1 is in the LeftFront zone
     And dealer.two_stage_unlock is disabled
-    When the driver pulls the Row1.Left outside handle
+    When the driver pulls the outside handle
     Then PassiveEntry dispatches UnlockAll
     And Vehicle.Controller.Body.Doors.CentralLock.FeedbackRequest is "unlock"
 
@@ -138,15 +138,18 @@ Feature: Passive Entry (PEPS unlock-on-handle-pull)
   Scenario: Passenger-side handle pull always unlocks all (bypasses two-stage)
     Given paired fob 1 is in the RightFront zone
     And dealer.two_stage_unlock is enabled
-    When the passenger pulls the Row1.Right outside handle
+    When the passenger pulls the outside handle
     Then PassiveEntry dispatches UnlockAll
 
   # --- REQ-PE-010 / REQ-PE-011: RHD support.  On RHD vehicles
-  #               (`dealer.driver_door_side = Right`), Row1.Right is
+  #               (`dealer.vehicle_orientation = Rhd`), Row1.Right is
   #               the driver door and Row1.Left is the passenger door.
   #               The two-stage and passenger-side-bypass rules apply
-  #               relative to the driver-door cal, not to physical
-  #               position.
+  #               relative to the orientation, not to physical
+  #               position.  The step definitions resolve
+  #               "the driver" / "the passenger" via the cal at
+  #               runtime, so the same gherkin works for both
+  #               orientations.
   #
   # REQ-PE-010: RHD stage-2 escalation via the passenger (LHS on RHD).
   # Mirror of REQ-PE-005 for RHD.
@@ -154,10 +157,10 @@ Feature: Passive Entry (PEPS unlock-on-handle-pull)
     Given the vehicle is RHD
     And dealer.two_stage_unlock is enabled
     And paired fob 1 is in the RightFront zone
-    When the driver pulls the Row1.Right outside handle
+    When the driver pulls the outside handle
     Then PassiveEntry dispatches UnlockDriver
     Given paired fob 1 is in the LeftFront zone
-    When the passenger pulls the Row1.Left outside handle
+    When the passenger pulls the outside handle
     Then PassiveEntry dispatches UnlockAll
 
   # REQ-PE-011: RHD passenger-side bypass — pulling Row1.Left (the
@@ -166,5 +169,5 @@ Feature: Passive Entry (PEPS unlock-on-handle-pull)
     Given the vehicle is RHD
     And dealer.two_stage_unlock is enabled
     And paired fob 1 is in the LeftFront zone
-    When the passenger pulls the Row1.Left outside handle
+    When the passenger pulls the outside handle
     Then PassiveEntry dispatches UnlockAll

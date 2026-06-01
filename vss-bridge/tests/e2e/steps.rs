@@ -271,6 +271,27 @@ impl VssWorld {
             .as_ref()
             .expect("scenario did not start the PEPS stack")
     }
+
+    /// Resolve the driver-side Row1 outside-handle signal path from the
+    /// current `dealer.vehicle_orientation`.  Lets the gherkin steps
+    /// say "the driver pulls the outside handle" without naming the
+    /// physical side, just like the production feature code does.
+    fn driver_handle(&self) -> VssPath {
+        use vss_bridge::plant_models::side::PhysicalSide;
+        match self.cfg().orientation().driver_physical() {
+            PhysicalSide::Left => ROW1_LEFT_HANDLE,
+            PhysicalSide::Right => ROW1_RIGHT_HANDLE,
+        }
+    }
+
+    /// Mirror of `driver_handle` for the passenger-side door.
+    fn passenger_handle(&self) -> VssPath {
+        use vss_bridge::plant_models::side::PhysicalSide;
+        match self.cfg().orientation().driver_physical() {
+            PhysicalSide::Left => ROW1_RIGHT_HANDLE,
+            PhysicalSide::Right => ROW1_LEFT_HANDLE,
+        }
+    }
 }
 
 /// Yield + small advance so every spawned task processes pending messages.
@@ -1292,65 +1313,47 @@ async fn settle_handle_pull() {
     settle().await;
 }
 
-#[when("the driver pulls the Row1.Left outside handle")]
-async fn when_driver_pulls_left(w: &mut VssWorld) {
+/// Consolidated driver-side handle pull.  The world's
+/// `driver_handle()` helper resolves to Row1.Left under LHD and
+/// Row1.Right under RHD, so this single step covers both
+/// orientations.  Phase 5 of the VSS v6.0 migration replaced the
+/// four `Row1.{Left,Right}` × {driver,passenger} variants of this
+/// step with two driver-relative ones — the feature spec is about
+/// who, not which physical side.
+#[when("the driver pulls the outside handle")]
+async fn when_driver_pulls(w: &mut VssWorld) {
+    let handle = w.driver_handle();
     // Clear history at the boundary so the following Then assertions
     // see only what PassiveEntry produces in response to *this* pull.
     w.bus().clear_history();
-    w.inject(ROW1_LEFT_HANDLE, SignalValue::Bool(true)).await;
+    w.inject(handle, SignalValue::Bool(true)).await;
     settle_handle_pull().await;
 }
 
-/// RHD driver-side pull — Row1.Right is the driver door when
-/// `dealer.vehicle_orientation = Right`.
-#[when("the driver pulls the Row1.Right outside handle")]
-async fn when_driver_pulls_right(w: &mut VssWorld) {
+/// Mirror of `when_driver_pulls` for the passenger door.
+#[when("the passenger pulls the outside handle")]
+async fn when_passenger_pulls(w: &mut VssWorld) {
+    let handle = w.passenger_handle();
     w.bus().clear_history();
-    w.inject(ROW1_RIGHT_HANDLE, SignalValue::Bool(true)).await;
+    w.inject(handle, SignalValue::Bool(true)).await;
     settle_handle_pull().await;
 }
 
-#[when("the passenger pulls the Row1.Right outside handle")]
-async fn when_passenger_pulls_right(w: &mut VssWorld) {
-    w.bus().clear_history();
-    w.inject(ROW1_RIGHT_HANDLE, SignalValue::Bool(true)).await;
-    settle_handle_pull().await;
-}
-
-/// RHD passenger-side pull — Row1.Left is the passenger door on RHD.
-#[when("the passenger pulls the Row1.Left outside handle")]
-async fn when_passenger_pulls_left(w: &mut VssWorld) {
-    w.bus().clear_history();
-    w.inject(ROW1_LEFT_HANDLE, SignalValue::Bool(true)).await;
-    settle_handle_pull().await;
-}
-
-#[when(
-    regex = r#"^the driver releases and re-pulls the Row1\.Left outside handle within (\d+) seconds?$"#
-)]
-async fn when_driver_releases_and_repulls_left(w: &mut VssWorld, secs: u64) {
+/// Consolidated second-pull-within-window step.  Resolves the driver
+/// door from orientation so the same step works for LHD and RHD —
+/// previously this was duplicated for `Row1.Left` and `Row1.Right`.
+#[when(regex = r#"^the driver releases and re-pulls the outside handle within (\d+) seconds?$"#)]
+async fn when_driver_releases_and_repulls(w: &mut VssWorld, secs: u64) {
+    let handle = w.driver_handle();
     // Release.
-    w.inject(ROW1_LEFT_HANDLE, SignalValue::Bool(false)).await;
+    w.inject(handle, SignalValue::Bool(false)).await;
     // Wait the requested interval (must stay inside the two-stage window).
     advance(Duration::from_secs(secs)).await;
     settle().await;
     // Clear history so the post-pull Then sees only the second-pull
     // command, not stage 1.
     w.bus().clear_history();
-    w.inject(ROW1_LEFT_HANDLE, SignalValue::Bool(true)).await;
-    settle_handle_pull().await;
-}
-
-/// RHD second-pull within window on the driver door (Row1.Right).
-#[when(
-    regex = r#"^the driver releases and re-pulls the Row1\.Right outside handle within (\d+) seconds?$"#
-)]
-async fn when_driver_releases_and_repulls_right(w: &mut VssWorld, secs: u64) {
-    w.inject(ROW1_RIGHT_HANDLE, SignalValue::Bool(false)).await;
-    advance(Duration::from_secs(secs)).await;
-    settle().await;
-    w.bus().clear_history();
-    w.inject(ROW1_RIGHT_HANDLE, SignalValue::Bool(true)).await;
+    w.inject(handle, SignalValue::Bool(true)).await;
     settle_handle_pull().await;
 }
 
