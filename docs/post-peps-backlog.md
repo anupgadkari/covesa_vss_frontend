@@ -24,29 +24,30 @@ item is independently shippable as its own sub-branch / PR.
 | 10 | KeySearch arbiter + VehicleStartingControl | XL | ✅ Done — PR #27 |
 | 11 | BTSI in TransmissionPlant | M | ✅ Done — PR #27 |
 | 12 | Key-in-Ignition Inhibit (KeyCylinder mode) | S | ✅ Done — PR #27 |
-| 13 | Migrate ExteriorTrunkButton → KeySearch arbiter | M | ⏳ Pending |
-| 14 | Stop continuous Zone publishing; `PlacedZone` + `LastObservedZone` | L | ⏳ Pending |
+| 13 | Migrate ExteriorTrunkButton → KeySearch arbiter | M | ✅ Done — `exterior_trunk_button` now submits `AntennaSet::TrunkOutside` + `Authenticated` via `KeySearchArbiterHandle`; no direct `.Zone`/`.PlacedZone` reads |
+| 14 | Stop continuous Zone publishing; `PlacedZone` + `LastObservedZone` | L | ⚠️ Partial — signals are defined (`Vehicle.Simulation.KeyFob.{N}.PlacedZone` + `LastObservedZone` in `plant_models/peps/signals.rs`); HMI cards display each correctly (Auth Device = PlacedZone, PEPS Devices = LastObservedZone, PR #43).  **Remaining:** audit any feature subscribers still reading the legacy continuous `.Zone` and migrate them to `.LastObservedZone` |
 | 14c | Extra scan triggers — brake-press pre-auth | S | ✅ Done |
-| 14d | Lost-paired-key scan + cluster warning (formerly door-close snapshot) | S | ✅ Done |
-| 15 | Smart Unlock feature (key-locked-in-trunk) | M | ⏳ Pending |
-| 16 | NFC Entry feature (card/phone tap → unlock; tap at push-button → start) | M | ⏳ Pending |
-| 17 | Key-lost warning chime | XS | ⏳ Pending |
+| 14d | Lost-paired-key scan + cluster warning (formerly door-close snapshot) | S | ✅ Done — publishes `LostKeyWarning` bool on door-close with no paired key found; chime hookup is item 17 |
+| 15 | Smart Unlock feature (key-locked-in-trunk) | M | ✅ Done — `features/smart_unlock.rs` subscribes to `LockStatus`/`LastRequestor`/`EventNum`, runs `Sequence(Cabin + AllApproach, Authenticated)` scan, dispatches `UnlockAll` on "paired key in cabin only" |
+| 16 | NFC Entry feature (card/phone tap → unlock; tap at push-button → start) | M | ✅ Done — `features/nfc_entry.rs` handles `NfcCard.{1,2}.Position → DriverHandle` and `BlePhone.{1,2}.NfcTap → UnlockAll`; PushButton tap publishes `NfcAuthBypass = true` for start-button override |
+| 17 | Key-lost warning chime | XS | ⏳ Pending — `lost_pk_scan` already publishes the `LostKeyWarning` bool; needs a chime claim when `LostKeyWarning && Speed > threshold` |
 | 18 | ASIL-B on FreeRTOS + Ferrocene-qualified Rust (replaces Classic AUTOSAR M7) | XXL | 📋 Program-level — see plan |
 | 19 | Kuksa.val databroker integration (replace MockBus on the SignalBus seam) | L | 📋 Program-level |
 | 20 | Feature-completeness + interconnection audit (requirements + Gherkin + tests) | M | 📋 Program-level |
 | 21 | Run the test suite on a virtualised target (QEMU / Renode / Avocado) | L | 📋 Program-level |
-| 22 | Refresh to the latest COVESA VSS release (v4.0 → v6.0) | XL | 🔄 In progress — sub-PRs 1-3,5-7 done (rename complete); sub-PR 4 (DriverSide) + 8 (new signals) remain; see [vss-v6.0-migration.md](./vss-v6.0-migration.md) |
+| 22 | Refresh to the latest COVESA VSS release (v4.0 → v6.0) | XL | 🔄 In progress — sub-PRs 1-3, 5-7 done (rename complete, PRs up to #41); sub-PR 4 DriverSide adoption Phases 1-4 landed (#44, #45); sub-PR 4 Phase 5 (cucumber-step language consolidation) + sub-PR 4b (canonical paths on the bus) + sub-PR 8 (new VSS v6.0 signals worth exposing) remain.  See [vss-v6.0-migration.md](./vss-v6.0-migration.md) |
 
-Suggested next order: **13 → 16 → 14 → 15 → 17**.  Reasoning:
-**13** is a localised migration that exercises the arbiter end-to-end
-on an existing feature, cheap regression value.  **16** delivers a
-visible new auth path on the existing NFC HMI plumbing.  **14** is
-the biggest refactor and benefits from having two arbiter consumers
-first.  **15** and **17** are small follow-ups.
+Suggested next order from what genuinely remains: **17 → 14 (remainder) → 22 sub-PR 4b / 4 Phase 5 / 8**.
+Reasoning: **17** is XS and unblocked — `LostKeyWarning` bool is already
+published, just needs a chime claim when the vehicle is moving.
+**14 remainder** is a targeted audit of feature subscribers (no
+plant-model rework, since the signals already exist).  **22**'s
+remaining sub-PRs are doc/test-clarity and external surface work
+that compose cleanly on top.
 
 ---
 
-## 13. Migrate ExteriorTrunkButton onto the KeySearch arbiter  *(M)*
+## 13. Migrate ExteriorTrunkButton onto the KeySearch arbiter  *(M)* — ✅ Done
 
 **Trigger.**  Today the `exterior_trunk_button` feature still reads
 `Body.PEPS.Plant.KeyFob.{N}.Zone` directly from the continuous-Zone
@@ -212,7 +213,7 @@ path.
 
 ---
 
-## 15. Smart Unlock feature (key-locked-in-trunk)  *(M)*
+## 15. Smart Unlock feature (key-locked-in-trunk)  *(M)* — ✅ Done
 
 **Trigger.**  Real OEM convenience feature: when the user double-
 locks the vehicle and walks away, if any paired fob is detected
@@ -253,7 +254,7 @@ override later.
 
 ---
 
-## 16. NFC Entry feature  *(M)*
+## 16. NFC Entry feature  *(M)* — ✅ Done
 
 **Trigger.**  Phase 7d added the HMI plumbing for NFC cards (N1,
 N2) and phones with NFC at both `DriverHandle` and `PushButton`
