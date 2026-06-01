@@ -27,11 +27,11 @@ item is independently shippable as its own sub-branch / PR.
 | 13 | Migrate ExteriorTrunkButton → KeySearch arbiter | M | ✅ Done — `exterior_trunk_button` now submits `AntennaSet::TrunkOutside` + `Authenticated` via `KeySearchArbiterHandle`; no direct `.Zone`/`.PlacedZone` reads |
 | 14 | Stop continuous Zone publishing; `PlacedZone` + `LastObservedZone` | L | ⚠️ Partial — signals are defined (`Vehicle.Simulation.KeyFob.{N}.PlacedZone` + `LastObservedZone` in `plant_models/peps/signals.rs`); HMI cards display each correctly (Auth Device = PlacedZone, PEPS Devices = LastObservedZone, PR #43).  **Remaining:** audit any feature subscribers still reading the legacy continuous `.Zone` and migrate them to `.LastObservedZone` |
 | 14c | Extra scan triggers — brake-press pre-auth | S | ✅ Done |
-| 14d | Lost-paired-key scan + cluster warning (formerly door-close snapshot) | S | ✅ Done — publishes `LostKeyWarning` bool on door-close with no paired key found; chime hookup is item 17 |
+| 14d | Lost-paired-key scan + cluster warning (formerly door-close snapshot) | S | ✅ Done — merged into #17.  The standalone `lost_pk_scan` feature was deleted; `KeyLostWarning` (item 17) is its strict successor and publishes the same `Vehicle.Controller.Body.PEPS.LostKeyWarning` bool on the wire, with corrected gating (cabin sealed under power vs. the original door-close trigger) and a chime claim. |
 | 15 | Smart Cabin Unlock (key-locked-in-cabin) | M | ✅ Done — `features/smart_unlock.rs` subscribes to `LockStatus`/`LastRequestor`/`EventNum`, runs `Sequence(Cabin + AllApproach, Authenticated)` scan, dispatches `UnlockAll` on "paired key in cabin only".  **Originally specified as the key-locked-in-trunk case (now item 23); the cabin case was built under the `SmartUnlock` name and is documented here.** |
 | 23 | Smart Trunk Pop (key-locked-in-trunk) | M | ⏳ Pending — sibling of #15 for the trunk case: on a fresh lock from an external source while quiescent, run a `TrunkInside` Authenticated scan; if a paired key is found, dispatch trunk-pop via the trunk arbiter + chime + hazards.  Distinct customer flow from #15 (trunk pops, doors stay locked). |
 | 16 | NFC Entry feature (card/phone tap → unlock; tap at push-button → start) | M | ✅ Done — `features/nfc_entry.rs` handles `NfcCard.{1,2}.Position → DriverHandle` and `BlePhone.{1,2}.NfcTap → UnlockAll`; PushButton tap publishes `NfcAuthBypass = true` for start-button override |
-| 17 | Key-lost warning chime | XS | ⏳ Pending — `lost_pk_scan` already publishes the `LostKeyWarning` bool; needs a chime claim when `LostKeyWarning && Speed > threshold` |
+| 17 | Key-lost warning chime | XS | 🔄 In PR #47 — `features/key_lost_warning.rs` owns its own Cabin / Authenticated arbiter scans (triggered on the all-sealed-under-power edge, on ignition-on while sealed, and on a 1-minute periodic).  Publishes the cluster flag `Vehicle.Controller.Body.PEPS.LostKeyWarning` (replacing the deleted LostPkScan, which solved a thinner version of the same problem) and claims the chime for 2 s.  Latch held across the periodic so subsequent ticks with still no key don't re-chime. |
 | 18 | ASIL-B on FreeRTOS + Ferrocene-qualified Rust (replaces Classic AUTOSAR M7) | XXL | 📋 Program-level — see plan |
 | 19 | Kuksa.val databroker integration (replace MockBus on the SignalBus seam) | L | 📋 Program-level |
 | 20 | Feature-completeness + interconnection audit (requirements + Gherkin + tests) | M | 📋 Program-level |
@@ -170,47 +170,39 @@ simulated LF airtime each.
 
 ---
 
-## 14d. Lost-paired-key scan + cluster warning  *(S)*
+## 14d. Lost-paired-key scan + cluster warning  *(S)* — ✅ Done (merged into #17)
 
-**Trigger.**  Driver gets in, closes the door, starts the car —
-but somehow no paired fob is with them (left on porch, dropped
-on driveway, handed to a passenger who got out, …).  The vehicle
-is now running without an authenticated key on board.  We want a
-cluster warning popup so the driver doesn't unknowingly drive
-away.
-
-The original 14d plan was a generic on-close snapshot that also
-fed Smart Unlock (#15).  In practice Smart Unlock's trigger is
-the **lock** edge (driver locks the door from outside with a fob
-potentially still in the trunk) — a different event entirely —
-so Smart Unlock should run its own scan when it needs one.
-Conflating the two muddied both features; we narrowed 14d to the
-lost-PK case and renamed the feature accordingly.
+> **History.**  This was originally implemented as a standalone
+> `features/lost_pk_scan.rs` that fired on the door-close edge with
+> ignition live, ran a `Sequence(AllApproach + TrunkInside + Cabin)`
+> Presence scan, and published
+> `Vehicle.Controller.Body.PEPS.LostKeyWarning` on zero results.
+>
+> During the #17 (key-lost warning chime) implementation we realised
+> the two features were addressing the same scenario — driver in a
+> running car with no paired key on board — and the original `lost_pk_scan`
+> shape had three issues:
+>
+> 1. The Sequence scan included `TrunkInside`, but a key in the trunk
+>    is the *key-locked-in-trunk* case (now backlog item #23), not
+>    the same problem.
+> 2. The Sequence scan used `Presence`, not `Authenticated` — so an
+>    intruder fob / mechanically-compatible blank in the cabin would
+>    suppress the warning.
+> 3. The "door close" trigger alone missed two real cases: the user
+>    closing up before turning the key (no door edge after ignition-
+>    on), and a fob leaving the cabin without any door edge (window,
+>    dead phone, etc.).
+>
+> The merged successor is `features/key_lost_warning.rs`: same
+> `LostKeyWarning` signal on the wire (no HMI churn), correct
+> Cabin / Authenticated scan, and three trigger sources (last-close
+> edge, ignition-on while sealed, 1-minute periodic).  See #17 below
+> for the landed shape.
 
 **Built on (in `main`).**  Per-door `IsOpen` signals,
-`Vehicle.LowVoltageSystemState`, KeySearchArbiter with
-`AntennaSet::Sequence` (runs AllApproach + TrunkInside + Cabin
-in one go).
-
-**Plan.**
-1. New feature `features/lost_pk_scan.rs`: subscribe to all four
-   `IsOpen` signals + `Vehicle.LowVoltageSystemState`.
-2. On the any-open→all-closed edge **AND** ignition ∈
-   {`ON`, `START`}: submit a `Sequence` of `AllApproach` +
-   `TrunkInside` + `Cabin` Presence scans, `Coalescing::Disallowed`.
-3. On zero paired keys found: publish
-   `Body.PEPS.LostKeyWarning = true`.  Clears on the next scan
-   that finds a key, or on ignition leaving live.
-4. HMI cluster subscribes to `LostKeyWarning` and renders a
-   "KEY NOT IN VEHICLE" popup.
-5. Tests: boot publishes false; ignition-off close = no-op;
-   ignition-on close with no key = warning; ignition-on close
-   with cabin key = no warning; warning clears on key reappear
-   and on ignition off; partial close doesn't fire.
-
-**Risks.**  Low.  Sequence scan latency adds up (~150 ms total)
-but runs after the user shuts the door, off any user-perceived
-path.
+`Vehicle.LowVoltageSystemState`, KeySearchArbiter, the
+`Vehicle.Controller.Body.Chime.IsActive` direct-publish path.
 
 ---
 
@@ -310,29 +302,50 @@ existing side-aware driver_door_side cal to route correctly.
 
 ---
 
-## 17. Key-lost warning chime  *(XS)*
+## 17. Key-lost warning chime  *(XS)* — 🔄 In PR #47
 
-**Trigger.**  `docs/key-search-arbiter-and-ignition.md` §11 lists
-this as a trivial add: while the vehicle is moving (`Vehicle.Speed
-> threshold`) and `Body.PEPS.ApproachKeys` drops to 0, sound a
-short chime + display a cluster warning.  Catches "fob dropped out
-of the car" mid-drive.
+> **Scope drifted during review.**  The original plan (mid-drive
+> speed-gated `ApproachKeys` edge) was wrong on two counts:
+> (a) `ApproachKeys` isn't continuously updated — it's published
+> by the arbiter after triggered or periodic scans, so a "drop to
+> zero" edge wasn't a coherent triggering signal; and (b) the
+> driver-error that's actually worth catching is *getting in a
+> running car with no key on board*, not *losing a key mid-drive*.
+> Item #14d (LostPkScan) already addressed (b) for the door-close
+> case, so #17 absorbed it.  See the in-PR description for the
+> landed shape.
 
-**Built on (in `main`).**  `ApproachKeys` published by the
-KeySearch arbiter.  `Vehicle.Speed` HMI input.  `Body.Chime.IsActive`
-plant model.
+**Final trigger.**  Submit a `Cabin / Authenticated / Disallowed-
+coalesce` KeySearchArbiter request when:
 
-**Plan.**
-1. New tiny feature `features/key_lost_warning.rs`.
-2. Subscribe `ApproachKeys`, `Vehicle.Speed`,
-   `Vehicle.LowVoltageSystemState`.
-3. When `Speed > 5 km/h` AND `ApproachKeys` transitions ≥1 → 0
-   AND power ∈ {`ON`, `START`}: claim chime for 2 seconds, publish
-   `Vehicle.Starting.KeyLostWarning = true` (new bool).
-4. Auto-clear after 2 s or when ApproachKeys ≥ 1 again.
-5. Tests: trigger on the drop edge; suppression while parked.
+1. `Vehicle.LowVoltageSystemState` is `ON` or `START`, AND
+2. Every Row1 / Row2 door and the rear trunk is closed.
 
-**Risks.**  None significant.
+The scan is submitted on:
+- The closing edge that completes the all-sealed state.
+- The ignition-on edge when the cabin is already sealed.
+- A 1-minute periodic tick while ignition is on.
+
+**Action.**  When the scan returns empty AND gating still holds AND
+no warning is latched: publish `Vehicle.Controller.Body.PEPS.
+LostKeyWarning = true` (the same signal LostPkScan used to publish —
+no HMI churn) and claim `Vehicle.Controller.Body.Chime.IsActive` for
+2 s.  Auto-clear of the chime + flag at 2 s; latch held so periodic
+ticks don't re-chime every minute.  Latch clears on: a scan finding
+a paired key, any door / trunk opening, ignition off.
+
+**Built on.**  `KeySearchArbiterHandle::submit` (#13 / item 14 /
+SmartUnlock established the per-feature scan-request pattern);
+chime path (`Vehicle.Controller.Body.Chime.IsActive`) shared with
+LockFeedback + PerimeterAlarm; no arbiter today.
+
+**Deletes.**  `features/lost_pk_scan.rs` (its successor); the
+`Vehicle.Controller.Starting.KeyLostWarning` interim signal added
+mid-review.
+
+**Risks.**  Chime collision — multiple features publish the shared
+chime signal directly with no arbitration.  Mitigated by short
+duration (2 s) and the rarity of overlapping cases.
 
 ---
 

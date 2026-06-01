@@ -211,14 +211,19 @@ pub enum FeatureId {
     /// on every external `Vehicle.Cabin.LockStatus` lock event with ignition
     /// quiescent.  See `features::smart_unlock`.
     SmartUnlock = 0x2B,
-    /// Key-lost warning chime.  While the vehicle is moving
-    /// (`Vehicle.Speed > KEY_LOST_SPEED_THRESHOLD_KMH`) and the
-    /// PEPS arbiter's `ApproachKeys` count drops from ≥1 to 0,
-    /// claim a short chime (2 s) and publish
-    /// `Vehicle.Controller.Starting.KeyLostWarning = true` so the
-    /// cluster can display "key lost" iconography.  Catches the
-    /// "fob fell out of the cabin / pocket mid-drive" case.  See
-    /// `features::key_lost_warning`.
+    /// Key-lost warning chime.  When the cabin is sealed under
+    /// power (every door + trunk closed, ignition ∈ {ON, START})
+    /// and a Cabin / Authenticated arbiter scan returns zero paired
+    /// keys, claim the chime for 2 s and publish
+    /// `Vehicle.Controller.Body.PEPS.LostKeyWarning = true` so the
+    /// cluster can render the "key not detected" icon.  Triggers on
+    /// the last-close edge, on ignition-on while already sealed, and
+    /// on a 1-minute periodic.  Successor to the deleted LostPkScan
+    /// feature.  See `features::key_lost_warning`.
+    ///
+    /// **Not currently wired through an arbiter** — the feature
+    /// publishes the chime + flag signals directly.  The FeatureId
+    /// is allocated for future use if chime arbitration is added.
     KeyLostWarning = 0x2C,
     // ---- Future window-arbiter participants (allow-list reserved) ----
     // WindowAntiPinch       = 0x28 — Priority::Critical, observes a
