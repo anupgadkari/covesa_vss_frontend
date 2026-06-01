@@ -53,6 +53,7 @@ use vss_bridge::features::farewell::Farewell;
 use vss_bridge::features::fog_lamps::FogLamps;
 use vss_bridge::features::follow_me_home::FollowMeHome;
 use vss_bridge::features::hazard_lighting::HazardLighting;
+use vss_bridge::features::key_lost_warning::KeyLostWarning;
 use vss_bridge::features::key_search_arbiter::KeySearchArbiter;
 use vss_bridge::features::keypad_lock::KeypadLock;
 use vss_bridge::features::lock_feedback::LockFeedback;
@@ -569,7 +570,12 @@ async fn boot_simulation_stack(
         .run(),
     );
 
-    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, KeypadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome, MirrorFold, MirrorAdjust, Farewell, DoorOpenAssist, LostPkScan, ExteriorTrunkButton, CabinTrunkRelease, ManualHorn, PerimeterAlarm, KeySearchArbiter, VehicleStartingControl, NfcEntry, SmartUnlock");
+    // Key-Lost Warning — short chime + cluster flag when ApproachKeys
+    // drops to 0 while the vehicle is moving and ignition is on.
+    // Catches the "fob fell out of the cabin mid-drive" case.
+    set.spawn(KeyLostWarning::new(Arc::clone(&bus)).run());
+
+    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, KeypadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome, MirrorFold, MirrorAdjust, Farewell, DoorOpenAssist, LostPkScan, ExteriorTrunkButton, CabinTrunkRelease, ManualHorn, PerimeterAlarm, KeySearchArbiter, VehicleStartingControl, NfcEntry, SmartUnlock, KeyLostWarning");
 
     // ── Plant Models ────────────────────────────────────────────────
     set.spawn(BlinkRelay::new(Arc::clone(&bus)).run());

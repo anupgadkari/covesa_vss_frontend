@@ -752,6 +752,10 @@ const HMI_ALIASES: &[(VssPath, VssPath)] = &[
         "Vehicle.Controller.Starting.ImmobilizerStatus",
         "Vehicle.Starting.ImmobilizerStatus",
     ),
+    (
+        "Vehicle.Controller.Starting.KeyLostWarning",
+        "Vehicle.Starting.KeyLostWarning",
+    ),
     ("Vehicle.Controller.Sunroof.MoveCmd", "Body.Sunroof.MoveCmd"),
     (
         "Vehicle.Controller.Sunroof.Shade.MoveCmd",

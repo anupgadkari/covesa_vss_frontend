@@ -587,6 +587,11 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Vehicle.PowerMode.IgnitionCylinder.Position" => Some(0x001E_0002),
         "Vehicle.Chassis.Brake.IsApplied" => Some(0x001E_0003),
         "Vehicle.Controller.Starting.ImmobilizerStatus" => Some(0x001E_0004),
+        // `Vehicle.Controller.Starting.KeyLostWarning` — Bool published by
+        //   the KeyLostWarning feature when ApproachKeys drops to 0 mid-
+        //   drive (Speed > 5 km/h, ignition ON/START).  Cluster polls
+        //   this to render the "key not detected" icon for 2 s.
+        "Vehicle.Controller.Starting.KeyLostWarning" => Some(0x001E_000B),
 
         // Brake / Transmission Shift Interlock (BTSI) + Key-in-Ignition
         // Inhibit derived flags.  Both bool, both bridge-published.
@@ -1190,6 +1195,7 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Vehicle.PowerMode.IgnitionCylinder.Position", 0x001E_0002),
     ("Vehicle.Chassis.Brake.IsApplied", 0x001E_0003),
     ("Vehicle.Controller.Starting.ImmobilizerStatus", 0x001E_0004),
+    ("Vehicle.Controller.Starting.KeyLostWarning", 0x001E_000B),
     ("Powertrain.Transmission.ShiftLockEngaged", 0x001E_0005),
     (
         "Vehicle.Controller.Body.Switches.IgnitionCylinder.RemovalInhibited",

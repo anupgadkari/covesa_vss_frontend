@@ -211,6 +211,15 @@ pub enum FeatureId {
     /// on every external `Vehicle.Cabin.LockStatus` lock event with ignition
     /// quiescent.  See `features::smart_unlock`.
     SmartUnlock = 0x2B,
+    /// Key-lost warning chime.  While the vehicle is moving
+    /// (`Vehicle.Speed > KEY_LOST_SPEED_THRESHOLD_KMH`) and the
+    /// PEPS arbiter's `ApproachKeys` count drops from ≥1 to 0,
+    /// claim a short chime (2 s) and publish
+    /// `Vehicle.Controller.Starting.KeyLostWarning = true` so the
+    /// cluster can display "key lost" iconography.  Catches the
+    /// "fob fell out of the cabin / pocket mid-drive" case.  See
+    /// `features::key_lost_warning`.
+    KeyLostWarning = 0x2C,
     // ---- Future window-arbiter participants (allow-list reserved) ----
     // WindowAntiPinch       = 0x28 — Priority::Critical, observes a
     //   future per-window anti-pinch detection signal and forces
@@ -279,6 +288,7 @@ impl FeatureId {
             0x26 => Some(Self::DelayedAccessory),
             0x27 => Some(Self::SunroofControl),
             0x2B => Some(Self::SmartUnlock),
+            0x2C => Some(Self::KeyLostWarning),
             _ => None,
         }
     }
