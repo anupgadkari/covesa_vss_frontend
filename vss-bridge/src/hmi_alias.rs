@@ -985,6 +985,23 @@ const HMI_ALIASES: &[(VssPath, VssPath)] = &[
         "Vehicle.Simulation.TestFixtures.DoesNotExist",
         "Body.DoesNotExist",
     ),
+    // Transmission — canonical `Vehicle.Powertrain.Transmission.*`
+    // adopted internally as part of sub-PR 8a.  HMI cluster JS
+    // still reads the pre-v6.0 names `Powertrain.Transmission.*`
+    // (no `Vehicle.` prefix); the shim translates outbound /
+    // inbound on the WS boundary.
+    (
+        "Vehicle.Powertrain.Transmission.CurrentGear",
+        "Powertrain.Transmission.CurrentGear",
+    ),
+    (
+        "Vehicle.Powertrain.Transmission.SelectedGear",
+        "Powertrain.Transmission.SelectedGear",
+    ),
+    (
+        "Vehicle.Powertrain.Transmission.ShiftLockEngaged",
+        "Powertrain.Transmission.ShiftLockEngaged",
+    ),
 ];
 
 /// Translate a canonical bus path to the legacy name the HMI expects.

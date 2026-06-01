@@ -52,11 +52,11 @@ use crate::signal_bus::{SignalBus, VssPath};
 
 // ── Signal constants ─────────────────────────────────────────────────────
 
-const SELECTED: VssPath = "Powertrain.Transmission.SelectedGear";
-const CURRENT: VssPath = "Powertrain.Transmission.CurrentGear";
+const SELECTED: VssPath = "Vehicle.Powertrain.Transmission.SelectedGear";
+const CURRENT: VssPath = "Vehicle.Powertrain.Transmission.CurrentGear";
 const BRAKE_IN: VssPath = "Vehicle.Chassis.Brake.IsApplied";
 const IGN_IN: VssPath = "Vehicle.LowVoltageSystemState";
-const SHIFT_LOCK_OUT: VssPath = "Powertrain.Transmission.ShiftLockEngaged";
+const SHIFT_LOCK_OUT: VssPath = "Vehicle.Powertrain.Transmission.ShiftLockEngaged";
 
 const PARK: i16 = 126;
 

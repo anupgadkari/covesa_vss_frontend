@@ -335,14 +335,14 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
 
         // Chassis / Powertrain (sensor inputs)
         "Vehicle.Chassis.Brake.PedalPosition" => Some(0x000C_0001),
-        "Powertrain.Transmission.CurrentGear" => Some(0x000C_0002),
+        "Vehicle.Powertrain.Transmission.CurrentGear" => Some(0x000C_0002),
         "Vehicle.Speed" => Some(0x000C_0003),
         "Vehicle.Body.Lights.LightSwitch" => Some(0x000C_0004),
         // Driver's gear-selector position (intent).  Same VSS encoding
         // as CurrentGear: 126=P, -1=R, 0=N, 127=D, 128=S, 1..N=manual.
         // Consumed by `TransmissionPlant`, which publishes the actual
         // engaged gear back as CurrentGear.
-        "Powertrain.Transmission.SelectedGear" => Some(0x000C_0005),
+        "Vehicle.Powertrain.Transmission.SelectedGear" => Some(0x000C_0005),
 
         // Door lock inputs (overlay — DoorLockInputs.vspec)
         "Vehicle.Cabin.Door.Row1.Left.Switch.Lock" => Some(0x000E_0001),
@@ -639,7 +639,7 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         //   LOCK (the "key removal" detent) — the cylinder snaps to
         //   OFF instead, matching real automotive key-in-ignition
         //   lockout behaviour.  Always false on PEPS builds.
-        "Powertrain.Transmission.ShiftLockEngaged" => Some(0x001E_0005),
+        "Vehicle.Powertrain.Transmission.ShiftLockEngaged" => Some(0x001E_0005),
         "Vehicle.Controller.Body.Switches.IgnitionCylinder.RemovalInhibited" => Some(0x001E_0006),
         // NFC auth bypass — set true by NfcEntry for ~3 s after any
         // NFC tap (driver-handle OR push-button).  Consumed by
@@ -1084,10 +1084,10 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Vehicle.Body.Horn.Switch.IsPressed", 0x000D_0022),
     // Chassis / Powertrain
     ("Vehicle.Chassis.Brake.PedalPosition", 0x000C_0001),
-    ("Powertrain.Transmission.CurrentGear", 0x000C_0002),
+    ("Vehicle.Powertrain.Transmission.CurrentGear", 0x000C_0002),
     ("Vehicle.Speed", 0x000C_0003),
     ("Vehicle.Body.Lights.LightSwitch", 0x000C_0004),
-    ("Powertrain.Transmission.SelectedGear", 0x000C_0005),
+    ("Vehicle.Powertrain.Transmission.SelectedGear", 0x000C_0005),
     // Door lock inputs (overlay — DoorLockInputs.vspec)
     ("Vehicle.Cabin.Door.Row1.Left.Switch.Lock", 0x000E_0001),
     ("Vehicle.Cabin.Door.Row1.Right.Switch.Lock", 0x000E_0002),
@@ -1311,7 +1311,10 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Vehicle.PowerMode.IgnitionCylinder.Position", 0x001E_0002),
     ("Vehicle.Chassis.Brake.IsApplied", 0x001E_0003),
     ("Vehicle.Controller.Starting.ImmobilizerStatus", 0x001E_0004),
-    ("Powertrain.Transmission.ShiftLockEngaged", 0x001E_0005),
+    (
+        "Vehicle.Powertrain.Transmission.ShiftLockEngaged",
+        0x001E_0005,
+    ),
     (
         "Vehicle.Controller.Body.Switches.IgnitionCylinder.RemovalInhibited",
         0x001E_0006,

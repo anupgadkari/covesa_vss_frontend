@@ -24,7 +24,7 @@ use crate::signal_bus::SignalBus;
 
 const POWER_STATE: &str = "Vehicle.LowVoltageSystemState";
 const BRAKE_PEDAL: &str = "Vehicle.Chassis.Brake.PedalPosition";
-const GEAR: &str = "Powertrain.Transmission.CurrentGear";
+const GEAR: &str = "Vehicle.Powertrain.Transmission.CurrentGear";
 const BRAKE_OUT: &str = "Vehicle.Body.Lights.Brake.IsActive";
 const REVERSE_OUT: &str = "Vehicle.Body.Lights.Backup.IsOn";
 
