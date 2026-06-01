@@ -62,6 +62,36 @@ const WINDOWS: [(VssPath, VssPath); 4] = [
     ),
 ];
 
+// ── Canonical VSS v6.0 siblings ─────────────────────────────────────
+//
+// Each published `Row{1,2}.{Left,Right}.Window.Position` value also
+// fires under its VSS v6.0 canonical `Row{N}.{DriverSide,PassengerSide}
+// .Window.Position` sibling so external Kuksa consumers can subscribe
+// canonically.  Mirrors door_lock + door_handle (sub-PR 4b PRs #55
+// and #57).  See backlog #22 sub-PR 4b for the architectural
+// rationale.
+//
+// `MotorDirection` is published by the WindowArbiter (see
+// `arbiter::window_arbiter`) — its canonical mirror is therefore an
+// arbiter-layer concern, not this plant's.  Left as a follow-up.
+//
+// Indexed identically to `WINDOWS` above — `canonical_position[i]` is
+// the canonical sibling of `WINDOWS[i].1`.  LHD vs RHD is picked at
+// construction via `with_cfg`.
+
+const POSITION_CANONICAL_LHD: [&str; 4] = [
+    "Vehicle.Cabin.Door.Row1.DriverSide.Window.Position",
+    "Vehicle.Cabin.Door.Row1.PassengerSide.Window.Position",
+    "Vehicle.Cabin.Door.Row2.DriverSide.Window.Position",
+    "Vehicle.Cabin.Door.Row2.PassengerSide.Window.Position",
+];
+const POSITION_CANONICAL_RHD: [&str; 4] = [
+    "Vehicle.Cabin.Door.Row1.PassengerSide.Window.Position",
+    "Vehicle.Cabin.Door.Row1.DriverSide.Window.Position",
+    "Vehicle.Cabin.Door.Row2.PassengerSide.Window.Position",
+    "Vehicle.Cabin.Door.Row2.DriverSide.Window.Position",
+];
+
 /// Integration tick — 100 ms (10 Hz).  At 10 %/s that's a 1.0-pp step
 /// per tick; rounded to u8 it gives a smooth visible ramp.
 const TICK: Duration = Duration::from_millis(100);
@@ -70,11 +100,34 @@ const STEP_PER_TICK: f32 = 1.0;
 
 pub struct WindowPlant<B: SignalBus> {
     bus: Arc<B>,
+    /// Canonical VSS v6.0 sibling paths for `Window.Position`, one per
+    /// window.  Default LHD; `with_cfg` swaps to the RHD variant when
+    /// the attached `PlatformConfig` reports
+    /// `vehicle_orientation = Rhd`.  Each `bus.publish(pos, ...)` is
+    /// followed by `bus.publish(canonical_position[i], ...)` so
+    /// external Kuksa consumers can subscribe under either name.  See
+    /// backlog #22 sub-PR 4b.
+    canonical_position: [&'static str; 4],
 }
 
 impl<B: SignalBus + Send + Sync + 'static> WindowPlant<B> {
     pub fn new(bus: Arc<B>) -> Self {
-        Self { bus }
+        Self {
+            bus,
+            canonical_position: POSITION_CANONICAL_LHD,
+        }
+    }
+
+    /// Builder — attach a `PlatformConfig` so the canonical-path
+    /// array matches the configured `vehicle_orientation`.  Without
+    /// this the plant stays on the LHD defaults set in `new`.
+    pub fn with_cfg(mut self, cfg: Arc<crate::config::PlatformConfig>) -> Self {
+        use crate::plant_models::side::VehicleOrientation;
+        self.canonical_position = match cfg.orientation() {
+            VehicleOrientation::Lhd => POSITION_CANONICAL_LHD,
+            VehicleOrientation::Rhd => POSITION_CANONICAL_RHD,
+        };
+        self
     }
 
     pub async fn run(self) {
@@ -86,19 +139,33 @@ impl<B: SignalBus + Send + Sync + 'static> WindowPlant<B> {
         let mut handles = Vec::with_capacity(4);
         for (idx, (motor, pos)) in WINDOWS.iter().enumerate() {
             let bus = Arc::clone(&self.bus);
-            handles.push(tokio::spawn(Self::run_window(idx, motor, pos, bus)));
+            let canonical_pos = self.canonical_position[idx];
+            handles.push(tokio::spawn(Self::run_window(
+                idx,
+                motor,
+                pos,
+                canonical_pos,
+                bus,
+            )));
         }
         for h in handles {
             let _ = h.await;
         }
     }
 
-    async fn run_window(idx: usize, motor: VssPath, pos: VssPath, bus: Arc<B>) {
+    async fn run_window(
+        idx: usize,
+        motor: VssPath,
+        pos: VssPath,
+        canonical_pos: &'static str,
+        bus: Arc<B>,
+    ) {
         let mut motor_rx = bus.subscribe(motor).await;
 
         // Boot the position at 0 (fully open) so the HMI shows a
         // defined value before any motor command lands.
         let _ = bus.publish(pos, SignalValue::Uint8(0)).await;
+        let _ = bus.publish(canonical_pos, SignalValue::Uint8(0)).await;
 
         let mut position: f32 = 0.0;
         let mut direction: i8 = 0; // -1 = DOWN, 0 = STOPPED, +1 = UP.
@@ -139,8 +206,10 @@ impl<B: SignalBus + Send + Sync + 'static> WindowPlant<B> {
                         continue; // at end-stop — no publish.
                     }
                     position = next;
+                    let rounded = position.round() as u8;
+                    let _ = bus.publish(pos, SignalValue::Uint8(rounded)).await;
                     let _ = bus
-                        .publish(pos, SignalValue::Uint8(position.round() as u8))
+                        .publish(canonical_pos, SignalValue::Uint8(rounded))
                         .await;
                 }
                 else => break,

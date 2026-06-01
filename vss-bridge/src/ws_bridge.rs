@@ -388,6 +388,14 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     "Vehicle.Cabin.Door.Row1.Right.Window.Position",
     "Vehicle.Cabin.Door.Row2.Left.Window.Position",
     "Vehicle.Cabin.Door.Row2.Right.Window.Position",
+    // Canonical VSS v6.0 siblings — WindowPlant dual-publishes
+    // each physical position under its DriverSide / PassengerSide
+    // canonical name so external Kuksa consumers can subscribe
+    // canonically.  Backlog #22 sub-PR 4b.
+    "Vehicle.Cabin.Door.Row1.DriverSide.Window.Position",
+    "Vehicle.Cabin.Door.Row1.PassengerSide.Window.Position",
+    "Vehicle.Cabin.Door.Row2.DriverSide.Window.Position",
+    "Vehicle.Cabin.Door.Row2.PassengerSide.Window.Position",
     // Authenticated panic-press event counter — RKE bumps on each
     // confirmed panic press; PanicAlarm + PerimeterAlarm consume.
     // Exposed to the HMI for debug / signal-log visibility.
