@@ -238,10 +238,7 @@ mod tests {
         let tarb = Arc::new(tarb);
 
         let (ksa, ksa_handle, ksa_rx) = KeySearchArbiter::new_with_rx(Arc::clone(&bus));
-        tokio::spawn(
-            ksa.with_cadence(Duration::from_millis(20), Duration::from_millis(200))
-                .run(ksa_rx),
-        );
+        tokio::spawn(ksa.run(ksa_rx));
 
         let feat = ExteriorTrunkButton::new(Arc::clone(&bus), tarb, ksa_handle);
         tokio::spawn(feat.run());

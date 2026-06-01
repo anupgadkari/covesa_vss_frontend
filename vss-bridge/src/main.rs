@@ -499,6 +499,7 @@ async fn boot_simulation_stack(
             Arc::clone(&bus),
             Arc::clone(&courtesy_arb),
             Arc::clone(&puddle_arb),
+            key_search_handle.clone(),
         )
         .run(),
     );
