@@ -25,7 +25,11 @@
 //! `Zone::TrunkInside` (`key_in_trunk_inside_alone_does_not_unlock`).
 //! This feature is the missing complement.
 //!
-//! # Trigger
+//! # Triggers
+//!
+//! Two paths land at the same scan + pop:
+//!
+//! ## Path A — direct, cabin-and-trunk locked together
 //!
 //! On a fresh `Vehicle.Cabin.LockStatus.EventNum` bump with all of:
 //!
@@ -34,19 +38,45 @@
 //! 2. `LastRequestor` is an **external auth source** — any path
 //!    the user invokes from outside the vehicle.  See
 //!    [`EXTERNAL_LOCK_SOURCES`] below.
-//! 3. `Vehicle.LowVoltageSystemState` is quiescent
-//!    (`OFF` / `LOCK`) — `ACC` is occupant-present and excluded
-//!    so we don't fight a user at the wheel.
-//! 4. `Vehicle.Body.Trunk.Rear.IsOpen` is **false** — if someone's
-//!    already at the trunk, there's nothing to pop.
+//! 3. `Vehicle.LowVoltageSystemState` is quiescent (`OFF` /
+//!    `LOCK`) — `ACC` is occupant-present and excluded so we
+//!    don't fight a user at the wheel.
+//! 4. `Vehicle.Body.Trunk.Rear.IsOpen` is **false** — the cabin
+//!    seal is complete; safe to scan.
 //! 5. `dealer.smart_trunk_pop_enabled` is true (cal gate; default
 //!    true).
-//! 6. The vehicle is a PEPS build, not a KeyCylinder build (no
-//!    interior LF antennas on KeyCylinder trims).
+//! 6. The vehicle is a PEPS build, not a KeyCylinder build.
 //!
-//! When all hold, submit `AntennaSet::TrunkInside` /
-//! `SearchMode::Authenticated` / `Coalescing::Disallowed`.  On a
-//! non-empty result:
+//! ## Path B — pending after trunk-close (power-tailgate case)
+//!
+//! Power-tailgate scenario: user locks the vehicle (RKE / PEPS /
+//! phone …) while the trunk is **already open**.  The cabin
+//! doors lock; the trunk stays open (it can't lock until it
+//! closes).  The user then loads the trunk — fob inside the
+//! backpack — and presses the close switch; the power tailgate
+//! shuts.  *No new `EventNum` bump arrives* because the cabin
+//! was already locked; only the `Trunk.IsOpen` edge fires.
+//!
+//! We handle this by latching a `pending_after_trunk_close` bit
+//! whenever Path A's conditions hold *except* the trunk is open.
+//! On the next `Trunk.IsOpen` true→false edge, if the latch is
+//! still set and the gates still hold, run the scan as if a
+//! fresh lock event had arrived.  The latch clears when:
+//!
+//! - The scan runs (consumed).
+//! - The cabin leaves the locked state (driver unlocked — got
+//!   their bag back themselves).
+//! - Ignition transitions to non-quiescent (driver came back in).
+//! - The dealer cal is toggled off.
+//!
+//! No time-window: the latch is purely state-driven.  If the user
+//! never closes the trunk, the latch stays set indefinitely —
+//! that's fine, it's a no-op until the trunk closes.
+//!
+//! ## Common path — scan + dispatch
+//!
+//! Submit `AntennaSet::TrunkInside` / `SearchMode::Authenticated`
+//! / `Coalescing::Disallowed`.  On a non-empty result:
 //!
 //! - Publish `FeedbackRequest = "mislock_trunk"` (audible cue —
 //!   distinct from SmartUnlock's `"mislock"` so the cabin and
@@ -189,6 +219,11 @@ impl<B: SignalBus + Send + Sync + 'static> SmartTrunkPop<B> {
         // defaults and SmartUnlock's behaviour).
         let mut ignition_quiescent = true;
         let mut trunk_open = false;
+        // Power-tailgate latch — see Path B in the module docs.  Set
+        // true when a qualifying lock event arrives while the trunk is
+        // open; consumed on the trunk's true→false edge; cleared if
+        // the cabin un-locks or ignition de-quiesces in the meantime.
+        let mut pending_after_trunk_close = false;
 
         loop {
             select! {
@@ -196,6 +231,12 @@ impl<B: SignalBus + Send + Sync + 'static> SmartTrunkPop<B> {
                 Some(val) = status_rx.next() => {
                     if let SignalValue::String(s) = val {
                         lock_status = s;
+                        // Driver unlocked (or someone else did) —
+                        // they're back at the vehicle; don't re-fire
+                        // a deferred trunk pop after the fact.
+                        if !LOCKED_STATES.contains(&lock_status.as_str()) {
+                            pending_after_trunk_close = false;
+                        }
                     }
                 }
                 Some(val) = requestor_rx.next() => {
@@ -206,15 +247,38 @@ impl<B: SignalBus + Send + Sync + 'static> SmartTrunkPop<B> {
                 Some(val) = ignition_rx.next() => {
                     if let SignalValue::String(s) = val {
                         ignition_quiescent = ignition_is_quiescent(&s);
+                        // Driver came back in (ignition no longer
+                        // quiescent) — drop any latched pending pop;
+                        // they have access to the cabin and can
+                        // retrieve the bag themselves.
+                        if !ignition_quiescent {
+                            pending_after_trunk_close = false;
+                        }
                     }
                 }
                 Some(val) = trunk_open_rx.next() => {
                     if let SignalValue::Bool(b) = val {
+                        let was_open = trunk_open;
                         trunk_open = b;
+                        // Power-tailgate close edge — if we latched
+                        // a pending pop when the user locked with the
+                        // trunk open, and the gates still hold, run
+                        // the scan now.
+                        if was_open && !trunk_open && pending_after_trunk_close {
+                            pending_after_trunk_close = false;
+                            if self.gates_still_hold(
+                                &lock_status, &last_requestor, ignition_quiescent,
+                            ) {
+                                self.scan_and_maybe_pop("trunk_close_after_pending").await;
+                            }
+                        }
                     }
                 }
                 Some(_) = event_num_rx.next() => {
                     if !self.cfg.dealer_config().smart_trunk_pop_enabled {
+                        // Cal off — clear any latched state so a
+                        // re-enable mid-stream doesn't fire stale.
+                        pending_after_trunk_close = false;
                         continue;
                     }
                     if !ignition_quiescent {
@@ -227,60 +291,81 @@ impl<B: SignalBus + Send + Sync + 'static> SmartTrunkPop<B> {
                         continue;
                     }
                     if trunk_open {
-                        tracing::debug!(
-                            "SmartTrunkPop: trunk already open — no-op"
+                        // Path B: defer until the trunk closes.
+                        tracing::info!(
+                            requestor = %last_requestor,
+                            "SmartTrunkPop: external lock with trunk open — \
+                             latching pending pop until trunk closes"
                         );
+                        pending_after_trunk_close = true;
                         continue;
                     }
 
-                    tracing::info!(
-                        requestor = %last_requestor,
-                        status = %lock_status,
-                        "SmartTrunkPop: qualifying external lock — running TrunkInside scan"
-                    );
-
-                    let result = self
-                        .key_search
-                        .submit(
-                            "SmartTrunkPop",
-                            AntennaSet::TrunkInside,
-                            SearchMode::Authenticated,
-                            Coalescing::Disallowed,
-                        )
-                        .await;
-                    let Some(result) = result else {
-                        tracing::warn!("SmartTrunkPop: key search returned no result");
-                        continue;
-                    };
-
-                    if result.keys_found.is_empty() {
-                        // No key in the trunk — cabin case is
-                        // SmartUnlock's call, we stay out of it.
-                        continue;
-                    }
-
-                    tracing::warn!(
-                        keys = result.keys_found.len(),
-                        "SmartTrunkPop: paired key detected in trunk — popping trunk"
-                    );
-                    // Audible cue BEFORE the pop, same ordering as
-                    // SmartUnlock — the cue overlaps the still-
-                    // fading lock chirp/flash so the "lock didn't
-                    // quite take" beat is clear.
-                    let _ = self
-                        .bus
-                        .publish(
-                            FEEDBACK_REQUEST,
-                            SignalValue::String("mislock_trunk".into()),
-                        )
-                        .await;
-                    self.pulse_trunk_open().await;
+                    self.scan_and_maybe_pop("event_num_bump").await;
                 }
                 else => break,
             }
         }
 
         tracing::warn!("SmartTrunkPop: input stream closed, exiting");
+    }
+
+    /// Re-check the gates that must still hold by the time a deferred
+    /// `pending_after_trunk_close` consumption fires.  Dealer cal
+    /// included so a mid-stream cal toggle bites here too.
+    fn gates_still_hold(
+        &self,
+        lock_status: &str,
+        last_requestor: &str,
+        ignition_quiescent: bool,
+    ) -> bool {
+        self.cfg.dealer_config().smart_trunk_pop_enabled
+            && ignition_quiescent
+            && LOCKED_STATES.contains(&lock_status)
+            && EXTERNAL_LOCK_SOURCES.contains(&last_requestor)
+    }
+
+    /// Run the TrunkInside scan and, on a non-empty result, publish
+    /// the `mislock_trunk` feedback cue and pulse the trunk arbiter.
+    /// Empty result is a deliberate no-op (SmartUnlock owns the cabin
+    /// case).
+    async fn scan_and_maybe_pop(&self, trigger: &'static str) {
+        tracing::info!(trigger, "SmartTrunkPop: running TrunkInside scan");
+
+        let result = self
+            .key_search
+            .submit(
+                "SmartTrunkPop",
+                AntennaSet::TrunkInside,
+                SearchMode::Authenticated,
+                Coalescing::Disallowed,
+            )
+            .await;
+        let Some(result) = result else {
+            tracing::warn!("SmartTrunkPop: key search returned no result");
+            return;
+        };
+
+        if result.keys_found.is_empty() {
+            return;
+        }
+
+        tracing::warn!(
+            trigger,
+            keys = result.keys_found.len(),
+            "SmartTrunkPop: paired key detected in trunk — popping trunk"
+        );
+        // Audible cue BEFORE the pop, same ordering as SmartUnlock —
+        // the cue overlaps the still-fading lock chirp/flash so the
+        // "lock didn't quite take" beat is clear.
+        let _ = self
+            .bus
+            .publish(
+                FEEDBACK_REQUEST,
+                SignalValue::String("mislock_trunk".into()),
+            )
+            .await;
+        self.pulse_trunk_open().await;
     }
 
     /// Pulse `Vehicle.Controller.Body.Trunk.Rear.OpenCmd` through the trunk
@@ -585,4 +670,120 @@ mod tests {
     /// surface explicit so clippy stays clean.
     #[allow(dead_code)]
     fn _imports_used(_d: Duration, _dc: DealerConfig) {}
+
+    // ── Power-tailgate scenario (Path B) ──────────────────────────
+
+    /// User locks the vehicle while the trunk is open (cabin doors
+    /// lock; trunk stays open), then later closes the trunk with the
+    /// fob inside.  No new lock event fires on the trunk-close edge
+    /// — SmartTrunkPop must remember the deferred decision and run
+    /// the scan when the trunk closes.
+    #[tokio::test]
+    async fn lock_with_trunk_open_then_close_fires_on_trunk_close() {
+        let bus = setup().await;
+
+        // Driver opens the trunk to load it.
+        bus.inject(TRUNK_OPEN, SignalValue::Bool(true));
+        settle().await;
+
+        // Driver locks the vehicle externally with the trunk still
+        // open.  The lock event fires; SmartTrunkPop sees trunk_open
+        // is true and latches a deferred pop.
+        fire_lock_event(&bus, "LOCKED", "KeyfobRke", 1);
+        settle().await;
+        assert!(
+            !trunk_pop_dispatched(&bus),
+            "must not pop while the trunk is still open"
+        );
+
+        // Driver puts the bag (with paired fob) in the trunk and
+        // presses the power-tailgate close switch.
+        place(&bus, 1, Zone::TrunkInside);
+        bus.inject(TRUNK_OPEN, SignalValue::Bool(false));
+        settle().await;
+
+        assert!(
+            trunk_pop_dispatched(&bus),
+            "trunk-close edge after a deferred lock must run the scan + pop"
+        );
+        assert!(
+            mislock_trunk_published(&bus),
+            "audible cue must accompany the deferred pop"
+        );
+    }
+
+    /// Same starting sequence, but the driver unlocks before closing
+    /// the trunk (e.g. realises they need something else).  The
+    /// latch must drop on the unlock — closing the trunk later must
+    /// NOT fire a stale deferred pop.
+    #[tokio::test]
+    async fn unlock_clears_pending_after_trunk_close_latch() {
+        let bus = setup().await;
+
+        bus.inject(TRUNK_OPEN, SignalValue::Bool(true));
+        settle().await;
+        fire_lock_event(&bus, "LOCKED", "KeyfobRke", 1);
+        settle().await;
+
+        // Driver unlocks (decides to take the bag with them after all).
+        fire_lock_event(&bus, "UNLOCKED", "KeyfobRke", 2);
+        settle().await;
+
+        // Now they close the trunk — latch should be gone.
+        place(&bus, 1, Zone::TrunkInside);
+        bus.inject(TRUNK_OPEN, SignalValue::Bool(false));
+        settle().await;
+
+        assert!(
+            !trunk_pop_dispatched(&bus),
+            "unlock between deferred lock and trunk-close must drop the latch"
+        );
+    }
+
+    /// Same starting sequence, but the driver gets back in the
+    /// vehicle (ignition transitions to ON / START / ACC) before
+    /// closing the trunk.  Latch must drop — they have cabin access.
+    #[tokio::test]
+    async fn ignition_returns_clears_pending_latch() {
+        let bus = setup().await;
+
+        bus.inject(TRUNK_OPEN, SignalValue::Bool(true));
+        settle().await;
+        fire_lock_event(&bus, "LOCKED", "KeyfobRke", 1);
+        settle().await;
+
+        // Driver gets back in.
+        bus.inject(IGNITION_STATE, SignalValue::String("ON".into()));
+        settle().await;
+
+        // Trunk closes later.
+        place(&bus, 1, Zone::TrunkInside);
+        bus.inject(TRUNK_OPEN, SignalValue::Bool(false));
+        settle().await;
+
+        assert!(
+            !trunk_pop_dispatched(&bus),
+            "ignition non-quiescent must clear the latch"
+        );
+    }
+
+    /// No paired key actually ends up in the trunk (e.g. user put
+    /// the fob in their pocket after all): the scan runs on the
+    /// trunk-close edge but returns empty → no pop.
+    #[tokio::test]
+    async fn pending_pop_with_empty_scan_is_no_op() {
+        let bus = setup().await;
+
+        bus.inject(TRUNK_OPEN, SignalValue::Bool(true));
+        settle().await;
+        fire_lock_event(&bus, "LOCKED", "KeyfobRke", 1);
+        settle().await;
+
+        // Trunk closes; no paired key placed inside.
+        bus.inject(TRUNK_OPEN, SignalValue::Bool(false));
+        settle().await;
+
+        assert!(!trunk_pop_dispatched(&bus));
+        assert!(!mislock_trunk_published(&bus));
+    }
 }
