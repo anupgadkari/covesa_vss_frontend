@@ -270,6 +270,22 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     "Vehicle.Cabin.Door.Row1.Right.Soldier.IsUnlocked",
     "Vehicle.Cabin.Door.Row2.Left.Soldier.IsUnlocked",
     "Vehicle.Cabin.Door.Row2.Right.Soldier.IsUnlocked",
+    // Canonical VSS v6.0 siblings — DoorLockPlantModel dual-publishes
+    // each physical state above under its DriverSide / PassengerSide
+    // canonical name so external Kuksa consumers can subscribe
+    // canonically.  Backlog #22 sub-PR 4b.
+    "Vehicle.Cabin.Door.Row1.DriverSide.IsLocked",
+    "Vehicle.Cabin.Door.Row1.PassengerSide.IsLocked",
+    "Vehicle.Cabin.Door.Row2.DriverSide.IsLocked",
+    "Vehicle.Cabin.Door.Row2.PassengerSide.IsLocked",
+    "Vehicle.Cabin.Door.Row1.DriverSide.IsDoubleLocked",
+    "Vehicle.Cabin.Door.Row1.PassengerSide.IsDoubleLocked",
+    "Vehicle.Cabin.Door.Row2.DriverSide.IsDoubleLocked",
+    "Vehicle.Cabin.Door.Row2.PassengerSide.IsDoubleLocked",
+    "Vehicle.Cabin.Door.Row1.DriverSide.Soldier.IsUnlocked",
+    "Vehicle.Cabin.Door.Row1.PassengerSide.Soldier.IsUnlocked",
+    "Vehicle.Cabin.Door.Row2.DriverSide.Soldier.IsUnlocked",
+    "Vehicle.Cabin.Door.Row2.PassengerSide.Soldier.IsUnlocked",
     // Door handle plant model outputs — ajar switch and latch state.
     "Vehicle.Cabin.Door.Row1.Left.IsOpen",
     "Vehicle.Cabin.Door.Row1.Right.IsOpen",

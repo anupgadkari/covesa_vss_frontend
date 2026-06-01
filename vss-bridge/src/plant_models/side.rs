@@ -109,6 +109,64 @@ impl VehicleOrientation {
     }
 }
 
+/// Map a physical `Row{1,2}.{Left,Right}` VSS path to its canonical
+/// `Row{N}.{DriverSide,PassengerSide}` sibling under the given
+/// orientation.  Used by plant models that dual-publish each
+/// physical-side state signal under its VSS v6.0 canonical name so
+/// external Kuksa consumers can subscribe canonically (backlog #22
+/// sub-PR 4b).
+///
+/// The mapping is a one-shot string substitution: under LHD the
+/// `Left` segment becomes `DriverSide`, `Right` becomes
+/// `PassengerSide`; under RHD they swap.  Row1 and Row2 use the
+/// same rule (VSS v6.0 keeps driver/passenger semantics for both
+/// rows — the door behind the driver is the rear-driver-side door).
+///
+/// Returns a leaked `&'static str` so callers can stash it in the
+/// same `[&'static str; 4]` arrays the plant models already use for
+/// physical paths.  The leak runs at most once per plant-model
+/// construction; total memory footprint is bounded by the number of
+/// dual-published per-door signals (currently 12 for door_lock).
+///
+/// `physical` must contain exactly one `.Left.` or `.Right.` segment.
+/// Other paths return a leaked copy of the input — call sites today
+/// only pass per-door VSS paths so this branch is unreached in
+/// practice; the fallback exists so the helper composes cleanly into
+/// `[&'static str; 4]` array initialisers without per-entry guards.
+pub fn canonical_door_path(physical: &str, orientation: VehicleOrientation) -> &'static str {
+    let canonical: String = if physical.contains(".Left.") {
+        let segment = match orientation {
+            VehicleOrientation::Lhd => "DriverSide",
+            VehicleOrientation::Rhd => "PassengerSide",
+        };
+        physical.replacen(".Left.", &format!(".{segment}."), 1)
+    } else if physical.contains(".Right.") {
+        let segment = match orientation {
+            VehicleOrientation::Lhd => "PassengerSide",
+            VehicleOrientation::Rhd => "DriverSide",
+        };
+        physical.replacen(".Right.", &format!(".{segment}."), 1)
+    } else {
+        physical.to_string()
+    };
+    Box::leak(canonical.into_boxed_str())
+}
+
+/// Convenience for plant-model startup: transform a `[&str; 4]`
+/// array of physical per-door paths into the matching canonical
+/// `[&'static str; 4]`.
+pub fn canonical_door_path_array(
+    physical: &[&str; 4],
+    orientation: VehicleOrientation,
+) -> [&'static str; 4] {
+    [
+        canonical_door_path(physical[0], orientation),
+        canonical_door_path(physical[1], orientation),
+        canonical_door_path(physical[2], orientation),
+        canonical_door_path(physical[3], orientation),
+    ]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -150,5 +208,95 @@ mod tests {
     #[test]
     fn default_orientation_is_lhd() {
         assert_eq!(VehicleOrientation::default(), VehicleOrientation::Lhd);
+    }
+
+    // ── canonical_door_path ─────────────────────────────────────────────
+
+    #[test]
+    fn canonical_lhd_left_to_driver() {
+        let c = canonical_door_path(
+            "Vehicle.Cabin.Door.Row1.Left.IsLocked",
+            VehicleOrientation::Lhd,
+        );
+        assert_eq!(c, "Vehicle.Cabin.Door.Row1.DriverSide.IsLocked");
+    }
+
+    #[test]
+    fn canonical_lhd_right_to_passenger() {
+        let c = canonical_door_path(
+            "Vehicle.Cabin.Door.Row1.Right.IsLocked",
+            VehicleOrientation::Lhd,
+        );
+        assert_eq!(c, "Vehicle.Cabin.Door.Row1.PassengerSide.IsLocked");
+    }
+
+    #[test]
+    fn canonical_rhd_left_to_passenger() {
+        let c = canonical_door_path(
+            "Vehicle.Cabin.Door.Row1.Left.IsLocked",
+            VehicleOrientation::Rhd,
+        );
+        assert_eq!(c, "Vehicle.Cabin.Door.Row1.PassengerSide.IsLocked");
+    }
+
+    #[test]
+    fn canonical_rhd_right_to_driver() {
+        let c = canonical_door_path(
+            "Vehicle.Cabin.Door.Row1.Right.IsLocked",
+            VehicleOrientation::Rhd,
+        );
+        assert_eq!(c, "Vehicle.Cabin.Door.Row1.DriverSide.IsLocked");
+    }
+
+    /// Row2 uses the same orientation rule — the door behind the
+    /// driver is the rear-driver-side door.
+    #[test]
+    fn canonical_row2_lhd() {
+        let c = canonical_door_path(
+            "Vehicle.Cabin.Door.Row2.Left.IsLocked",
+            VehicleOrientation::Lhd,
+        );
+        assert_eq!(c, "Vehicle.Cabin.Door.Row2.DriverSide.IsLocked");
+    }
+
+    /// Nested-segment paths (e.g. `.Soldier.IsUnlocked`) replace only
+    /// the one row+side segment, not anything deeper.
+    #[test]
+    fn canonical_preserves_deeper_segments() {
+        let c = canonical_door_path(
+            "Vehicle.Cabin.Door.Row1.Left.Soldier.IsUnlocked",
+            VehicleOrientation::Lhd,
+        );
+        assert_eq!(c, "Vehicle.Cabin.Door.Row1.DriverSide.Soldier.IsUnlocked");
+    }
+
+    #[test]
+    fn canonical_array_resolves_all_four_doors_lhd() {
+        let physical: [&str; 4] = [
+            "Vehicle.Cabin.Door.Row1.Left.IsLocked",
+            "Vehicle.Cabin.Door.Row1.Right.IsLocked",
+            "Vehicle.Cabin.Door.Row2.Left.IsLocked",
+            "Vehicle.Cabin.Door.Row2.Right.IsLocked",
+        ];
+        let c = canonical_door_path_array(&physical, VehicleOrientation::Lhd);
+        assert_eq!(c[0], "Vehicle.Cabin.Door.Row1.DriverSide.IsLocked");
+        assert_eq!(c[1], "Vehicle.Cabin.Door.Row1.PassengerSide.IsLocked");
+        assert_eq!(c[2], "Vehicle.Cabin.Door.Row2.DriverSide.IsLocked");
+        assert_eq!(c[3], "Vehicle.Cabin.Door.Row2.PassengerSide.IsLocked");
+    }
+
+    #[test]
+    fn canonical_array_resolves_all_four_doors_rhd() {
+        let physical: [&str; 4] = [
+            "Vehicle.Cabin.Door.Row1.Left.IsLocked",
+            "Vehicle.Cabin.Door.Row1.Right.IsLocked",
+            "Vehicle.Cabin.Door.Row2.Left.IsLocked",
+            "Vehicle.Cabin.Door.Row2.Right.IsLocked",
+        ];
+        let c = canonical_door_path_array(&physical, VehicleOrientation::Rhd);
+        assert_eq!(c[0], "Vehicle.Cabin.Door.Row1.PassengerSide.IsLocked");
+        assert_eq!(c[1], "Vehicle.Cabin.Door.Row1.DriverSide.IsLocked");
+        assert_eq!(c[2], "Vehicle.Cabin.Door.Row2.PassengerSide.IsLocked");
+        assert_eq!(c[3], "Vehicle.Cabin.Door.Row2.DriverSide.IsLocked");
     }
 }

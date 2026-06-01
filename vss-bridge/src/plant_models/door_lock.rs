@@ -71,6 +71,60 @@ const DOOR_DOUBLE_LOCKED_SIGNALS: [&str; 4] = [
     "Vehicle.Cabin.Door.Row2.Right.IsDoubleLocked",
 ];
 
+// ── Canonical VSS v6.0 siblings ─────────────────────────────────────
+//
+// VSS v6.0 names Row1/Row2 doors by their *logical* role
+// (DriverSide / PassengerSide) rather than the physical Left/Right
+// wiring side.  This plant publishes both forms so external Kuksa
+// consumers can subscribe canonically.  See backlog #22 sub-PR 4b.
+// Internal consumers (features in this codebase) still use the
+// physical paths above.
+//
+// Indexed identically to the physical arrays — `canonical[i]` is
+// the canonical sibling of `physical[i]`.  The LHD vs RHD pair is
+// picked once at construction (`with_cfg`) and stored on the
+// struct, so each `bus.publish(physical, val)` is followed by
+// `bus.publish(canonical[i], val)` with no per-call allocation.
+
+const DOOR_LOCKED_CANONICAL_LHD: [&str; 4] = [
+    "Vehicle.Cabin.Door.Row1.DriverSide.IsLocked",
+    "Vehicle.Cabin.Door.Row1.PassengerSide.IsLocked",
+    "Vehicle.Cabin.Door.Row2.DriverSide.IsLocked",
+    "Vehicle.Cabin.Door.Row2.PassengerSide.IsLocked",
+];
+const DOOR_LOCKED_CANONICAL_RHD: [&str; 4] = [
+    "Vehicle.Cabin.Door.Row1.PassengerSide.IsLocked",
+    "Vehicle.Cabin.Door.Row1.DriverSide.IsLocked",
+    "Vehicle.Cabin.Door.Row2.PassengerSide.IsLocked",
+    "Vehicle.Cabin.Door.Row2.DriverSide.IsLocked",
+];
+
+const DOOR_SOLDIER_CANONICAL_LHD: [&str; 4] = [
+    "Vehicle.Cabin.Door.Row1.DriverSide.Soldier.IsUnlocked",
+    "Vehicle.Cabin.Door.Row1.PassengerSide.Soldier.IsUnlocked",
+    "Vehicle.Cabin.Door.Row2.DriverSide.Soldier.IsUnlocked",
+    "Vehicle.Cabin.Door.Row2.PassengerSide.Soldier.IsUnlocked",
+];
+const DOOR_SOLDIER_CANONICAL_RHD: [&str; 4] = [
+    "Vehicle.Cabin.Door.Row1.PassengerSide.Soldier.IsUnlocked",
+    "Vehicle.Cabin.Door.Row1.DriverSide.Soldier.IsUnlocked",
+    "Vehicle.Cabin.Door.Row2.PassengerSide.Soldier.IsUnlocked",
+    "Vehicle.Cabin.Door.Row2.DriverSide.Soldier.IsUnlocked",
+];
+
+const DOOR_DOUBLE_LOCKED_CANONICAL_LHD: [&str; 4] = [
+    "Vehicle.Cabin.Door.Row1.DriverSide.IsDoubleLocked",
+    "Vehicle.Cabin.Door.Row1.PassengerSide.IsDoubleLocked",
+    "Vehicle.Cabin.Door.Row2.DriverSide.IsDoubleLocked",
+    "Vehicle.Cabin.Door.Row2.PassengerSide.IsDoubleLocked",
+];
+const DOOR_DOUBLE_LOCKED_CANONICAL_RHD: [&str; 4] = [
+    "Vehicle.Cabin.Door.Row1.PassengerSide.IsDoubleLocked",
+    "Vehicle.Cabin.Door.Row1.DriverSide.IsDoubleLocked",
+    "Vehicle.Cabin.Door.Row2.PassengerSide.IsDoubleLocked",
+    "Vehicle.Cabin.Door.Row2.DriverSide.IsDoubleLocked",
+];
+
 /// Door index constants (matches signal array ordering above).
 const ROW1_LEFT: usize = 0;
 const ROW1_RIGHT: usize = 1;
@@ -108,6 +162,15 @@ pub struct DoorLockPlantModel<B: SignalBus> {
     /// the driver-door index from `dealer.vehicle_orientation` at runtime.
     /// `None` (the default for tests) means LHD: Row1.Left is the driver.
     cfg: Option<Arc<crate::config::PlatformConfig>>,
+    /// Canonical VSS v6.0 sibling paths for each physical per-door signal.
+    /// Populated at construction (default LHD) and recomputed when a
+    /// `PlatformConfig` is attached via `with_cfg`.  Each apply / publish
+    /// also fires the canonical sibling so external Kuksa consumers can
+    /// subscribe to `Vehicle.Cabin.Door.Row*.{DriverSide,PassengerSide}.*`
+    /// directly.  See backlog #22 sub-PR 4b.
+    canonical_locked: [&'static str; 4],
+    canonical_soldier: [&'static str; 4],
+    canonical_double_locked: [&'static str; 4],
 }
 
 impl<B: SignalBus + Send + Sync + 'static> DoorLockPlantModel<B> {
@@ -122,6 +185,12 @@ impl<B: SignalBus + Send + Sync + 'static> DoorLockPlantModel<B> {
             event_number: 0,
             cfg: None,
             nvm: None,
+            // Default to LHD until `with_cfg` says otherwise.  Tests
+            // and standalone-mode constructions stay on LHD; the
+            // production path always goes through `with_cfg`.
+            canonical_locked: DOOR_LOCKED_CANONICAL_LHD,
+            canonical_soldier: DOOR_SOLDIER_CANONICAL_LHD,
+            canonical_double_locked: DOOR_DOUBLE_LOCKED_CANONICAL_LHD,
         }
     }
 
@@ -138,6 +207,12 @@ impl<B: SignalBus + Send + Sync + 'static> DoorLockPlantModel<B> {
             event_number: 0,
             cfg: None,
             nvm: None,
+            // Default to LHD until `with_cfg` says otherwise.  Tests
+            // and standalone-mode constructions stay on LHD; the
+            // production path always goes through `with_cfg`.
+            canonical_locked: DOOR_LOCKED_CANONICAL_LHD,
+            canonical_soldier: DOOR_SOLDIER_CANONICAL_LHD,
+            canonical_double_locked: DOOR_DOUBLE_LOCKED_CANONICAL_LHD,
         }
     }
 
@@ -156,6 +231,12 @@ impl<B: SignalBus + Send + Sync + 'static> DoorLockPlantModel<B> {
             event_number: 0,
             cfg: None,
             nvm: None,
+            // Default to LHD until `with_cfg` says otherwise.  Tests
+            // and standalone-mode constructions stay on LHD; the
+            // production path always goes through `with_cfg`.
+            canonical_locked: DOOR_LOCKED_CANONICAL_LHD,
+            canonical_soldier: DOOR_SOLDIER_CANONICAL_LHD,
+            canonical_double_locked: DOOR_DOUBLE_LOCKED_CANONICAL_LHD,
         }
     }
 
@@ -181,6 +262,9 @@ impl<B: SignalBus + Send + Sync + 'static> DoorLockPlantModel<B> {
             event_number: 0,
             cfg: None,
             nvm: Some(nvm),
+            canonical_locked: DOOR_LOCKED_CANONICAL_LHD,
+            canonical_soldier: DOOR_SOLDIER_CANONICAL_LHD,
+            canonical_double_locked: DOOR_DOUBLE_LOCKED_CANONICAL_LHD,
         }
     }
 
@@ -188,6 +272,22 @@ impl<B: SignalBus + Send + Sync + 'static> DoorLockPlantModel<B> {
     /// driver-door index from `dealer.vehicle_orientation` at runtime.
     /// Without this, the plant defaults to LHD (Row1.Left).
     pub fn with_cfg(mut self, cfg: Arc<crate::config::PlatformConfig>) -> Self {
+        use crate::plant_models::side::VehicleOrientation;
+        // Pick the canonical-path arrays that match the configured
+        // orientation.  Without `with_cfg` the plant stays on the
+        // LHD defaults set in `new`/`with_ack_tx`/`with_ack_and_nvm`.
+        match cfg.orientation() {
+            VehicleOrientation::Lhd => {
+                self.canonical_locked = DOOR_LOCKED_CANONICAL_LHD;
+                self.canonical_soldier = DOOR_SOLDIER_CANONICAL_LHD;
+                self.canonical_double_locked = DOOR_DOUBLE_LOCKED_CANONICAL_LHD;
+            }
+            VehicleOrientation::Rhd => {
+                self.canonical_locked = DOOR_LOCKED_CANONICAL_RHD;
+                self.canonical_soldier = DOOR_SOLDIER_CANONICAL_RHD;
+                self.canonical_double_locked = DOOR_DOUBLE_LOCKED_CANONICAL_RHD;
+            }
+        }
         self.cfg = Some(cfg);
         self
     }
@@ -255,15 +355,27 @@ impl<B: SignalBus + Send + Sync + 'static> DoorLockPlantModel<B> {
                 .bus
                 .publish(DOOR_DOUBLE_LOCKED_SIGNALS[door], SignalValue::Bool(false))
                 .await;
+            let _ = self
+                .bus
+                .publish(self.canonical_double_locked[door], SignalValue::Bool(false))
+                .await;
         }
         let _ = self
             .bus
             .publish(DOOR_LOCKED_SIGNALS[door], SignalValue::Bool(locked))
             .await;
+        let _ = self
+            .bus
+            .publish(self.canonical_locked[door], SignalValue::Bool(locked))
+            .await;
         // Soldier knob mirrors the central actuator — moves with it.
         let _ = self
             .bus
             .publish(DOOR_SOLDIER_SIGNALS[door], SignalValue::Bool(!locked))
+            .await;
+        let _ = self
+            .bus
+            .publish(self.canonical_soldier[door], SignalValue::Bool(!locked))
             .await;
         tracing::debug!(
             door = DOOR_LOCKED_SIGNALS[door],
@@ -285,11 +397,22 @@ impl<B: SignalBus + Send + Sync + 'static> DoorLockPlantModel<B> {
                 .bus
                 .publish(DOOR_LOCKED_SIGNALS[door], SignalValue::Bool(true))
                 .await;
+            let _ = self
+                .bus
+                .publish(self.canonical_locked[door], SignalValue::Bool(true))
+                .await;
         }
         let _ = self
             .bus
             .publish(
                 DOOR_DOUBLE_LOCKED_SIGNALS[door],
+                SignalValue::Bool(double_locked),
+            )
+            .await;
+        let _ = self
+            .bus
+            .publish(
+                self.canonical_double_locked[door],
                 SignalValue::Bool(double_locked),
             )
             .await;
@@ -310,12 +433,30 @@ impl<B: SignalBus + Send + Sync + 'static> DoorLockPlantModel<B> {
                 .await;
             let _ = self
                 .bus
+                .publish(self.canonical_locked[i], SignalValue::Bool(self.locked[i]))
+                .await;
+            let _ = self
+                .bus
                 .publish(DOOR_SOLDIER_SIGNALS[i], SignalValue::Bool(!self.locked[i]))
                 .await;
             let _ = self
                 .bus
                 .publish(
+                    self.canonical_soldier[i],
+                    SignalValue::Bool(!self.locked[i]),
+                )
+                .await;
+            let _ = self
+                .bus
+                .publish(
                     DOOR_DOUBLE_LOCKED_SIGNALS[i],
+                    SignalValue::Bool(self.double_locked[i]),
+                )
+                .await;
+            let _ = self
+                .bus
+                .publish(
+                    self.canonical_double_locked[i],
                     SignalValue::Bool(self.double_locked[i]),
                 )
                 .await;
@@ -493,7 +634,7 @@ mod tests {
         // 4 IsLocked + 4 Soldier + 4 IsDoubleLocked = 12 initial publishes
         let locked_signals: Vec<_> = history
             .iter()
-            .filter(|(p, _)| p.contains("IsLocked") && !p.contains("Double"))
+            .filter(|(p, _)| p.contains("IsLocked") && !p.contains("Double") && !p.contains("Side"))
             .collect();
         assert_eq!(locked_signals.len(), 4, "should publish 4 IsLocked signals");
         for (_, val) in &locked_signals {
@@ -522,7 +663,10 @@ mod tests {
         let locked_true: Vec<_> = history
             .iter()
             .filter(|(p, v)| {
-                p.contains("IsLocked") && !p.contains("Double") && *v == SignalValue::Bool(true)
+                p.contains("IsLocked")
+                    && !p.contains("Double")
+                    && !p.contains("Side")
+                    && *v == SignalValue::Bool(true)
             })
             .collect();
         assert_eq!(
@@ -556,7 +700,10 @@ mod tests {
         let unlocked: Vec<_> = history
             .iter()
             .filter(|(p, v)| {
-                p.contains("IsLocked") && !p.contains("Double") && *v == SignalValue::Bool(false)
+                p.contains("IsLocked")
+                    && !p.contains("Double")
+                    && !p.contains("Side")
+                    && *v == SignalValue::Bool(false)
             })
             .collect();
         assert_eq!(
@@ -591,7 +738,10 @@ mod tests {
         let unlocked: Vec<_> = history
             .iter()
             .filter(|(p, v)| {
-                p.contains("IsLocked") && !p.contains("Double") && *v == SignalValue::Bool(false)
+                p.contains("IsLocked")
+                    && !p.contains("Double")
+                    && !p.contains("Side")
+                    && *v == SignalValue::Bool(false)
             })
             .collect();
         assert_eq!(unlocked.len(), 1, "only driver door should be unlocked");
@@ -633,7 +783,10 @@ mod tests {
         let unlocked: Vec<_> = history
             .iter()
             .filter(|(p, v)| {
-                p.contains("IsLocked") && !p.contains("Double") && *v == SignalValue::Bool(false)
+                p.contains("IsLocked")
+                    && !p.contains("Double")
+                    && !p.contains("Side")
+                    && *v == SignalValue::Bool(false)
             })
             .collect();
         assert_eq!(
@@ -668,7 +821,9 @@ mod tests {
 
         let dl_true: Vec<_> = history
             .iter()
-            .filter(|(p, v)| p.contains("IsDoubleLocked") && *v == SignalValue::Bool(true))
+            .filter(|(p, v)| {
+                p.contains("IsDoubleLocked") && !p.contains("Side") && *v == SignalValue::Bool(true)
+            })
             .collect();
         assert_eq!(
             dl_true.len(),
@@ -679,7 +834,10 @@ mod tests {
         let locked_true: Vec<_> = history
             .iter()
             .filter(|(p, v)| {
-                p.contains("IsLocked") && !p.contains("Double") && *v == SignalValue::Bool(true)
+                p.contains("IsLocked")
+                    && !p.contains("Double")
+                    && !p.contains("Side")
+                    && *v == SignalValue::Bool(true)
             })
             .collect();
         assert_eq!(
@@ -712,7 +870,11 @@ mod tests {
         let history = bus.history();
         let dl_cleared: Vec<_> = history
             .iter()
-            .filter(|(p, v)| p.contains("IsDoubleLocked") && *v == SignalValue::Bool(false))
+            .filter(|(p, v)| {
+                p.contains("IsDoubleLocked")
+                    && !p.contains("Side")
+                    && *v == SignalValue::Bool(false)
+            })
             .collect();
         assert_eq!(
             dl_cleared.len(),
@@ -773,7 +935,11 @@ mod tests {
         // All 4 IsDoubleLocked must be cleared
         let dl_cleared: Vec<_> = history
             .iter()
-            .filter(|(p, v)| p.contains("IsDoubleLocked") && *v == SignalValue::Bool(false))
+            .filter(|(p, v)| {
+                p.contains("IsDoubleLocked")
+                    && !p.contains("Side")
+                    && *v == SignalValue::Bool(false)
+            })
             .collect();
         assert_eq!(
             dl_cleared.len(),
