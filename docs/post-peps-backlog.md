@@ -29,22 +29,25 @@ item is independently shippable as its own sub-branch / PR.
 | 14c | Extra scan triggers — brake-press pre-auth | S | ✅ Done |
 | 14d | Lost-paired-key scan + cluster warning (formerly door-close snapshot) | S | ✅ Done — merged into #17.  The standalone `lost_pk_scan` feature was deleted; `KeyLostWarning` (item 17) is its strict successor and publishes the same `Vehicle.Controller.Body.PEPS.LostKeyWarning` bool on the wire, with corrected gating (cabin sealed under power vs. the original door-close trigger) and a chime claim. |
 | 15 | Smart Cabin Unlock (key-locked-in-cabin) | M | ✅ Done — `features/smart_unlock.rs` subscribes to `LockStatus`/`LastRequestor`/`EventNum`, runs `Sequence(Cabin + AllApproach, Authenticated)` scan, dispatches `UnlockAll` on "paired key in cabin only".  **Originally specified as the key-locked-in-trunk case (now item 23); the cabin case was built under the `SmartUnlock` name and is documented here.** |
-| 23 | Smart Trunk Pop (key-locked-in-trunk) | M | ⏳ Pending — sibling of #15 for the trunk case: on a fresh lock from an external source while quiescent, run a `TrunkInside` Authenticated scan; if a paired key is found, dispatch trunk-pop via the trunk arbiter + chime + hazards.  Distinct customer flow from #15 (trunk pops, doors stay locked). |
+| 23 | Smart Trunk Pop (key-locked-in-trunk) | M | ✅ Done — `features/smart_trunk_pop.rs` runs `TrunkInside` Authenticated scans on a fresh external lock event while quiescent and pops the trunk via the trunk arbiter when a paired key is found.  Two trigger paths: direct (lock event with trunk already closed) and pending-after-trunk-close (latched on a lock event with trunk still open; consumed on the trunk's open→closed edge — power-tailgate case).  PR #49. |
 | 16 | NFC Entry feature (card/phone tap → unlock; tap at push-button → start) | M | ✅ Done — `features/nfc_entry.rs` handles `NfcCard.{1,2}.Position → DriverHandle` and `BlePhone.{1,2}.NfcTap → UnlockAll`; PushButton tap publishes `NfcAuthBypass = true` for start-button override |
-| 17 | Key-lost warning chime | XS | 🔄 In PR #47 — `features/key_lost_warning.rs` owns its own Cabin / Authenticated arbiter scans (triggered on the all-sealed-under-power edge, on ignition-on while sealed, and on a 1-minute periodic).  Publishes the cluster flag `Vehicle.Controller.Body.PEPS.LostKeyWarning` (replacing the deleted LostPkScan, which solved a thinner version of the same problem) and claims the chime for 2 s.  Latch held across the periodic so subsequent ticks with still no key don't re-chime. |
+| 17 | Key-lost warning chime | XS | ✅ Done — `features/key_lost_warning.rs` owns its own Cabin / Authenticated arbiter scans (last-close edge, ignition-on while sealed, 1-min periodic).  Publishes `Vehicle.Controller.Body.PEPS.LostKeyWarning` (same signal the deleted LostPkScan used) and claims the chime for 2 s.  Latch held across the periodic so still-no-key ticks don't re-chime.  PR #47. |
+| 24 | Welcome owns the approach poll (drop arbiter's self-driven loop) | M | ⏳ Pending — move the `AllApproach / Presence` periodic poll out of `KeySearchArbiter` and into the `Welcome` feature, where it conceptually belongs (Welcome is the feature that needs to know whether a paired fob is approaching).  Last step of the "every scan is feature-driven" cleanup that #17 (KeyLostWarning) and #23 (SmartTrunkPop) already applied to their respective scans.  Eliminates the arbiter's "feelings of its own."  Detail section below. |
 | 18 | ASIL-B on FreeRTOS + Ferrocene-qualified Rust (replaces Classic AUTOSAR M7) | XXL | 📋 Program-level — see plan |
 | 19 | Kuksa.val databroker integration (replace MockBus on the SignalBus seam) | L | 📋 Program-level |
 | 20 | Feature-completeness + interconnection audit (requirements + Gherkin + tests) | M | 📋 Program-level |
 | 21 | Run the test suite on a virtualised target (QEMU / Renode / Avocado) | L | 📋 Program-level |
 | 22 | Refresh to the latest COVESA VSS release (v4.0 → v6.0) | XL | 🔄 In progress — sub-PRs 1-3, 5-7 done (rename complete, PRs up to #41); sub-PR 4 DriverSide adoption Phases 1-4 landed (#44, #45); sub-PR 4 Phase 5 (cucumber-step language consolidation) + sub-PR 4b (canonical paths on the bus) + sub-PR 8 (new VSS v6.0 signals worth exposing) remain.  See [vss-v6.0-migration.md](./vss-v6.0-migration.md) |
 
-Suggested next order from what genuinely remains: **17 (in PR) → 23 → 14 (remainder) → 22 sub-PR 4b / 4 Phase 5 / 8**.
-Reasoning: **17** is XS and unblocked — `LostKeyWarning` bool is already
-published, just needs a chime claim when the vehicle is moving.
-**14 remainder** is a targeted audit of feature subscribers (no
-plant-model rework, since the signals already exist).  **22**'s
-remaining sub-PRs are doc/test-clarity and external surface work
-that compose cleanly on top.
+Suggested next order from what genuinely remains: **24 → 14 (remainder) → 22 sub-PR 4b / 4 Phase 5 / 8**.
+Reasoning: **24** closes the "every key search is feature-driven"
+loop opened by #17 and #23 — the last consumer of the arbiter's
+self-driven periodic scan is Welcome, and moving the scan there
+lets us delete the arbiter's internal poll loop entirely.  **14
+remainder** is a targeted audit of feature subscribers (no plant-
+model rework, since the signals already exist).  **22**'s
+remaining sub-PRs are doc / test-clarity and external surface
+work that compose cleanly on top.
 
 ---
 
@@ -835,6 +838,129 @@ line 625, `key_in_trunk_inside_alone_does_not_unlock`).
 - `FeedbackRequest = "mislock_trunk"` (extends the existing
   `FeedbackRequest` String enum — LockFeedback can play a distinct
   chime sequence to distinguish from `"mislock"`).
+
+---
+
+## 24. Welcome owns the approach poll  *(M)*
+
+The final step of the "every key search is feature-driven"
+principle that #17 (KeyLostWarning) and #23 (SmartTrunkPop)
+already applied to their respective scans.  Eliminates the
+`KeySearchArbiter`'s internal periodic poll — the arbiter
+becomes purely a serialiser of feature-submitted requests.
+
+### Why move it
+
+Today `KeySearchArbiter::run` carries an adaptive periodic
+`AllApproach / Presence` poll (700 ms fast when no key in
+approach; 10 s slow once a key is detected; suspended while
+ignition is in `ACC` / `ON` / `START`).  See
+[`key-search-arbiter-and-ignition.md`](./key-search-arbiter-and-ignition.md) §3.3.
+
+The arbiter doesn't *need* the result of that poll for anything
+itself.  It publishes `ApproachState` / `ApproachKeys` /
+`ApproachPollInterval` as side-effects, and the actual consumer
+is the `Welcome` feature (via per-fob `LastObservedZone` signals
+that the same poll updates).  Every other PEPS-aware feature
+already submits its own scans on demand:
+
+| Feature | Scan trigger |
+|---|---|
+| PassiveEntry | Outside handle pull edge |
+| KeypadLock | Keypad debounce-complete |
+| VehicleStartingControl | Brake-press pre-auth + start-button press |
+| ExteriorTrunkButton | Trunk-button press while locked |
+| SmartUnlock | External-source lock event qualifying |
+| SmartTrunkPop | External-source lock event + trunk-close edge |
+| KeyLostWarning | Cabin-sealed-under-power + periodic 1 min |
+| **Welcome** | **periodic (NEW — currently free-rides the arbiter's poll)** |
+
+Moving the poll into Welcome:
+
+1. Removes the only time-driven scan that isn't tied to a
+   feature event.  Arbiter becomes purely request-driven.
+2. Lets Welcome adapt the cadence based on its own state (e.g.
+   pause once the courtesy lights are latched, not just on
+   ignition).
+3. Makes the architectural rule uniform across the codebase —
+   easier to reason about, easier to teach.
+
+### Built on (in `main`)
+
+- `KeySearchArbiterHandle::submit` — already exposes everything
+  Welcome needs.  `Coalescing::Allowed` is the right policy for
+  a periodic poll (a concurrent burst should coalesce).
+- The PEPS plant's `LastObservedZone` publish path runs after
+  every arbiter scan regardless of who submitted, so Welcome's
+  per-fob subscriptions don't change.
+- The arbiter's `ApproachState` / `ApproachKeys` /
+  `ApproachPollInterval` publishes: Welcome takes over publishing
+  these from the result of its own scan, same field semantics.
+
+### Plan
+
+1. **New cadence state in Welcome.**  `fast_cadence` /
+   `slow_cadence` move from `KeySearchArbiter` to `Welcome` (with
+   the same `APPROACH_POLL_FAST` / `APPROACH_POLL_SLOW` constants
+   re-exported from Welcome's module).  `Welcome::with_cadence`
+   replaces `KeySearchArbiter::with_cadence`.
+2. **Periodic submit loop.**  Welcome's run loop grows a periodic
+   tick that submits `AntennaSet::AllApproach` / `Presence` /
+   `Coalescing::Allowed`.  The interval starts at `fast_cadence`
+   and flips to `slow_cadence` once the result reports
+   ≥ 1 approach key.  Same suspension logic as today: paused
+   while ignition is in `ACC` / `ON` / `START`.
+3. **Welcome publishes the aggregate signals.**
+   `Vehicle.Controller.Body.PEPS.ApproachState`,
+   `.ApproachKeys`, and `.ApproachPollInterval` are published by
+   Welcome after each poll instead of by the arbiter.  Signal
+   names + types unchanged — HMI consumers are unaffected.
+4. **Delete the arbiter's poll loop.**  `KeySearchArbiter::run`
+   loses its `poll_deadline` arm, its `ApproachState` /
+   `ApproachKeys` / `ApproachPollInterval` writes, and its
+   `fast_cadence` / `slow_cadence` / `IGNITION_STATE_SIGNAL`
+   subscriptions.  The struct shrinks to just the request mpsc
+   receiver and the per-fob zone / paired caches that incoming
+   requests need.  `KeySearchArbiter::with_cadence` disappears.
+5. **Reuse the existing `LastObservedZone` publish path.**  Every
+   feature-submitted scan already updates per-fob
+   `LastObservedZone`s in `publish_last_observed`; this stays
+   exactly as is, since Welcome's poll is just another submitter.
+6. **Tests.**  KeySearchArbiter tests that exercised the
+   periodic-poll cadence flip move to Welcome's test module.
+   The arbiter's remaining tests (request-submission path,
+   coalescing window, priority queue) are unchanged.
+
+### Risks
+
+- **Cadence migration must be careful about lazy starts.**  Today
+  the arbiter starts polling immediately on boot.  Welcome
+  doesn't currently boot the same way — its run loop blocks on
+  the zone streams.  The first periodic tick in Welcome must
+  fire promptly (within `fast_cadence`) so ApproachState
+  doesn't lag behind the legacy timing.
+- **Test parity.**  `key_search_arbiter::tests` has several
+  scenarios that exercise the poll cadence flip; they need to be
+  re-rooted on a setup that spawns Welcome alongside the arbiter.
+  The PEPS plant model's mock-bus + virtual-time scaffolding is
+  shared, so the rewrite is mechanical.
+- **HMI signal continuity.**  The HMI's PEPS Devices card
+  subscribes to `ApproachKeys` and `ApproachPollInterval` for
+  rendering.  As long as Welcome publishes them with the same
+  cadence-flip semantics, the card behaves identically.  Add a
+  manual smoke test (drag a fob into approach, watch the badge
+  light + the interval flip) to the PR's test plan.
+
+### Out of scope for this item
+
+- Coalescing the arbiter's per-fob `paired` / `LastObservedZone`
+  caches with a more principled design — that's a follow-up if
+  the arbiter's remaining footprint feels misshapen after the
+  poll loop leaves.
+- Splitting `Welcome` itself into "approach detection" +
+  "courtesy lighting" sub-features.  Conceptually clean, but
+  the two are tightly coupled today and the existing tests treat
+  them as one feature — defer.
 
 ---
 
