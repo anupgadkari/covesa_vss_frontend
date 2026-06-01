@@ -153,6 +153,25 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Vehicle.Cabin.Door.Row2.Right.Soldier.IsUnlocked" => Some(0x0005_003A),
         "Vehicle.Cabin.Door.Row2.Right.CloseCmd" => Some(0x0005_003B),
 
+        // ── Canonical VSS v6.0 siblings for door_lock state ─────────
+        // Published by DoorLockPlantModel alongside the physical
+        // `Row[12].{Left,Right}.*` signals above so external Kuksa
+        // consumers can subscribe canonically.  Mapping is
+        // orientation-resolved at plant boot (LHD: Left→DriverSide,
+        // Right→PassengerSide; RHD swaps).  See backlog #22 sub-PR 4b.
+        "Vehicle.Cabin.Door.Row1.DriverSide.IsLocked" => Some(0x0005_0040),
+        "Vehicle.Cabin.Door.Row1.PassengerSide.IsLocked" => Some(0x0005_0041),
+        "Vehicle.Cabin.Door.Row2.DriverSide.IsLocked" => Some(0x0005_0042),
+        "Vehicle.Cabin.Door.Row2.PassengerSide.IsLocked" => Some(0x0005_0043),
+        "Vehicle.Cabin.Door.Row1.DriverSide.IsDoubleLocked" => Some(0x0005_0044),
+        "Vehicle.Cabin.Door.Row1.PassengerSide.IsDoubleLocked" => Some(0x0005_0045),
+        "Vehicle.Cabin.Door.Row2.DriverSide.IsDoubleLocked" => Some(0x0005_0046),
+        "Vehicle.Cabin.Door.Row2.PassengerSide.IsDoubleLocked" => Some(0x0005_0047),
+        "Vehicle.Cabin.Door.Row1.DriverSide.Soldier.IsUnlocked" => Some(0x0005_0048),
+        "Vehicle.Cabin.Door.Row1.PassengerSide.Soldier.IsUnlocked" => Some(0x0005_0049),
+        "Vehicle.Cabin.Door.Row2.DriverSide.Soldier.IsUnlocked" => Some(0x0005_004A),
+        "Vehicle.Cabin.Door.Row2.PassengerSide.Soldier.IsUnlocked" => Some(0x0005_004B),
+
         // Body misc
         "Vehicle.Body.Hood.IsOpen" => Some(0x0006_0001),
         // Hood — HoodPlantModel runs a tri-state latch FSM
@@ -851,6 +870,49 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
         0x0005_003A,
     ),
     ("Vehicle.Cabin.Door.Row2.Right.CloseCmd", 0x0005_003B),
+    // Canonical VSS v6.0 siblings — see lookup block above.
+    ("Vehicle.Cabin.Door.Row1.DriverSide.IsLocked", 0x0005_0040),
+    (
+        "Vehicle.Cabin.Door.Row1.PassengerSide.IsLocked",
+        0x0005_0041,
+    ),
+    ("Vehicle.Cabin.Door.Row2.DriverSide.IsLocked", 0x0005_0042),
+    (
+        "Vehicle.Cabin.Door.Row2.PassengerSide.IsLocked",
+        0x0005_0043,
+    ),
+    (
+        "Vehicle.Cabin.Door.Row1.DriverSide.IsDoubleLocked",
+        0x0005_0044,
+    ),
+    (
+        "Vehicle.Cabin.Door.Row1.PassengerSide.IsDoubleLocked",
+        0x0005_0045,
+    ),
+    (
+        "Vehicle.Cabin.Door.Row2.DriverSide.IsDoubleLocked",
+        0x0005_0046,
+    ),
+    (
+        "Vehicle.Cabin.Door.Row2.PassengerSide.IsDoubleLocked",
+        0x0005_0047,
+    ),
+    (
+        "Vehicle.Cabin.Door.Row1.DriverSide.Soldier.IsUnlocked",
+        0x0005_0048,
+    ),
+    (
+        "Vehicle.Cabin.Door.Row1.PassengerSide.Soldier.IsUnlocked",
+        0x0005_0049,
+    ),
+    (
+        "Vehicle.Cabin.Door.Row2.DriverSide.Soldier.IsUnlocked",
+        0x0005_004A,
+    ),
+    (
+        "Vehicle.Cabin.Door.Row2.PassengerSide.Soldier.IsUnlocked",
+        0x0005_004B,
+    ),
     ("Vehicle.Body.Hood.IsOpen", 0x0006_0001),
     ("Vehicle.Body.Trunk.Rear.IsOpen", 0x0006_0002),
     ("Vehicle.Body.Trunk.Rear.IsLocked", 0x0006_0003),
