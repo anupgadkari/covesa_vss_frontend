@@ -62,7 +62,7 @@ use crate::signal_bus::{SignalBus, VssPath};
 const START_STOP_IN: VssPath = "Vehicle.PowerMode.StartStopSwitch.IsPressed";
 const CYLINDER_IN: VssPath = "Vehicle.PowerMode.IgnitionCylinder.Position";
 const BRAKE_IN: VssPath = "Vehicle.Chassis.Brake.IsApplied";
-const CURRENT_GEAR_IN: VssPath = "Powertrain.Transmission.CurrentGear";
+const CURRENT_GEAR_IN: VssPath = "Vehicle.Powertrain.Transmission.CurrentGear";
 /// NFC auth bypass — published by `NfcEntry` on a start-button NFC
 /// tap.  Stays `true` for a short window; while it's true, a PEPS
 /// start-button press skips the normal `Cabin` Authenticated scan
@@ -1208,7 +1208,7 @@ mod tests {
         // Shift out of PARK.  TransmissionPlant isn't in this setup,
         // so inject CurrentGear directly to simulate it.
         bus.inject(
-            "Powertrain.Transmission.CurrentGear",
+            "Vehicle.Powertrain.Transmission.CurrentGear",
             SignalValue::Int16(127), // Drive
         );
         settle().await;
@@ -1238,7 +1238,7 @@ mod tests {
         bus.inject(CYLINDER_IN, SignalValue::String("ON".into()));
         settle().await;
         bus.inject(
-            "Powertrain.Transmission.CurrentGear",
+            "Vehicle.Powertrain.Transmission.CurrentGear",
             SignalValue::Int16(127),
         );
         settle().await;
@@ -1247,7 +1247,7 @@ mod tests {
         settle().await;
         // Shift back to PARK.
         bus.inject(
-            "Powertrain.Transmission.CurrentGear",
+            "Vehicle.Powertrain.Transmission.CurrentGear",
             SignalValue::Int16(126),
         );
         settle().await;
@@ -1268,7 +1268,7 @@ mod tests {
         // must stay false even if the transmission leaves PARK.
         let bus = setup(cfg_peps()).await;
         bus.inject(
-            "Powertrain.Transmission.CurrentGear",
+            "Vehicle.Powertrain.Transmission.CurrentGear",
             SignalValue::Int16(127),
         );
         settle().await;

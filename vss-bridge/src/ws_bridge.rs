@@ -39,7 +39,7 @@ const INPUT_SIGNALS: &[VssPath] = &[
     // Driver's gear-selector intent — written by HMI cockpit shifter
     // + sidebar gear control.  Consumed by the TransmissionPlant
     // which publishes the actual engaged CurrentGear in OUTPUT_SIGNALS.
-    "Powertrain.Transmission.SelectedGear",
+    "Vehicle.Powertrain.Transmission.SelectedGear",
     "Vehicle.Body.Lights.LightSwitch",
     "Vehicle.Controller.Body.PEPS.KeyPresent",
     "Vehicle.Cabin.Door.Row1.Left.Switch.Lock",
@@ -181,7 +181,7 @@ const INPUT_SIGNALS: &[VssPath] = &[
     // Actual engaged gear — published by the TransmissionPlant from
     // the driver's SelectedGear input.  HMI reads for cluster PRND
     // text and the sidebar Gear display.
-    "Powertrain.Transmission.CurrentGear",
+    "Vehicle.Powertrain.Transmission.CurrentGear",
     // Master child-lock momentary push — HMI writes this; the
     // PowerChildLock feature observes the rising edge and toggles
     // MasterStatus + the per-door IsChildLockActive fan-out.
@@ -412,7 +412,7 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     "Vehicle.Chassis.Brake.IsApplied",
     "Vehicle.Controller.Starting.ImmobilizerStatus",
     // BTSI + Key-in-Ignition Inhibit derived flags.
-    "Powertrain.Transmission.ShiftLockEngaged",
+    "Vehicle.Powertrain.Transmission.ShiftLockEngaged",
     "Vehicle.Controller.Body.Switches.IgnitionCylinder.RemovalInhibited",
     // NFC auth bypass — see NfcEntry / VehicleStartingControl.
     "Vehicle.Controller.Body.PEPS.NfcAuthBypass",
