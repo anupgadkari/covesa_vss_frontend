@@ -37,18 +37,57 @@ item is independently shippable as its own sub-branch / PR.
 | 19 | Kuksa.val databroker integration (replace MockBus on the SignalBus seam) | L | 📋 Program-level |
 | 20 | Feature-completeness + interconnection audit (requirements + Gherkin + tests) | M | 📋 Program-level |
 | 21 | Run the test suite on a virtualised target (QEMU / Renode / Avocado) | L | 📋 Program-level |
-| 22 | Refresh to the latest COVESA VSS release (v4.0 → v6.0) | XL | 🔄 In progress — sub-PRs 1-3, 5-7 done (rename complete, PRs up to #41); sub-PR 4 DriverSide adoption Phases 1-4 landed (#44, #45); sub-PR 4 Phase 5 (cucumber-step language consolidation) + sub-PR 4b (canonical paths on the bus) + sub-PR 8 (new VSS v6.0 signals worth exposing) remain.  See [vss-v6.0-migration.md](./vss-v6.0-migration.md) |
+| 22 | Refresh to the latest COVESA VSS release (v4.0 → v6.0) | XL | 🔄 In progress.  Sub-PRs 1-7 done (rename, DriverSide adoption, cucumber consolidation, canonical bus paths for door_lock + door_handle + window).  Sub-PR 8 (new VSS v6.0 signals worth exposing) reframed broadly — see item **25** below.  Slice **8a** (transmission canonical rename) in PR #59. |
+| 25 | Bridge as VSS publisher for domains without separate POSIX services | L | ⏳ In progress.  Reframing of #22 sub-PR 8 after architectural discussion.  In a production deployment, signals come from multiple ECU services (engine, BMS, telematics, …).  Where the platform has no separate publisher service, this bridge takes responsibility.  Detail section below. |
+| 26 | Body-platform OBD / DTC service | M | 📋 Future.  Eventually the bridge needs a body-platform OBD-II / DTC surface — diagnostic trouble codes, freeze frames, the standard `Vehicle.OBD.*` subtree.  Tied to having an ASIL-B fault store (likely lives on the M7 in the final platform).  Not started; tracking here so it isn't lost. |
 
-Suggested next order from what genuinely remains: **22 sub-PR 4b / 4 Phase 5 / 8**.
-The remaining sub-PRs are doc / test-clarity and external-surface
-work that compose cleanly on top.
+Suggested next order from what genuinely remains: **22 → 25 → 14 (remainder) → 26 (later)**.
+The "every key search is feature-driven" cleanup is complete with
+#24 — KeyLostWarning (#17), SmartTrunkPop (#23), and Welcome's
+approach poll (#24) all own their own scans, and `KeySearchArbiter`
+is purely a request serialiser.  Item #14 (stop continuous Zone
+publishing) closed out organically.
 
-The "every key search is feature-driven" architectural cleanup is
-*complete* with #24 landed — KeyLostWarning (#17), SmartTrunkPop
-(#23), and Welcome's approach poll (#24) all own their own scans,
-and `KeySearchArbiter` is purely a request serialiser.  Item #14
-(stop continuous Zone publishing) closed out as a side effect of
-that cleanup — no subscribers to the legacy `.Zone` remain.
+# 25. Bridge as VSS publisher for non-body domains
+
+In a real production deployment the VSS broker consumes signals from
+many publisher services — engine ECU → RPM, BMS → State-of-Charge,
+HVAC controller → vent state, telematics modem → GPS, and so on.
+On this platform we are deliberately **not** assuming separate
+POSIX services per domain.  Where no such service exists, this
+bridge is the only thing on the seam between the broker and the
+buses (CAN / LIN / Ethernet); it owns the publish responsibility.
+
+## In scope (bridge will publish)
+
+| Slice | Domain | Signals (rough) | Status |
+|---|---|---|---|
+| 8a | Powertrain — Transmission rename | `Vehicle.Powertrain.Transmission.*` (canonical naming for the 3 existing signals) | In PR #59 |
+| 8b | Driver | `Vehicle.Driver.IdentifierType`, `.Identifier.Subject` (sourced from `LockStatus.LastRequestor` + the active fob/phone slot) | Next |
+| 8c | Powertrain — engine + fuel stub | `Vehicle.Powertrain.CombustionEngine.Speed` (RPM), `.FuelSystem.RelativeLevel` / `.Range` / `.IsEngineFuelLevelLow` | Planned |
+| 8d | Vehicle motion + ambient | `Vehicle.Speed` (with an actual source), `.IsMoving`, `.AverageSpeed`, `.TraveledDistance`, `.AmbientAirTemperature` | Planned |
+| 8e | HVAC plant | The existing 10 HVAC signals get a plant model that simulates the Classic AUTOSAR HVAC algorithm.  Bridge already exposes the user-input side (SetTemperature, FanSpeed, Mode, A/C On/Off, Defrost, Recirculation); plant adds actuator outputs (resolved blower speed, compressor active, vent flap positions, cabin-actual temperature) plus a small thermodynamic model | Planned |
+
+## Out of scope (separate POSIX services own these)
+
+| Domain | Owner | Why not the bridge |
+|---|---|---|
+| ADAS (`Vehicle.ADAS.*`) | dedicated ADAS service | Cameras + radar + perception stack — not a body-controller concern |
+| Telematics (`Vehicle.CurrentLocation.*`, NAV) | telematics modem service | GPS + cellular owned by the modem |
+| Connectivity (`Vehicle.Connectivity.*`) | NetworkManager / modem service | WiFi / cellular state belongs at the platform networking layer |
+
+The single existing `Vehicle.ADAS.HighBeam.OncomingVehicleDetected`
+signal stays (it's an HMI debug input feeding the AutoHighBeam
+feature — not a stub publisher).  We won't expand the ADAS surface.
+
+# 26. Body-platform OBD / DTC service
+
+The body controller eventually needs a diagnostic-trouble-code
+surface — the standard `Vehicle.OBD.*` subtree, fault freeze frames,
+maybe a J1979 PID mapping.  Tied to having an ASIL-B fault store
+(likely living on the M7 in the final platform; on this bridge it
+would be a Rust plant model that mirrors that).  Not started.
+Tracking here so it doesn't get lost.
 
 ---
 
