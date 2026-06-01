@@ -4,7 +4,9 @@
 //! # Trigger
 //!
 //! Fires on the *rising edge* of all four gating conditions being
-//! true simultaneously:
+//! true simultaneously, evaluated **only when a fresh `ApproachKeys`
+//! publish arrives** (not on the door-close edge itself — see the
+//! "Coherence with the KeySearchArbiter" note below):
 //!
 //! 1. `Vehicle.LowVoltageSystemState` is `ON` or `START` — the
 //!    driver has taken (or is about to take) responsibility for
@@ -19,6 +21,26 @@
 //! No speed threshold.  The driver-error this catches is "you got
 //! in, closed up, turned the key, and there's no fob in the
 //! vehicle" — equally bad standing still as moving.
+//!
+//! ## Coherence with the KeySearchArbiter
+//!
+//! `ApproachKeys` is not a continuous signal — the
+//! `KeySearchArbiter` publishes it after each LF scan, and scans
+//! are themselves triggered (door-close, periodic, brake-pre-auth)
+//! rather than free-running.  That means at the moment a door
+//! finishes closing, the cached `ApproachKeys` still reflects the
+//! *previous* scan and may be stale.
+//!
+//! We sidestep the staleness by evaluating the gating **only when
+//! a fresh `ApproachKeys` publish arrives**.  The arbiter scans in
+//! response to door-close events; the resulting publish IS the
+//! authoritative "the cabin is now sealed and here's whether
+//! there's a key" answer.  Door / trunk / ignition edges only
+//! update the cached state and can *clear* a running warning —
+//! they never fire one.  If the user closes everything up and
+//! turns the ignition on before the arbiter has scanned, the
+//! warning waits for the next scan publish; the next periodic
+//! tick (or any other arbiter trigger) closes the loop.
 //!
 //! # Action
 //!
@@ -158,10 +180,18 @@ impl<B: SignalBus + Send + Sync + 'static> KeyLostWarning<B> {
                 }
             };
 
+            // `approach_publish` is set true only when the ApproachKeys
+            // arm fires.  Every other arm only updates cached state;
+            // the gating evaluation at the bottom of the loop either
+            // (a) fires the warning — but ONLY if approach_publish is
+            // true (i.e. the arbiter just told us something fresh), or
+            // (b) clears a running warning when gating drops.
+            let mut approach_publish = false;
             select! {
                 Some(val) = approach_rx.next() => {
                     if let Some(c) = approach_keys_count(&val) {
                         approach_keys = c;
+                        approach_publish = true;
                     }
                 }
                 Some(val) = power_rx.next() => {
@@ -192,12 +222,12 @@ impl<B: SignalBus + Send + Sync + 'static> KeyLostWarning<B> {
                 else => break,
             }
 
-            // Re-evaluate the gating condition after every input edge.
             self.evaluate_gating(
                 power_on,
                 approach_keys,
                 trunk_open,
                 &door_open,
+                approach_publish,
                 &mut warning_deadline,
                 &mut latched_active,
             )
@@ -210,40 +240,56 @@ impl<B: SignalBus + Send + Sync + 'static> KeyLostWarning<B> {
     /// Decide whether the current input snapshot warrants firing,
     /// clearing, or doing nothing.  Called after every subscription
     /// edge in `run`.
+    ///
+    /// Asymmetric trigger / clear policy:
+    ///   * **Fire** only if `approach_publish` is true — i.e. the
+    ///     edge that brought us here was a fresh `ApproachKeys`
+    ///     publish from the arbiter.  Other input edges (door,
+    ///     trunk, ignition) update cache only; they don't fire
+    ///     because the cached `ApproachKeys` would still be from
+    ///     the previous scan and might be stale.  See the
+    ///     "Coherence with the KeySearchArbiter" note in the
+    ///     module header.
+    ///   * **Clear** on any edge that drops the gating condition,
+    ///     regardless of which arm fired.  An open door / open
+    ///     trunk / ignition off is observably true the moment it
+    ///     happens; no scan latency to wait for.
+    #[allow(clippy::too_many_arguments)]
     async fn evaluate_gating(
         &self,
         power_on: bool,
         approach_keys: u8,
         trunk_open: bool,
         door_open: &[bool; 4],
+        approach_publish: bool,
         warning_deadline: &mut Option<Instant>,
         latched_active: &mut bool,
     ) {
         let all_closed = !trunk_open && door_open.iter().all(|&b| !b);
         let gating_true = power_on && all_closed && approach_keys == 0;
 
-        if gating_true {
-            if !*latched_active {
-                // Rising edge — fire.
-                *latched_active = true;
-                *warning_deadline = Some(Instant::now() + WARNING_DURATION);
-                tracing::info!(
-                    "KeyLostWarning: vehicle sealed under power with no paired key \
-                     in cabin — chime + cluster warning"
-                );
-                self.assert_warning().await;
-            }
-            // Else: still in the same all-closed-no-key state —
-            // suppress; the warning already fired or is timing out.
-        } else if *latched_active {
-            // Gating dropped — clear the latch so the next rising
-            // edge can fire again, and tear down any in-flight
-            // chime + flag.
+        if gating_true && approach_publish && !*latched_active {
+            // Rising edge of all-gates-true, driven by a fresh
+            // ApproachKeys publish (the only authoritative "no key in
+            // cabin" tick).  Fire and latch.
+            *latched_active = true;
+            *warning_deadline = Some(Instant::now() + WARNING_DURATION);
+            tracing::info!(
+                "KeyLostWarning: arbiter scan returned 0 keys with cabin sealed \
+                 under power — chime + cluster warning"
+            );
+            self.assert_warning().await;
+        } else if !gating_true && *latched_active {
+            // Gating dropped (a door / trunk opened, ignition went
+            // off, or the next ApproachKeys publish brought back a
+            // ≥1 count).  Tear down latch + in-flight warning.
             *latched_active = false;
             if warning_deadline.take().is_some() {
                 self.clear_warning().await;
             }
         }
+        // Else: gating still true but no fresh scan, or gating still
+        // false — either way, nothing to publish.
     }
 
     async fn assert_warning(&self) {
@@ -301,29 +347,40 @@ mod tests {
         }
     }
 
+    /// Simulate the KeySearchArbiter publishing the result of a scan.
+    /// In production this happens after door-close triggers and on
+    /// periodic ticks; in tests we drive it explicitly so the gating
+    /// evaluation has a fresh "no key" tick to react to.
+    fn arbiter_scan_result(bus: &MockBus, count: u8) {
+        bus.inject(APPROACH_KEYS, SignalValue::Uint8(count));
+    }
+
     /// Close all doors and trunk while ignition is ON and no paired
-    /// key is in the cabin — chime + cluster flag fire on the
-    /// last-closed edge.
+    /// key is in the cabin.  The door-close edge itself does NOT fire;
+    /// the warning fires when the KeySearchArbiter's next scan
+    /// publishes `ApproachKeys = 0`.
     #[tokio::test(start_paused = true)]
-    async fn close_up_with_no_key_and_ignition_on_fires() {
+    async fn close_up_then_arbiter_scan_fires() {
         let (bus, _h) = setup().await;
 
         bus.inject(POWER_STATE, SignalValue::String("ON".into()));
         settle(1).await;
-        // Close three doors — gating still false because Row2.Right is
-        // still open.
-        for s in &DOOR_OPEN_SIGNALS[..3] {
+        // Close every door + trunk.  At this point the cached
+        // ApproachKeys is from before the close, so we do NOT expect
+        // a fire yet.
+        for s in DOOR_OPEN_SIGNALS {
             bus.inject(s, SignalValue::Bool(false));
         }
         settle(1).await;
         assert_eq!(
             bus.latest_value(KEY_LOST_WARNING_OUT),
             None,
-            "must not fire while a door is still open"
+            "must wait for the arbiter scan, not fire on door-close"
         );
 
-        // Close the last door — the all-closed edge fires the warning.
-        bus.inject(DOOR_OPEN_SIGNALS[3], SignalValue::Bool(false));
+        // Arbiter scans (triggered by the door-close) and reports
+        // zero paired keys — THIS is the triggering edge.
+        arbiter_scan_result(&bus, 0);
         settle(1).await;
 
         assert_eq!(
@@ -341,7 +398,31 @@ mod tests {
         assert_eq!(bus.latest_value(CHIME), Some(SignalValue::Bool(false)));
     }
 
-    /// Ignition OFF: closing everything up must NOT fire.
+    /// Door-close edge with no subsequent arbiter scan must NOT fire,
+    /// even though the gating condition is otherwise true.  Guards
+    /// against the staleness bug — `ApproachKeys` from before the
+    /// close could be 0 from a previous scan and is not authoritative
+    /// for the post-close state.
+    #[tokio::test(start_paused = true)]
+    async fn door_close_alone_without_scan_does_not_fire() {
+        let (bus, _h) = setup().await;
+
+        bus.inject(POWER_STATE, SignalValue::String("ON".into()));
+        for s in DOOR_OPEN_SIGNALS {
+            bus.inject(s, SignalValue::Bool(false));
+        }
+        settle(10).await;
+
+        assert!(
+            bus.history()
+                .iter()
+                .all(|(s, _)| *s != KEY_LOST_WARNING_OUT),
+            "must not fire on door-close alone; waits for arbiter scan"
+        );
+    }
+
+    /// Ignition OFF: closing everything up + arbiter scan reporting 0
+    /// keys must NOT fire.
     #[tokio::test(start_paused = true)]
     async fn close_up_with_ignition_off_does_not_fire() {
         let (bus, _h) = setup().await;
@@ -350,6 +431,8 @@ mod tests {
         for s in DOOR_OPEN_SIGNALS {
             bus.inject(s, SignalValue::Bool(false));
         }
+        settle(1).await; // drain door-close edges before the arbiter publish
+        arbiter_scan_result(&bus, 0);
         settle(1).await;
 
         assert!(
@@ -361,7 +444,8 @@ mod tests {
     }
 
     /// Trunk left open: even with all doors closed + ignition ON +
-    /// no key, the warning must not fire until the trunk also closes.
+    /// no key, an arbiter scan tick must not fire while the trunk is
+    /// still open.  Closing the trunk + a subsequent scan does fire.
     #[tokio::test(start_paused = true)]
     async fn trunk_open_inhibits_trigger() {
         let (bus, _h) = setup().await;
@@ -371,6 +455,8 @@ mod tests {
         for s in DOOR_OPEN_SIGNALS {
             bus.inject(s, SignalValue::Bool(false));
         }
+        settle(1).await; // drain door-close edges before the arbiter publish
+        arbiter_scan_result(&bus, 0);
         settle(1).await;
 
         assert!(
@@ -380,8 +466,10 @@ mod tests {
             "trunk still open — warning must not fire"
         );
 
-        // Close the trunk: now the all-sealed edge triggers.
+        // Close the trunk; arbiter scans again on next periodic tick.
         bus.inject(TRUNK_OPEN, SignalValue::Bool(false));
+        settle(1).await; // drain trunk-close edge first
+        arbiter_scan_result(&bus, 0);
         settle(1).await;
         assert_eq!(
             bus.latest_value(KEY_LOST_WARNING_OUT),
@@ -389,16 +477,18 @@ mod tests {
         );
     }
 
-    /// Key in the cabin: closing everything up must NOT fire.
+    /// Key in the cabin: arbiter scan reports ≥1 after the close-up,
+    /// so no warning fires.
     #[tokio::test(start_paused = true)]
     async fn key_present_inhibits_trigger() {
         let (bus, _h) = setup().await;
 
         bus.inject(POWER_STATE, SignalValue::String("ON".into()));
-        bus.inject(APPROACH_KEYS, SignalValue::Uint8(1));
         for s in DOOR_OPEN_SIGNALS {
             bus.inject(s, SignalValue::Bool(false));
         }
+        settle(1).await; // drain door-close edges before the arbiter publish
+        arbiter_scan_result(&bus, 1);
         settle(1).await;
 
         assert!(
@@ -409,8 +499,8 @@ mod tests {
         );
     }
 
-    /// User retrieves the key while the warning is active: warning
-    /// clears early.
+    /// User retrieves the key while the warning is active: the next
+    /// arbiter scan reports ≥ 1, which clears the warning early.
     #[tokio::test(start_paused = true)]
     async fn recovery_before_timeout_clears_early() {
         let (bus, _h) = setup().await;
@@ -419,14 +509,16 @@ mod tests {
         for s in DOOR_OPEN_SIGNALS {
             bus.inject(s, SignalValue::Bool(false));
         }
+        settle(1).await; // drain door-close edges before the arbiter publish
+        arbiter_scan_result(&bus, 0);
         settle(500).await;
         assert_eq!(
             bus.latest_value(KEY_LOST_WARNING_OUT),
             Some(SignalValue::Bool(true)),
         );
 
-        // Key reappears (driver found their fob).
-        bus.inject(APPROACH_KEYS, SignalValue::Uint8(1));
+        // Next scan sees the key (driver found their fob).
+        arbiter_scan_result(&bus, 1);
         settle(1).await;
 
         assert_eq!(
@@ -446,13 +538,17 @@ mod tests {
         for s in DOOR_OPEN_SIGNALS {
             bus.inject(s, SignalValue::Bool(false));
         }
+        settle(1).await; // drain door-close edges before the arbiter publish
+        arbiter_scan_result(&bus, 0);
         settle(500).await;
         assert_eq!(
             bus.latest_value(KEY_LOST_WARNING_OUT),
             Some(SignalValue::Bool(true)),
         );
 
-        // Driver opens their door.
+        // Driver opens their door — gating drops immediately
+        // (don't wait for the next scan to acknowledge the user's
+        // search).
         bus.inject(DOOR_OPEN_SIGNALS[0], SignalValue::Bool(true));
         settle(1).await;
 
@@ -472,6 +568,8 @@ mod tests {
         for s in DOOR_OPEN_SIGNALS {
             bus.inject(s, SignalValue::Bool(false));
         }
+        settle(1).await; // drain door-close edges before the arbiter publish
+        arbiter_scan_result(&bus, 0);
         settle(500).await;
         assert_eq!(
             bus.latest_value(KEY_LOST_WARNING_OUT),
@@ -488,40 +586,47 @@ mod tests {
     }
 
     /// Re-arming: after a cleared warning, the gating must drop and
-    /// rise again to re-fire.  A redundant tick while still in the
-    /// all-closed-no-key state does NOT re-fire.
+    /// rise again to re-fire.  Subsequent periodic arbiter scans
+    /// that still report 0 (the user hasn't found the key yet) must
+    /// NOT re-fire — that would chime every periodic interval and
+    /// be annoying.
     #[tokio::test(start_paused = true)]
-    async fn no_re_fire_while_latched() {
+    async fn periodic_scans_with_still_no_key_do_not_re_fire() {
         let (bus, _h) = setup().await;
 
         bus.inject(POWER_STATE, SignalValue::String("ON".into()));
         for s in DOOR_OPEN_SIGNALS {
             bus.inject(s, SignalValue::Bool(false));
         }
+        settle(1).await; // drain door-close edges before the arbiter publish
+        arbiter_scan_result(&bus, 0);
         settle(1).await;
         // Wait past the 2 s auto-clear so the chime/flag are False
         // but the latch is still held.
         settle(WARNING_DURATION.as_millis() as u64 + 50).await;
         bus.clear_history();
 
-        // Inject a redundant "still 0" key reading.  Must not re-fire.
-        bus.inject(APPROACH_KEYS, SignalValue::Uint8(0));
+        // The arbiter performs its next periodic scan — still no key.
+        arbiter_scan_result(&bus, 0);
         settle(1).await;
 
-        assert!(
+        assert_eq!(
             bus.history()
                 .iter()
                 .filter(|(s, v)| *s == KEY_LOST_WARNING_OUT && *v == SignalValue::Bool(true))
-                .count()
-                == 0,
+                .count(),
+            0,
             "must not re-fire while gating stays continuously true"
         );
 
-        // Now drop the gating (open a door) and rise again (close it):
-        // the rising edge re-fires.
+        // Now the gating drops (driver opens a door to look) and
+        // rises again (door closed, fresh scan still reports 0).
+        // The rising edge re-fires.
         bus.inject(DOOR_OPEN_SIGNALS[0], SignalValue::Bool(true));
         settle(1).await;
         bus.inject(DOOR_OPEN_SIGNALS[0], SignalValue::Bool(false));
+        settle(1).await; // drain door-close edge first
+        arbiter_scan_result(&bus, 0);
         settle(1).await;
 
         assert_eq!(
