@@ -71,14 +71,8 @@ const DRIVER_IDENTIFIER_SUBJECT: VssPath = "Vehicle.Driver.Identifier.Subject";
 fn classify(requestor: &str) -> (&'static str, String) {
     match requestor {
         // Credential-based — a paired device authenticated.
-        "KeyfobRke"
-        | "KeyfobPeps"
-        | "PassiveEntry"
-        | "PhoneApp"
-        | "PhoneBle"
-        | "NfcCard"
-        | "NfcPhone"
-        | "KeypadLock" => ("userid", requestor.to_string()),
+        "KeyfobRke" | "KeyfobPeps" | "PassiveEntry" | "PhoneApp" | "PhoneBle" | "NfcCard"
+        | "NfcPhone" | "KeypadLock" => ("userid", requestor.to_string()),
 
         // Smart-* actuations are driven by a paired key being found
         // in cabin / trunk — credential-based, even though the
@@ -129,7 +123,10 @@ impl<B: SignalBus + Send + Sync + 'static> DriverPlantModel<B> {
             .await;
         let _ = self
             .bus
-            .publish(DRIVER_IDENTIFIER_SUBJECT, SignalValue::String(String::new()))
+            .publish(
+                DRIVER_IDENTIFIER_SUBJECT,
+                SignalValue::String(String::new()),
+            )
             .await;
 
         let mut last_type: &'static str = "default";
@@ -264,10 +261,7 @@ mod tests {
     #[tokio::test]
     async fn interior_switch_is_default_no_subject() {
         let bus = setup().await;
-        bus.inject(
-            LAST_REQUESTOR,
-            SignalValue::String("DoorTrimButton".into()),
-        );
+        bus.inject(LAST_REQUESTOR, SignalValue::String("DoorTrimButton".into()));
         settle().await;
         assert_eq!(
             string_at(&bus, DRIVER_IDENTIFIER_TYPE).as_deref(),
