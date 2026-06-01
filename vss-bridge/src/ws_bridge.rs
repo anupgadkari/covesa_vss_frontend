@@ -784,6 +784,7 @@ fn build_config_msg(cfg: &PlatformConfig) -> String {
                 },
                 "mirror_fold_mode":           format!("{:?}", dealer.mirror_fold_mode).to_uppercase(),
                 "farewell_hold_secs":         dealer.farewell_hold_secs,
+                "smart_trunk_pop_enabled":    dealer.smart_trunk_pop_enabled,
             },
             "variant": {
                 "double_lock_enabled":  variant.double_lock_enabled,
@@ -887,6 +888,14 @@ fn handle_config_set(msg: &serde_json::Value, cfg: &PlatformConfig) -> bool {
                 _ => MirrorFoldMode::Manual,
             };
             true
+        }
+        "dealer.smart_trunk_pop_enabled" => {
+            if let Some(b) = value.as_bool() {
+                dealer.smart_trunk_pop_enabled = b;
+                true
+            } else {
+                false
+            }
         }
         _ => false,
     };

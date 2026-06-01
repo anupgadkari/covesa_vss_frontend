@@ -599,6 +599,18 @@ pub struct DealerConfig {
     /// is the typical OEM value — long enough to walk to the front
     /// door of a house.  DID 0xF198.
     pub farewell_hold_secs: u64,
+
+    /// Smart Trunk Pop enable/disable.  DID 0xF199.
+    /// When true (default), an external lock event with a paired
+    /// key detected in the trunk pops the trunk + plays the
+    /// `mislock_trunk` audible cue.  When false the feature is
+    /// dormant.  See `features::smart_trunk_pop` and backlog #23.
+    #[serde(default = "default_smart_trunk_pop_enabled")]
+    pub smart_trunk_pop_enabled: bool,
+}
+
+fn default_smart_trunk_pop_enabled() -> bool {
+    true
 }
 
 /// Side-mirror fold mode (per vehicle line).  See `DealerConfig::mirror_fold_mode`.
@@ -627,6 +639,7 @@ impl Default for DealerConfig {
             vehicle_orientation: VehicleOrientation::Lhd,
             mirror_fold_mode: MirrorFoldMode::Manual,
             farewell_hold_secs: 20,
+            smart_trunk_pop_enabled: true,
         }
     }
 }
