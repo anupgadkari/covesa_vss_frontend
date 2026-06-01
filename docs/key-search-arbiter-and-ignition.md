@@ -27,12 +27,21 @@ subscribes to those signals directly.  This has three problems:
    off (~10 s) once a key is detected, to save power.  The current
    continuous-zone model has no way to model this.
 
-The redesign introduces a **KeySearch arbiter** that owns LF airtime,
-serializes search requests from features, and runs an adaptive
-approach poll on its own.  Features stop subscribing to per-fob zone
-signals and instead either issue an explicit search request when
-they need to know, or subscribe to derived "approach state" signals
-that the arbiter publishes.
+The redesign introduces a **KeySearch arbiter** that owns LF airtime
+and serializes search requests from features.  Features stop
+subscribing to per-fob zone signals and instead issue an explicit
+search request when they need to know.  Each feature drives its own
+scans tied to a specific physical event it owns (a button, an edge,
+a periodic check); the arbiter does no time-driven scanning of its
+own.
+
+> The original draft of this doc had the arbiter run an adaptive
+> approach poll on its own as a fourth "feature."  Subsequent work
+> (KeyLostWarning #17, SmartTrunkPop #23) made it clear that
+> putting a scan in the arbiter is just the wrong layer — the
+> arbiter has no decision to make with the result.  The poll's
+> consumer is the `Welcome` feature; the migration is backlog
+> item #24.  §3.3 documents the legacy shape until that lands.
 
 ---
 
@@ -145,6 +154,20 @@ pub struct KeyFinding {
   scan and both `oneshot::Sender`s receive the same result.
 
 ### 3.3 Approach poll loop
+
+> **⚠️ Architectural correction (backlog item #24, pending).**
+> Subsequent feature-level work (KeyLostWarning #17, SmartTrunkPop
+> #23) settled on the principle that **every key search is
+> triggered by the feature that needs the result**, with the
+> arbiter acting purely as a serialiser of LF airtime.  Under that
+> rule, the approach-poll loop described in this section belongs
+> in the `Welcome` feature, not in the arbiter — Welcome is the
+> only consumer of the poll's result, and moving it there
+> eliminates the last time-driven scan that isn't tied to a
+> feature event.  See backlog #24 for the migration plan.  The
+> behaviour described below is what `main` does today; the long-
+> term shape is identical (same cadence, same publish surface)
+> but lives in a different module.
 
 Built into the arbiter as an internal periodic task:
 
