@@ -182,6 +182,14 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         "Vehicle.Cabin.Door.Row1.PassengerSide.IsOpen" => Some(0x0005_0051),
         "Vehicle.Cabin.Door.Row2.DriverSide.IsOpen" => Some(0x0005_0052),
         "Vehicle.Cabin.Door.Row2.PassengerSide.IsOpen" => Some(0x0005_0053),
+        // Canonical siblings for WindowPlant's `Window.Position`
+        // output.  `MotorDirection` is published by the
+        // WindowArbiter and gets canonicalised in a separate PR if
+        // needed; this block covers the plant's position output only.
+        "Vehicle.Cabin.Door.Row1.DriverSide.Window.Position" => Some(0x0005_0054),
+        "Vehicle.Cabin.Door.Row1.PassengerSide.Window.Position" => Some(0x0005_0055),
+        "Vehicle.Cabin.Door.Row2.DriverSide.Window.Position" => Some(0x0005_0056),
+        "Vehicle.Cabin.Door.Row2.PassengerSide.Window.Position" => Some(0x0005_0057),
 
         // Body misc
         "Vehicle.Body.Hood.IsOpen" => Some(0x0006_0001),
@@ -945,6 +953,23 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
     ("Vehicle.Cabin.Door.Row1.PassengerSide.IsOpen", 0x0005_0051),
     ("Vehicle.Cabin.Door.Row2.DriverSide.IsOpen", 0x0005_0052),
     ("Vehicle.Cabin.Door.Row2.PassengerSide.IsOpen", 0x0005_0053),
+    // window plant canonical siblings — see lookup block above.
+    (
+        "Vehicle.Cabin.Door.Row1.DriverSide.Window.Position",
+        0x0005_0054,
+    ),
+    (
+        "Vehicle.Cabin.Door.Row1.PassengerSide.Window.Position",
+        0x0005_0055,
+    ),
+    (
+        "Vehicle.Cabin.Door.Row2.DriverSide.Window.Position",
+        0x0005_0056,
+    ),
+    (
+        "Vehicle.Cabin.Door.Row2.PassengerSide.Window.Position",
+        0x0005_0057,
+    ),
     ("Vehicle.Body.Hood.IsOpen", 0x0006_0001),
     ("Vehicle.Body.Trunk.Rear.IsOpen", 0x0006_0002),
     ("Vehicle.Body.Trunk.Rear.IsLocked", 0x0006_0003),

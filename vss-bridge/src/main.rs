@@ -453,7 +453,11 @@ async fn boot_simulation_stack(
     // WindowPlant — 4 per-window motor → position ramps at 10 %/s.
     // Reads MotorDirection (window arbiter output) and integrates
     // Window.Position.
-    set.spawn(WindowPlant::new(Arc::clone(&bus)).run());
+    set.spawn(
+        WindowPlant::new(Arc::clone(&bus))
+            .with_cfg(Arc::clone(&cfg))
+            .run(),
+    );
 
     // PassiveEntry — handle-pull authenticated unlock.
     let pe_devices: Vec<PairedDevice> = {
