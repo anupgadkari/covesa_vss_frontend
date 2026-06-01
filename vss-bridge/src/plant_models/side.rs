@@ -16,7 +16,9 @@
 /// Which physical side of the vehicle the driver sits on.  Constant
 /// for the lifetime of a vehicle build; we model it as runtime
 /// configuration because e2e tests need to flip it per-scenario.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize,
+)]
 pub enum VehicleOrientation {
     /// Driver on the physical left (most of NA, EU, China).
     #[default]

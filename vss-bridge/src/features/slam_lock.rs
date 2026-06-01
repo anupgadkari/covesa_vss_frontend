@@ -55,8 +55,8 @@ use tokio::time::sleep;
 
 use crate::arbiter::{DoorLockArbiter, DoorLockRequest, LockCommand, FEEDBACK_REQUEST};
 use crate::config::PlatformConfig;
-use crate::plant_models::side::PhysicalSide;
 use crate::ipc_message::{FeatureId, SignalValue};
+use crate::plant_models::side::PhysicalSide;
 use crate::signal_bus::{SignalBus, VssPath};
 
 /// How long SlamLock waits between observing a lock-with-door-open
@@ -117,10 +117,6 @@ const EXTERNAL_LOCK_INVERSION_REQUESTORS: &[&str] = &[
 fn is_armable_lock_state(status: &str) -> bool {
     matches!(status, "LOCKED" | "DOUBLE_LOCKED")
 }
-
-/// Which physical side of Row 1 is the driver door under the current
-/// vehicle orientation.  Returned as a `PhysicalSide` so the dispatch
-/// site can compare against the button it just observed.
 
 pub struct SlamLock<B: SignalBus> {
     bus: Arc<B>,
@@ -335,7 +331,7 @@ mod tests {
     use super::*;
     use crate::adapters::mock::MockBus;
     use crate::arbiter::door_lock_arbiter;
-    use crate::config::{DriverDoorSide, VehicleLineCal};
+    use crate::config::{VehicleLineCal, VehicleOrientation};
 
     /// Advance the paused tokio clock past the inversion delay and
     /// yield enough times for the dispatch + arbiter + plant-model
@@ -352,7 +348,7 @@ mod tests {
 
     /// Setup helper.  Spawns DoorLockArbiter and SlamLock with the
     /// supplied vehicle-line cal, plus the matching dealer-cal flips
-    /// (`two_stage_unlock`, `driver_door_side`).
+    /// (`two_stage_unlock`, `vehicle_orientation`).
     async fn setup(vl: VehicleLineCal, two_stage: bool, driver_side_right: bool) -> Arc<MockBus> {
         let bus = Arc::new(MockBus::new());
         let (arb, _ack_tx, loop_fut) = door_lock_arbiter(Arc::clone(&bus));
@@ -362,10 +358,10 @@ mod tests {
         // Apply dealer-cal flips for two-stage and RHD/LHD.
         let mut dc = cfg.dealer_config();
         dc.two_stage_unlock = two_stage;
-        dc.driver_door_side = if driver_side_right {
-            DriverDoorSide::Right
+        dc.vehicle_orientation = if driver_side_right {
+            VehicleOrientation::Rhd
         } else {
-            DriverDoorSide::Left
+            VehicleOrientation::Lhd
         };
         cfg.update_dealer_config(dc);
 

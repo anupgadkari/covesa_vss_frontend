@@ -186,7 +186,7 @@ impl VssWorld {
 
         let cfg = PlatformConfig::load();
         // Plant model gets the cfg so `unlock_driver` resolves the
-        // driver door from `dealer.driver_door_side` at runtime
+        // driver door from `dealer.vehicle_orientation` at runtime
         // (LHD = Row1.Left, RHD = Row1.Right).
         let dlpm =
             DoorLockPlantModel::with_ack_tx(Arc::clone(&bus), ack_tx).with_cfg(Arc::clone(&cfg));
@@ -1262,17 +1262,17 @@ async fn given_two_stage_disabled(w: &mut VssWorld) {
     settle().await;
 }
 
-/// RHD selector — flips `dealer.driver_door_side` to `Right`.  On
+/// RHD selector — flips `dealer.vehicle_orientation` to `Right`.  On
 /// RHD vehicles, Row1.Right is the driver door and Row1.Left is the
 /// passenger door.  The two-stage / passenger-bypass logic in
 /// PassiveEntry consults this cal at runtime to decide which door
 /// counts as "driver" for stage-1 unlock routing.
 #[given("the vehicle is RHD")]
 async fn given_rhd(w: &mut VssWorld) {
-    use vss_bridge::config::DriverDoorSide;
+    use vss_bridge::config::VehicleOrientation;
     w.ensure_passive_entry_started().await;
     let mut dc = w.cfg().dealer_config();
-    dc.driver_door_side = DriverDoorSide::Right;
+    dc.vehicle_orientation = VehicleOrientation::Rhd;
     w.cfg().update_dealer_config(dc);
     settle().await;
 }
@@ -1302,7 +1302,7 @@ async fn when_driver_pulls_left(w: &mut VssWorld) {
 }
 
 /// RHD driver-side pull — Row1.Right is the driver door when
-/// `dealer.driver_door_side = Right`.
+/// `dealer.vehicle_orientation = Right`.
 #[when("the driver pulls the Row1.Right outside handle")]
 async fn when_driver_pulls_right(w: &mut VssWorld) {
     w.bus().clear_history();

@@ -921,12 +921,12 @@ mod tests {
     }
 
     /// RHD variant of `setup()` — same stack but with
-    /// `dealer.driver_door_side = Right`, so Row1.Right is the driver
+    /// `dealer.vehicle_orientation = Right`, so Row1.Right is the driver
     /// door and Row1.Left is the passenger door.  The plant model
     /// also gets the cfg via `with_cfg` so `unlock_driver` resolves
     /// to the correct physical door.
     async fn setup_rhd() -> Arc<MockBus> {
-        use crate::config::DriverDoorSide;
+        use crate::config::VehicleOrientation;
 
         let bus = Arc::new(MockBus::new());
         let (arb, ack_tx, arb_fut) = door_lock_arbiter(Arc::clone(&bus));
@@ -938,7 +938,7 @@ mod tests {
 
         let config = PlatformConfig::load();
         let mut dc = config.dealer_config();
-        dc.driver_door_side = DriverDoorSide::Right;
+        dc.vehicle_orientation = VehicleOrientation::Rhd;
         config.update_dealer_config(dc);
 
         let dlpm =

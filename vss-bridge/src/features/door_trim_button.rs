@@ -95,8 +95,8 @@ use futures::stream::{select_all, StreamExt};
 
 use crate::arbiter::{DoorLockArbiter, DoorLockRequest, LockCommand, FEEDBACK_REQUEST};
 use crate::config::PlatformConfig;
-use crate::plant_models::side::PhysicalSide;
 use crate::ipc_message::{FeatureId, SignalValue};
+use crate::plant_models::side::PhysicalSide;
 use crate::signal_bus::{SignalBus, VssPath};
 
 const LOCK_BUTTONS: [VssPath; 2] = [
@@ -266,7 +266,7 @@ impl<B: SignalBus + Send + Sync + 'static> DoorTrimButton<B> {
     ///     (passenger-side bypass — pressing unlock from the passenger
     ///     seat is unambiguous "unlock everything").
     ///
-    /// RHD respects `dealer.driver_door_side`: Row1.Right is the
+    /// RHD respects `dealer.vehicle_orientation`: Row1.Right is the
     /// driver door on RHD, so the side meanings flip.
     fn unlock_command_for(&self, side: SideLabel, lock_status: &str) -> Option<LockCommand> {
         // Super-lock gate: trim Unlock is suppressed entirely.
@@ -316,7 +316,7 @@ impl<B: SignalBus + Send + Sync + 'static> DoorTrimButton<B> {
 
 /// Which physical Row 1 trim Unlock button the user pressed.  The
 /// driver-vs-passenger interpretation depends on
-/// `dealer.driver_door_side` and is resolved by `unlock_command_for`.
+/// `dealer.vehicle_orientation` and is resolved by `unlock_command_for`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SideLabel {
     Left,
@@ -331,7 +331,7 @@ mod tests {
     use crate::adapters::mock::MockBus;
     use crate::arbiter::door_lock_arbiter;
 
-    use crate::config::{DriverDoorSide, VehicleLineCal};
+    use crate::config::{VehicleLineCal, VehicleOrientation};
 
     async fn setup() -> Arc<MockBus> {
         // Default cal: slam_lock_protect = true (EU defensive default).
@@ -340,13 +340,13 @@ mod tests {
 
     async fn setup_with_cal(vl: VehicleLineCal) -> Arc<MockBus> {
         // Default dealer cal: two_stage_unlock=true, LHD.
-        setup_with_cals(vl, true, DriverDoorSide::Left).await
+        setup_with_cals(vl, true, VehicleOrientation::Lhd).await
     }
 
     async fn setup_with_cals(
         vl: VehicleLineCal,
         two_stage_unlock: bool,
-        driver_door_side: DriverDoorSide,
+        vehicle_orientation: VehicleOrientation,
     ) -> Arc<MockBus> {
         let bus = Arc::new(MockBus::new());
         let (arb, _ack_tx, loop_fut) = door_lock_arbiter(Arc::clone(&bus));
@@ -355,7 +355,7 @@ mod tests {
         let cfg = PlatformConfig::with_vehicle_line(vl);
         let mut dc = cfg.dealer_config();
         dc.two_stage_unlock = two_stage_unlock;
-        dc.driver_door_side = driver_door_side;
+        dc.vehicle_orientation = vehicle_orientation;
         cfg.update_dealer_config(dc);
         let feature = DoorTrimButton::new(Arc::clone(&bus), arb, cfg);
         tokio::spawn(feature.run());
@@ -421,7 +421,7 @@ mod tests {
         // LHD + two_stage_unlock=true: pressing the driver-side
         // (Row1.Left) trim Unlock issues stage-1 UnlockDriver, not
         // UnlockAll.  Matches PassiveEntry / SlamLock routing.
-        let bus = setup_with_cals(VehicleLineCal::default(), true, DriverDoorSide::Left).await;
+        let bus = setup_with_cals(VehicleLineCal::default(), true, VehicleOrientation::Lhd).await;
         bus.inject(
             "Vehicle.Cabin.Door.Row1.Left.Switch.Unlock",
             SignalValue::Bool(true),
@@ -447,7 +447,7 @@ mod tests {
     async fn lhd_driver_trim_unlock_two_stage_off_dispatches_unlock_all() {
         // LHD + two_stage_unlock=false: driver-side trim Unlock falls
         // back to UnlockAll (no stage-1 routing on this vehicle line).
-        let bus = setup_with_cals(VehicleLineCal::default(), false, DriverDoorSide::Left).await;
+        let bus = setup_with_cals(VehicleLineCal::default(), false, VehicleOrientation::Lhd).await;
         bus.inject(
             "Vehicle.Cabin.Door.Row1.Left.Switch.Unlock",
             SignalValue::Bool(true),
@@ -470,8 +470,12 @@ mod tests {
         // Passenger-side bypass — regardless of two_stage_unlock,
         // pressing the passenger trim Unlock dispatches UnlockAll.
         for two_stage in [true, false] {
-            let bus =
-                setup_with_cals(VehicleLineCal::default(), two_stage, DriverDoorSide::Left).await;
+            let bus = setup_with_cals(
+                VehicleLineCal::default(),
+                two_stage,
+                VehicleOrientation::Lhd,
+            )
+            .await;
             bus.inject(
                 "Vehicle.Cabin.Door.Row1.Right.Switch.Unlock",
                 SignalValue::Bool(true),
@@ -496,7 +500,7 @@ mod tests {
         // RHD: Row1.Right is the driver door, so it's the side that
         // respects two-stage.  Row1.Left becomes the passenger side
         // (covered by rhd_passenger_trim_unlock_always_unlock_all).
-        let bus = setup_with_cals(VehicleLineCal::default(), true, DriverDoorSide::Right).await;
+        let bus = setup_with_cals(VehicleLineCal::default(), true, VehicleOrientation::Rhd).await;
         bus.inject(
             "Vehicle.Cabin.Door.Row1.Right.Switch.Unlock",
             SignalValue::Bool(true),
@@ -518,7 +522,7 @@ mod tests {
     async fn rhd_passenger_trim_unlock_always_unlock_all() {
         // RHD: Row1.Left is passenger → always UnlockAll regardless
         // of two_stage_unlock.
-        let bus = setup_with_cals(VehicleLineCal::default(), true, DriverDoorSide::Right).await;
+        let bus = setup_with_cals(VehicleLineCal::default(), true, VehicleOrientation::Rhd).await;
         bus.inject(
             "Vehicle.Cabin.Door.Row1.Left.Switch.Unlock",
             SignalValue::Bool(true),
@@ -541,7 +545,7 @@ mod tests {
         // Stage-2 escalation: cabin is already DRIVER_UNLOCKED from a
         // prior stage-1, so pressing the driver-side trim Unlock again
         // dispatches UnlockAll (rather than repeating UnlockDriver).
-        let bus = setup_with_cals(VehicleLineCal::default(), true, DriverDoorSide::Left).await;
+        let bus = setup_with_cals(VehicleLineCal::default(), true, VehicleOrientation::Lhd).await;
 
         // Simulate the cabin coming up in DRIVER_UNLOCKED before the
         // press — the trim feature subscribes to Vehicle.Cabin.LockStatus,
@@ -574,7 +578,7 @@ mod tests {
         // Sanity / regression: when the cabin is LOCKED (or any state
         // other than DRIVER_UNLOCKED), the driver trim Unlock still
         // routes through stage-1.
-        let bus = setup_with_cals(VehicleLineCal::default(), true, DriverDoorSide::Left).await;
+        let bus = setup_with_cals(VehicleLineCal::default(), true, VehicleOrientation::Lhd).await;
         bus.inject(
             "Vehicle.Cabin.LockStatus",
             SignalValue::String("LOCKED".into()),
@@ -603,7 +607,7 @@ mod tests {
     async fn passenger_trim_unlock_in_driver_unlocked_state_still_unlock_all() {
         // Passenger trim Unlock always unlocks all — the new stage-2
         // escalation rule for the driver side doesn't change this.
-        let bus = setup_with_cals(VehicleLineCal::default(), true, DriverDoorSide::Left).await;
+        let bus = setup_with_cals(VehicleLineCal::default(), true, VehicleOrientation::Lhd).await;
         bus.inject(
             "Vehicle.Cabin.LockStatus",
             SignalValue::String("DRIVER_UNLOCKED".into()),
@@ -632,10 +636,10 @@ mod tests {
     async fn trim_presses_suppressed_under_double_lock() {
         // Super-lock physically disconnects the interior linkage —
         // BOTH Lock and Unlock trim presses must be ignored.  Verified
-        // across all four physical buttons × both DriverDoorSide cals
+        // across all four physical buttons × both VehicleOrientation cals
         // so the rule applies uniformly regardless of which trim
         // button maps to "driver."
-        for driver_side in [DriverDoorSide::Left, DriverDoorSide::Right] {
+        for driver_side in [VehicleOrientation::Lhd, VehicleOrientation::Rhd] {
             for side_signal in [
                 "Vehicle.Cabin.Door.Row1.Left.Switch.Lock",
                 "Vehicle.Cabin.Door.Row1.Right.Switch.Lock",
