@@ -225,6 +225,18 @@ pub enum FeatureId {
     /// publishes the chime + flag signals directly.  The FeatureId
     /// is allocated for future use if chime arbitration is added.
     KeyLostWarning = 0x2C,
+    /// Smart Trunk Pop — sibling of SmartUnlock (#15) for the
+    /// key-locked-in-trunk case.  On a fresh external lock event
+    /// while ignition is quiescent and the trunk is closed, scans
+    /// `Vehicle.Controller.Body.PEPS.{...}` antennas for paired
+    /// keys in `TrunkInside`.  On a hit: publishes
+    /// `FeedbackRequest = "mislock_trunk"` and pulses
+    /// `TRUNK_OPEN_CMD` via the trunk arbiter as
+    /// `FeatureId::SmartTrunkPop`.  Doors stay locked — the user
+    /// retrieves the device and walks away with the cabin still
+    /// secured.  See `features::smart_trunk_pop` and backlog
+    /// item #23.
+    SmartTrunkPop = 0x2D,
     // ---- Future window-arbiter participants (allow-list reserved) ----
     // WindowAntiPinch       = 0x28 — Priority::Critical, observes a
     //   future per-window anti-pinch detection signal and forces
@@ -294,6 +306,7 @@ impl FeatureId {
             0x27 => Some(Self::SunroofControl),
             0x2B => Some(Self::SmartUnlock),
             0x2C => Some(Self::KeyLostWarning),
+            0x2D => Some(Self::SmartTrunkPop),
             _ => None,
         }
     }

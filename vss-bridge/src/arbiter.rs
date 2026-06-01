@@ -1310,6 +1310,11 @@ pub fn trunk_arbiter<B: SignalBus>(
             signal: TRUNK_OPEN_CMD,
             priority: Priority::Medium,
         },
+        AllowEntry {
+            feature_id: FeatureId::SmartTrunkPop,
+            signal: TRUNK_OPEN_CMD,
+            priority: Priority::Medium,
+        },
     ];
 
     // Valet-mode gate: when `Vehicle.Controller.Cabin.ValetMode.IsActive` is true, force

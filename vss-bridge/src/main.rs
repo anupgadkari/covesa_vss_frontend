@@ -69,6 +69,7 @@ use vss_bridge::features::power_child_lock::PowerChildLock;
 use vss_bridge::features::power_window::PowerWindow;
 use vss_bridge::features::rke::{PairedFob, RkeFeature};
 use vss_bridge::features::slam_lock::SlamLock;
+use vss_bridge::features::smart_trunk_pop::SmartTrunkPop;
 use vss_bridge::features::smart_unlock::SmartUnlock;
 use vss_bridge::features::sunroof_control::SunroofControl;
 use vss_bridge::features::turn_indicator::TurnIndicator;
@@ -572,7 +573,21 @@ async fn boot_simulation_stack(
     // edge, on ignition-on while sealed, and on a 1-minute periodic.
     set.spawn(KeyLostWarning::new(Arc::clone(&bus), key_search_handle.clone()).run());
 
-    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, KeypadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome, MirrorFold, MirrorAdjust, Farewell, DoorOpenAssist, ExteriorTrunkButton, CabinTrunkRelease, ManualHorn, PerimeterAlarm, KeySearchArbiter, VehicleStartingControl, NfcEntry, SmartUnlock, KeyLostWarning");
+    // Smart Trunk Pop — sibling of SmartUnlock for the key-locked-in-
+    // trunk case.  On a fresh external lock event with a paired key
+    // detected in the trunk, pulses TRUNK_OPEN_CMD via the trunk
+    // arbiter; doors stay locked.  PEPS-only; dealer-cal gated.
+    set.spawn(
+        SmartTrunkPop::new(
+            Arc::clone(&bus),
+            Arc::clone(&trunk_arb),
+            key_search_handle.clone(),
+            Arc::clone(&cfg),
+        )
+        .run(),
+    );
+
+    tracing::info!("features spawned: ManualLighting, FollowMeHome, AutoHighBeam, BrakeReverseLamps, FogLamps, HazardLighting, TurnIndicator, RKE, LockFeedback, DoubleLockRelease, WalkAwayLock, KeypadLock, PanicAlarm, AutoRelock, PassiveEntry, Welcome, MirrorFold, MirrorAdjust, Farewell, DoorOpenAssist, ExteriorTrunkButton, CabinTrunkRelease, ManualHorn, PerimeterAlarm, KeySearchArbiter, VehicleStartingControl, NfcEntry, SmartUnlock, KeyLostWarning, SmartTrunkPop");
 
     // ── Plant Models ────────────────────────────────────────────────
     set.spawn(BlinkRelay::new(Arc::clone(&bus)).run());
