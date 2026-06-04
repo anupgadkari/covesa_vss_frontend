@@ -151,7 +151,7 @@ Key safety properties:
 
 | Component | Standard | Governance |
 |-----------|----------|-----------|
-| Signal specification | COVESA VSS v4.0 | Industry consortium (BMW, JLR, Volvo, Bosch, …) |
+| Signal specification | COVESA VSS v6.0 *(production conformance in progress)* | Industry consortium (BMW, JLR, Volvo, Bosch, …) |
 | Signal broker | kuksa.val | COVESA / Eclipse Foundation, Apache 2.0 |
 | Container runtime | Podman (OCI) | Red Hat / open source |
 | Application language | Rust | Mozilla Foundation / open source |
@@ -186,20 +186,29 @@ This is not a slide deck. Working, tested code exists today and is ready for dem
 |-----------|--------|-------|
 | IPC wire format (28-byte messages, CRC-16) | Complete | 8 tests (roundtrip, tamper detection) |
 | SignalBus trait + MockBus adapter | Complete | 5 tests |
-| Signal ID catalog (86 VSS signals) | Complete | 4 tests (no duplicates, roundtrip) |
+| Signal ID catalog (296 paths: VSS v6.0 canonical + `Vehicle.Controller.*` extensions + `Vehicle.Simulation.*`) | Complete | 4 tests (no duplicates, roundtrip) |
 | kuksa.val gRPC client (subscribe + set) | Complete | Compiles, reconnect logic |
 | VSS switch input overlay (4 signals) | Complete | Defined in vspec |
 | Engineering diagnostic HMI (50 signals) | Complete | Browser-based, used for bench validation |
 | Architecture document (v1.1) | Complete | — |
+| **Feature business logic — 30+ shipped reference modules** | Complete | Per-feature unit + integration tests |
+| KeySearchArbiter (PEPS LF airtime serializer) | Complete | Integration tests; every scan owned by the feature that needs it |
+| Domain arbiters (Lighting, LowBeam, Courtesy, Puddle, DoorLock, Trunk, Window, Horn, Comfort) | Complete | Priority-claim + watchdog tests |
+| Plant models (door_lock, door_handle, window, hood, sunroof, trunk, mirrors, chime, blink_relay, brake, transmission, auth_channel, PEPS, …17 total) | Complete | NVM persistence for stateful actuators |
+| HMI alias shim (canonical ↔ legacy vocabulary at WS boundary) | Complete | Round-trip + uniqueness tests |
+| WebSocket bridge (HMI ↔ SignalBus) | Complete | Coalesced 10 ms snapshots, boot-readiness gate |
+
+**Shipped feature business logic modules (30+):** PEPS / PassiveEntry, RKE, SmartUnlock, SmartTrunkPop, KeyLostWarning, Welcome (with approach-poll ownership), Farewell, PerimeterAlarm, PanicAlarm, NfcEntry, KeypadLock, AutoLock, AutoRelock, WalkAwayLock, CrashUnlock, DoorOpenAssist, FollowMeHome, ManualLighting, HazardLighting, TurnIndicator, BrakeReverseLamps, AutoHighBeam, FogLamps, MirrorFold, MirrorAdjust, SunroofControl, PowerWindow, PowerChildLock, CabinTrunkRelease, ExteriorTrunkButton, SlamLock, DoorTrimButton, VehicleStartingControl, DoubleLockRelease, LockFeedback. Each is unit-testable under MockBus with no hardware.
 
 **Remaining deliverables (included in engagement):**
-1. Signal Arbiter implementation
-2. All 8 feature business logic reference modules
-3. RpmsgBus transport adapter (requires S32G2 hardware)
-4. Container build pipeline + OTA flow
-5. Safety Monitor reference C implementation (M7/AUTOSAR)
-6. Hardware-in-the-loop validation on S32G2 eval board
-7. Knowledge transfer and onboarding for your feature engineering team
+1. RpmsgBus transport adapter (requires S32G2 hardware)
+2. Container build pipeline + OTA flow
+3. Safety Monitor reference C implementation (M7/AUTOSAR)
+4. Hardware-in-the-loop validation on S32G2 eval board
+5. SOME/IP, GLink, DDS transport adapters (OEM-program-dependent)
+6. SOVD diagnostic gateway (HTTP/REST)
+7. VSS v6.0 migration completion (sub-PRs 8c, 8d, 8e — Powertrain, Motion, HVAC stubs)
+8. Knowledge transfer and onboarding for your feature engineering team
 
 ---
 
