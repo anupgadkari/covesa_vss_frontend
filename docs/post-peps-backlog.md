@@ -495,6 +495,101 @@ discipline already define the M7 ↔ A53 wire format.
   project.  Build into the BOM, but cheaper than full Classic
   AUTOSAR seats by an order of magnitude.
 
+**Cost framing — when does this pencil out?**
+
+The decision lives or dies on four cost categories.  Each is
+order-of-magnitude reasoned (loaded senior-embedded eng cost
+~US$250–350k/yr, US/EU rates; numbers shift in EM markets but the
+ratios are stable).
+
+*1. Per-vehicle / per-program licensing (recurring).*  The clear win.
+
+| | Classic AUTOSAR | FreeRTOS + SafeRTOS |
+|---|---|---|
+| BSW royalty | $0.50–$2 per ECU (Vector, EB, Elektrobit) | $0 |
+| RTOS license | bundled | SafeRTOS one-time: ~$50–$200k per product family (WHIS) |
+| Tooling seats | DaVinci Configurator, Vector tools: $30–$100k/dev/yr | nil (open toolchain) |
+
+For a body ECU at 100k vehicles/year/program, BSW royalty alone is
+**$100–200k/year per program, forever**.  This is the number we put
+in front of OEM procurement — it justifies the Platform Provider
+licensing model standalone.
+
+*2. Safety qualification (one-time, but the biggest hidden cost).*
+The math gets uncomfortable here.  Classic AUTOSAR BSW is
+pre-qualified ASIL-B/D and you inherit the certificate — that is
+literally what the BSW vendor sells.  SafeRTOS gives you a
+pre-certified kernel (SIL3 / ASIL-D) but **everything around the
+kernel — CAN/LIN drivers, NVM driver, watchdog manager, application
+SWCs — is unqualified**.  We own the full safety case.
+
+Rough first-program safety-case budget (ASIL-B body controller,
+greenfield):
+
+| Item | Senior heads × duration | Rough $ |
+|---|---|---|
+| DIA / safety plan / HSI | 2–3 × 6 mo | $500–900k |
+| HARA + safety concept | 1–2 × 4–6 mo | $200–400k |
+| HSI/HRA + V&V + TÜV assessment | 2–3 × 6 mo + cert fees | $300–700k |
+| Per-subsequent-program delta (HW or major SW change) | | $100–300k |
+
+**First-program safety case: $1–2M extra vs. inheriting AUTOSAR's.**
+Ferrocene's qualified rustc removes the toolchain side of the case
+(huge), but the driver-layer case remains.
+
+*3. One-time engineering build (HAL + drivers).*  Classic AUTOSAR
+MCAL + RTE eliminates ~30–40% of platform plumbing.  Hand-rolling,
+ballpark per driver class:
+
+- CAN/LIN drivers + frame timing: 3–6 senior-eng-months
+- NVM driver (atomic + wear-leveling): 2–3 months
+- RPmsg / IPC adapter: 1–2 months
+- Watchdog / clock / power-mode management: 2–3 months
+- Reference Safety Monitor + SWC scaffolding in Rust: 4–6 months
+
+Net additional one-time engineering: **$600k–$1.5M**.  Amortized
+across every program after the first.
+
+*4. Talent + hiring (ongoing).*  Counter-intuitively leans toward
+FreeRTOS/Rust.  Classic AUTOSAR + DaVinci expertise is scarce,
+brutal turnover, ~30–50% hiring premium over generic embedded.
+FreeRTOS + Rust + embedded safety is also scarce but the pool is
+growing fast and the work attracts higher-quality engineers
+(Ferrocene-Rust stack is recruiting bait).
+
+**Total bet for the service company.**  Year 1–2 build phase
+absorbs roughly **$2.5–4M** extra vs. starting on Classic AUTOSAR
+(Δ safety case + Δ engineering).  From Year 3+ each OEM program
+carries a structural cost advantage of $100–200k/yr royalty +
+$30–100k/dev/yr tooling savings, which we either share with the
+OEM or capture as margin.  At a steady state of 3–4 active programs
+we recover the $2.5–4M within **18–30 months**.
+
+**Strategic moat.**  Classic AUTOSAR makes us another Vector / EB
+integrator competing on procurement relationships.  FreeRTOS /
+SafeRTOS + Ferrocene Rust + open VSS makes us a differentiated
+stack — same direction Tesla, Rivian, parts of BMW and JLR are
+already moving in.  OEM senior management increasingly *expects*
+this answer.
+
+**When the math does NOT work.**
+- ≤1 OEM program over 3 years: $2.5–4M won't amortize.  Stay on
+  Classic AUTOSAR.
+- Risk-averse procurement-led OEM as first customer: they will
+  discount SafeRTOS + Rust on principle.  Need an early partner
+  who values the differentiation enough to co-fund the safety case.
+- No in-house ASIL safety engineering: start there before the RTOS
+  decision.  The safety case is the cost; the kernel choice is
+  downstream.
+
+**Decision posture (service company view).**  Architect the M7 SWC
+layer RTOS-portable above the SignalBus / IPC seam from day one.
+Build the Classic AUTOSAR reference first to win procurement
+credibility, but keep the FreeRTOS + SafeRTOS + Ferrocene track on
+the roadmap as the differentiation lever for the second OEM program
+(co-funding terms negotiable).  Do not bet the company on FreeRTOS
+adoption before the first OEM signs.
+
 **Selling angle (memory/preferences.md).**  "Same Rust codebase
 across QM (Linux on A53) AND ASIL-B (M7), single toolchain,
 single Cargo workspace, single CI matrix.  No Arxml, no model-
