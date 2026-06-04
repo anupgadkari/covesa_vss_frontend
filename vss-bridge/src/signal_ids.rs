@@ -683,6 +683,11 @@ pub fn path_to_id(path: VssPath) -> Option<u32> {
         // See `docs/post-peps-backlog.md` item #25 (sub-PR 8b).
         "Vehicle.Driver.Identifier.Type" => Some(0x001F_0001),
         "Vehicle.Driver.Identifier.Subject" => Some(0x001F_0002),
+        // Coarse "how was the vehicle just actuated" classification
+        // derived from LastRequestor (Keyfob/Phone/Nfc/Keypad/Manual/
+        // Automated/Unknown).  Distinct from Driver.Identifier, which
+        // is reserved for who-the-driver-is once slot wiring lands.
+        "Vehicle.Controller.Body.LastAuthChannel" => Some(0x001F_0003),
 
         _ => None,
     }
@@ -1333,9 +1338,11 @@ pub const ALL_SIGNALS: &[(VssPath, u32)] = &[
         "Vehicle.Controller.Body.Switches.StartStop.BacklightIntensity",
         0x001E_0009,
     ),
-    // Vehicle.Driver.Identifier branch (block 0x001F) — DriverPlantModel.
+    // Vehicle.Driver.Identifier branch + auth-channel extension
+    // (block 0x001F) — AuthChannelPlant.
     ("Vehicle.Driver.Identifier.Type", 0x001F_0001),
     ("Vehicle.Driver.Identifier.Subject", 0x001F_0002),
+    ("Vehicle.Controller.Body.LastAuthChannel", 0x001F_0003),
 ];
 
 #[cfg(test)]

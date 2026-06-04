@@ -10,13 +10,13 @@
 //! signals) and publish corresponding feedback signals (lamp state,
 //! defect flags, etc.) directly to the bus — they do NOT go through
 //! the arbiter, since they represent physical hardware.
+pub mod auth_channel;
 pub mod blink_relay;
 pub mod brake;
 pub mod chime;
 pub mod day_night_mode;
 pub mod door_handle;
 pub mod door_lock;
-pub mod driver;
 pub mod hood;
 pub mod mirror_adjust;
 pub mod mirror_fold;

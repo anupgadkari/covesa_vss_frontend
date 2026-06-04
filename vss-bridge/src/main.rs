@@ -79,13 +79,13 @@ use vss_bridge::features::welcome::Welcome;
 use vss_bridge::ipc_message::SignalValue;
 use vss_bridge::kuksa_sync;
 use vss_bridge::nvm::NvmStore;
+use vss_bridge::plant_models::auth_channel::AuthChannelPlant;
 use vss_bridge::plant_models::blink_relay::BlinkRelay;
 use vss_bridge::plant_models::brake::BrakePlant;
 use vss_bridge::plant_models::chime::ChimePlantModel;
 use vss_bridge::plant_models::day_night_mode::DayNightModePlant;
 use vss_bridge::plant_models::door_handle::DoorHandlePlantModel;
 use vss_bridge::plant_models::door_lock::DoorLockPlantModel;
-use vss_bridge::plant_models::driver::DriverPlantModel;
 use vss_bridge::plant_models::hood::HoodPlantModel;
 use vss_bridge::plant_models::mirror_adjust::MirrorAdjustPlantModel;
 use vss_bridge::plant_models::mirror_fold::MirrorFoldPlantModel;
@@ -633,12 +633,14 @@ async fn boot_simulation_stack(
             .with_response_stagger_ms(vss_bridge::plant_models::peps::PRODUCTION_STAGGER_MS)
             .run(),
     );
-    // Vehicle.Driver.Identifier.{Type,Subject} — VSS v6.0 canonical
-    // identity branch.  Bridge owns publish since there's no separate
-    // POSIX driver-monitoring / telematics service on this platform.
-    // Derived from Vehicle.Cabin.LockStatus.LastRequestor edges.
-    set.spawn(DriverPlantModel::new(Arc::clone(&bus)).run());
-    tracing::info!("plant models spawned: BlinkRelay, BrakePlant, ChimePlantModel, DayNightModePlant, DoorLockPlantModel, DoorHandlePlantModel, TrunkPlantModel, HoodPlantModel, SunroofPlantModel, PepsPlantModel, DriverPlantModel");
+    // AuthChannelPlant — derived "how was the vehicle just actuated"
+    // (Vehicle.Controller.Body.LastAuthChannel) and a deterministic
+    // seed of Vehicle.Driver.Identifier.{Type,Subject}.  Bridge owns
+    // these since no separate POSIX driver-monitoring / telematics
+    // service exists on this platform.  Identifier.Subject stays
+    // empty until slot-wiring from RKE/PassiveEntry lands.
+    set.spawn(AuthChannelPlant::new(Arc::clone(&bus)).run());
+    tracing::info!("plant models spawned: BlinkRelay, BrakePlant, ChimePlantModel, DayNightModePlant, DoorLockPlantModel, DoorHandlePlantModel, TrunkPlantModel, HoodPlantModel, SunroofPlantModel, PepsPlantModel, AuthChannelPlant");
 
     // ── WebSocket bridge ────────────────────────────────────────────
     let ws_port: u16 = std::env::var("VSS_BRIDGE_WS_PORT")
