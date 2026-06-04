@@ -79,6 +79,7 @@ use vss_bridge::features::welcome::Welcome;
 use vss_bridge::ipc_message::SignalValue;
 use vss_bridge::kuksa_sync;
 use vss_bridge::nvm::NvmStore;
+use vss_bridge::plant_models::auth_channel::AuthChannelPlant;
 use vss_bridge::plant_models::blink_relay::BlinkRelay;
 use vss_bridge::plant_models::brake::BrakePlant;
 use vss_bridge::plant_models::chime::ChimePlantModel;
@@ -632,7 +633,14 @@ async fn boot_simulation_stack(
             .with_response_stagger_ms(vss_bridge::plant_models::peps::PRODUCTION_STAGGER_MS)
             .run(),
     );
-    tracing::info!("plant models spawned: BlinkRelay, BrakePlant, ChimePlantModel, DayNightModePlant, DoorLockPlantModel, DoorHandlePlantModel, TrunkPlantModel, HoodPlantModel, SunroofPlantModel, PepsPlantModel");
+    // AuthChannelPlant — derived "how was the vehicle just actuated"
+    // (Vehicle.Controller.Body.LastAuthChannel) and a deterministic
+    // seed of Vehicle.Driver.Identifier.{Type,Subject}.  Bridge owns
+    // these since no separate POSIX driver-monitoring / telematics
+    // service exists on this platform.  Identifier.Subject stays
+    // empty until slot-wiring from RKE/PassiveEntry lands.
+    set.spawn(AuthChannelPlant::new(Arc::clone(&bus)).run());
+    tracing::info!("plant models spawned: BlinkRelay, BrakePlant, ChimePlantModel, DayNightModePlant, DoorLockPlantModel, DoorHandlePlantModel, TrunkPlantModel, HoodPlantModel, SunroofPlantModel, PepsPlantModel, AuthChannelPlant");
 
     // ── WebSocket bridge ────────────────────────────────────────────
     let ws_port: u16 = std::env::var("VSS_BRIDGE_WS_PORT")
