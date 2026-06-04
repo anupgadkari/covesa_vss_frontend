@@ -1,6 +1,6 @@
 # VSS Body Controller — Software Architecture
 
-**Platform:** NXP S32G2 HPC · Android Automotive OS · COVESA VSS v4.0  
+**Platform:** NXP S32G2 HPC · Android Automotive OS · COVESA VSS v6.0 *(migration from v4.0 in progress — see `docs/vss-v6.0-migration.md`)*  
 **Safety:** ASIL-B (body lighting, passive entry) / QM (HMI, application features)  
 **Application language:** Rust (L5 feature layer) · C/AUTOSAR (M7 safety monitor)  
 **Container runtime:** Podman · Red Hat Enterprise Linux base image  
@@ -177,7 +177,7 @@ android.hardware.automotive.vehicle.IVehicle  (AIDL)
 
 ## 6. VSS Middleware — L4
 
-**COVESA VSS v4.0**  
+**COVESA VSS v6.0** *(migration from v4.0 in progress — sub-PRs 1–7 + 8a + 8b shipped; see `docs/vss-v6.0-migration.md` and `docs/post-peps-backlog.md` item #22)*  
 The Vehicle Signal Specification defines a hierarchical tree of signal paths. Every signal has a path (e.g. `Vehicle.Body.Lights.Beam.Low.IsOn`), a data type, a unit, and a direction (`sensor` or `actuator`).
 
 **kuksa.val data broker**
@@ -490,7 +490,7 @@ impl<B: SignalBus> HazardFsm<B> {
 | `HighBeamFsm` | Locally Awake | `Body.Switches.HighBeam.IsEngaged` (overlay) | `Body.Lights.Beam.High.IsOn` @ prio 2 |
 | `DrlFsm` | Fully Awake | `Vehicle.LowVoltageSystemState`, `Chassis.ParkingBrake.IsEngaged` (overlay) | `Body.Lights.Running.IsOn` @ prio 2 |
 
-**Input/output separation principle**: FSMs subscribe to *physical switch/stalk inputs* (sensor overlay signals), not to the actuator outputs they control. This prevents feedback loops and correctly models the hardware: a hazard switch is physically separate from the indicator lamps it controls. Overlay signals that are not in standard VSS v4.0 are defined in `overlay/Body/SwitchInputs.vspec`.
+**Input/output separation principle**: FSMs subscribe to *physical switch/stalk inputs* (sensor overlay signals), not to the actuator outputs they control. This prevents feedback loops and correctly models the hardware: a hazard switch is physically separate from the indicator lamps it controls. Overlay signals that are not in standard VSS (v4.0 or v6.0) are defined in `overlay/Body/SwitchInputs.vspec`.
 
 ---
 
@@ -692,7 +692,7 @@ CRC-16/CCITT-FALSE (IBM 3740, initial value 0xFFFF) over all bytes from offset 0
 
 ## 11. VSS Signal Overlay
 
-Standard COVESA VSS v4.0 `SingleDoor.vspec` defines only `IsOpen` and `IsLocked`. The following overlay extends each door instance with signals required for latch state reporting and regulatory compliance.
+Standard COVESA VSS (v4.0 baseline, retained in v6.0) `SingleDoor.vspec` defines only `IsOpen` and `IsLocked`. The following overlay extends each door instance with signals required for latch state reporting and regulatory compliance.
 
 **File**: `overlay/Body/DoorExtended.vspec`
 
@@ -727,7 +727,7 @@ Instance the above across `Row[1,2]` × `["DriverSide", "PassengerSide"]` using 
 
 ### Switch / Stalk Input Overlay
 
-Standard COVESA VSS v4.0 defines actuator outputs (e.g. `Body.Lights.Hazard.IsSignaling`) but not the physical switch inputs that drive them. Feature business logic must subscribe to inputs, not outputs, to avoid feedback loops. The following overlay defines sensor signals for physical switches and stalks.
+Standard COVESA VSS (v4.0 baseline, retained in v6.0) defines actuator outputs (e.g. `Vehicle.Body.Lights.Hazard.IsSignaling`) but not the physical switch inputs that drive them. Feature business logic must subscribe to inputs, not outputs, to avoid feedback loops. The following overlay defines sensor signals for physical switches and stalks.
 
 **File**: `overlay/Body/SwitchInputs.vspec`
 
@@ -766,7 +766,7 @@ Chassis.ParkingBrake.IsEngaged:
 
 ### Power Mode Signals
 
-Features that depend on vehicle power state subscribe to **`Vehicle.LowVoltageSystemState`** (standard VSS v4.0) rather than `Vehicle.Powertrain.Engine.IsRunning`. This is powertrain-agnostic — works for ICE, HEV, and BEV platforms. Values: `undefined`, `lock`, `off`, `acc`, `on`, `start` (lowest → highest; `lock` is steering column lock, an anti-theft state below `off`). **`Vehicle.Powertrain.Type`** (string: `COMBUSTION`, `HYBRID`, `ELECTRIC`) is available for features that need powertrain-specific behaviour.
+Features that depend on vehicle power state subscribe to **`Vehicle.LowVoltageSystemState`** (standard VSS, present in both v4.0 and v6.0) rather than `Vehicle.Powertrain.Engine.IsRunning`. This is powertrain-agnostic — works for ICE, HEV, and BEV platforms. Values: `undefined`, `lock`, `off`, `acc`, `on`, `start` (lowest → highest; `lock` is steering column lock, an anti-theft state below `off`). **`Vehicle.Powertrain.Type`** (string: `COMBUSTION`, `HYBRID`, `ELECTRIC`) is available for features that need powertrain-specific behaviour.
 
 ### ECU Sleep/Wake States
 
@@ -1232,5 +1232,5 @@ Produce:
 ---
 
 *Document version: 1.1 — Architecture as of April 2026*
-*VSS base: COVESA VSS v4.0 + DoorExtended overlay + SwitchInputs overlay*
+*VSS base: COVESA VSS v6.0 (migration from v4.0 in progress) + DoorExtended overlay + SwitchInputs overlay*
 *IPC schema: src/ipc_message.rs v1 (magic 0xBCC01A00) — pure Rust, matching AUTOSAR C header*

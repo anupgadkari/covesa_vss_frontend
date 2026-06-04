@@ -23,8 +23,10 @@ This platform is a **product sold by a service company to OEM management**. It i
 
 | Domain | Cores | Clock | Role |
 |--------|-------|-------|------|
-| Application (A53) | 4x ARM Cortex-A53 | 1 GHz | AAOS, Podman containers, Rust application layer, HMI |
-| Real-time (M7) | 3x ARM Cortex-M7 | 400 MHz | AUTOSAR Classic CP, Safety Monitor (ASIL-B), PEPS, CAN/LIN frame processing |
+| Application (A53) | 4x ARM Cortex-A53 | 1 GHz | AAOS, Podman containers, Rust application layer (feature business logic) |
+| Real-time (M7) | 3x ARM Cortex-M7 | 400 MHz | AUTOSAR Classic CP, Safety Monitor (ASIL-B), PEPS, CAN/LIN frame processing; OEM may also extend with ASIL-B Application Layer SWCs as in-house competency grows |
+
+The web HMI (`vss-hmi-body-sensors.html`) is **optional engineering tooling** — bench validation, factory diagnostics, and reference visualization. It is not a production-shipped component and not part of the A53 application-domain role description.
 
 **Key peripherals on the SoC:**
 
@@ -647,7 +649,14 @@ A53 cluster (Cortex-A53 x4)
 
 ## 8. Signal Inventory
 
-86 VSS signals are currently defined across the platform. The overlay extends standard COVESA VSS v4.0 with:
+296 signal paths are currently defined across the platform, organised in a four-namespace split for VSS v6.0 conformance (migration from v4.0 in progress — see `docs/vss-v6.0-migration.md` and `docs/post-peps-backlog.md` item #22):
+
+- **`Vehicle.*`** — canonical COVESA VSS v6.0 paths (lights, doors, locks, windows, etc.)
+- **`Vehicle.Controller.*`** — body-controller-owned application logic (arbiter state, FSM state, diagnostics) — kept off the canonical tree so OEM consumers see a clean VSS catalog
+- **`Vehicle.Simulation.*`** — simulator-only signals (PEPS plant model, HMI affordances), gated on `cfg(feature = "simulator")` and omitted from production kuksa.val catalogs
+- **`Vehicle.Cabin.Door.RowN.{Driver,Passenger}Side.*`** — canonical door extensions (handles, lock pads) dual-published alongside the physical `Row{N}.{Left,Right}` paths during the v6.0 migration
+
+Where standard VSS lacks a signal, overlays extend the canonical tree:
 
 - **Switch/stalk inputs** (`overlay/Body/SwitchInputs.vspec`): physical hazard switch, turn stalk, high beam switch, parking brake
 - **Door lock inputs** (`overlay/Body/DoorLockInputs.vspec`): keyfob RKE, door trim buttons, phone app, BLE key, NFC card/phone, per-door IsRemoved, crash detected
