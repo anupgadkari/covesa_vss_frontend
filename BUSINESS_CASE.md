@@ -2,7 +2,7 @@
 
 **Purpose**: Internal document for management. Makes the case for investing in a licensable body controller software platform, with an honest assessment of what we are building, how we make money, what the risks are, and why the rewards justify the investment.
 
-**Last updated**: 2026-04-14
+**Last updated**: 2026-06-04
 
 ---
 
@@ -16,7 +16,7 @@ This is not a consulting engagement. It is not a staffing arrangement. It is a *
 
 | Layer | What it is | Why it matters |
 |---|---|---|
-| **Feature business logic** (Rust, A-core) | Hazard lighting, turn indicators, auto-relock, PEPS sequencing, crash unlock, headlamp control, lock feedback, connectivity-based lock sources (BLE, NFC, phone app) | This is the intelligence of the body controller. OEMs currently build this from scratch in C on AUTOSAR, taking 2-3 years per program. Our platform delivers it ready-to-configure. |
+| **Feature business logic** (Rust, A-core) | **30+ shipped reference modules** covering lighting (Hazard, Turn, ManualLighting, AutoHighBeam, FollowMeHome, BrakeReverse, FogLamps, DRL), locking (AutoLock, AutoRelock, WalkAwayLock, CrashUnlock, DoubleLockRelease, SlamLock, DoorTrimButton), PEPS / authenticated entry (PassiveEntry, KeyfobRke, SmartUnlock, SmartTrunkPop, KeyLostWarning, Welcome, Farewell), connectivity lock sources (NfcEntry, KeypadLock, PhoneBle, PhoneApp), comfort (PowerWindow, SunroofControl, MirrorFold, MirrorAdjust, PowerChildLock, DoorOpenAssist), security (PerimeterAlarm, PanicAlarm), and powertrain interlock (VehicleStartingControl). Each is unit-testable under MockBus with no hardware. | This is the intelligence of the body controller. OEMs currently build it from scratch in C on AUTOSAR, taking 2-3 years per program. Our platform delivers it ready-to-configure. The breadth of shipped features is the evidence that the platform is real, not a slideware reference architecture. |
 | **Domain arbiters** (Rust, A-core) | Priority-based signal resolution with static allow-lists. Prevents feature conflicts (e.g., hazard overrides turn signal). | Safety-critical arbitration logic, validated once and reused across programs. An OEM building this from scratch must design, implement, and validate it every time. |
 | **Safety Monitor** (C, AUTOSAR Classic, M-core) | ASIL-B state authority. Validates every actuator command from the A-core. Cannot be overridden by QM software. | The ISO 26262 compliance boundary. Certified once, reused across OEM programs. This is the most expensive component to develop and validate from scratch. |
 | **ASIL-B Application SWCs** (C / AUTOSAR Classic, M-core) — *OEM-owned, optional* | Domain-specific safety-critical application logic the OEM wishes to keep in-house (e.g., proprietary alarm strategies, OEM-specific lock arbitration rules). | The OEM is **not** restricted to the QM Rust layer. As in-house ASIL competency grows, the OEM may extend into Classic AUTOSAR Application Layer SWCs on M7 without re-architecting the platform. Platform Provider delivers the Safety Monitor + reference SWCs; OEM owns whatever ASIL-B differentiation they choose. |
@@ -37,6 +37,18 @@ This is not a consulting engagement. It is not a staffing arrangement. It is a *
 ## 2. Why OEMs Need This
 
 ### 2.1 The OEM's Problem
+
+**The structural pain is portfolio scaling: every vehicle program is a greenfield body-controller build, even within the same OEM.**
+
+A typical OEM runs 5–20+ active vehicle programs across sedan, SUV, coupe, truck, ICE, hybrid, and BEV variants. Today each program rebuilds the body controller software from a baseline — the previous program's code is too coupled to its specific SoC, BSW configuration, vehicle wiring, and feature calibration to drop in. The result: the OEM funds the same body-controller engineering work 5–20 times across the portfolio, with the same C-on-AUTOSAR cycle time and the same safety re-certification every program.
+
+**Body controllers are not a customer-visible differentiator.** Buyers do not choose a vehicle because of how its lighting FSM is implemented, or which arbiter resolves a turn-vs-hazard conflict. The OEM differentiates on styling, drivetrain, ADAS, infotainment experience, and brand — not on body controller software. This is why OEMs are increasingly comfortable **sharing a body platform across competitors**: the platform itself is non-differentiating infrastructure, and a shared platform spreads development cost, hardens the safety case across more programs, and validates the technology faster than any single-OEM stack.
+
+Our platform solves portfolio scaling directly. The same core stack ships across the OEM's portfolio with **configuration, not re-engineering** — vehicle-line calibrations (sedan vs. SUV), variant/trim options, and dealer-configurable parameters via UDS. Adding a new vehicle program is a 6–9 month integration, not a 3–4 year greenfield build.
+
+A secondary pain — supplier dependency on the incumbent Tier-1 body-controller vendor — is also addressed structurally. Today, the OEM is locked into one Tier-1 (Continental, Aptiv, Bosch, Hella, Lear, Marelli, etc.) for each program's full lifecycle; switching mid-program is a 12–18 month / $3–6M rewrite, so OEMs renew with the incumbent almost regardless of feature gaps. Our Platform Provider model gives the OEM continuous platform evolution without rebuilding their supplier relationship every program.
+
+#### The development-cycle cost (secondary, but real)
 
 Body controllers are unsexy but ubiquitous — every vehicle has one. The typical OEM development cycle for a body controller program:
 
@@ -126,7 +138,7 @@ The critical insight: **maintenance revenue compounds**. Every program that reac
 | **ASIL-B Safety Monitor certification cost** | High | Single most expensive development item. Budget $1-2M for initial ISO 26262 work products and certification. Amortized across all OEM programs. Engage a functional safety consultancy (e.g., exida, TUV) early. |
 | **AUTOSAR Classic licensing cost** | Medium | We pay per-seat licenses for Vector/EB tools. These are our COGS, not the OEM's. Factor into license pricing. As our team stabilizes, seat count stays flat while program count grows — fixed cost, scaling revenue. |
 | **SoC vendor lock-in** | Low | SignalBus trait portability is already proven (MockBus in CI, RPmsg for NXP planned, GLINK for Qualcomm planned). Architecture guarantees portability. |
-| **Rust maturity in automotive** | Medium | Rust is gaining automotive traction (Volvo, Volkswagen CARIAD, Ferrocene safety-qualified compiler). Our use is in the QM application layer — not safety-critical. The M7 remains C/AUTOSAR. The mixed approach is pragmatic, not radical. |
+| **Rust maturity in automotive** | Medium | Rust is gaining automotive traction (Volvo, Volkswagen CARIAD, Ferrocene safety-qualified rustc — ISO 26262 ASIL-D). Our default use is the QM application layer; M7 remains C/AUTOSAR. The mixed approach is pragmatic, not radical. A second-program differentiation lever — Ferrocene Rust + SafeRTOS on M7 replacing the Classic AUTOSAR stack — is on the roadmap (backlog item #18) with full cost framing. Architected from day one so the M7 SWC layer is RTOS-portable above the IPC seam, which keeps that option open without committing the first program to it. |
 | **Platform scope creep** | Medium | Clear boundary: body + connectivity. No ADAS. No IVI. Resist OEM requests to add chassis or powertrain unless we deliberately expand scope (see 4.2). |
 
 ### 4.2 Strategic Risk: Scope — Body Only vs. Body + Chassis + Connectivity
@@ -157,7 +169,7 @@ This is a decision we must make before signing our first OEM program:
 | Risk | Severity | Mitigation |
 |---|---|---|
 | **High upfront investment before revenue** | Critical | Platform development (Rust application layer, Safety Monitor, BSP integration, certification) requires $3-5M before the first license fee. Mitigation: staged investment — build the application layer first (lower cost, demonstrates value in demos), defer Safety Monitor certification until first OEM is signed. |
-| **AUTOSAR Classic toolchain cost** | Medium | Vector/EB toolchain licenses: $50-100K/yr per seat, typically need 3-5 seats. This is a fixed cost regardless of program count. Mitigation: factor into platform pricing. As program count grows, this cost becomes a smaller percentage of revenue. |
+| **AUTOSAR Classic toolchain cost** | Medium | Vector/EB toolchain licenses: $50-100K/yr per seat, typically need 3-5 seats — $150-500K/yr fixed cost regardless of program count. Mitigation (near-term): factor into platform pricing; the cost becomes a smaller percentage of revenue as program count grows. Mitigation (structural): backlog item #18 (FreeRTOS/SafeRTOS + Ferrocene Rust replacing Classic AUTOSAR on M7) eliminates the per-seat tooling cost entirely after the first-program safety case is built. See item #18 for full cost framing — the bet is ~$2.5-4M build cost in Year 1-2, with payback at 3-4 program steady state. |
 | **Per-unit royalty collection** | Low | If we include per-unit royalties, we depend on OEM accurately reporting production volumes. Mitigation: use fixed license + maintenance model as the primary structure. Per-unit royalty as an optional add-on for OEMs who prefer lower upfront cost. |
 
 ---
@@ -205,6 +217,9 @@ Body controllers are in transition:
 - SOVD (diagnostic modernization) is becoming a procurement checkbox
 - Digital key (BLE, NFC, UWB) is driving new lock source features that traditional body controller suppliers are slow to deliver
 - OEMs want faster iteration cycles — C on AUTOSAR Classic takes 2-3 years per feature set, Rust on Linux takes months
+- **COVESA VSS v6.0 conformance** is becoming a procurement filter. OEM data-broker, cloud telematics, and head-unit ecosystems increasingly standardize on canonical VSS paths; suppliers locked into VSS v4.0 (or proprietary signal vocabularies) cannot ship new OEM-requested signals without major re-architecture. Our platform is on the v6.0 migration path with a three-namespace split (canonical `Vehicle.*`, controller extensions, simulator-only) that keeps production catalogs clean.
+- **Multi-domain VSS publisher capability**: where a platform deployment has no separate POSIX service for Powertrain / Driver-identity / Motion / HVAC, the bridge owns canonical publishing for those domains too (backlog item #25). The OEM gets a complete VSS catalog from a single integration seam, not a half-built body publisher that needs adapters glued on later.
+- **Architectural differentiators that have shipped, not just promised**: feature-driven key search (every PEPS scan owned by the feature that needs it, no central polling loop), per-actuator plant models with NVM persistence (door locks, windows, sunroof, hood survive power cycles), HMI-vocabulary alias shim (decouples HMI refactor from canonical signal renames). These are evidence the platform is production-grade, not slideware.
 
 We are building the right product at the right time. The question is whether we move fast enough to capture the window before larger players (Continental, Aptiv, Bosch) build their own SDV body platforms.
 
@@ -219,6 +234,7 @@ We are building the right product at the right time. The question is whether we 
 | **Product liability insurance** | OEMs will require it before signing. Non-negotiable. | Automotive-grade product liability policy. Cost depends on coverage and program count. |
 | **A reference customer strategy** | The first OEM is the hardest. We may need to offer favorable terms (reduced license, co-development) to get the first production reference. | Willingness to invest in the first program at reduced margin in exchange for a reference that sells the second and third. |
 | **Sales capability** | Selling a platform to OEM management is not the same as selling engineering hours. Requires product positioning, ROI analysis, and executive-level relationships. | One senior automotive business development hire or partnership with an existing Tier-1 that needs this capability (white-label or co-sell arrangement). |
+| **Strategic option: RTOS / toolchain track** | First OEM program ships on Classic AUTOSAR for procurement credibility. The FreeRTOS + SafeRTOS + Ferrocene Rust track (backlog item #18) eliminates Tier-1 BSW royalty and per-seat tooling cost — a structural margin lever for OEM program #2. Build cost: ~$2.5–4M; payback at 3–4 active programs in 18–30 months. Strategic moat: same direction Tesla, Rivian, and parts of BMW/JLR are heading. | Year 3+ decision, not Year 1. Architect M7 SWC layer RTOS-portable above the IPC seam from day one (no incremental cost) so the option stays open; commit when an OEM #2 partner is willing to share the safety-case cost. |
 
 ---
 
