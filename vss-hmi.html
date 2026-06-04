@@ -3667,6 +3667,10 @@ function ControlPanelContent({s,set,cfg,anyDoor,anyLight,lux}){
           <CfgReadOnly val={s['Cabin.LockStatus.LastRequestor']||'—'}/>
         </div>
         <div className="cr">
+          <span className="cn">LastAuthChannel</span>
+          <CfgReadOnly val={s['Cabin.LockStatus.LastAuthChannel']||'—'}/>
+        </div>
+        <div className="cr">
           <span className="cn">EventNum</span>
           <CfgReadOnly val={s['Cabin.LockStatus.EventNum']??'—'}/>
         </div>
