@@ -38,13 +38,15 @@ This is not a consulting engagement. It is not a staffing arrangement. It is a *
 
 ### 2.1 The OEM's Problem
 
-**The structural pain is Tier-1 body-controller supplier dependency, not just development time.**
+**The structural pain is portfolio scaling: every vehicle program is a greenfield body-controller build, even within the same OEM.**
 
-Today the OEM is locked into a Tier-1 body-controller supplier (Continental, Aptiv, Bosch, Hella, Lear, Marelli, etc.) for the full product lifecycle of every vehicle program. The supplier owns the BSW integration, the safety case, the diagnostic stack, and the feature business logic. Switching suppliers mid-program effectively means re-validating every feature against the new BSW, re-certifying the safety case, re-integrating the BSP, and re-training the integration team — typically a **12–18 month rewrite costing $3–6M before any value is delivered**. The result: OEMs renew with the incumbent supplier almost regardless of cost or feature gaps, because the switching cost dominates.
+A typical OEM runs 5–20+ active vehicle programs across sedan, SUV, coupe, truck, ICE, hybrid, and BEV variants. Today each program rebuilds the body controller software from a baseline — the previous program's code is too coupled to its specific SoC, BSW configuration, vehicle wiring, and feature calibration to drop in. The result: the OEM funds the same body-controller engineering work 5–20 times across the portfolio, with the same C-on-AUTOSAR cycle time and the same safety re-certification every program.
 
-This dependency compounds across vehicle programs: each new program is another long-term commitment to a specific supplier's stack, with the same dependency carried forward.
+**Body controllers are not a customer-visible differentiator.** Buyers do not choose a vehicle because of how its lighting FSM is implemented, or which arbiter resolves a turn-vs-hazard conflict. The OEM differentiates on styling, drivetrain, ADAS, infotainment experience, and brand — not on body controller software. This is why OEMs are increasingly comfortable **sharing a body platform across competitors**: the platform itself is non-differentiating infrastructure, and a shared platform spreads development cost, hardens the safety case across more programs, and validates the technology faster than any single-OEM stack.
 
-Our platform breaks that dependency. The OEM owns the integration layer and the configuration. The Platform Provider handles BSW evolution, safety re-certification, and SoC BSP updates. **The OEM's body-controller strategy stops being a procurement-locked-in dependency and becomes a configuration choice they own.**
+Our platform solves portfolio scaling directly. The same core stack ships across the OEM's portfolio with **configuration, not re-engineering** — vehicle-line calibrations (sedan vs. SUV), variant/trim options, and dealer-configurable parameters via UDS. Adding a new vehicle program is a 6–9 month integration, not a 3–4 year greenfield build.
+
+A secondary pain — supplier dependency on the incumbent Tier-1 body-controller vendor — is also addressed structurally. Today, the OEM is locked into one Tier-1 (Continental, Aptiv, Bosch, Hella, Lear, Marelli, etc.) for each program's full lifecycle; switching mid-program is a 12–18 month / $3–6M rewrite, so OEMs renew with the incumbent almost regardless of feature gaps. Our Platform Provider model gives the OEM continuous platform evolution without rebuilding their supplier relationship every program.
 
 #### The development-cycle cost (secondary, but real)
 
