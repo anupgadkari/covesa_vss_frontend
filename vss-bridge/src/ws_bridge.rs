@@ -257,6 +257,13 @@ const OUTPUT_SIGNALS: &[VssPath] = &[
     // chip useful for forensics / debugging.
     "Vehicle.Cabin.LockStatus.LastRequestor",
     "Vehicle.Cabin.LockStatus.EventNum",
+    // VSS v6.0 Driver.Identifier branch (seeded empties for now —
+    // populated by a future PR once slot wiring lands) + coarse
+    // auth-channel classification derived from LastRequestor.
+    // See plant_models::auth_channel.
+    "Vehicle.Driver.Identifier.Type",
+    "Vehicle.Driver.Identifier.Subject",
+    "Vehicle.Controller.Body.LastAuthChannel",
     "Vehicle.Cabin.Door.Row1.Left.IsLocked",
     "Vehicle.Cabin.Door.Row1.Right.IsLocked",
     "Vehicle.Cabin.Door.Row2.Left.IsLocked",
