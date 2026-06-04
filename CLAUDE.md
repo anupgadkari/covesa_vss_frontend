@@ -24,7 +24,7 @@ Anup Gadkari — works at a **service company** selling the SDV body controller 
 2. Say **"Platform Provider"**, never "Tier-1"
 3. **HMI is optional tooling** — never list as a top-level architecture benefit; frame as bench validation / factory diagnostics / engineering visualization
 4. **OEM can own ASIL-B app layer** — acknowledge OEM can extend into Classic AUTOSAR Application Layer SWCs on M7, not just QM Rust layer
-5. Pain point to emphasize: Tier-1 body supplier dependency (not head unit supplier)
+5. **Headline OEM pain**: portfolio scaling across vehicle lines — every program is a greenfield body-controller build today; body controllers are NOT a customer-visible differentiator, so OEMs are increasingly comfortable sharing a body platform across competitors. **Secondary pain**: Tier-1 body-controller supplier lock-in (never head unit supplier — that distinction still matters when supplier dependency comes up)
 
 ## Projects
 | Name | What |
