@@ -726,6 +726,12 @@ const HMI_ALIASES: &[(VssPath, VssPath)] = &[
         "Vehicle.Cabin.LockStatus.LastRequestor",
         "Cabin.LockStatus.LastRequestor",
     ),
+    // Auth-channel classification (extension under Vehicle.Controller.*)
+    // surfaced in the HMI's Cabin.LockStatus group next to LastRequestor.
+    (
+        "Vehicle.Controller.Body.LastAuthChannel",
+        "Cabin.LockStatus.LastAuthChannel",
+    ),
     (
         "Vehicle.Controller.Cabin.Seat.Row1.Left.IsHeatingOn",
         "Cabin.Seat.Row1.Left.IsHeatingOn",
